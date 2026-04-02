@@ -29,6 +29,8 @@ jobs:
   build-macos:
     name: Build macOS (Tauri)
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
