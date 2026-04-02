@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # glib 0.20.0 is required for the security fix, but Tauri 2.x
+      # depends on gtk-rs 0.18 which pins glib to 0.18.x.
+      # This cannot be resolved until Tauri updates its gtk-rs dependency.
+      - dependency-name: "glib"
+        versions: [">=0.19"]
+      - dependency-name: "glib-sys"
+        versions: [">=0.19"]
+      - dependency-name: "glib-macros"
+        versions: [">=0.19"]
