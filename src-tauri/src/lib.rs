@@ -24,6 +24,9 @@ pub fn run() {
             composition::get_composition,
             composition::get_composition_flat,
             composition::get_composition_versions,
+            composition::create_composition,
+            composition::update_composition,
+            composition::delete_composition,
             // Template
             template::list_templates,
             template::get_web_template,
