@@ -283,15 +283,17 @@ pub async fn create_ehr(
     });
 
     // Override subject if external identity is provided
-    if request.subject_namespace.is_some() && request.subject_id.is_some() {
+    if let (Some(subject_id), Some(subject_namespace)) =
+        (request.subject_id, request.subject_namespace)
+    {
         ehr_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
                 "_type": "PARTY_REF",
                 "id": {
                     "_type": "GENERIC_ID",
-                    "value": request.subject_id.unwrap(),
-                    "scheme": request.subject_namespace.unwrap()
+                    "value": subject_id,
+                    "scheme": subject_namespace
                 },
                 "namespace": "external",
                 "type": "PERSON"
@@ -348,7 +350,7 @@ pub async fn create_ehr(
     // Extract EHR ID from the location path
     let ehr_id = location
         .split('/')
-        .last()
+        .next_back()
         .ok_or("Could not extract EHR ID from Location header")?
         .to_string();
 
@@ -413,14 +415,16 @@ pub async fn update_ehr_status(
     updated_status["is_modifiable"] = serde_json::json!(request.is_modifiable);
 
     // Update subject if provided
-    if request.subject_namespace.is_some() && request.subject_id.is_some() {
+    if let (Some(subject_id), Some(subject_namespace)) =
+        (request.subject_id, request.subject_namespace)
+    {
         updated_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
                 "id": {
                     "_type": "GENERIC_ID",
-                    "value": request.subject_id.unwrap(),
-                    "scheme": request.subject_namespace.unwrap()
+                    "value": subject_id,
+                    "scheme": subject_namespace
                 },
                 "namespace": "external"
             }
