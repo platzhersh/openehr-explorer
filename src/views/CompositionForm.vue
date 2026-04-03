@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore } from "../stores/ehr";
@@ -258,10 +258,20 @@ function clearDraft() {
   localStorage.removeItem(draftKey.value);
 }
 
+async function copyPreviewJson() {
+  await navigator.clipboard.writeText(previewJson.value);
+}
+
 // Auto-save draft every 30 seconds
-let draftInterval: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
-  draftInterval = setInterval(saveDraft, 30000);
+  const draftInterval = setInterval(saveDraft, 30000);
+
+  // Clean up interval on unmount
+  onUnmounted(() => {
+    if (draftInterval) {
+      clearInterval(draftInterval);
+    }
+  });
 });
 
 watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft, { deep: true });
@@ -368,7 +378,7 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
     <div v-if="showPreview" class="preview-panel">
       <div class="preview-header">
         <h3>FLAT JSON Preview</h3>
-        <button class="btn btn-sm" @click="navigator.clipboard.writeText(previewJson)">
+        <button class="btn btn-sm" @click="copyPreviewJson">
           Copy JSON
         </button>
       </div>

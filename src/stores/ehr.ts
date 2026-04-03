@@ -23,6 +23,8 @@ export interface EhrDetail {
   time_created: string | null;
   is_modifiable: boolean | null;
   is_queryable: boolean | null;
+  subject_id: string | null;
+  subject_namespace: string | null;
   compositions: CompositionSummary[];
 }
 

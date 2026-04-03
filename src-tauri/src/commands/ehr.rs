@@ -18,6 +18,8 @@ pub struct EhrDetail {
     pub time_created: Option<String>,
     pub is_modifiable: Option<bool>,
     pub is_queryable: Option<bool>,
+    pub subject_id: Option<String>,
+    pub subject_namespace: Option<String>,
     pub compositions: Vec<CompositionSummary>,
 }
 
@@ -152,6 +154,25 @@ pub async fn get_ehr_detail(server_id: String, ehr_id: String) -> Result<EhrDeta
         .and_then(|s| s.get("is_queryable"))
         .and_then(|v| v.as_bool());
 
+    // Extract subject identity from EHR status
+    let subject_id = ehr_json
+        .get("ehr_status")
+        .and_then(|s| s.get("subject"))
+        .and_then(|s| s.get("external_ref"))
+        .and_then(|r| r.get("id"))
+        .and_then(|id| id.get("value"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let subject_namespace = ehr_json
+        .get("ehr_status")
+        .and_then(|s| s.get("subject"))
+        .and_then(|s| s.get("external_ref"))
+        .and_then(|r| r.get("id"))
+        .and_then(|id| id.get("scheme"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     // Fetch compositions via AQL
     let aql = format!(
         "SELECT c/uid/value, c/archetype_details/template_id/value, c/name/value, c/composer/name, c/context/start_time/value \
@@ -205,6 +226,8 @@ pub async fn get_ehr_detail(server_id: String, ehr_id: String) -> Result<EhrDeta
         time_created,
         is_modifiable,
         is_queryable,
+        subject_id,
+        subject_namespace,
         compositions,
     })
 }

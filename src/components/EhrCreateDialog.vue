@@ -3,7 +3,7 @@ import { ref } from "vue";
 import { useServerStore } from "../stores/server";
 import { useEhrStore } from "../stores/ehr";
 
-const props = defineProps<{
+defineProps<{
   open: boolean;
 }>();
 
