@@ -76,6 +76,78 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  async function createEhr(
+    serverId: string,
+    request: {
+      subject_namespace?: string;
+      subject_id?: string;
+      is_queryable?: boolean;
+      is_modifiable?: boolean;
+      ehr_id?: string;
+    }
+  ) {
+    loading.value = true;
+    error.value = null;
+    try {
+      const result = await invoke<{
+        ehr_id: string;
+        system_id: string | null;
+        time_created: string | null;
+      }>("create_ehr", {
+        serverId,
+        request,
+      });
+      return result;
+    } catch (e) {
+      error.value = String(e);
+      throw e;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function updateEhrStatus(
+    serverId: string,
+    ehrId: string,
+    request: {
+      is_queryable: boolean;
+      is_modifiable: boolean;
+      subject_namespace?: string;
+      subject_id?: string;
+    }
+  ) {
+    loading.value = true;
+    error.value = null;
+    try {
+      await invoke<string>("update_ehr_status", {
+        serverId,
+        ehrId,
+        request,
+      });
+    } catch (e) {
+      error.value = String(e);
+      throw e;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function deleteEhr(serverId: string, ehrId: string) {
+    loading.value = true;
+    error.value = null;
+    try {
+      await invoke<string>("delete_ehr", {
+        serverId,
+        ehrId,
+      });
+    } catch (e) {
+      error.value = String(e);
+      throw e;
+    } finally {
+      loading.value = false;
+    }
+  }
+
   return {
     ehrs,
     total,
@@ -86,5 +158,8 @@ export const useEhrStore = defineStore("ehr", () => {
     selectedEhr,
     fetchEhrs,
     fetchEhrDetail,
+    createEhr,
+    updateEhrStatus,
+    deleteEhr,
   };
 });
