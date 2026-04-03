@@ -73,13 +73,25 @@ async function copyToClipboard(text: string) {
 }
 
 const filteredEhrs = computed(() => {
-  if (!searchQuery.value) return ehrStore.ehrs;
-  const q = searchQuery.value.toLowerCase();
-  return ehrStore.ehrs.filter(
-    (e) =>
-      e.ehr_id.toLowerCase().includes(q) ||
-      e.subject_id?.toLowerCase().includes(q)
-  );
+  let ehrs = ehrStore.ehrs;
+
+  // Filter by search query
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase();
+    ehrs = ehrs.filter(
+      (e) =>
+        e.ehr_id.toLowerCase().includes(q) ||
+        e.subject_id?.toLowerCase().includes(q)
+    );
+  }
+
+  // Sort by time_created descending (newest first)
+  return [...ehrs].sort((a, b) => {
+    if (!a.time_created && !b.time_created) return 0;
+    if (!a.time_created) return 1;
+    if (!b.time_created) return -1;
+    return b.time_created.localeCompare(a.time_created);
+  });
 });
 
 // Group compositions by template_id
