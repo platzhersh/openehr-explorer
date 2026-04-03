@@ -72,16 +72,25 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN_PATH
 
       - name: Build Tauri app (universal binary)
-        run: npm run tauri build -- --target universal-apple-darwin
+        # Only pass Apple notarization env vars when they are actually
+        # configured; empty values cause Tauri to attempt notarization
+        # and then fail with "Team ID must be at least 3 characters".
+        run: |
+          if [ -n "$APPLE_TEAM_ID_INPUT" ]; then
+            export APPLE_ID="$APPLE_ID_INPUT"
+            export APPLE_PASSWORD="$APPLE_PASSWORD_INPUT"
+            export APPLE_TEAM_ID="$APPLE_TEAM_ID_INPUT"
+          fi
+          npm run tauri build -- --target universal-apple-darwin
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
           # Use Developer ID signing if secrets are configured, otherwise
           # fall back to ad-hoc signing (-) so macOS shows "unidentified
           # developer" instead of "file is damaged"
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID_INPUT: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_INPUT: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_INPUT: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
