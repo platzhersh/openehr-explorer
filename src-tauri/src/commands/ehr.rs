@@ -283,15 +283,17 @@ pub async fn create_ehr(
     });
 
     // Override subject if external identity is provided
-    if request.subject_namespace.is_some() && request.subject_id.is_some() {
+    if let (Some(subject_id), Some(subject_namespace)) =
+        (request.subject_id, request.subject_namespace)
+    {
         ehr_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
                 "_type": "PARTY_REF",
                 "id": {
                     "_type": "GENERIC_ID",
-                    "value": request.subject_id.unwrap(),
-                    "scheme": request.subject_namespace.unwrap()
+                    "value": subject_id,
+                    "scheme": subject_namespace
                 },
                 "namespace": "external",
                 "type": "PERSON"
@@ -310,7 +312,10 @@ pub async fn create_ehr(
     };
 
     // Debug: print the JSON being sent
-    eprintln!("Creating EHR with JSON:\n{}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
+    eprintln!(
+        "Creating EHR with JSON:\n{}",
+        serde_json::to_string_pretty(&request_body).unwrap_or_default()
+    );
 
     let url = format!("{}/rest/openehr/v1/ehr", base);
     let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
@@ -325,7 +330,11 @@ pub async fn create_ehr(
 
     if !status.is_success() {
         let response_text = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status.as_u16(), response_text));
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            status.as_u16(),
+            response_text
+        ));
     }
 
     // EHRBase returns 201 Created with Location header, but empty body
@@ -341,7 +350,7 @@ pub async fn create_ehr(
     // Extract EHR ID from the location path
     let ehr_id = location
         .split('/')
-        .last()
+        .next_back()
         .ok_or("Could not extract EHR ID from Location header")?
         .to_string();
 
@@ -372,11 +381,16 @@ pub async fn update_ehr_status(
 
     // First, fetch current EHR status to get the version UID
     let get_url = format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id);
-    let get_response = make_request(&client, reqwest::Method::GET, &get_url, &profile.auth_method)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch current EHR status: {}", e))?;
+    let get_response = make_request(
+        &client,
+        reqwest::Method::GET,
+        &get_url,
+        &profile.auth_method,
+    )
+    .header("Accept", "application/json")
+    .send()
+    .await
+    .map_err(|e| format!("Failed to fetch current EHR status: {}", e))?;
 
     if !get_response.status().is_success() {
         let status = get_response.status().as_u16();
@@ -401,14 +415,16 @@ pub async fn update_ehr_status(
     updated_status["is_modifiable"] = serde_json::json!(request.is_modifiable);
 
     // Update subject if provided
-    if request.subject_namespace.is_some() && request.subject_id.is_some() {
+    if let (Some(subject_id), Some(subject_namespace)) =
+        (request.subject_id, request.subject_namespace)
+    {
         updated_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
                 "id": {
                     "_type": "GENERIC_ID",
-                    "value": request.subject_id.unwrap(),
-                    "scheme": request.subject_namespace.unwrap()
+                    "value": subject_id,
+                    "scheme": subject_namespace
                 },
                 "namespace": "external"
             }
@@ -417,14 +433,19 @@ pub async fn update_ehr_status(
 
     // PUT request with If-Match header
     let put_url = format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id);
-    let put_response = make_request(&client, reqwest::Method::PUT, &put_url, &profile.auth_method)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .header("If-Match", version_uid)
-        .json(&updated_status)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to update EHR status: {}", e))?;
+    let put_response = make_request(
+        &client,
+        reqwest::Method::PUT,
+        &put_url,
+        &profile.auth_method,
+    )
+    .header("Content-Type", "application/json")
+    .header("Accept", "application/json")
+    .header("If-Match", version_uid)
+    .json(&updated_status)
+    .send()
+    .await
+    .map_err(|e| format!("Failed to update EHR status: {}", e))?;
 
     if !put_response.status().is_success() {
         let status = put_response.status().as_u16();

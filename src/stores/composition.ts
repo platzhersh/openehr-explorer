@@ -9,7 +9,7 @@ export const useCompositionStore = defineStore("composition", () => {
   async function createComposition(
     serverId: string,
     ehrId: string,
-    compositionData: Record<string, unknown>
+    compositionData: Record<string, unknown>,
   ) {
     loading.value = true;
     error.value = null;
@@ -32,7 +32,7 @@ export const useCompositionStore = defineStore("composition", () => {
     serverId: string,
     ehrId: string,
     compositionUid: string,
-    compositionData: Record<string, unknown>
+    compositionData: Record<string, unknown>,
   ) {
     loading.value = true;
     error.value = null;
@@ -52,11 +52,7 @@ export const useCompositionStore = defineStore("composition", () => {
     }
   }
 
-  async function deleteComposition(
-    serverId: string,
-    ehrId: string,
-    compositionUid: string
-  ) {
+  async function deleteComposition(serverId: string, ehrId: string, compositionUid: string) {
     loading.value = true;
     error.value = null;
     try {

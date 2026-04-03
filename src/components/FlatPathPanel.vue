@@ -30,11 +30,7 @@ async function copyPath(path: string) {
     </div>
 
     <div class="search-bar">
-      <input
-        class="input search-input"
-        v-model="searchQuery"
-        placeholder="Filter paths..."
-      />
+      <input class="input search-input" v-model="searchQuery" placeholder="Filter paths..." />
     </div>
 
     <div class="path-list">
@@ -46,9 +42,7 @@ async function copyPath(path: string) {
         @mouseleave="emit('highlight', null)"
       >
         <span class="path-text">{{ path }}</span>
-        <button class="copy-btn" @click="copyPath(path)" title="Copy path">
-          Copy
-        </button>
+        <button class="copy-btn" @click="copyPath(path)" title="Copy path">Copy</button>
       </div>
 
       <div v-if="filteredPaths.length === 0" class="empty-state">

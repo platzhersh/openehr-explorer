@@ -155,9 +155,7 @@ async function copyEhrId() {
           </div>
 
           <div class="dialog-actions">
-            <button type="button" class="btn btn-secondary" @click="handleClose">
-              Cancel
-            </button>
+            <button type="button" class="btn btn-secondary" @click="handleClose">Cancel</button>
             <button type="submit" class="btn btn-primary" :disabled="loading">
               {{ loading ? "Creating..." : "Create EHR" }}
             </button>

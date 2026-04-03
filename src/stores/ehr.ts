@@ -86,7 +86,7 @@ export const useEhrStore = defineStore("ehr", () => {
       is_queryable?: boolean;
       is_modifiable?: boolean;
       ehr_id?: string;
-    }
+    },
   ) {
     loading.value = true;
     error.value = null;
@@ -116,7 +116,7 @@ export const useEhrStore = defineStore("ehr", () => {
       is_modifiable: boolean;
       subject_namespace?: string;
       subject_id?: string;
-    }
+    },
   ) {
     loading.value = true;
     error.value = null;

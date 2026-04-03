@@ -7,7 +7,7 @@ const serverStore = useServerStore();
 const queryStore = useQueryStore();
 
 const queryText = ref(
-  "SELECT e/ehr_id/value, c/uid/value, c/name/value\nFROM EHR e\nCONTAINS COMPOSITION c\nLIMIT 20"
+  "SELECT e/ehr_id/value, c/uid/value, c/name/value\nFROM EHR e\nCONTAINS COMPOSITION c\nLIMIT 20",
 );
 const saveName = ref("");
 const showSaveDialog = ref(false);
@@ -53,7 +53,7 @@ function exportCsv() {
     row.map((cell) => {
       const val = typeof cell === "object" ? JSON.stringify(cell) : String(cell ?? "");
       return `"${val.replace(/"/g, '""')}"`;
-    })
+    }),
   );
 
   const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -79,8 +79,7 @@ function formatCellValue(value: unknown): string {
   return String(value);
 }
 
-const isComplex = (value: unknown): boolean =>
-  typeof value === "object" && value !== null;
+const isComplex = (value: unknown): boolean => typeof value === "object" && value !== null;
 </script>
 
 <template>
@@ -99,13 +98,7 @@ const isComplex = (value: unknown): boolean =>
             @click="loadQuery(sq)"
           >
             <div class="saved-name">{{ sq.name }}</div>
-            <button
-              class="copy-btn"
-              @click.stop="deleteSavedQuery(sq.id)"
-              title="Delete"
-            >
-              X
-            </button>
+            <button class="copy-btn" @click.stop="deleteSavedQuery(sq.id)" title="Delete">X</button>
           </div>
           <div v-if="queryStore.savedQueries.length === 0" class="empty-state">
             <p>No saved queries yet.</p>
@@ -120,12 +113,8 @@ const isComplex = (value: unknown): boolean =>
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">
-                Save
-              </button>
-              <button class="btn btn-sm btn-primary" @click="runQuery">
-                Run (Ctrl+Enter)
-              </button>
+              <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
+              <button class="btn btn-sm btn-primary" @click="runQuery">Run (Ctrl+Enter)</button>
             </div>
           </div>
 
@@ -136,9 +125,7 @@ const isComplex = (value: unknown): boolean =>
               placeholder="Query name..."
               @keydown.enter="saveCurrentQuery"
             />
-            <button class="btn btn-sm btn-primary" @click="saveCurrentQuery">
-              Save
-            </button>
+            <button class="btn btn-sm btn-primary" @click="saveCurrentQuery">Save</button>
             <button class="btn btn-sm" @click="showSaveDialog = false">Cancel</button>
           </div>
 
@@ -158,8 +145,8 @@ const isComplex = (value: unknown): boolean =>
           <div v-else-if="queryStore.result" class="results">
             <div class="results-header">
               <span class="results-info">
-                {{ queryStore.result.total_count }} rows
-                in {{ queryStore.result.execution_time_ms }}ms
+                {{ queryStore.result.total_count }} rows in
+                {{ queryStore.result.execution_time_ms }}ms
               </span>
               <button class="btn btn-sm" @click="exportCsv">Export CSV</button>
             </div>

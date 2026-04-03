@@ -24,23 +24,16 @@ interface TreeNode {
   path: string;
 }
 
-function buildTree(
-  data: unknown,
-  parentPath: string = "",
-  key: string = "root"
-): TreeNode[] {
+function buildTree(data: unknown, parentPath: string = "", key: string = "root"): TreeNode[] {
   if (data === null || data === undefined) return [];
 
   if (Array.isArray(data)) {
-    return data.flatMap((item, i) =>
-      buildTree(item, `${parentPath}[${i}]`, `${key}[${i}]`)
-    );
+    return data.flatMap((item, i) => buildTree(item, `${parentPath}[${i}]`, `${key}[${i}]`));
   }
 
   if (typeof data === "object") {
     const obj = data as Record<string, unknown>;
-    const name =
-      (obj.name as any)?.value ?? (obj.name as string) ?? key;
+    const name = (obj.name as any)?.value ?? (obj.name as string) ?? key;
     const archetypeId =
       (obj.archetype_node_id as string) ??
       (obj.archetype_details as any)?.archetype_id?.value ??
@@ -48,17 +41,13 @@ function buildTree(
     const rmType = (obj._type as string) ?? null;
 
     // Resolve label from web template if available
-    const label = props.webTemplate
-      ? resolveNodeLabel(props.webTemplate, archetypeId, name)
-      : name;
+    const label = props.webTemplate ? resolveNodeLabel(props.webTemplate, archetypeId, name) : name;
 
     const children: TreeNode[] = [];
     const valueFields: Record<string, unknown> = {};
 
     for (const [k, v] of Object.entries(obj)) {
-      if (
-        ["name", "_type", "archetype_node_id", "archetype_details", "uid"].includes(k)
-      ) {
+      if (["name", "_type", "archetype_node_id", "archetype_details", "uid"].includes(k)) {
         continue;
       }
 
@@ -136,11 +125,7 @@ const tree = computed(() => buildTree(props.data));
 <template>
   <div class="composition-tree">
     <div v-for="node in tree" :key="node.path" class="tree-root">
-      <TreeNodeComponent
-        :node="node"
-        :depth="0"
-        :highlighted-path="highlightedPath"
-      />
+      <TreeNodeComponent :node="node" :depth="0" :highlighted-path="highlightedPath" />
     </div>
     <div v-if="tree.length === 0" class="empty-state">
       <p>No data to display.</p>
@@ -186,11 +171,7 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 
       if (hasChildren) {
         headerChildren.push(
-          h(
-            "span",
-            { class: "toggle", onClick: toggle },
-            collapsed.value ? "\u25B6" : "\u25BC"
-          )
+          h("span", { class: "toggle", onClick: toggle }, collapsed.value ? "\u25B6" : "\u25BC"),
         );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
@@ -199,35 +180,26 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
       headerChildren.push(h("span", { class: "node-label" }, node.label));
 
       if (node.rmType) {
-        headerChildren.push(
-          h("span", { class: "badge rm-type" }, node.rmType)
-        );
+        headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
       }
 
       if (node.archetypeId) {
-        headerChildren.push(
-          h("span", { class: "badge archetype-id" }, node.archetypeId)
-        );
+        headerChildren.push(h("span", { class: "badge archetype-id" }, node.archetypeId));
       }
 
       if (node.value !== null && node.value !== undefined) {
-        headerChildren.push(
-          h("span", { class: "node-value" }, String(node.value))
-        );
+        headerChildren.push(h("span", { class: "node-value" }, String(node.value)));
       }
 
       elements.push(
         h(
           "div",
           {
-            class: [
-              "tree-node-header",
-              { highlighted: props.highlightedPath === node.path },
-            ],
+            class: ["tree-node-header", { highlighted: props.highlightedPath === node.path }],
             style: { paddingLeft: `${props.depth * 20}px` },
           },
-          headerChildren
-        )
+          headerChildren,
+        ),
       );
 
       // Children
@@ -238,8 +210,8 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
               node: child,
               depth: props.depth + 1,
               highlightedPath: props.highlightedPath,
-            })
-          )
+            }),
+          ),
         );
       }
 
