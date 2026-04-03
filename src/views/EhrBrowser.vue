@@ -15,6 +15,7 @@ const showCreateDialog = ref(false);
 const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
+const activeTab = ref<"detail" | "json">("detail");
 
 const ehrId = computed(() => route.params.ehrId as string | undefined);
 
@@ -145,6 +146,17 @@ function openDeleteDialog() {
 const canDelete = computed(() => {
   return deleteConfirmText.value === ehrId.value;
 });
+
+const ehrJson = computed(() => {
+  if (!ehrStore.selectedEhr) return "";
+  return JSON.stringify(ehrStore.selectedEhr, null, 2);
+});
+
+async function copyEhrJson() {
+  if (ehrJson.value) {
+    await navigator.clipboard.writeText(ehrJson.value);
+  }
+}
 </script>
 
 <template>
@@ -210,11 +222,28 @@ const canDelete = computed(() => {
         <div class="panel-header">
           <h2>EHR Detail</h2>
           <div class="header-actions">
+            <div class="tab-bar">
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'detail' }"
+                @click="activeTab = 'detail'"
+              >
+                Detail
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'json' }"
+                @click="activeTab = 'json'"
+              >
+                JSON
+              </button>
+            </div>
+            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">Copy JSON</button>
             <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
           </div>
         </div>
 
-        <div class="detail-section">
+        <div v-if="activeTab === 'detail'" class="detail-section">
           <div class="detail-row">
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
@@ -240,34 +269,49 @@ const canDelete = computed(() => {
             <span class="detail-label">Queryable</span>
             <span class="detail-value">{{ ehrStore.selectedEhr.is_queryable ?? "unknown" }}</span>
           </div>
+          <div class="detail-row" v-if="ehrStore.selectedEhr.subject_id">
+            <span class="detail-label">Subject ID</span>
+            <span class="detail-value">{{ ehrStore.selectedEhr.subject_id }}</span>
+          </div>
+          <div class="detail-row" v-if="ehrStore.selectedEhr.subject_namespace">
+            <span class="detail-label">Subject Namespace</span>
+            <span class="detail-value">{{ ehrStore.selectedEhr.subject_namespace }}</span>
+          </div>
         </div>
 
-        <h3 class="section-title">
+        <!-- JSON View -->
+        <div v-if="activeTab === 'json'" class="json-view">
+          <pre class="json-pre">{{ ehrJson }}</pre>
+        </div>
+
+        <h3 class="section-title" v-if="activeTab === 'detail'">
           Compositions ({{ ehrStore.selectedEhr.compositions.length }})
         </h3>
 
-        <div v-for="(comps, templateId) in compositionsByTemplate" :key="templateId" class="template-group">
-          <div class="template-group-header">
-            <span class="template-name">{{ templateId }}</span>
-            <span class="badge">{{ comps.length }}</span>
-          </div>
-          <div
-            v-for="comp in comps"
-            :key="comp.uid"
-            class="composition-item"
-            @click="openComposition(comp)"
-          >
-            <div class="comp-name">{{ comp.name ?? comp.uid.substring(0, 8) }}</div>
-            <div class="comp-meta">
-              <span v-if="comp.composer">{{ comp.composer }}</span>
-              <span v-if="comp.time_committed">{{ comp.time_committed }}</span>
+        <template v-if="activeTab === 'detail'">
+          <div v-for="(comps, templateId) in compositionsByTemplate" :key="templateId" class="template-group">
+            <div class="template-group-header">
+              <span class="template-name">{{ templateId }}</span>
+              <span class="badge">{{ comps.length }}</span>
+            </div>
+            <div
+              v-for="comp in comps"
+              :key="comp.uid"
+              class="composition-item"
+              @click="openComposition(comp)"
+            >
+              <div class="comp-name">{{ comp.name ?? comp.uid.substring(0, 8) }}</div>
+              <div class="comp-meta">
+                <span v-if="comp.composer">{{ comp.composer }}</span>
+                <span v-if="comp.time_committed">{{ comp.time_committed }}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="ehrStore.selectedEhr.compositions.length === 0" class="empty-state">
-          <p>No compositions found for this EHR.</p>
-        </div>
+          <div v-if="ehrStore.selectedEhr.compositions.length === 0" class="empty-state">
+            <p>No compositions found for this EHR.</p>
+          </div>
+        </template>
       </template>
 
       <div v-else class="empty-state">
@@ -363,6 +407,47 @@ const canDelete = computed(() => {
 .header-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.tab-bar {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.tab {
+  padding: 4px 12px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+.tab.active {
+  background: var(--color-primary-dim);
+  color: #fff;
+}
+
+.json-view {
+  margin-top: 16px;
+  overflow: auto;
+}
+.json-pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-surface);
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
 }
 
 .search-bar {
