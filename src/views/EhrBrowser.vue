@@ -3,6 +3,7 @@ import { ref, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary } from "../stores/ehr";
+import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -10,6 +11,10 @@ const serverStore = useServerStore();
 const ehrStore = useEhrStore();
 const searchQuery = ref("");
 const currentPage = ref(0);
+const showCreateDialog = ref(false);
+const showDeleteDialog = ref(false);
+const deleteConfirmText = ref("");
+const deleting = ref(false);
 
 const ehrId = computed(() => route.params.ehrId as string | undefined);
 
@@ -88,6 +93,46 @@ const compositionsByTemplate = computed(() => {
   }
   return groups;
 });
+
+function handleEhrCreated(newEhrId: string) {
+  showCreateDialog.value = false;
+  refresh();
+  // Navigate to the new EHR
+  router.push({ name: "ehr-detail", params: { ehrId: newEhrId } });
+}
+
+async function handleDeleteEhr() {
+  if (!serverStore.activeServerId || !ehrId.value) return;
+
+  // Validate confirmation text
+  if (deleteConfirmText.value !== ehrId.value) {
+    return;
+  }
+
+  deleting.value = true;
+  try {
+    await ehrStore.deleteEhr(serverStore.activeServerId, ehrId.value);
+    showDeleteDialog.value = false;
+    deleteConfirmText.value = "";
+    // Navigate back to EHR list
+    router.push({ name: "ehrs" });
+    // Refresh list
+    refresh();
+  } catch (e) {
+    alert(`Failed to delete EHR: ${e}`);
+  } finally {
+    deleting.value = false;
+  }
+}
+
+function openDeleteDialog() {
+  deleteConfirmText.value = "";
+  showDeleteDialog.value = true;
+}
+
+const canDelete = computed(() => {
+  return deleteConfirmText.value === ehrId.value;
+});
 </script>
 
 <template>
@@ -95,7 +140,10 @@ const compositionsByTemplate = computed(() => {
     <div class="panel-left">
       <div class="panel-header">
         <h2>EHRs</h2>
-        <button class="btn btn-sm" @click="refresh">Refresh</button>
+        <div class="header-actions">
+          <button class="btn btn-sm btn-primary" @click="showCreateDialog = true">+ New EHR</button>
+          <button class="btn btn-sm" @click="refresh">Refresh</button>
+        </div>
       </div>
 
       <div class="search-bar">
@@ -149,6 +197,9 @@ const compositionsByTemplate = computed(() => {
       <template v-if="ehrStore.selectedEhr">
         <div class="panel-header">
           <h2>EHR Detail</h2>
+          <div class="header-actions">
+            <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
+          </div>
         </div>
 
         <div class="detail-section">
@@ -212,6 +263,48 @@ const compositionsByTemplate = computed(() => {
         <p>Click on an EHR from the list to view its details and compositions.</p>
       </div>
     </div>
+
+    <!-- EHR Create Dialog -->
+    <EhrCreateDialog
+      :open="showCreateDialog"
+      @close="showCreateDialog = false"
+      @created="handleEhrCreated"
+    />
+
+    <!-- EHR Delete Confirmation Dialog -->
+    <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
+      <div class="dialog" @click.stop>
+        <h3>Delete EHR</h3>
+        <p>
+          This action cannot be undone. This will permanently delete the EHR and all its compositions.
+        </p>
+        <p>
+          Please type the EHR ID to confirm:
+        </p>
+        <div class="confirm-text">
+          <code>{{ ehrId }}</code>
+        </div>
+        <input
+          v-model="deleteConfirmText"
+          type="text"
+          class="input"
+          placeholder="Enter EHR ID to confirm"
+          :disabled="deleting"
+        />
+        <div class="dialog-actions">
+          <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
+            Cancel
+          </button>
+          <button
+            class="btn btn-sm btn-danger"
+            @click="handleDeleteEhr"
+            :disabled="!canDelete || deleting"
+          >
+            {{ deleting ? "Deleting..." : "Delete EHR" }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -253,6 +346,11 @@ const compositionsByTemplate = computed(() => {
 .panel-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .search-bar {
@@ -377,5 +475,70 @@ const compositionsByTemplate = computed(() => {
   margin-top: 2px;
   font-size: 11px;
   color: var(--color-text-muted);
+}
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dialog p {
+  margin: 0 0 12px 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.confirm-text {
+  background: var(--color-surface);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.dialog .input {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-danger {
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(255, 90, 90, 0.2);
 }
 </style>

@@ -48,6 +48,24 @@ const router = createRouter({
       name: "servers",
       component: () => import("./views/ServerManager.vue"),
     },
+    {
+      path: "/compose/:templateId",
+      name: "compose",
+      component: () => import("./views/CompositionForm.vue"),
+      props: true,
+    },
+    {
+      path: "/compose/:templateId/:ehrId",
+      name: "compose-for-ehr",
+      component: () => import("./views/CompositionForm.vue"),
+      props: true,
+    },
+    {
+      path: "/edit/:ehrId/:compositionUid",
+      name: "edit-composition",
+      component: () => import("./views/CompositionForm.vue"),
+      props: true,
+    },
   ],
 });
 
