@@ -40,7 +40,15 @@ const responseDetails = ref<string>("");
 const mbFormRef = ref<HTMLElement | null>(null);
 
 const isReady = computed(() => {
-  return selectedEhrId.value && templateStore.selectedWebTemplate && serverStore.activeServerId;
+  // Form can be shown if template is loaded - EHR selection is only required for submission
+  const ready = templateStore.selectedWebTemplate && serverStore.activeServerId;
+  console.log("isReady check:", {
+    selectedEhrId: selectedEhrId.value,
+    hasWebTemplate: !!templateStore.selectedWebTemplate,
+    activeServerId: serverStore.activeServerId,
+    isReady: ready
+  });
+  return ready;
 });
 
 // Initialize
@@ -60,8 +68,23 @@ onMounted(async () => {
 
   // Load template
   const templateId = props.templateId || route.params.templateId as string;
+  console.log("CompositionForm onMounted: templateId =", templateId);
+  console.log("CompositionForm onMounted: props =", props);
+  console.log("CompositionForm onMounted: route.params =", route.params);
+
   if (templateId) {
-    await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
+    console.log("CompositionForm: fetching web template for", templateId);
+    try {
+      await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
+      console.log("CompositionForm: web template fetched successfully");
+      console.log("CompositionForm: selectedWebTemplate =", templateStore.selectedWebTemplate);
+    } catch (e) {
+      console.error("CompositionForm: failed to fetch web template:", e);
+      error.value = `Failed to load template: ${e}`;
+    }
+  } else {
+    console.error("CompositionForm: no template ID found");
+    error.value = "No template ID provided";
   }
 
   // Edit mode: load existing composition
@@ -75,6 +98,13 @@ onMounted(async () => {
 
   // Load draft if exists
   loadDraft();
+
+  // Ensure webTemplate is set on the mb-auto-form element when it becomes available
+  setTimeout(() => {
+    if (mbFormRef.value && templateStore.selectedWebTemplate) {
+      (mbFormRef.value as any).webTemplate = templateStore.selectedWebTemplate;
+    }
+  }, 100);
 });
 
 async function loadCompositionForEdit() {
@@ -340,15 +370,17 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
       <!-- medblocks-ui Form -->
       <div v-if="isReady" class="form-section">
         <h3>Composition Data</h3>
-        <mb-form
+        <mb-auto-form
           ref="mbFormRef"
-          :webTemplate="templateStore.selectedWebTemplate"
           @mb-submit="handleMbSubmit"
         />
       </div>
 
       <div v-else class="loading">
-        Loading template...
+        <p v-if="!serverStore.activeServerId">No server selected</p>
+        <p v-else-if="!templateStore.selectedWebTemplate">Loading template...</p>
+        <p v-else-if="!selectedEhrId">Please select an EHR above</p>
+        <p v-else>Initializing form...</p>
       </div>
 
       <!-- Submit -->
