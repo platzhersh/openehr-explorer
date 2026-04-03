@@ -239,6 +239,7 @@ pub async fn create_ehr(
 
     if let Some(ehr_id) = &request.ehr_id {
         ehr_body["ehr_id"] = serde_json::json!({
+            "_type": "HIER_OBJECT_ID",
             "value": ehr_id
         });
     }
@@ -248,76 +249,83 @@ pub async fn create_ehr(
         "_type": "EHR_STATUS",
         "archetype_node_id": "openEHR-EHR-EHR_STATUS.generic.v1",
         "name": {
+            "_type": "DV_TEXT",
             "value": "EHR Status"
+        },
+        "subject": {
+            "_type": "PARTY_SELF"
         },
         "is_queryable": request.is_queryable.unwrap_or(true),
         "is_modifiable": request.is_modifiable.unwrap_or(true)
     });
 
-    // Add subject if provided
+    // Override subject if external identity is provided
     if request.subject_namespace.is_some() && request.subject_id.is_some() {
         ehr_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
+                "_type": "PARTY_REF",
                 "id": {
                     "_type": "GENERIC_ID",
                     "value": request.subject_id.unwrap(),
                     "scheme": request.subject_namespace.unwrap()
                 },
-                "namespace": "external"
+                "namespace": "external",
+                "type": "PERSON"
             }
-        });
-    } else {
-        ehr_status["subject"] = serde_json::json!({
-            "_type": "PARTY_SELF"
         });
     }
 
-    ehr_body["ehr_status"] = ehr_status;
+    // For EHR creation, EHRBase expects the EHR_STATUS object directly, not wrapped
+    let request_body = if request.ehr_id.is_some() {
+        // If custom EHR ID is provided, we need to wrap it
+        ehr_body["ehr_status"] = ehr_status.clone();
+        ehr_body
+    } else {
+        // Otherwise, send EHR_STATUS directly as the root object
+        ehr_status
+    };
+
+    // Debug: print the JSON being sent
+    eprintln!("Creating EHR with JSON:\n{}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
 
     let url = format!("{}/rest/openehr/v1/ehr", base);
     let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
-        .json(&ehr_body)
+        .json(&request_body)
         .send()
         .await
         .map_err(|e| format!("Failed to create EHR: {}", e))?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    let status = response.status();
+
+    if !status.is_success() {
+        let response_text = response.text().await.unwrap_or_default();
+        return Err(format!("Server returned HTTP {}: {}", status.as_u16(), response_text));
     }
 
-    let result: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    // EHRBase returns 201 Created with Location header, but empty body
+    // Extract EHR ID from Location header: /rest/openehr/v1/ehr/{ehr_id}
+    let location = response
+        .headers()
+        .get("Location")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("Location header not found in response")?;
 
-    let ehr_id = result
-        .get("ehr_id")
-        .and_then(|e| e.get("value"))
-        .and_then(|v| v.as_str())
-        .ok_or("EHR ID not found in response")?
+    eprintln!("EHR created at: {}", location);
+
+    // Extract EHR ID from the location path
+    let ehr_id = location
+        .split('/')
+        .last()
+        .ok_or("Could not extract EHR ID from Location header")?
         .to_string();
-
-    let system_id = result
-        .get("system_id")
-        .and_then(|s| s.get("value"))
-        .and_then(|v| v.as_str())
-        .map(String::from);
-
-    let time_created = result
-        .get("time_created")
-        .and_then(|t| t.get("value"))
-        .and_then(|v| v.as_str())
-        .map(String::from);
 
     Ok(CreateEhrResponse {
         ehr_id,
-        system_id,
-        time_created,
+        system_id: None,
+        time_created: None,
     })
 }
 
