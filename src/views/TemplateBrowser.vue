@@ -4,6 +4,8 @@ import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { extractFlatPaths } from "../lib/webtemplate";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 
 const route = useRoute();
 const router = useRouter();
@@ -87,11 +89,8 @@ const wtTree = computed(() => {
   return tree ? buildWtTree(tree) : null;
 });
 
-async function handleDrop(event: DragEvent) {
-  event.preventDefault();
-  uploadDragOver.value = false;
-  const file = event.dataTransfer?.files[0];
-  if (!file || !serverStore.activeServerId) return;
+async function uploadFile(file: File) {
+  if (!serverStore.activeServerId) return;
 
   uploadStatus.value = null;
   uploadError.value = null;
@@ -104,6 +103,52 @@ async function handleDrop(event: DragEvent) {
     );
     uploadStatus.value = result;
     templateStore.fetchTemplates(serverStore.activeServerId);
+  } catch (e) {
+    uploadError.value = String(e);
+  }
+}
+
+async function handleDrop(event: DragEvent) {
+  event.preventDefault();
+  uploadDragOver.value = false;
+  const file = event.dataTransfer?.files[0];
+  if (!file) return;
+
+  await uploadFile(file);
+}
+
+async function handleFileSelect() {
+  try {
+    const selected = await open({
+      multiple: false,
+      filters: [
+        {
+          name: "OPT Files",
+          extensions: ["opt", "xml"],
+        },
+      ],
+    });
+
+    if (selected && typeof selected === "string") {
+      if (!serverStore.activeServerId) return;
+
+      uploadStatus.value = null;
+      uploadError.value = null;
+
+      try {
+        // Read file using Tauri's FS plugin
+        const text = await readTextFile(selected);
+
+        const result = await templateStore.uploadTemplate(
+          serverStore.activeServerId,
+          text
+        );
+        uploadStatus.value = result;
+        templateStore.fetchTemplates(serverStore.activeServerId);
+      } catch (e) {
+        uploadError.value = String(e);
+      }
+    }
   } catch (e) {
     uploadError.value = String(e);
   }
@@ -164,6 +209,9 @@ async function copyToClipboard(text: string) {
           @drop="handleDrop"
         >
           <p>Drop OPT file here to upload</p>
+          <button class="btn btn-sm" @click="handleFileSelect">
+            Or choose file...
+          </button>
         </div>
         <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
         <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
@@ -431,10 +479,17 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
   color: var(--color-text-muted);
   font-size: 13px;
   transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
 }
 .upload-zone.drag-over {
   border-color: var(--color-primary);
   background: rgba(100, 255, 218, 0.05);
+}
+.upload-zone p {
+  margin: 0;
 }
 
 .upload-msg {
