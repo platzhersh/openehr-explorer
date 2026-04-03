@@ -138,7 +138,11 @@ function setAuthType(type: string) {
 
         <div class="form-group">
           <label>Authentication</label>
-          <select class="input" :value="form.auth_method.type" @change="setAuthType(($event.target as HTMLSelectElement).value)">
+          <select
+            class="input"
+            :value="form.auth_method.type"
+            @change="setAuthType(($event.target as HTMLSelectElement).value)"
+          >
             <option value="none">None</option>
             <option value="basic">Basic Auth</option>
             <option value="bearer">Bearer Token</option>

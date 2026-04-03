@@ -32,10 +32,10 @@ export const useTemplateStore = defineStore("template", () => {
     loading.value = true;
     error.value = null;
     try {
-      selectedWebTemplate.value = await invoke<Record<string, unknown>>(
-        "get_web_template",
-        { serverId, templateId }
-      );
+      selectedWebTemplate.value = await invoke<Record<string, unknown>>("get_web_template", {
+        serverId,
+        templateId,
+      });
     } catch (e) {
       error.value = String(e);
     } finally {

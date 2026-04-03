@@ -47,6 +47,20 @@ docker-compose down      # Stop EHRBase server
 
 This ensures reproducible builds and prevents unexpected breakage from dependency updates.
 
+### Linting & Formatting
+```bash
+npm run lint             # Lint frontend (oxlint)
+npm run lint:fix         # Lint + auto-fix frontend
+npm run fmt              # Format frontend (oxfmt)
+npm run fmt:check        # Check frontend formatting
+
+cd src-tauri
+cargo fmt                # Format Rust code
+cargo fmt -- --check     # Check Rust formatting
+cargo clippy             # Run Rust linter
+cargo clippy -- -D warnings  # Clippy with warnings as errors (CI mode)
+```
+
 ### Build
 ```bash
 npm run tauri build      # Build production app (creates DMG on macOS)

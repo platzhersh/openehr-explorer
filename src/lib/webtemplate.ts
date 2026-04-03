@@ -5,7 +5,7 @@
 export function resolveNodeLabel(
   webTemplate: Record<string, unknown>,
   archetypeNodeId: string | null,
-  defaultName: string
+  defaultName: string,
 ): string {
   if (!archetypeNodeId || !webTemplate) return defaultName;
 
@@ -16,10 +16,7 @@ export function resolveNodeLabel(
   return found ?? defaultName;
 }
 
-function findNodeById(
-  node: Record<string, unknown>,
-  targetId: string
-): string | null {
+function findNodeById(node: Record<string, unknown>, targetId: string): string | null {
   const nodeId = node.id as string | undefined;
   const nodeArchetypeId = node.node_id as string | undefined;
 
@@ -41,9 +38,7 @@ function findNodeById(
 /**
  * Extract all FLAT paths from a Web Template tree.
  */
-export function extractFlatPaths(
-  webTemplate: Record<string, unknown>
-): string[] {
+export function extractFlatPaths(webTemplate: Record<string, unknown>): string[] {
   const tree = webTemplate.tree as Record<string, unknown> | undefined;
   if (!tree) return [];
 
@@ -52,13 +47,9 @@ export function extractFlatPaths(
   return paths.sort();
 }
 
-function collectPaths(
-  node: Record<string, unknown>,
-  parentPath: string,
-  paths: string[]
-): void {
+function collectPaths(node: Record<string, unknown>, parentPath: string, paths: string[]): void {
   const id = node.id as string | undefined;
-  const currentPath = parentPath ? `${parentPath}/${id ?? ""}` : id ?? "";
+  const currentPath = parentPath ? `${parentPath}/${id ?? ""}` : (id ?? "");
 
   const children = node.children as Record<string, unknown>[] | undefined;
   if (children && children.length > 0) {

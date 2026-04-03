@@ -66,10 +66,7 @@ pub async fn list_templates(server_id: String) -> Result<Vec<TemplateSummary>, S
 }
 
 #[tauri::command]
-pub async fn get_web_template(
-    server_id: String,
-    template_id: String,
-) -> Result<Value, String> {
+pub async fn get_web_template(server_id: String, template_id: String) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -99,10 +96,7 @@ pub async fn get_web_template(
 }
 
 #[tauri::command]
-pub async fn get_template_opt(
-    server_id: String,
-    template_id: String,
-) -> Result<String, String> {
+pub async fn get_template_opt(server_id: String, template_id: String) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -132,10 +126,7 @@ pub async fn get_template_opt(
 }
 
 #[tauri::command]
-pub async fn upload_template(
-    server_id: String,
-    opt_xml: String,
-) -> Result<String, String> {
+pub async fn upload_template(server_id: String, opt_xml: String) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -153,8 +144,15 @@ pub async fn upload_template(
     let body = response.text().await.unwrap_or_default();
 
     if status.is_success() || status.as_u16() == 201 || status.as_u16() == 204 {
-        Ok(format!("Template uploaded successfully (HTTP {})", status.as_u16()))
+        Ok(format!(
+            "Template uploaded successfully (HTTP {})",
+            status.as_u16()
+        ))
     } else {
-        Err(format!("Upload failed (HTTP {}): {}", status.as_u16(), body))
+        Err(format!(
+            "Upload failed (HTTP {}): {}",
+            status.as_u16(),
+            body
+        ))
     }
 }

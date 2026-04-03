@@ -1,5 +1,5 @@
-pub mod server;
-pub mod ehr;
 pub mod composition;
-pub mod template;
+pub mod ehr;
 pub mod query;
+pub mod server;
+pub mod template;

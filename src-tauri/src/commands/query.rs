@@ -108,10 +108,7 @@ pub async fn execute_aql(server_id: String, query: String) -> Result<AqlResult, 
                         .and_then(|n| n.as_str())
                         .unwrap_or("?")
                         .to_string(),
-                    path: col
-                        .get("path")
-                        .and_then(|p| p.as_str())
-                        .map(String::from),
+                    path: col.get("path").and_then(|p| p.as_str()).map(String::from),
                 })
                 .collect()
         })
@@ -122,11 +119,7 @@ pub async fn execute_aql(server_id: String, query: String) -> Result<AqlResult, 
         .and_then(|r| r.as_array())
         .map(|rs| {
             rs.iter()
-                .map(|row| {
-                    row.as_array()
-                        .cloned()
-                        .unwrap_or_else(|| vec![row.clone()])
-                })
+                .map(|row| row.as_array().cloned().unwrap_or_else(|| vec![row.clone()]))
                 .collect()
         })
         .unwrap_or_default();

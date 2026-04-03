@@ -27,7 +27,7 @@ watch(
       currentPage.value = 0;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(ehrId, (id) => {
@@ -80,9 +80,7 @@ const filteredEhrs = computed(() => {
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase();
     ehrs = ehrs.filter(
-      (e) =>
-        e.ehr_id.toLowerCase().includes(q) ||
-        e.subject_id?.toLowerCase().includes(q)
+      (e) => e.ehr_id.toLowerCase().includes(q) || e.subject_id?.toLowerCase().includes(q),
     );
   }
 
@@ -195,7 +193,11 @@ async function copyEhrJson() {
           >
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
-              <button class="copy-btn" @click.stop="copyToClipboard(ehr.ehr_id)" title="Copy full ID">
+              <button
+                class="copy-btn"
+                @click.stop="copyToClipboard(ehr.ehr_id)"
+                title="Copy full ID"
+              >
                 Copy
               </button>
             </div>
@@ -238,7 +240,9 @@ async function copyEhrJson() {
                 JSON
               </button>
             </div>
-            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">Copy JSON</button>
+            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">
+              Copy JSON
+            </button>
             <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
           </div>
         </div>
@@ -289,7 +293,11 @@ async function copyEhrJson() {
         </h3>
 
         <template v-if="activeTab === 'detail'">
-          <div v-for="(comps, templateId) in compositionsByTemplate" :key="templateId" class="template-group">
+          <div
+            v-for="(comps, templateId) in compositionsByTemplate"
+            :key="templateId"
+            class="template-group"
+          >
             <div class="template-group-header">
               <span class="template-name">{{ templateId }}</span>
               <span class="badge">{{ comps.length }}</span>
@@ -332,11 +340,10 @@ async function copyEhrJson() {
       <div class="dialog" @click.stop>
         <h3>Delete EHR</h3>
         <p>
-          This action cannot be undone. This will permanently delete the EHR and all its compositions.
+          This action cannot be undone. This will permanently delete the EHR and all its
+          compositions.
         </p>
-        <p>
-          Please type the EHR ID to confirm:
-        </p>
+        <p>Please type the EHR ID to confirm:</p>
         <div class="confirm-text">
           <code>{{ ehrId }}</code>
         </div>

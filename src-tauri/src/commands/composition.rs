@@ -161,9 +161,7 @@ pub async fn get_composition_versions(
                     .map(String::from),
             });
 
-            let time_committed = commit_audit
-                .as_ref()
-                .and_then(|a| a.time_committed.clone());
+            let time_committed = commit_audit.as_ref().and_then(|a| a.time_committed.clone());
 
             CompositionVersion {
                 version_id,
@@ -295,5 +293,8 @@ pub async fn delete_composition(
         return Err(format!("Server returned HTTP {}: {}", status, body));
     }
 
-    Ok(format!("Composition {} deleted successfully", composition_uid))
+    Ok(format!(
+        "Composition {} deleted successfully",
+        composition_uid
+    ))
 }

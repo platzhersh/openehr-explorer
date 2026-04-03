@@ -18,8 +18,8 @@ export const useServerStore = defineStore("server", () => {
   const activeServerId = ref<string | null>(null);
   const connectionStatus = ref<Record<string, "connected" | "error" | "unknown">>({});
 
-  const activeServer = computed(() =>
-    profiles.value.find((p) => p.id === activeServerId.value) ?? null
+  const activeServer = computed(
+    () => profiles.value.find((p) => p.id === activeServerId.value) ?? null,
   );
 
   async function loadProfiles() {
