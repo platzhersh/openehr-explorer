@@ -31,6 +31,10 @@ source $HOME/.cargo/env  # or restart your shell
 ```bash
 npm install              # Install frontend dependencies
 npm run tauri dev        # Run development server with hot reload
+
+# Local EHRBase for testing
+docker-compose up -d     # Start local EHRBase server (see LOCAL_TESTING.md)
+docker-compose down      # Stop EHRBase server
 ```
 
 ### Build
