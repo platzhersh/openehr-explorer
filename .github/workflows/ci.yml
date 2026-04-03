@@ -75,7 +75,10 @@ jobs:
         run: npm run tauri build -- --target universal-apple-darwin
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Use Developer ID signing if secrets are configured, otherwise
+          # fall back to ad-hoc signing (-) so macOS shows "unidentified
+          # developer" instead of "file is damaged"
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
