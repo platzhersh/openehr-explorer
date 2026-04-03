@@ -180,3 +180,120 @@ pub async fn get_composition_versions(
 
     Ok(versions)
 }
+
+#[tauri::command]
+pub async fn create_composition(
+    server_id: String,
+    ehr_id: String,
+    composition_data: Value,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!("{}/rest/openehr/v1/ehr/{}/composition", base, ehr_id);
+
+    let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+        .header("Content-Type", "application/openehr.wt.flat.schema+json")
+        .header("Accept", "application/json")
+        .json(&composition_data)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to create composition: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Server returned HTTP {}: {}", status, body));
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Extract composition UID from response
+    let composition_uid = result
+        .get("uid")
+        .and_then(|u| u.get("value"))
+        .and_then(|v| v.as_str())
+        .ok_or("Composition UID not found in response")?
+        .to_string();
+
+    Ok(composition_uid)
+}
+
+#[tauri::command]
+pub async fn update_composition(
+    server_id: String,
+    ehr_id: String,
+    composition_uid: String,
+    composition_data: Value,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/composition/{}",
+        base, ehr_id, composition_uid
+    );
+
+    let response = make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
+        .header("Content-Type", "application/openehr.wt.flat.schema+json")
+        .header("Accept", "application/json")
+        .json(&composition_data)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to update composition: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Server returned HTTP {}: {}", status, body));
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Extract new version UID
+    let new_uid = result
+        .get("uid")
+        .and_then(|u| u.get("value"))
+        .and_then(|v| v.as_str())
+        .ok_or("Composition UID not found in response")?
+        .to_string();
+
+    Ok(new_uid)
+}
+
+#[tauri::command]
+pub async fn delete_composition(
+    server_id: String,
+    ehr_id: String,
+    composition_uid: String,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/composition/{}",
+        base, ehr_id, composition_uid
+    );
+
+    let response = make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to delete composition: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Server returned HTTP {}: {}", status, body));
+    }
+
+    Ok(format!("Composition {} deleted successfully", composition_uid))
+}

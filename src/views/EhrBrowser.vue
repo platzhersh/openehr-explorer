@@ -3,6 +3,7 @@ import { ref, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary } from "../stores/ehr";
+import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -10,6 +11,11 @@ const serverStore = useServerStore();
 const ehrStore = useEhrStore();
 const searchQuery = ref("");
 const currentPage = ref(0);
+const showCreateDialog = ref(false);
+const showDeleteDialog = ref(false);
+const deleteConfirmText = ref("");
+const deleting = ref(false);
+const activeTab = ref<"detail" | "json">("detail");
 
 const ehrId = computed(() => route.params.ehrId as string | undefined);
 
@@ -68,13 +74,25 @@ async function copyToClipboard(text: string) {
 }
 
 const filteredEhrs = computed(() => {
-  if (!searchQuery.value) return ehrStore.ehrs;
-  const q = searchQuery.value.toLowerCase();
-  return ehrStore.ehrs.filter(
-    (e) =>
-      e.ehr_id.toLowerCase().includes(q) ||
-      e.subject_id?.toLowerCase().includes(q)
-  );
+  let ehrs = ehrStore.ehrs;
+
+  // Filter by search query
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase();
+    ehrs = ehrs.filter(
+      (e) =>
+        e.ehr_id.toLowerCase().includes(q) ||
+        e.subject_id?.toLowerCase().includes(q)
+    );
+  }
+
+  // Sort by time_created descending (newest first)
+  return [...ehrs].sort((a, b) => {
+    if (!a.time_created && !b.time_created) return 0;
+    if (!a.time_created) return 1;
+    if (!b.time_created) return -1;
+    return b.time_created.localeCompare(a.time_created);
+  });
 });
 
 // Group compositions by template_id
@@ -88,6 +106,57 @@ const compositionsByTemplate = computed(() => {
   }
   return groups;
 });
+
+function handleEhrCreated(newEhrId: string) {
+  showCreateDialog.value = false;
+  refresh();
+  // Navigate to the new EHR
+  router.push({ name: "ehr-detail", params: { ehrId: newEhrId } });
+}
+
+async function handleDeleteEhr() {
+  if (!serverStore.activeServerId || !ehrId.value) return;
+
+  // Validate confirmation text
+  if (deleteConfirmText.value !== ehrId.value) {
+    return;
+  }
+
+  deleting.value = true;
+  try {
+    await ehrStore.deleteEhr(serverStore.activeServerId, ehrId.value);
+    showDeleteDialog.value = false;
+    deleteConfirmText.value = "";
+    // Navigate back to EHR list
+    router.push({ name: "ehrs" });
+    // Refresh list
+    refresh();
+  } catch (e) {
+    alert(`Failed to delete EHR: ${e}`);
+  } finally {
+    deleting.value = false;
+  }
+}
+
+function openDeleteDialog() {
+  deleteConfirmText.value = "";
+  showDeleteDialog.value = true;
+}
+
+const canDelete = computed(() => {
+  return deleteConfirmText.value === ehrId.value;
+});
+
+const ehrJson = computed(() => {
+  if (!ehrStore.selectedEhr) return "";
+  return JSON.stringify(ehrStore.selectedEhr, null, 2);
+});
+
+async function copyEhrJson() {
+  if (ehrJson.value) {
+    await navigator.clipboard.writeText(ehrJson.value);
+  }
+}
 </script>
 
 <template>
@@ -95,7 +164,10 @@ const compositionsByTemplate = computed(() => {
     <div class="panel-left">
       <div class="panel-header">
         <h2>EHRs</h2>
-        <button class="btn btn-sm" @click="refresh">Refresh</button>
+        <div class="header-actions">
+          <button class="btn btn-sm btn-primary" @click="showCreateDialog = true">+ New EHR</button>
+          <button class="btn btn-sm" @click="refresh">Refresh</button>
+        </div>
       </div>
 
       <div class="search-bar">
@@ -149,9 +221,29 @@ const compositionsByTemplate = computed(() => {
       <template v-if="ehrStore.selectedEhr">
         <div class="panel-header">
           <h2>EHR Detail</h2>
+          <div class="header-actions">
+            <div class="tab-bar">
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'detail' }"
+                @click="activeTab = 'detail'"
+              >
+                Detail
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'json' }"
+                @click="activeTab = 'json'"
+              >
+                JSON
+              </button>
+            </div>
+            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">Copy JSON</button>
+            <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
+          </div>
         </div>
 
-        <div class="detail-section">
+        <div v-if="activeTab === 'detail'" class="detail-section">
           <div class="detail-row">
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
@@ -177,39 +269,96 @@ const compositionsByTemplate = computed(() => {
             <span class="detail-label">Queryable</span>
             <span class="detail-value">{{ ehrStore.selectedEhr.is_queryable ?? "unknown" }}</span>
           </div>
+          <div class="detail-row" v-if="ehrStore.selectedEhr.subject_id">
+            <span class="detail-label">Subject ID</span>
+            <span class="detail-value">{{ ehrStore.selectedEhr.subject_id }}</span>
+          </div>
+          <div class="detail-row" v-if="ehrStore.selectedEhr.subject_namespace">
+            <span class="detail-label">Subject Namespace</span>
+            <span class="detail-value">{{ ehrStore.selectedEhr.subject_namespace }}</span>
+          </div>
         </div>
 
-        <h3 class="section-title">
+        <!-- JSON View -->
+        <div v-if="activeTab === 'json'" class="json-view">
+          <pre class="json-pre">{{ ehrJson }}</pre>
+        </div>
+
+        <h3 class="section-title" v-if="activeTab === 'detail'">
           Compositions ({{ ehrStore.selectedEhr.compositions.length }})
         </h3>
 
-        <div v-for="(comps, templateId) in compositionsByTemplate" :key="templateId" class="template-group">
-          <div class="template-group-header">
-            <span class="template-name">{{ templateId }}</span>
-            <span class="badge">{{ comps.length }}</span>
-          </div>
-          <div
-            v-for="comp in comps"
-            :key="comp.uid"
-            class="composition-item"
-            @click="openComposition(comp)"
-          >
-            <div class="comp-name">{{ comp.name ?? comp.uid.substring(0, 8) }}</div>
-            <div class="comp-meta">
-              <span v-if="comp.composer">{{ comp.composer }}</span>
-              <span v-if="comp.time_committed">{{ comp.time_committed }}</span>
+        <template v-if="activeTab === 'detail'">
+          <div v-for="(comps, templateId) in compositionsByTemplate" :key="templateId" class="template-group">
+            <div class="template-group-header">
+              <span class="template-name">{{ templateId }}</span>
+              <span class="badge">{{ comps.length }}</span>
+            </div>
+            <div
+              v-for="comp in comps"
+              :key="comp.uid"
+              class="composition-item"
+              @click="openComposition(comp)"
+            >
+              <div class="comp-name">{{ comp.name ?? comp.uid.substring(0, 8) }}</div>
+              <div class="comp-meta">
+                <span v-if="comp.composer">{{ comp.composer }}</span>
+                <span v-if="comp.time_committed">{{ comp.time_committed }}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="ehrStore.selectedEhr.compositions.length === 0" class="empty-state">
-          <p>No compositions found for this EHR.</p>
-        </div>
+          <div v-if="ehrStore.selectedEhr.compositions.length === 0" class="empty-state">
+            <p>No compositions found for this EHR.</p>
+          </div>
+        </template>
       </template>
 
       <div v-else class="empty-state">
         <h3>Select an EHR</h3>
         <p>Click on an EHR from the list to view its details and compositions.</p>
+      </div>
+    </div>
+
+    <!-- EHR Create Dialog -->
+    <EhrCreateDialog
+      :open="showCreateDialog"
+      @close="showCreateDialog = false"
+      @created="handleEhrCreated"
+    />
+
+    <!-- EHR Delete Confirmation Dialog -->
+    <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
+      <div class="dialog" @click.stop>
+        <h3>Delete EHR</h3>
+        <p>
+          This action cannot be undone. This will permanently delete the EHR and all its compositions.
+        </p>
+        <p>
+          Please type the EHR ID to confirm:
+        </p>
+        <div class="confirm-text">
+          <code>{{ ehrId }}</code>
+        </div>
+        <input
+          v-model="deleteConfirmText"
+          type="text"
+          class="input"
+          placeholder="Enter EHR ID to confirm"
+          :disabled="deleting"
+        />
+        <div class="dialog-actions">
+          <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
+            Cancel
+          </button>
+          <button
+            class="btn btn-sm btn-danger"
+            @click="handleDeleteEhr"
+            :disabled="!canDelete || deleting"
+          >
+            {{ deleting ? "Deleting..." : "Delete EHR" }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -253,6 +402,52 @@ const compositionsByTemplate = computed(() => {
 .panel-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tab-bar {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.tab {
+  padding: 4px 12px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+.tab.active {
+  background: var(--color-primary-dim);
+  color: #fff;
+}
+
+.json-view {
+  margin-top: 16px;
+  overflow: auto;
+}
+.json-pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-surface);
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
 }
 
 .search-bar {
@@ -377,5 +572,70 @@ const compositionsByTemplate = computed(() => {
   margin-top: 2px;
   font-size: 11px;
   color: var(--color-text-muted);
+}
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dialog p {
+  margin: 0 0 12px 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.confirm-text {
+  background: var(--color-surface);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.dialog .input {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-danger {
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(255, 90, 90, 0.2);
 }
 </style>

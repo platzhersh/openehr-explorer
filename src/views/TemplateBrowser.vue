@@ -157,6 +157,10 @@ async function handleFileSelect() {
 async function copyToClipboard(text: string) {
   await navigator.clipboard.writeText(text);
 }
+
+function createComposition(templateId: string) {
+  router.push({ name: "compose", params: { templateId } });
+}
 </script>
 
 <template>
@@ -188,15 +192,23 @@ async function copyToClipboard(text: string) {
             :key="tmpl.template_id"
             class="template-item"
             :class="{ active: tmpl.template_id === selectedTemplateId }"
-            @click="selectTemplate(tmpl.template_id)"
           >
-            <div class="template-name">{{ tmpl.template_id }}</div>
-            <div class="template-meta">
-              <span v-if="tmpl.concept" class="meta-item">{{ tmpl.concept }}</span>
-              <span v-if="tmpl.created_timestamp" class="meta-item">
-                {{ tmpl.created_timestamp }}
-              </span>
+            <div @click="selectTemplate(tmpl.template_id)" style="flex: 1; cursor: pointer">
+              <div class="template-name">{{ tmpl.template_id }}</div>
+              <div class="template-meta">
+                <span v-if="tmpl.concept" class="meta-item">{{ tmpl.concept }}</span>
+                <span v-if="tmpl.created_timestamp" class="meta-item">
+                  {{ tmpl.created_timestamp }}
+                </span>
+              </div>
             </div>
+            <button
+              class="btn btn-sm btn-primary"
+              @click.stop="createComposition(tmpl.template_id)"
+              title="Create new composition"
+            >
+              New Composition
+            </button>
           </div>
         </div>
 
@@ -444,8 +456,10 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 .template-item {
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
-  cursor: pointer;
   transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .template-item:hover {
   background: var(--color-surface);

@@ -37,6 +37,16 @@ docker-compose up -d     # Start local EHRBase server (see LOCAL_TESTING.md)
 docker-compose down      # Stop EHRBase server
 ```
 
+### Dependency Management
+
+**IMPORTANT:** This project uses **pinned versions** (not semver ranges) for all dependencies:
+- `package.json`: Use exact versions without `^` or `~` (e.g., `"vue": "3.5.31"` NOT `"^3.5.31"`)
+- `Cargo.toml`: Use full versions without caret (e.g., `version = "2.3.1"` NOT `version = "2"`)
+
+**Note:** In Cargo.toml, we specify the full version number (e.g., `"2.3.1"`) which Cargo treats as `"^2.3.1"` by default. The actual pinning happens via `Cargo.lock` which is committed to the repository.
+
+This ensures reproducible builds and prevents unexpected breakage from dependency updates.
+
 ### Build
 ```bash
 npm run tauri build      # Build production app (creates DMG on macOS)
@@ -144,3 +154,61 @@ When working with openEHR REST APIs:
 - **FLAT format** is a denormalized key-value representation of compositions (useful for SDK development)
 - **AQL** (Archetype Query Language) is used to query EHR data across compositions
 - **OPT** (Operational Template XML) vs **Web Template** (JSON): both describe templates, different formats
+
+## PRD-0003: Composition & EHR CRUD Implementation
+
+### Status: ✅ COMPLETE (100%)
+
+All features from PRD-0003 have been implemented and are ready to use!
+
+### Implemented Features
+
+**Backend (100% Complete):**
+- EHR CRUD: `create_ehr`, `update_ehr_status`, `delete_ehr` (`src-tauri/src/commands/ehr.rs:228-426`)
+- Composition CRUD: `create_composition`, `update_composition`, `delete_composition` (`src-tauri/src/commands/composition.rs:184-299`)
+- All commands registered and working with FLAT format (`application/openehr.wt.flat.schema+json`)
+
+**Stores (100% Complete):**
+- `src/stores/ehr.ts` - EHR CRUD functions with proper error handling
+- `src/stores/composition.ts` - Composition CRUD functions
+
+**UI Components (100% Complete):**
+- `src/components/EhrCreateDialog.vue` - Full EHR creation dialog with subject identity, flags, custom ID
+- `src/views/EhrBrowser.vue` - "+ New EHR" button + Delete EHR dialog (requires typing EHR ID to confirm)
+- `src/views/CompositionForm.vue` - Complete composition create/edit form with:
+  - EHR selector with "Create New EHR" option
+  - Context fields (composer, language, territory, time)
+  - medblocks-ui `<mb-form>` integration for template rendering
+  - FLAT preview panel (toggleable)
+  - Edit mode with pre-population from existing compositions
+  - Draft persistence (auto-save every 30s, localStorage with 24hr expiry)
+  - Request/Response detail panels
+  - Full error handling and success messages
+- `src/views/CompositionViewer.vue` - Enhanced with Edit and Delete buttons
+- `src/views/TemplateBrowser.vue` - "New Composition" button for each template
+
+**Routes Added:**
+- `/compose/:templateId` - Create composition from template
+- `/compose/:templateId/:ehrId` - Create composition for specific EHR
+- `/edit/:ehrId/:compositionUid` - Edit existing composition
+
+**Dependencies:**
+- `medblocks-ui` - Loaded via CDN in `index.html` (JSDelivr CDN: 0.1.1)
+- `@tauri-apps/plugin-dialog` (2.6.0)
+- `@tauri-apps/plugin-fs` (2.4.5)
+
+### Complete Workflows
+
+1. **Create EHR**: Click "+ New EHR" in EHR Browser → Fill form → Auto-navigates to new EHR
+2. **Delete EHR**: Open EHR detail → Click "Delete EHR" → Type EHR ID to confirm → Deleted
+3. **Create Composition**: Template Browser → "New Composition" → Select EHR → Fill form → Submit → View created composition
+4. **Edit Composition**: View composition → Click "Edit" → Modify form → Submit → New version created
+5. **Delete Composition**: View composition → Click "Delete" → Confirm → Returns to EHR detail
+
+### Documentation
+
+See `IMPLEMENTATION_SUMMARY.md` for:
+- Detailed breakdown of all implemented features
+- Testing instructions for local EHRBase
+- Architecture decisions and patterns
+- Complete file reference

@@ -17,10 +17,16 @@ pub fn run() {
             // EHR
             ehr::list_ehrs,
             ehr::get_ehr_detail,
+            ehr::create_ehr,
+            ehr::update_ehr_status,
+            ehr::delete_ehr,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,
             composition::get_composition_versions,
+            composition::create_composition,
+            composition::update_composition,
+            composition::delete_composition,
             // Template
             template::list_templates,
             template::get_web_template,

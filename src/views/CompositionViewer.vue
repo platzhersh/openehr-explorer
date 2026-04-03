@@ -3,12 +3,14 @@ import { ref, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
+import { useCompositionStore } from "../stores/composition";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
+const compositionStore = useCompositionStore();
 
 const ehrId = computed(() => route.params.ehrId as string);
 const compositionUid = computed(() => route.params.compositionUid as string);
@@ -21,6 +23,8 @@ const error = ref<string | null>(null);
 const activeTab = ref<"pretty" | "json" | "flat">("pretty");
 const showFlatPaths = ref(false);
 const highlightedPath = ref<string | null>(null);
+const showDeleteDialog = ref(false);
+const deleting = ref(false);
 
 watch(
   [() => serverStore.activeServerId, compositionUid],
@@ -98,6 +102,33 @@ const flatPaths = computed(() => {
   }
   return [];
 });
+
+function handleEdit() {
+  router.push({
+    name: "edit-composition",
+    params: { ehrId: ehrId.value, compositionUid: compositionUid.value },
+  });
+}
+
+async function handleDelete() {
+  if (!serverStore.activeServerId) return;
+
+  deleting.value = true;
+  try {
+    await compositionStore.deleteComposition(
+      serverStore.activeServerId,
+      ehrId.value,
+      compositionUid.value
+    );
+    showDeleteDialog.value = false;
+    // Navigate back to EHR detail
+    router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
+  } catch (e) {
+    error.value = `Failed to delete composition: ${e}`;
+  } finally {
+    deleting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -134,6 +165,8 @@ const flatPaths = computed(() => {
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
         </button>
         <button class="btn btn-sm" @click="copyJson">Copy JSON</button>
+        <button class="btn btn-sm" @click="handleEdit">Edit</button>
+        <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
       </div>
     </div>
 
@@ -162,6 +195,22 @@ const flatPaths = computed(() => {
         :paths="flatPaths"
         @highlight="highlightedPath = $event"
       />
+    </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
+      <div class="dialog" @click.stop>
+        <h3>Delete Composition</h3>
+        <p>Are you sure you want to delete this composition? This action cannot be undone.</p>
+        <div class="dialog-actions">
+          <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
+            Cancel
+          </button>
+          <button class="btn btn-sm btn-danger" @click="handleDelete" :disabled="deleting">
+            {{ deleting ? "Deleting..." : "Delete" }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -247,5 +296,55 @@ const flatPaths = computed(() => {
   color: var(--color-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dialog p {
+  margin: 0 0 24px 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-danger {
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(255, 90, 90, 0.2);
 }
 </style>
