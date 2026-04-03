@@ -1,0 +1,66 @@
+services:
+  # PostgreSQL database for EHRBase
+  ehrbase-db:
+    image: ehrbase/ehrbase-v2-postgres:16.2
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      EHRBASE_USER_ADMIN: ehrbase
+      EHRBASE_PASSWORD_ADMIN: ehrbase
+      EHRBASE_USER: ehrbase_restricted
+      EHRBASE_PASSWORD: ehrbase_restricted
+    ports:
+      - "5442:5432"
+    volumes:
+      - ehrbase-db-data:/var/lib/postgresql/data
+    networks:
+      - ehrbase-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # EHRBase application
+  ehrbase:
+    image: ehrbase/ehrbase:2.7.0
+    environment:
+      # Database configuration
+      DB_URL: jdbc:postgresql://ehrbase-db:5432/ehrbase
+      DB_USER: ehrbase_restricted
+      DB_PASS: ehrbase_restricted
+      DB_USER_ADMIN: ehrbase
+      DB_PASS_ADMIN: ehrbase
+
+      # Security configuration
+      SECURITY_AUTHTYPE: BASIC
+      SECURITY_AUTHUSER: ehrbase-user
+      SECURITY_AUTHPASSWORD: ehrbase-password
+      SECURITY_AUTHADMINUSER: ehrbase-admin
+      SECURITY_AUTHADMINPASSWORD: ehrbase-admin-password
+
+      # Server configuration
+      SERVER_NODENAME: local.ehrbase.org
+
+      # Admin API (for template upload)
+      ADMIN_API_ACTIVE: "true"
+    ports:
+      - "8080:8080"
+    networks:
+      - ehrbase-net
+    depends_on:
+      ehrbase-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ehrbase/rest/openehr/v1/definition/template || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  ehrbase-net:
+    driver: bridge
+
+volumes:
+  ehrbase-db-data:
