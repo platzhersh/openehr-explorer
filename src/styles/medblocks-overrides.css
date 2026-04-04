@@ -91,7 +91,8 @@
   --sl-font-size-3x-large: 3rem;
   --sl-font-size-4x-large: 4.5rem;
 
-  --sl-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --sl-font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --sl-font-weight-light: 300;
   --sl-font-weight-normal: 400;
   --sl-font-weight-semibold: 500;

@@ -91,7 +91,7 @@ onMounted(async () => {
       console.log("Web Template loaded:", templateStore.selectedWebTemplate);
 
       // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
-      const templateId = props.templateId || route.params.templateId as string;
+      const templateId = props.templateId || (route.params.templateId as string);
       if (templateId && serverStore.activeServerId) {
         try {
           const example = await invoke("get_template_example", {
@@ -188,7 +188,7 @@ const previewJson = computed(() => {
         }
 
         // Skip name fields (these are metadata, not actual content)
-        if (key.endsWith('/name')) {
+        if (key.endsWith("/name")) {
           continue;
         }
 
@@ -203,15 +203,15 @@ const previewJson = computed(() => {
         // Step 1: Keep ":0" - EHRBase example shows it's needed
 
         // Step 2: Handle special case for value paths
-        transformedKey = transformedKey.replace(/\/text\/value$/, '/name|value');
+        transformedKey = transformedKey.replace(/\/text\/value$/, "/name|value");
 
         // Step 3: Convert /attribute to |attribute for data value attributes only
-        const lastSlashIndex = transformedKey.lastIndexOf('/');
+        const lastSlashIndex = transformedKey.lastIndexOf("/");
         if (lastSlashIndex !== -1) {
           const lastSegment = transformedKey.substring(lastSlashIndex + 1);
-          const pipeAttributes = ['value', 'magnitude', 'unit', 'code', 'terminology'];
+          const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
           if (pipeAttributes.includes(lastSegment)) {
-            transformedKey = transformedKey.substring(0, lastSlashIndex) + '|' + lastSegment;
+            transformedKey = transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
           }
         }
 
@@ -219,7 +219,9 @@ const previewJson = computed(() => {
       }
 
       // Add context fields using ctx/ shortcuts
-      const isoTime = compositionTime.value ? new Date(compositionTime.value).toISOString() : new Date().toISOString();
+      const isoTime = compositionTime.value
+        ? new Date(compositionTime.value).toISOString()
+        : new Date().toISOString();
 
       const payload = {
         ...formData,
@@ -292,7 +294,7 @@ async function handleSubmit() {
 
           // Skip name fields (these are metadata, not actual content)
           // FLAT format typically doesn't include name fields
-          if (key.endsWith('/name')) {
+          if (key.endsWith("/name")) {
             continue;
           }
 
@@ -316,17 +318,17 @@ async function handleSubmit() {
 
           // Step 2: Handle the special case for value paths
           // "arbol/text/value" should become "arbol/name|value"
-          transformedKey = transformedKey.replace(/\/text\/value$/, '/name|value');
+          transformedKey = transformedKey.replace(/\/text\/value$/, "/name|value");
 
           // Step 3: Convert /attribute to |attribute for known attributes at the end
           // But NOT for structural paths like /time in the middle
-          const lastSlashIndex = transformedKey.lastIndexOf('/');
+          const lastSlashIndex = transformedKey.lastIndexOf("/");
           if (lastSlashIndex !== -1) {
             const lastSegment = transformedKey.substring(lastSlashIndex + 1);
             // Only convert to pipe notation for data value attributes, not structural time
-            const pipeAttributes = ['value', 'magnitude', 'unit', 'code', 'terminology'];
+            const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
             if (pipeAttributes.includes(lastSegment)) {
-              transformedKey = transformedKey.substring(0, lastSlashIndex) + '|' + lastSegment;
+              transformedKey = transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
             }
           }
 
@@ -344,7 +346,7 @@ async function handleSubmit() {
     }
 
     // Get template ID
-    const templateId = props.templateId || route.params.templateId as string;
+    const templateId = props.templateId || (route.params.templateId as string);
     if (!templateId) {
       throw new Error("Template ID not found");
     }
@@ -352,7 +354,9 @@ async function handleSubmit() {
     // Build payload following EHRBase 2.x actual format
     // medblocks-ui FLAT export is incompatible with EHRBase FLAT format
     // We need to manually map the fields based on the /example endpoint
-    const isoTime = compositionTime.value ? new Date(compositionTime.value).toISOString() : new Date().toISOString();
+    const isoTime = compositionTime.value
+      ? new Date(compositionTime.value).toISOString()
+      : new Date().toISOString();
 
     // Extract the actual data value from medblocks-ui's nested structure
     let textValue = "";
@@ -590,11 +594,7 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
       <!-- medblocks-ui Form -->
       <div v-if="isReady" class="form-section">
         <h3>Composition Data</h3>
-        <mb-auto-form
-          ref="mbFormRef"
-          @mb-submit="handleMbSubmit"
-          @mb-change="handleMbChange"
-        />
+        <mb-auto-form ref="mbFormRef" @mb-submit="handleMbSubmit" @mb-change="handleMbChange" />
       </div>
 
       <div v-else class="loading">
@@ -611,7 +611,13 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
           class="btn btn-primary"
           @click="handleSubmit"
           :disabled="!selectedEhrId || !composerName || loading"
-          :title="!selectedEhrId ? 'Please select an EHR' : !composerName ? 'Please enter composer name' : ''"
+          :title="
+            !selectedEhrId
+              ? 'Please select an EHR'
+              : !composerName
+                ? 'Please enter composer name'
+                : ''
+          "
         >
           {{ loading ? "Submitting..." : isEditMode ? "Update Composition" : "Create Composition" }}
         </button>
@@ -641,12 +647,8 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
       <div class="preview-header">
         <h3>FLAT JSON Preview</h3>
         <div class="preview-actions">
-          <button class="btn btn-sm" @click="refreshPreview" title="Refresh preview">
-            ↻
-          </button>
-          <button class="btn btn-sm" @click="copyPreviewJson">
-            Copy JSON
-          </button>
+          <button class="btn btn-sm" @click="refreshPreview" title="Refresh preview">↻</button>
+          <button class="btn btn-sm" @click="copyPreviewJson">Copy JSON</button>
         </div>
       </div>
       <pre class="preview-json">{{ previewJson }}</pre>
