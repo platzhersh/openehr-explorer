@@ -13,6 +13,8 @@ pub struct ServerProfile {
     pub base_url: String,
     pub server_type: ServerType,
     pub auth_method: AuthMethod,
+    #[serde(default)]
+    pub admin_auth_method: Option<AuthMethod>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,6 +11,11 @@ export interface ServerProfile {
     | { type: "none" }
     | { type: "basic"; username: string; password: string }
     | { type: "bearer"; token: string };
+  admin_auth_method?:
+    | { type: "none" }
+    | { type: "basic"; username: string; password: string }
+    | { type: "bearer"; token: string }
+    | null;
 }
 
 export interface ServerVersionInfo {

@@ -15,6 +15,7 @@ const showCreateDialog = ref(false);
 const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
+const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "json">("detail");
 
 const ehrId = computed(() => route.params.ehrId as string | undefined);
@@ -121,16 +122,18 @@ async function handleDeleteEhr() {
   }
 
   deleting.value = true;
+  deleteError.value = null;
   try {
     await ehrStore.deleteEhr(serverStore.activeServerId, ehrId.value);
     showDeleteDialog.value = false;
     deleteConfirmText.value = "";
-    // Navigate back to EHR list
+    // Clear detail pane and navigate back to EHR list
+    ehrStore.selectedEhr = null;
     router.push({ name: "ehrs" });
     // Refresh list
     refresh();
   } catch (e) {
-    alert(`Failed to delete EHR: ${e}`);
+    deleteError.value = String(e);
   } finally {
     deleting.value = false;
   }
@@ -138,6 +141,7 @@ async function handleDeleteEhr() {
 
 function openDeleteDialog() {
   deleteConfirmText.value = "";
+  deleteError.value = null;
   showDeleteDialog.value = true;
 }
 
@@ -354,6 +358,14 @@ async function copyEhrJson() {
           placeholder="Enter EHR ID to confirm"
           :disabled="deleting"
         />
+        <div v-if="deleteError" class="delete-error">
+          <strong>Failed to delete EHR</strong>
+          <p class="error-detail">{{ deleteError }}</p>
+          <div v-if="deleteError.includes('HTTP 403')" class="delete-hint">
+            EHR deletion requires admin credentials. Check the
+            <strong>Admin Credentials</strong> setting in your server profile (Servers &rarr; Edit).
+          </div>
+        </div>
         <div class="dialog-actions">
           <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
             Cancel
@@ -628,6 +640,37 @@ async function copyEhrJson() {
 .dialog .input {
   width: 100%;
   margin-bottom: 24px;
+}
+
+.delete-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.delete-error > strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.error-detail {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.delete-hint {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 200, 50, 0.1);
+  border: 1px solid rgba(255, 200, 50, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 13px;
 }
 
 .dialog-actions {

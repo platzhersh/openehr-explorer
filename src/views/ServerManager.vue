@@ -39,7 +39,11 @@ function newProfile() {
 }
 
 function editProfile(profile: ServerProfile) {
-  form.value = { ...profile, auth_method: { ...profile.auth_method } as any };
+  form.value = {
+    ...profile,
+    auth_method: { ...profile.auth_method } as any,
+    admin_auth_method: profile.admin_auth_method ? ({ ...profile.admin_auth_method } as any) : null,
+  };
   editing.value = true;
   testResult.value = null;
   testError.value = null;
@@ -71,6 +75,16 @@ function setAuthType(type: string) {
     form.value.auth_method = { type: "basic", username: "", password: "" };
   } else if (type === "bearer") {
     form.value.auth_method = { type: "bearer", token: "" };
+  }
+}
+
+function setAdminAuthType(type: string) {
+  if (type === "none_admin") {
+    form.value.admin_auth_method = null;
+  } else if (type === "basic") {
+    form.value.admin_auth_method = { type: "basic", username: "", password: "" };
+  } else if (type === "bearer") {
+    form.value.admin_auth_method = { type: "bearer", token: "" };
   }
 }
 </script>
@@ -179,6 +193,44 @@ function setAuthType(type: string) {
           </div>
         </template>
 
+        <template v-if="form.server_type === 'ehrbase'">
+          <hr class="form-divider" />
+          <div class="form-group">
+            <label>Admin Credentials (for EHR deletion)</label>
+            <select
+              class="input"
+              :value="form.admin_auth_method ? form.admin_auth_method.type : 'none_admin'"
+              @change="setAdminAuthType(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="none_admin">Same as above</option>
+              <option value="basic">Basic Auth</option>
+              <option value="bearer">Bearer Token</option>
+            </select>
+          </div>
+
+          <template v-if="form.admin_auth_method?.type === 'basic'">
+            <div class="form-group">
+              <label>Admin Username</label>
+              <input class="input" v-model="(form.admin_auth_method as any).username" />
+            </div>
+            <div class="form-group">
+              <label>Admin Password</label>
+              <input
+                class="input"
+                type="password"
+                v-model="(form.admin_auth_method as any).password"
+              />
+            </div>
+          </template>
+
+          <template v-if="form.admin_auth_method?.type === 'bearer'">
+            <div class="form-group">
+              <label>Admin Token</label>
+              <input class="input" v-model="(form.admin_auth_method as any).token" />
+            </div>
+          </template>
+        </template>
+
         <div class="form-actions">
           <button class="btn" @click="testConnection">Test Connection</button>
           <button class="btn btn-primary" @click="save">Save</button>
@@ -281,6 +333,12 @@ function setAuthType(type: string) {
 }
 .form-group .input {
   width: 100%;
+}
+
+.form-divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 16px 0;
 }
 
 .form-actions {
