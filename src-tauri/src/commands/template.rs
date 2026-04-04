@@ -6,6 +6,7 @@ use crate::inspector::send_instrumented;
 
 #[tauri::command]
 pub async fn get_template_example(
+    app: tauri::AppHandle,
     server_id: String,
     template_id: String,
 ) -> Result<Value, String> {
@@ -19,21 +20,19 @@ pub async fn get_template_example(
         urlencoding::encode(&template_id)
     );
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch template example: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!("Server returned HTTP {}", resp.status));
     }
 
-    response
-        .json::<Value>()
-        .await
+    serde_json::from_str(&resp.body)
         .map_err(|e| format!("Failed to parse template example: {}", e))
 }
 
