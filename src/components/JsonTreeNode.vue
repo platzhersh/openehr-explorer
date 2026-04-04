@@ -51,8 +51,7 @@ const isArchetypeNodeId = computed(
   () => props.label === "archetype_node_id" && typeof props.value === "string",
 );
 const isCopyableId = computed(
-  () =>
-    (props.label === "uid" || props.label === "object_id") && typeof props.value === "string",
+  () => (props.label === "uid" || props.label === "object_id") && typeof props.value === "string",
 );
 
 // DV_QUANTITY enrichment: check if parent object has _type: DV_QUANTITY
@@ -64,6 +63,11 @@ const dvQuantityDisplay = computed(() => {
   const units = obj.units;
   if (magnitude !== undefined && units) return `${magnitude} ${units}`;
   return null;
+});
+
+const metaLabel = computed(() => {
+  if (isArray.value) return "Array(" + childCount.value + ")";
+  return "{" + childCount.value + "}";
 });
 
 const matchesSearch = computed(() => {
@@ -93,7 +97,7 @@ async function copyValue(text: string) {
 
       <template v-if="isExpandable">
         <span class="node-meta">
-          {{ isArray ? `Array(${childCount})` : `{${childCount}}` }}
+          {{ metaLabel }}
         </span>
         <span v-if="dvQuantityDisplay" class="dv-quantity-badge">{{ dvQuantityDisplay }}</span>
       </template>

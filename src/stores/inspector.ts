@@ -25,8 +25,8 @@ export const useInspectorStore = defineStore("inspector", () => {
   const filterMethods = ref<string[]>([]);
   const filterStatusClass = ref<string[]>([]);
 
-  const selectedEntry = computed(() =>
-    entries.value.find((e) => e.id === selectedId.value) ?? null
+  const selectedEntry = computed(
+    () => entries.value.find((e) => e.id === selectedId.value) ?? null,
   );
 
   const filteredEntries = computed(() => {
@@ -150,10 +150,15 @@ export function statusClass(status: number): string {
 
 export function methodClass(method: string): string {
   switch (method.toUpperCase()) {
-    case "GET": return "method-get";
-    case "POST": return "method-post";
-    case "PUT": return "method-put";
-    case "DELETE": return "method-delete";
-    default: return "method-other";
+    case "GET":
+      return "method-get";
+    case "POST":
+      return "method-post";
+    case "PUT":
+      return "method-put";
+    case "DELETE":
+      return "method-delete";
+    default:
+      return "method-other";
   }
 }

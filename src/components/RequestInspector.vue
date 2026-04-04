@@ -167,7 +167,6 @@ function doClear() {
   store.clear();
   showClearConfirm.value = false;
 }
-
 </script>
 
 <template>
@@ -420,9 +419,7 @@ function doClear() {
                     </button>
                   </div>
                   <pre class="raw-body">{{
-                    responseJson
-                      ? JSON.stringify(responseJson, null, 2)
-                      : selected.response_body
+                    responseJson ? JSON.stringify(responseJson, null, 2) : selected.response_body
                   }}</pre>
                 </div>
 
