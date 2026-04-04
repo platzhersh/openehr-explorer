@@ -3,6 +3,7 @@ import { ref, watch, reactive } from "vue";
 import { useCodeMirror } from "../composables/useCodeMirror";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 import type { AqlCompletionConfig } from "../lib/aql/codemirror-autocomplete";
+import { formatAql } from "../lib/aql/formatter";
 
 const props = defineProps<{
   modelValue: string;
@@ -32,6 +33,12 @@ const { view, getValue, setValue } = useCodeMirror(containerEl, {
   },
   onChange(value: string) {
     emit("update:modelValue", value);
+  },
+  onFormat() {
+    // Format the current value
+    const currentValue = getValue();
+    const formatted = formatAql(currentValue);
+    setValue(formatted);
   },
   completionConfig,
 });
@@ -63,7 +70,14 @@ watch(
   { immediate: true },
 );
 
-defineExpose({ view, getValue, setValue });
+// Format function
+function format() {
+  const currentValue = getValue();
+  const formatted = formatAql(currentValue);
+  setValue(formatted);
+}
+
+defineExpose({ view, getValue, setValue, format });
 </script>
 
 <template>

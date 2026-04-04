@@ -10,6 +10,7 @@ export interface UseCodeMirrorOptions {
   initialValue?: string;
   onExecute?: () => void;
   onChange?: (value: string) => void;
+  onFormat?: () => void;
   completionConfig: { value: AqlCompletionConfig };
 }
 
@@ -98,20 +99,35 @@ export function useCodeMirror(
       }),
     ];
 
-    // Add Ctrl/Cmd+Enter keybinding for execute
+    // Add custom keybindings
+    const customKeys = [];
+
+    // Ctrl/Cmd+Enter for execute
     if (options.onExecute) {
       const executeHandler = options.onExecute;
-      extensions.push(
-        keymap.of([
-          {
-            key: "Mod-Enter",
-            run: () => {
-              executeHandler();
-              return true;
-            },
-          },
-        ]),
-      );
+      customKeys.push({
+        key: "Mod-Enter",
+        run: () => {
+          executeHandler();
+          return true;
+        },
+      });
+    }
+
+    // Shift+Alt+F for format (VS Code style)
+    if (options.onFormat) {
+      const formatHandler = options.onFormat;
+      customKeys.push({
+        key: "Shift-Alt-f",
+        run: () => {
+          formatHandler();
+          return true;
+        },
+      });
+    }
+
+    if (customKeys.length > 0) {
+      extensions.push(keymap.of(customKeys));
     }
 
     const state = EditorState.create({

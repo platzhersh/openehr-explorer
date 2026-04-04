@@ -28,6 +28,9 @@ const isResizing = ref(false);
 const templatePaths = ref<Map<string, AqlPathEntry[]>>(new Map());
 const allTemplatePaths = ref<AqlPathEntry[]>([]);
 
+// Reference to AqlEditor component
+const editorRef = ref<InstanceType<typeof AqlEditor> | null>(null);
+
 // Load data after component is mounted to avoid blocking render
 onMounted(() => {
   if (!serverStore.activeServerId) return;
@@ -100,6 +103,10 @@ function clearContextTemplate() {
 async function runQuery() {
   if (!serverStore.activeServerId || !queryText.value.trim()) return;
   await queryStore.executeAql(serverStore.activeServerId, queryText.value);
+}
+
+function formatQuery() {
+  editorRef.value?.format();
 }
 
 async function saveCurrentQuery() {
@@ -216,6 +223,7 @@ const editorStyle = computed(() => ({
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
+              <button class="btn btn-sm" @click="formatQuery" title="Format query (Shift+Alt+F)">Format</button>
               <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
               <button class="btn btn-sm btn-primary" @click="runQuery">Run (Ctrl+Enter)</button>
             </div>
@@ -263,6 +271,7 @@ const editorStyle = computed(() => ({
 
           <div class="editor-wrapper" :style="editorStyle">
             <AqlEditor
+              ref="editorRef"
               v-model="queryText"
               :template-paths="templatePaths"
               :all-template-paths="allTemplatePaths"
