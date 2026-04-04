@@ -44,6 +44,15 @@ const isReady = computed(() => {
   return templateStore.selectedWebTemplate && serverStore.activeServerId;
 });
 
+// Sorted EHRs (newest first, matching EHR Browser order)
+const sortedEhrs = computed(() => {
+  return [...ehrStore.ehrs].sort((a, b) => {
+    const timeA = a.time_created ? new Date(a.time_created).getTime() : 0;
+    const timeB = b.time_created ? new Date(b.time_created).getTime() : 0;
+    return timeB - timeA; // Descending order (newest first)
+  });
+});
+
 // Initialize
 onMounted(async () => {
   if (!serverStore.activeServerId) {
@@ -578,7 +587,7 @@ watch(
         <div class="ehr-selector">
           <select v-model="selectedEhrId" class="input" :disabled="isEditMode">
             <option value="">-- Select EHR --</option>
-            <option v-for="ehr in ehrStore.ehrs" :key="ehr.ehr_id" :value="ehr.ehr_id">
+            <option v-for="ehr in sortedEhrs" :key="ehr.ehr_id" :value="ehr.ehr_id">
               {{ ehr.ehr_id.substring(0, 8) }}... {{ ehr.subject_id ? `(${ehr.subject_id})` : "" }}
             </option>
           </select>
