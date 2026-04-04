@@ -63,10 +63,7 @@ export function extractAqlPathsForArchetype(
   return entries;
 }
 
-function findNodeByArchetypeId(
-  node: WebTemplateNode,
-  archetypeId: string,
-): WebTemplateNode | null {
+function findNodeByArchetypeId(node: WebTemplateNode, archetypeId: string): WebTemplateNode | null {
   // Check the node's id field — in Web Templates, archetype nodes have their archetype ID as the id
   if (node.id === archetypeId) {
     return node;

@@ -91,7 +91,7 @@ export const COMPOSITION_PATHS: RmPathEntry[] = [
   {
     path: "context/setting/value",
     rmType: "String",
-    description: "Setting (e.g., \"primary medical care\")",
+    description: 'Setting (e.g., "primary medical care")',
   },
   {
     path: "language/code_string",

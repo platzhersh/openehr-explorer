@@ -1,4 +1,9 @@
-import { autocompletion, type CompletionContext, type Completion, startCompletion } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  type CompletionContext,
+  type Completion,
+  startCompletion,
+} from "@codemirror/autocomplete";
 import type { AqlPathEntry } from "./aqlPathIndex";
 import { parseAliases, findAlias } from "./aliasParser";
 
@@ -9,7 +14,11 @@ const KEYWORD_COMPLETIONS: Completion[] = [
   { label: "SELECT", type: "keyword", info: "Specifies which fields to return" },
   { label: "FROM", type: "keyword", info: "Specifies the root RM type to query from" },
   { label: "WHERE", type: "keyword", info: "Filters results based on conditions" },
-  { label: "CONTAINS", type: "keyword", info: "Specifies containment relationships between RM types" },
+  {
+    label: "CONTAINS",
+    type: "keyword",
+    info: "Specifies containment relationships between RM types",
+  },
   { label: "ORDER BY", type: "keyword", info: "Sorts results by the specified path" },
   { label: "LIMIT", type: "keyword", info: "Restricts the number of returned rows" },
   { label: "OFFSET", type: "keyword", info: "Skips a number of rows before returning results" },
@@ -55,8 +64,16 @@ const EHR_PATH_COMPLETIONS: Completion[] = [
   { label: "ehr_id/value", type: "property", info: "UUID of the EHR" },
   { label: "time_created/value", type: "property", info: "Creation timestamp" },
   { label: "system_id/value", type: "property", info: "Owning CDR system identifier" },
-  { label: "ehr_status/subject/external_ref/id/value", type: "property", info: "Patient identifier" },
-  { label: "ehr_status/subject/external_ref/namespace", type: "property", info: "Patient ID namespace" },
+  {
+    label: "ehr_status/subject/external_ref/id/value",
+    type: "property",
+    info: "Patient identifier",
+  },
+  {
+    label: "ehr_status/subject/external_ref/namespace",
+    type: "property",
+    info: "Patient ID namespace",
+  },
   { label: "ehr_status/is_queryable", type: "property", info: "Whether EHR appears in AQL" },
   { label: "ehr_status/is_modifiable", type: "property", info: "Whether EHR accepts writes" },
   { label: "ehr_status/uid/value", type: "property", info: "UID of the EHR_STATUS object" },
@@ -114,7 +131,7 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
               if (paths && paths.length > 0) {
                 return {
                   from: slashPos,
-                  options: paths.map(p => ({
+                  options: paths.map((p) => ({
                     label: p.label,
                     type: "property",
                     detail: p.rmType,
@@ -127,7 +144,7 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
               if (config.value.allTemplatePaths.length > 0) {
                 return {
                   from: slashPos,
-                  options: config.value.allTemplatePaths.slice(0, 100).map(p => ({
+                  options: config.value.allTemplatePaths.slice(0, 100).map((p) => ({
                     label: p.label,
                     type: "property",
                     detail: p.rmType,
@@ -173,7 +190,7 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
                 label: `${wordText}/`,
                 type: "property",
                 info: `Access ${possibleAlias.rmType} paths`,
-                apply: (view, completion, from, to) => {
+                apply: (view, _completion, from, to) => {
                   // Insert the alias with slash
                   view.dispatch({
                     changes: { from, to, insert: `${wordText}/` },

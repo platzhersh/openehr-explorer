@@ -23,10 +23,7 @@ export function parseAliases(queryText: string): AliasBinding[] {
   const rmTypes =
     "EHR|COMPOSITION|OBSERVATION|EVALUATION|INSTRUCTION|ACTION|ADMIN_ENTRY|CLUSTER|ELEMENT|SECTION";
 
-  const pattern = new RegExp(
-    `\\b(${rmTypes})\\s+([a-zA-Z_]\\w*)(?:\\s*\\[([^\\]]+)\\])?`,
-    "gi",
-  );
+  const pattern = new RegExp(`\\b(${rmTypes})\\s+([a-zA-Z_]\\w*)(?:\\s*\\[([^\\]]+)\\])?`, "gi");
 
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(queryText)) !== null) {

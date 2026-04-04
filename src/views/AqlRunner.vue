@@ -223,7 +223,9 @@ const editorStyle = computed(() => ({
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button class="btn btn-sm" @click="formatQuery" title="Format query (Shift+Alt+F)">Format</button>
+              <button class="btn btn-sm" @click="formatQuery" title="Format query (Shift+Alt+F)">
+                Format
+              </button>
               <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
               <button class="btn btn-sm btn-primary" @click="runQuery">Run (Ctrl+Enter)</button>
             </div>
