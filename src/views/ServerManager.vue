@@ -42,7 +42,7 @@ function editProfile(profile: ServerProfile) {
   form.value = {
     ...profile,
     auth_method: { ...profile.auth_method } as any,
-    admin_auth_method: profile.admin_auth_method ? { ...profile.admin_auth_method } as any : null,
+    admin_auth_method: profile.admin_auth_method ? ({ ...profile.admin_auth_method } as any) : null,
   };
   editing.value = true;
   testResult.value = null;
@@ -215,7 +215,11 @@ function setAdminAuthType(type: string) {
             </div>
             <div class="form-group">
               <label>Admin Password</label>
-              <input class="input" type="password" v-model="(form.admin_auth_method as any).password" />
+              <input
+                class="input"
+                type="password"
+                v-model="(form.admin_auth_method as any).password"
+              />
             </div>
           </template>
 

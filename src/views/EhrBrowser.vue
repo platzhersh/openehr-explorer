@@ -363,8 +363,7 @@ async function copyEhrJson() {
           <p class="error-detail">{{ deleteError }}</p>
           <div v-if="deleteError.includes('HTTP 403')" class="delete-hint">
             EHR deletion requires admin credentials. Check the
-            <strong>Admin Credentials</strong> setting in your server profile
-            (Servers &rarr; Edit).
+            <strong>Admin Credentials</strong> setting in your server profile (Servers &rarr; Edit).
           </div>
         </div>
         <div class="dialog-actions">

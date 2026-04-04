@@ -471,10 +471,19 @@ pub async fn delete_ehr(
     // EHRBase provides an admin API for EHR deletion.
     let (url, auth) = match profile.server_type {
         ServerType::Ehrbase => {
-            let admin_auth = profile.admin_auth_method.as_ref().unwrap_or(&profile.auth_method);
-            (format!("{}/rest/admin/ehr/{}", base, ehr_id), admin_auth.clone())
+            let admin_auth = profile
+                .admin_auth_method
+                .as_ref()
+                .unwrap_or(&profile.auth_method);
+            (
+                format!("{}/rest/admin/ehr/{}", base, ehr_id),
+                admin_auth.clone(),
+            )
         }
-        _ => (format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id), profile.auth_method.clone()),
+        _ => (
+            format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id),
+            profile.auth_method.clone(),
+        ),
     };
     let resp = send_instrumented(
         &app,
