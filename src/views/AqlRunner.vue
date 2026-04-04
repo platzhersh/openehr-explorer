@@ -51,10 +51,13 @@ function exportCsv() {
 
   const headers = queryStore.result.columns.map((c) => c.path || c.name);
   const rows = queryStore.result.rows.map((row, idx) => {
-    const rowWithNumber = [String(idx + 1), ...row.map((cell) => {
-      const val = typeof cell === "object" ? JSON.stringify(cell) : String(cell ?? "");
-      return `"${val.replace(/"/g, '""')}"`;
-    })];
+    const rowWithNumber = [
+      String(idx + 1),
+      ...row.map((cell) => {
+        const val = typeof cell === "object" ? JSON.stringify(cell) : String(cell ?? "");
+        return `"${val.replace(/"/g, '""')}"`;
+      }),
+    ];
     return rowWithNumber;
   });
 

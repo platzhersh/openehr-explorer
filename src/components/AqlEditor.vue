@@ -45,10 +45,7 @@ const AQL_KEYWORDS = [
 
 function highlightAql(code: string): string {
   // First escape HTML
-  let highlighted = code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  let highlighted = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   // Process in order: comments first (to protect them), then strings, then the rest
   // We use placeholder tokens to protect already-highlighted segments
@@ -80,10 +77,7 @@ function highlightAql(code: string): string {
   highlighted = highlighted.replace(/\b(\d+)\b/g, '<span class="aql-number">$1</span>');
 
   // 5. Highlight paths (e.g., e/ehr_id/value, c/content[at0001]/items)
-  highlighted = highlighted.replace(
-    /\b([a-z]\/[\w/\[\]@]+)/g,
-    '<span class="aql-path">$1</span>',
-  );
+  highlighted = highlighted.replace(/\b([a-z]\/[\w/\[\]@]+)/g, '<span class="aql-path">$1</span>');
 
   // 6. Highlight archetype IDs (e.g., at0001, openEHR-EHR-COMPOSITION.*)
   highlighted = highlighted.replace(
