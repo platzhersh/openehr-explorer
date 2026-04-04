@@ -1,0 +1,119 @@
+/**
+ * Medblocks UI Custom Styling
+ *
+ * This file contains CSS overrides for medblocks-ui web components
+ * to match the openEHR Explorer design system.
+ */
+
+/* ===== Root Variables - Shoelace Dark Theme ===== */
+:root {
+  /* Primary color (teal/cyan) */
+  --sl-color-primary-50: #042f2e;
+  --sl-color-primary-100: #134e4a;
+  --sl-color-primary-200: #115e59;
+  --sl-color-primary-300: #0f766e;
+  --sl-color-primary-400: #0d9488;
+  --sl-color-primary-500: #14b8a6;
+  --sl-color-primary-600: #2dd4bf;
+  --sl-color-primary-700: #5eead4;
+  --sl-color-primary-800: #99f6e4;
+  --sl-color-primary-900: #ccfbf1;
+  --sl-color-primary-950: #f0fdfa;
+
+  /* Neutral colors - inverted for dark theme */
+  --sl-color-neutral-0: #ffffff;
+  --sl-color-neutral-50: #f7fafc;
+  --sl-color-neutral-100: #edf2f7;
+  --sl-color-neutral-200: #e2e8f0;
+  --sl-color-neutral-300: #cbd5e0;
+  --sl-color-neutral-400: #a0aec0;
+  --sl-color-neutral-500: #718096;
+  --sl-color-neutral-600: #4a5568;
+  --sl-color-neutral-700: #2d3748;
+  --sl-color-neutral-800: #1e2936;
+  --sl-color-neutral-900: #1a202c;
+  --sl-color-neutral-950: #0f1419;
+
+  /* Input backgrounds and borders */
+  --sl-input-background-color: var(--sl-color-neutral-900);
+  --sl-input-background-color-hover: var(--sl-color-neutral-800);
+  --sl-input-background-color-focus: var(--sl-color-neutral-800);
+  --sl-input-background-color-disabled: var(--sl-color-neutral-950);
+
+  --sl-input-border-color: var(--sl-color-neutral-700);
+  --sl-input-border-color-hover: var(--sl-color-primary-500);
+  --sl-input-border-color-focus: var(--sl-color-primary-500);
+
+  --sl-input-color: var(--sl-color-neutral-100);
+  --sl-input-color-hover: var(--sl-color-neutral-50);
+  --sl-input-color-focus: var(--sl-color-neutral-50);
+
+  --sl-input-placeholder-color: var(--sl-color-neutral-500);
+  --sl-input-placeholder-color-disabled: var(--sl-color-neutral-600);
+
+  --sl-input-border-width: 1px;
+  --sl-input-focus-ring-color: rgba(20, 184, 166, 0.25);
+
+  /* Panel/card backgrounds */
+  --sl-panel-background-color: var(--sl-color-neutral-800);
+  --sl-panel-border-color: var(--sl-color-neutral-700);
+  --sl-panel-border-width: 1px;
+
+  /* Overlay (dropdown menus, etc) */
+  --sl-overlay-background-color: var(--sl-color-neutral-900);
+  --sl-overlay-border-color: var(--sl-color-neutral-700);
+
+  /* Spacing */
+  --sl-spacing-3x-small: 0.125rem;
+  --sl-spacing-2x-small: 0.25rem;
+  --sl-spacing-x-small: 0.5rem;
+  --sl-spacing-small: 0.75rem;
+  --sl-spacing-medium: 1rem;
+  --sl-spacing-large: 1.25rem;
+  --sl-spacing-x-large: 1.75rem;
+  --sl-spacing-2x-large: 2.25rem;
+  --sl-spacing-3x-large: 3rem;
+  --sl-spacing-4x-large: 4.5rem;
+
+  /* Border radius */
+  --sl-border-radius-small: 4px;
+  --sl-border-radius-medium: 6px;
+  --sl-border-radius-large: 8px;
+
+  /* Typography */
+  --sl-font-size-2x-small: 0.625rem;
+  --sl-font-size-x-small: 0.75rem;
+  --sl-font-size-small: 0.875rem;
+  --sl-font-size-medium: 1rem;
+  --sl-font-size-large: 1.25rem;
+  --sl-font-size-x-large: 1.5rem;
+  --sl-font-size-2x-large: 2.25rem;
+  --sl-font-size-3x-large: 3rem;
+  --sl-font-size-4x-large: 4.5rem;
+
+  --sl-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --sl-font-weight-light: 300;
+  --sl-font-weight-normal: 400;
+  --sl-font-weight-semibold: 500;
+  --sl-font-weight-bold: 600;
+
+  /* Focus ring */
+  --sl-focus-ring-width: 3px;
+  --sl-focus-ring-color: var(--sl-input-focus-ring-color);
+  --sl-focus-ring: 0 0 0 var(--sl-focus-ring-width) var(--sl-focus-ring-color);
+  --sl-focus-ring-offset: 0;
+
+  /* Shadow */
+  --sl-shadow-x-small: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --sl-shadow-small: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --sl-shadow-medium: 0 2px 4px rgba(0, 0, 0, 0.24);
+  --sl-shadow-large: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --sl-shadow-x-large: 0 4px 16px rgba(0, 0, 0, 0.24);
+}
+
+/* ===== Medblocks UI Form Wrapper ===== */
+mb-auto-form {
+  display: block;
+  font-family: var(--sl-font-sans);
+  font-size: var(--sl-font-size-small);
+}

@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
+import "./styles/medblocks-overrides.css";
 
 const router = createRouter({
   history: createWebHistory(),

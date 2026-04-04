@@ -32,6 +32,7 @@ pub fn run() {
             template::get_web_template,
             template::get_template_opt,
             template::upload_template,
+            template::get_template_example,
             // AQL Query
             query::execute_aql,
             query::list_saved_queries,

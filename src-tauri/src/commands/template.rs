@@ -3,6 +3,39 @@ use serde_json::Value;
 
 use super::server::{create_client, get_profile_by_id, make_request};
 
+#[tauri::command]
+pub async fn get_template_example(
+    server_id: String,
+    template_id: String,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT",
+        base,
+        urlencoding::encode(&template_id)
+    );
+
+    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch template example: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Server returned HTTP {}: {}", status, body));
+    }
+
+    response
+        .json::<Value>()
+        .await
+        .map_err(|e| format!("Failed to parse template example: {}", e))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateSummary {
     pub template_id: String,

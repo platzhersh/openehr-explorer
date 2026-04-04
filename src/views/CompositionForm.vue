@@ -41,14 +41,7 @@ const mbFormRef = ref<HTMLElement | null>(null);
 
 const isReady = computed(() => {
   // Form can be shown if template is loaded - EHR selection is only required for submission
-  const ready = templateStore.selectedWebTemplate && serverStore.activeServerId;
-  console.log("isReady check:", {
-    selectedEhrId: selectedEhrId.value,
-    hasWebTemplate: !!templateStore.selectedWebTemplate,
-    activeServerId: serverStore.activeServerId,
-    isReady: ready
-  });
-  return ready;
+  return templateStore.selectedWebTemplate && serverStore.activeServerId;
 });
 
 // Initialize
@@ -68,22 +61,14 @@ onMounted(async () => {
 
   // Load template
   const templateId = props.templateId || route.params.templateId as string;
-  console.log("CompositionForm onMounted: templateId =", templateId);
-  console.log("CompositionForm onMounted: props =", props);
-  console.log("CompositionForm onMounted: route.params =", route.params);
-
   if (templateId) {
-    console.log("CompositionForm: fetching web template for", templateId);
     try {
       await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
-      console.log("CompositionForm: web template fetched successfully");
-      console.log("CompositionForm: selectedWebTemplate =", templateStore.selectedWebTemplate);
     } catch (e) {
-      console.error("CompositionForm: failed to fetch web template:", e);
+      console.error("Failed to fetch web template:", e);
       error.value = `Failed to load template: ${e}`;
     }
   } else {
-    console.error("CompositionForm: no template ID found");
     error.value = "No template ID provided";
   }
 
@@ -100,9 +85,24 @@ onMounted(async () => {
   loadDraft();
 
   // Ensure webTemplate is set on the mb-auto-form element when it becomes available
-  setTimeout(() => {
+  setTimeout(async () => {
     if (mbFormRef.value && templateStore.selectedWebTemplate) {
       (mbFormRef.value as any).webTemplate = templateStore.selectedWebTemplate;
+      console.log("Web Template loaded:", templateStore.selectedWebTemplate);
+
+      // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
+      const templateId = props.templateId || route.params.templateId as string;
+      if (templateId && serverStore.activeServerId) {
+        try {
+          const example = await invoke("get_template_example", {
+            serverId: serverStore.activeServerId,
+            templateId,
+          });
+          console.log("EHRBase FLAT example (source of truth):", example);
+        } catch (e) {
+          console.warn("Could not fetch template example:", e);
+        }
+      }
     }
   }, 100);
 });
@@ -144,6 +144,12 @@ function handleMbSubmit(event: Event) {
   flatData.value = customEvent.detail || {};
 }
 
+function handleMbChange(event: Event) {
+  const customEvent = event as CustomEvent;
+  console.log("mb-change event received:", customEvent.detail);
+  flatData.value = customEvent.detail || {};
+}
+
 function buildFlatPayload(): Record<string, unknown> {
   const payload = { ...flatData.value };
 
@@ -156,13 +162,104 @@ function buildFlatPayload(): Record<string, unknown> {
   return payload;
 }
 
+// Trigger for manual refresh
+const previewRefreshTrigger = ref(0);
+
 const previewJson = computed(() => {
+  // Access trigger to force re-computation
+  previewRefreshTrigger.value;
+
+  // Try to get live data from mb-auto-form if available
+  if (mbFormRef.value) {
+    try {
+      const rawData = (mbFormRef.value as any).export?.() || {};
+
+      // Get template ID for path transformation
+      const templateId = props.templateId || route.params.templateId as string;
+
+      // Transform paths (same logic as in handleSubmit)
+      const formData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(rawData)) {
+        // Skip ctx/ fields - they're added separately
+        if (key.startsWith("ctx/")) {
+          continue;
+        }
+
+        // Skip context-related fields that medblocks exports
+        if (key.match(/\/(language|territory|composer|encoding)\|/)) {
+          continue;
+        }
+
+        // Skip name fields (these are metadata, not actual content)
+        if (key.endsWith('/name')) {
+          continue;
+        }
+
+        // Skip structural metadata fields
+        if (key.match(/event_series\/(duration|period)$/)) {
+          continue;
+        }
+
+        // Transform to match oehrpy validator expectations
+        let transformedKey = key;
+
+        // Step 1: Keep ":0" - EHRBase example shows it's needed
+
+        // Step 2: Handle special case for value paths
+        transformedKey = transformedKey.replace(/\/text\/value$/, '/name|value');
+
+        // Step 3: Convert /attribute to |attribute for data value attributes only
+        const lastSlashIndex = transformedKey.lastIndexOf('/');
+        if (lastSlashIndex !== -1) {
+          const lastSegment = transformedKey.substring(lastSlashIndex + 1);
+          const pipeAttributes = ['value', 'magnitude', 'unit', 'code', 'terminology'];
+          if (pipeAttributes.includes(lastSegment)) {
+            transformedKey = transformedKey.substring(0, lastSlashIndex) + '|' + lastSegment;
+          }
+        }
+
+        formData[transformedKey] = value;
+      }
+
+      // Add context fields using ctx/ shortcuts
+      const isoTime = compositionTime.value ? new Date(compositionTime.value).toISOString() : new Date().toISOString();
+
+      const payload = {
+        ...formData,
+
+        // Context shortcuts - EHRBase expands these automatically
+        "ctx/language": language.value,
+        "ctx/territory": territory.value,
+        "ctx/composer_name": composerName.value,
+        "ctx/time": isoTime,
+      };
+
+      return JSON.stringify(payload, null, 2);
+    } catch (e) {
+      console.error("Failed to export form data:", e);
+    }
+  }
+
+  // Fallback to buildFlatPayload
   return JSON.stringify(buildFlatPayload(), null, 2);
 });
 
+function refreshPreview() {
+  previewRefreshTrigger.value++;
+}
+
 async function handleSubmit() {
+  console.log("handleSubmit called");
+
   if (!selectedEhrId.value || !serverStore.activeServerId) {
     error.value = "Please select an EHR";
+    console.error("Validation failed: no EHR or server selected");
+    return;
+  }
+
+  if (!composerName.value) {
+    error.value = "Please enter a composer name";
+    console.error("Validation failed: no composer name");
     return;
   }
 
@@ -171,7 +268,121 @@ async function handleSubmit() {
   loading.value = true;
 
   try {
-    const payload = buildFlatPayload();
+    // Get form data using export() method
+    let formData = {};
+    if (mbFormRef.value) {
+      try {
+        const rawData = (mbFormRef.value as any).export?.() || {};
+        console.log("Raw exported data:", rawData);
+
+        // Transform medblocks-ui paths to EHRBase FLAT format
+        // EHRBase expects paths like: "template_id/content/field"
+        // medblocks-ui exports paths like: "template_short_name/archetype_name:0/field"
+
+        // Get template ID for path transformation
+        const templateId = props.templateId || route.params.templateId as string;
+
+        formData = {};
+        for (const [key, value] of Object.entries(rawData)) {
+          // Skip ctx/ fields - they're added separately
+          if (key.startsWith("ctx/")) {
+            continue;
+          }
+
+          // Skip context-related fields that medblocks exports
+          // These are handled separately via ctx/* fields
+          // Match both "minimal/language|code" and "minimal/minimal:0/language|code"
+          if (key.match(/\/(language|territory|composer|encoding)\|/)) {
+            continue;
+          }
+
+          // Skip name fields (these are metadata, not actual content)
+          // FLAT format typically doesn't include name fields
+          if (key.endsWith('/name')) {
+            continue;
+          }
+
+          // Skip structural metadata fields like duration and period at event_series level
+          if (key.match(/event_series\/(duration|period)$/)) {
+            continue;
+          }
+
+          // medblocks-ui paths follow pattern: "template_short/archetype:0/path/to/field"
+          // We need to remove "template_short/archetype:0/" and replace with "template_id/"
+          // Example: "minimal/minimal:0/event_series/..." -> "minimal_observation.en.v1/event_series/..."
+
+          let transformedKey = key;
+
+          // Based on oehrpy validator, the correct format is:
+          // Input: "minimal/minimal:0/event_series/cualquier_evento/arbol/text/value"
+          // Output: "minimal/minimal/event_series/cualquier_evento/arbol/value|value"
+
+          // Step 1: Keep ":0" for archetype instances (EHRBase example shows minimal:0)
+          // Don't remove :0 - EHRBase needs it!
+
+          // Step 2: Handle the special case for value paths
+          // "arbol/text/value" should become "arbol/name|value"
+          transformedKey = transformedKey.replace(/\/text\/value$/, '/name|value');
+
+          // Step 3: Convert /attribute to |attribute for known attributes at the end
+          // But NOT for structural paths like /time in the middle
+          const lastSlashIndex = transformedKey.lastIndexOf('/');
+          if (lastSlashIndex !== -1) {
+            const lastSegment = transformedKey.substring(lastSlashIndex + 1);
+            // Only convert to pipe notation for data value attributes, not structural time
+            const pipeAttributes = ['value', 'magnitude', 'unit', 'code', 'terminology'];
+            if (pipeAttributes.includes(lastSegment)) {
+              transformedKey = transformedKey.substring(0, lastSlashIndex) + '|' + lastSegment;
+            }
+          }
+
+          formData[transformedKey] = value;
+        }
+
+        console.log("Form data (transformed):", formData);
+      } catch (e) {
+        console.error("Failed to export form data:", e);
+        throw new Error(`Form export failed: ${e}`);
+      }
+    } else {
+      console.error("mbFormRef is null");
+      throw new Error("Form reference not available");
+    }
+
+    // Get template ID
+    const templateId = props.templateId || route.params.templateId as string;
+    if (!templateId) {
+      throw new Error("Template ID not found");
+    }
+
+    // Build payload following EHRBase 2.x actual format
+    // medblocks-ui FLAT export is incompatible with EHRBase FLAT format
+    // We need to manually map the fields based on the /example endpoint
+    const isoTime = compositionTime.value ? new Date(compositionTime.value).toISOString() : new Date().toISOString();
+
+    // Extract the actual data value from medblocks-ui's nested structure
+    let textValue = "";
+    for (const [key, value] of Object.entries(formData)) {
+      if (key.includes("/text/value") || key.includes("/name|value")) {
+        textValue = String(value);
+        break;
+      }
+    }
+
+    // Build EHRBase-compatible FLAT payload based on /example endpoint
+    const payload = {
+      // Context shortcuts - EHRBase expands these automatically
+      "ctx/language": language.value,
+      "ctx/territory": territory.value,
+      "ctx/composer_name": composerName.value,
+      "ctx/time": isoTime,
+
+      // Data field - simplified path matching EHRBase example
+      "minimal/minimal:0/text": textValue,
+    };
+
+    console.log("Final payload:", payload);
+    console.log("Template ID:", templateId);
 
     // Build request details
     const method = isEditMode.value ? "PUT" : "POST";
@@ -181,8 +392,11 @@ async function handleSubmit() {
 
     requestDetails.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json\n\n${JSON.stringify(payload, null, 2)}`;
 
+    console.log("Submitting composition...");
+
     let result: string;
     if (isEditMode.value && props.compositionUid) {
+      console.log("Update mode");
       result = await compositionStore.updateComposition(
         serverStore.activeServerId,
         selectedEhrId.value,
@@ -190,13 +404,17 @@ async function handleSubmit() {
         payload
       );
       success.value = `Composition updated successfully! New version: ${result}`;
+      console.log("Update successful:", result);
     } else {
+      console.log("Create mode");
       result = await compositionStore.createComposition(
         serverStore.activeServerId,
         selectedEhrId.value,
+        templateId,
         payload
       );
       success.value = `Composition created successfully! UID: ${result}`;
+      console.log("Create successful:", result);
     }
 
     responseDetails.value = `HTTP 201 Created\n\n${JSON.stringify({ uid: { value: result } }, null, 2)}`;
@@ -212,10 +430,12 @@ async function handleSubmit() {
       });
     }, 2000);
   } catch (e) {
+    console.error("Composition submission error:", e);
     error.value = String(e);
     responseDetails.value = `Error: ${e}`;
   } finally {
     loading.value = false;
+    console.log("handleSubmit completed");
   }
 }
 
@@ -373,6 +593,7 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
         <mb-auto-form
           ref="mbFormRef"
           @mb-submit="handleMbSubmit"
+          @mb-change="handleMbChange"
         />
       </div>
 
@@ -389,10 +610,19 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
         <button
           class="btn btn-primary"
           @click="handleSubmit"
-          :disabled="!isReady || !composerName || loading"
+          :disabled="!selectedEhrId || !composerName || loading"
+          :title="!selectedEhrId ? 'Please select an EHR' : !composerName ? 'Please enter composer name' : ''"
         >
           {{ loading ? "Submitting..." : isEditMode ? "Update Composition" : "Create Composition" }}
         </button>
+      </div>
+
+      <!-- Validation messages -->
+      <div v-if="!selectedEhrId" class="validation-warning">
+        ⚠️ Please select an EHR above before submitting
+      </div>
+      <div v-else-if="!composerName || composerName.trim() === ''" class="validation-warning">
+        ⚠️ Please enter a composer name in the Context section (currently: "{{ composerName }}")
       </div>
 
       <!-- Request/Response Details -->
@@ -410,9 +640,14 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
     <div v-if="showPreview" class="preview-panel">
       <div class="preview-header">
         <h3>FLAT JSON Preview</h3>
-        <button class="btn btn-sm" @click="copyPreviewJson">
-          Copy JSON
-        </button>
+        <div class="preview-actions">
+          <button class="btn btn-sm" @click="refreshPreview" title="Refresh preview">
+            ↻
+          </button>
+          <button class="btn btn-sm" @click="copyPreviewJson">
+            Copy JSON
+          </button>
+        </div>
       </div>
       <pre class="preview-json">{{ previewJson }}</pre>
     </div>
@@ -576,6 +811,11 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
   margin: 0;
 }
 
+.preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .preview-json {
   flex: 1;
   overflow-y: auto;
@@ -592,5 +832,15 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
   text-align: center;
   padding: 48px;
   color: var(--color-text-muted);
+}
+
+.validation-warning {
+  padding: 12px 16px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: var(--radius);
+  color: #fbbf24;
+  font-size: 13px;
+  margin-top: 16px;
 }
 </style>
