@@ -15,6 +15,7 @@ pub fn run() {
             server::save_server_profile,
             server::delete_server_profile,
             server::test_server_connection,
+            server::get_server_version,
             // EHR
             ehr::list_ehrs,
             ehr::get_ehr_detail,

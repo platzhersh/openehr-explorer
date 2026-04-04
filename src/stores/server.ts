@@ -13,10 +13,20 @@ export interface ServerProfile {
     | { type: "bearer"; token: string };
 }
 
+export interface ServerVersionInfo {
+  ehrbase_version: string | null;
+  sdk_version: string | null;
+  archie_version: string | null;
+  jvm_version: string | null;
+  os_version: string | null;
+  postgres_version: string | null;
+}
+
 export const useServerStore = defineStore("server", () => {
   const profiles = ref<ServerProfile[]>([]);
   const activeServerId = ref<string | null>(null);
   const connectionStatus = ref<Record<string, "connected" | "error" | "unknown">>({});
+  const versionInfo = ref<Record<string, ServerVersionInfo>>({});
 
   const activeServer = computed(
     () => profiles.value.find((p) => p.id === activeServerId.value) ?? null,
@@ -58,15 +68,28 @@ export const useServerStore = defineStore("server", () => {
     activeServerId.value = id;
   }
 
+  async function fetchServerVersion(profile: ServerProfile): Promise<ServerVersionInfo | null> {
+    try {
+      const version = await invoke<ServerVersionInfo>("get_server_version", { profile });
+      versionInfo.value[profile.id] = version;
+      return version;
+    } catch (e) {
+      console.error("Failed to fetch server version:", e);
+      return null;
+    }
+  }
+
   return {
     profiles,
     activeServerId,
     activeServer,
     connectionStatus,
+    versionInfo,
     loadProfiles,
     saveProfile,
     deleteProfile,
     testConnection,
     setActiveServer,
+    fetchServerVersion,
   };
 });
