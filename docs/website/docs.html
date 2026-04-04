@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation — openEHR Explorer</title>
+  <meta name="description" content="Documentation for openEHR Explorer — a cross-platform desktop app for browsing, querying, and inspecting openEHR CDR instances.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-tertiary: #0f3460;
+      --surface: #1e2a4a;
+      --surface-hover: #253456;
+      --border: #2a3a5c;
+      --text: #e0e0e0;
+      --text-secondary: #8892b0;
+      --text-muted: #5a6a8a;
+      --primary: #64ffda;
+      --primary-dim: #3d9e85;
+      --success: #6bff8e;
+      --warning: #ffd93d;
+      --error: #ff6b6b;
+      --code-bg: #0d1117;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --radius: 6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    /* Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 60px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo:hover { text-decoration: none; }
+    .wordmark {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--text-secondary);
+      font-size: 15px;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links a.active { color: var(--primary); }
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .github-btn:hover { border-color: var(--primary); color: var(--text); text-decoration: none; }
+
+    /* Layout */
+    .docs-layout {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      position: sticky;
+      top: 60px;
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      flex-shrink: 0;
+    }
+    .sidebar-group-title {
+      padding: 8px 24px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-top: 20px;
+      font-weight: 600;
+    }
+    .sidebar-group-title:first-child { margin-top: 0; }
+    .sidebar-link {
+      display: block;
+      padding: 7px 24px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      border-left: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .sidebar-link:hover {
+      color: var(--text);
+      background: rgba(100,255,218,0.03);
+      text-decoration: none;
+    }
+    .sidebar-link.active {
+      color: var(--primary);
+      border-left-color: var(--primary);
+      background: rgba(100,255,218,0.05);
+    }
+
+    /* Content */
+    .docs-content {
+      flex: 1;
+      max-width: 900px;
+      padding: 40px 48px;
+    }
+    .docs-content h2 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      margin-top: 48px;
+      color: var(--text);
+    }
+    .docs-content h2:first-child { margin-top: 0; }
+    .docs-content h3 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    .docs-content p {
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .docs-content ul, .docs-content ol {
+      margin-bottom: 16px;
+      padding-left: 24px;
+      color: var(--text-secondary);
+    }
+    .docs-content li { margin-bottom: 6px; line-height: 1.6; }
+    .docs-content strong { color: var(--text); }
+
+    /* Code */
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: 0.9em;
+      color: var(--primary);
+    }
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--primary);
+      overflow-x: auto;
+      margin: 16px 0;
+      line-height: 1.6;
+    }
+    .code-comment { color: var(--text-muted); }
+
+    /* Callouts */
+    .note {
+      border-left: 3px solid var(--primary);
+      background: rgba(100,255,218,0.05);
+      padding: 12px 16px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 16px 0;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+    .warning {
+      border-left: 3px solid var(--warning);
+      background: rgba(255,217,61,0.05);
+      padding: 12px 16px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 16px 0;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+    .callout-title {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 600;
+    }
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 24px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 12px 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0;
+        overflow-x: auto;
+      }
+      .sidebar-group-title {
+        width: 100%;
+        margin-top: 8px;
+        padding: 4px 16px;
+      }
+      .sidebar-link {
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        padding: 6px 12px;
+        white-space: nowrap;
+      }
+      .sidebar-link.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--primary);
+      }
+      .docs-layout { flex-direction: column; }
+      .docs-content { padding: 24px 16px; }
+      .header-inner { padding: 0 16px; }
+      .wordmark { font-size: 16px; }
+      .nav-links { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <svg viewBox="0 0 64 64" width="32" height="32" role="img" aria-label="openEHR Explorer logo">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="wordmark">openEHR Explorer</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="docs.html" class="active">Docs</a></li>
+          <li><a href="brand-kit.html">Brand Kit</a></li>
+          <li><a href="https://github.com/platzhersh/openehr-explorer" class="github-btn" target="_blank" rel="noopener">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="sidebar" role="navigation" aria-label="Documentation navigation">
+      <div class="sidebar-group-title">Getting Started</div>
+      <a href="#prerequisites" class="sidebar-link active">Prerequisites</a>
+      <a href="#installation" class="sidebar-link">Installation</a>
+      <a href="#first-connection" class="sidebar-link">First Connection</a>
+
+      <div class="sidebar-group-title">Features</div>
+      <a href="#server-manager" class="sidebar-link">Server Manager</a>
+      <a href="#ehr-browser" class="sidebar-link">EHR Browser</a>
+      <a href="#composition-viewer" class="sidebar-link">Composition Viewer</a>
+      <a href="#template-browser" class="sidebar-link">Template Browser</a>
+      <a href="#aql-runner" class="sidebar-link">AQL Runner</a>
+      <a href="#flat-path-panel" class="sidebar-link">FLAT Path Panel</a>
+
+      <div class="sidebar-group-title">Configuration</div>
+      <a href="#server-profiles" class="sidebar-link">Server Profiles</a>
+      <a href="#keyboard-shortcuts" class="sidebar-link">Keyboard Shortcuts</a>
+
+      <div class="sidebar-group-title">Reference</div>
+      <a href="#troubleshooting" class="sidebar-link">Troubleshooting</a>
+      <a href="#changelog" class="sidebar-link">Changelog</a>
+    </aside>
+
+    <main class="docs-content">
+
+      <!-- Getting Started -->
+      <section id="prerequisites">
+        <h2>Prerequisites</h2>
+        <p>openEHR Explorer is a native desktop application. There are no runtime dependencies — you do not need Java, Docker, Node.js, or any other runtime installed to use it.</p>
+        <h3>System Requirements</h3>
+        <ul>
+          <li><strong>macOS:</strong> macOS 12 (Monterey) or later</li>
+          <li><strong>Windows:</strong> Windows 10 (version 1803) or later</li>
+          <li><strong>Linux:</strong> Ubuntu 22.04+, Fedora 37+, or equivalent (WebKit2GTK required)</li>
+          <li><strong>Disk space:</strong> ~10 MB</li>
+        </ul>
+        <p>You will also need access to an openEHR CDR instance (such as <a href="https://ehrbase.org" target="_blank" rel="noopener">EHRBase</a> or Better Platform) to connect to. The app does not include a built-in CDR.</p>
+      </section>
+
+      <section id="installation">
+        <h2>Installation</h2>
+        <div class="note">
+          <div class="callout-title">Early Development</div>
+          openEHR Explorer is currently in early development. Check <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for the latest version.
+        </div>
+
+        <h3>macOS</h3>
+        <p>Download the <code>.dmg</code> file from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Open the DMG and drag openEHR Explorer to your Applications folder.</p>
+        <div class="code-block"><span class="code-comment"># Homebrew — coming soon</span>
+brew install --cask openehr-explorer</div>
+
+        <h3>Windows</h3>
+        <p>Download the <code>.msi</code> installer from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> and run it. The app will be added to your Start menu.</p>
+        <div class="code-block"><span class="code-comment"># winget — coming soon</span>
+winget install openehr-explorer</div>
+
+        <h3>Linux</h3>
+        <p>Download the <code>.AppImage</code> from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Make it executable and run:</p>
+        <div class="code-block">chmod +x openehr-explorer_0.1.0_amd64.AppImage
+./openehr-explorer_0.1.0_amd64.AppImage</div>
+      </section>
+
+      <section id="first-connection">
+        <h2>First Connection</h2>
+        <p>After installing and launching the app, follow these steps to connect to your first openEHR CDR:</p>
+        <ol>
+          <li>Click <strong>Servers</strong> in the sidebar to open the Server Manager.</li>
+          <li>Click <strong>"+ Add Server"</strong>.</li>
+          <li>Enter a display name (e.g., "Local EHRBase").</li>
+          <li>Enter the base URL of your CDR (e.g., <code>http://localhost:8080/ehrbase</code>).</li>
+          <li>Select the server type: <strong>EHRBase</strong>, <strong>Better Platform</strong>, or <strong>Generic</strong>.</li>
+          <li>Choose an authentication method:
+            <ul>
+              <li><strong>None</strong> — for unauthenticated servers</li>
+              <li><strong>Basic</strong> — enter username and password</li>
+              <li><strong>Bearer</strong> — enter an access token</li>
+            </ul>
+          </li>
+          <li>Click <strong>"Test Connection"</strong> to verify.</li>
+          <li>Click <strong>"Save"</strong>.</li>
+        </ol>
+        <p>The server now appears in the sidebar switcher at the top. Select it to start browsing EHRs, templates, and running queries.</p>
+      </section>
+
+      <!-- Features -->
+      <section id="server-manager">
+        <h2>Server Manager</h2>
+        <p>The Server Manager lets you create, edit, and delete server profiles. Each profile stores a connection configuration for a specific openEHR CDR instance.</p>
+        <ul>
+          <li>Supports <strong>EHRBase</strong>, <strong>Better Platform</strong>, and generic openEHR REST servers.</li>
+          <li>Each profile stores: display name, base URL, server type, and authentication method.</li>
+          <li><strong>Test Connection</strong> validates the configuration before saving.</li>
+          <li>Switch between servers instantly using the sidebar dropdown — no restart needed.</li>
+        </ul>
+        <p>Server profiles are stored locally and never sent to any external service. You can configure as many profiles as you need.</p>
+      </section>
+
+      <section id="ehr-browser">
+        <h2>EHR Browser</h2>
+        <p>The EHR Browser displays a paginated list of all Electronic Health Records from the connected CDR.</p>
+        <ul>
+          <li>Click any EHR to expand it and see its compositions grouped by template.</li>
+          <li>Click a composition to open it in the Composition Viewer.</li>
+          <li><strong>Create EHR:</strong> Click "+ New EHR" to create a new record with optional subject identity, external references, and custom EHR ID.</li>
+          <li><strong>Delete EHR:</strong> Open an EHR's detail view and click "Delete EHR". You must type the EHR ID to confirm — this prevents accidental deletion.</li>
+        </ul>
+        <p>The browser uses AQL-based listing for efficient pagination, even on CDRs with thousands of records.</p>
+      </section>
+
+      <section id="composition-viewer">
+        <h2>Composition Viewer</h2>
+        <p>The Composition Viewer provides three synchronized views of any composition:</p>
+        <ul>
+          <li><strong>Pretty view:</strong> A structured tree rendering with human-readable archetype labels. Archetype node IDs like <code>at0006</code> are replaced with their display names (e.g., "Any Event").</li>
+          <li><strong>JSON view:</strong> The raw canonical JSON representation as returned by the CDR.</li>
+          <li><strong>FLAT view:</strong> A key-value representation using FLAT paths — ideal for SDK developers building or debugging FLAT compositions.</li>
+        </ul>
+        <p>The <strong>Path Panel</strong> on the right shows all FLAT paths from the Web Template. Click any path to copy it to your clipboard.</p>
+        <p>You can also navigate between composition versions, edit compositions (opens the Composition Form), and delete compositions from this view.</p>
+      </section>
+
+      <section id="template-browser">
+        <h2>Template Browser</h2>
+        <p>The Template Browser lists all templates uploaded to the connected CDR.</p>
+        <ul>
+          <li>Click a template to inspect its <strong>Web Template</strong> tree structure interactively.</li>
+          <li>Expand nodes to explore archetypes, data types, constraints, and cardinalities.</li>
+          <li><strong>Upload OPT:</strong> Upload Operational Template XML files directly from the browser.</li>
+          <li><strong>New Composition:</strong> Click "New Composition" on any template to create a composition using that template's form.</li>
+        </ul>
+      </section>
+
+      <section id="aql-runner">
+        <h2>AQL Runner</h2>
+        <p>The AQL Runner is a query editor for the Archetype Query Language (AQL), the standard query language for openEHR data.</p>
+        <ul>
+          <li>Write AQL queries with syntax highlighting.</li>
+          <li>Execute queries against the connected CDR and see results in a sortable table.</li>
+          <li><strong>Save queries:</strong> Save frequently used queries with a name and description for quick access.</li>
+          <li><strong>Export CSV:</strong> Export query results as CSV files for further analysis.</li>
+        </ul>
+        <div class="code-block">SELECT
+  e/ehr_id/value as ehr_id,
+  c/uid/value as composition_id,
+  c/name/value as name
+FROM EHR e
+  CONTAINS COMPOSITION c
+ORDER BY c/name/value ASC
+LIMIT 10</div>
+        <div class="note">
+          <div class="callout-title">Coming in v0.2.0</div>
+          AQL autocomplete with archetype-aware suggestions, powered by a CodeMirror-based editor.
+        </div>
+      </section>
+
+      <section id="flat-path-panel">
+        <h2>FLAT Path Panel</h2>
+        <p>The FLAT Path Panel is available in both the Composition Viewer and the Template Browser. It displays the full FLAT path for every node in the Web Template.</p>
+        <ul>
+          <li><strong>One-click copy:</strong> Click any path to copy it to your clipboard.</li>
+          <li>Paths follow the Web Template FLAT format — useful for building FLAT compositions programmatically with SDKs like <a href="https://platzhersh.github.io/oehrpy" target="_blank" rel="noopener">oehrpy</a>.</li>
+          <li>Search and filter paths by keyword.</li>
+        </ul>
+        <p>Example FLAT path:</p>
+        <div class="code-block">vital-signs/blood_pressure:0/any_event:0/systolic|magnitude</div>
+      </section>
+
+      <!-- Configuration -->
+      <section id="server-profiles">
+        <h2>Server Profiles</h2>
+        <p>Server profiles are stored locally on your machine:</p>
+        <ul>
+          <li><strong>Linux/macOS:</strong> <code>~/.config/openehr-explorer/profiles.json</code></li>
+          <li><strong>Windows:</strong> <code>%APPDATA%\openehr-explorer\profiles.json</code></li>
+        </ul>
+        <h3>Server Types</h3>
+        <p>The server type determines how API URLs are constructed:</p>
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Base Path</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>EHRBase</td><td><code>/rest/openehr/v1/</code></td><td><code>http://localhost:8080/ehrbase/rest/openehr/v1/ehr</code></td></tr>
+            <tr><td>Better Platform</td><td><code>/rest/v1/</code></td><td><code>https://better.example.com/rest/v1/ehr</code></td></tr>
+            <tr><td>Generic</td><td>Configurable</td><td>Depends on CDR vendor</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Authentication Methods</h3>
+        <ul>
+          <li><strong>None:</strong> No authentication headers sent. Use for local development servers.</li>
+          <li><strong>Basic:</strong> HTTP Basic Authentication with username and password. Credentials are stored locally (not encrypted).</li>
+          <li><strong>Bearer:</strong> Authorization header with a Bearer token. Useful for OAuth2-based CDR deployments.</li>
+        </ul>
+      </section>
+
+      <section id="keyboard-shortcuts">
+        <h2>Keyboard Shortcuts</h2>
+        <table>
+          <thead>
+            <tr><th>Shortcut</th><th>Action</th><th>Context</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Ctrl/Cmd + 1</code></td><td>Switch to EHR Browser</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + 2</code></td><td>Switch to Template Browser</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + 3</code></td><td>Switch to AQL Runner</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + 4</code></td><td>Switch to Server Manager</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + Enter</code></td><td>Execute AQL query</td><td>AQL Runner</td></tr>
+            <tr><td><code>Escape</code></td><td>Close dialog / panel</td><td>Global</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Reference -->
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+
+        <h3>"Connection refused"</h3>
+        <p>Verify that your CDR is running and that the base URL in your server profile is correct. If using EHRBase locally, ensure the Docker container is started:</p>
+        <div class="code-block">docker-compose up -d
+<span class="code-comment"># Wait a few seconds, then retry the connection</span></div>
+
+        <h3>"401 Unauthorized"</h3>
+        <p>Check your authentication credentials in the server profile. For Basic auth, verify the username and password. For Bearer auth, ensure the token has not expired.</p>
+
+        <h3>"CORS errors"</h3>
+        <p>openEHR Explorer uses Tauri's native HTTP client, which does not go through a browser engine — CORS does not apply. If you see CORS-related errors, you may be running a development build via <code>npm run tauri dev</code> where the Vite dev server proxies requests.</p>
+
+        <h3>"Template not found" when creating a composition</h3>
+        <p>Ensure the template has been uploaded to the CDR. Go to Template Browser, verify the template appears in the list, and try again.</p>
+
+        <div class="warning">
+          <div class="callout-title">Found a bug?</div>
+          Please report it on <a href="https://github.com/platzhersh/openehr-explorer/issues">GitHub Issues</a>. Include the steps to reproduce, your OS version, and the CDR type you are connecting to.
+        </div>
+      </section>
+
+      <section id="changelog">
+        <h2>Changelog</h2>
+
+        <h3>v0.1.0 — Initial Release</h3>
+        <ul>
+          <li><strong>EHR Browser:</strong> Paginated listing, create, delete</li>
+          <li><strong>Composition Viewer:</strong> Pretty / JSON / FLAT views, path panel, version navigation</li>
+          <li><strong>Composition CRUD:</strong> Create, edit, delete compositions in FLAT format</li>
+          <li><strong>Template Browser:</strong> List templates, inspect Web Template tree, upload OPT</li>
+          <li><strong>AQL Runner:</strong> Execute queries, sortable results table, saved queries, CSV export</li>
+          <li><strong>Server Manager:</strong> Multi-server profiles with EHRBase and Better Platform support</li>
+          <li><strong>Request Inspector:</strong> View raw HTTP requests/responses for debugging</li>
+        </ul>
+
+        <div class="note">
+          <div class="callout-title">What's next?</div>
+          See the <a href="https://github.com/platzhersh/openehr-explorer">GitHub repository</a> for the roadmap. Key planned features include AQL autocomplete (v0.2.0) and a synthetic data generator.
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="footer">
+    &copy; 2026 Chregi Platz &middot; MIT License &middot; Not affiliated with openEHR International
+  </footer>
+
+  <script>
+    // Active section tracking via IntersectionObserver
+    (function() {
+      const links = document.querySelectorAll('.sidebar-link');
+      const sections = document.querySelectorAll('.docs-content section[id]');
+      const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            links.forEach(function(link) { link.classList.remove('active'); });
+            var active = document.querySelector('.sidebar-link[href="#' + entry.target.id + '"]');
+            if (active) active.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-60px 0px -80% 0px', threshold: 0 });
+      sections.forEach(function(section) { observer.observe(section); });
+    })();
+  </script>
+
+</body>
+</html>

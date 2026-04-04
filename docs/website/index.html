@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>openEHR Explorer — Browse, Query, and Inspect Any openEHR CDR</title>
+  <meta name="description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances. Built with Tauri and Vue 3.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-tertiary: #0f3460;
+      --surface: #1e2a4a;
+      --surface-hover: #253456;
+      --border: #2a3a5c;
+      --text: #e0e0e0;
+      --text-secondary: #8892b0;
+      --text-muted: #5a6a8a;
+      --primary: #64ffda;
+      --primary-dim: #3d9e85;
+      --success: #6bff8e;
+      --warning: #ffd93d;
+      --error: #ff6b6b;
+      --code-bg: #0d1117;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --radius: 6px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .logo-link:hover {
+      text-decoration: none;
+    }
+
+    .wordmark {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .header-nav a {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header-nav a:hover {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+
+    .github-btn:hover {
+      border-color: var(--primary);
+      text-decoration: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 80px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .hero-logo {
+      animation: float 4s ease-in-out infinite;
+      margin-bottom: 32px;
+    }
+
+    .hero h1 {
+      font-size: 4rem;
+      font-weight: 600;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #64ffda 0%, #38bdf8 60%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-tagline {
+      font-size: 1.5rem;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--primary-dim);
+      color: #fff;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary);
+      color: var(--bg);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--primary-dim);
+    }
+
+    .version-badge {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── UI Preview Strip ── */
+    .preview-strip {
+      padding: 0 24px 80px;
+    }
+
+    .preview-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .preview-card svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .preview-caption {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-top: 16px;
+      max-width: 1000px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ── Feature Cards ── */
+    .features {
+      padding: 80px 24px;
+    }
+
+    .section-heading {
+      font-size: 2rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 48px;
+      color: var(--text);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--primary-dim);
+    }
+
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* ── Quick Start ── */
+    .quickstart {
+      padding: 80px 24px;
+    }
+
+    .quickstart-inner {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .quickstart-inner h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      margin-top: 32px;
+      color: var(--text);
+    }
+
+    .quickstart-inner h3:first-of-type {
+      margin-top: 0;
+    }
+
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--primary);
+      overflow-x: auto;
+      line-height: 1.7;
+    }
+
+    .code-block .comment {
+      color: var(--text-muted);
+    }
+
+    .code-block a {
+      color: var(--primary);
+    }
+
+    /* ── Ecosystem Banner ── */
+    .ecosystem {
+      background: var(--surface);
+      padding: 40px 24px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ecosystem p {
+      max-width: 800px;
+      margin: 0 auto;
+      color: var(--text-secondary);
+      font-size: 1rem;
+      line-height: 1.7;
+    }
+
+    /* ── Footer ── */
+    .site-footer {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+
+    .footer-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .footer-cols {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .footer-col {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .footer-brand .wordmark {
+      font-size: 1rem;
+    }
+
+    .footer-license {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: center;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    .footer-col:last-child {
+      text-align: right;
+    }
+
+    .footer-heart {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+
+    .footer-bottom {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .header-inner {
+        flex-direction: column;
+        height: auto;
+        padding: 12px 24px;
+        gap: 12px;
+      }
+
+      .header-nav {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 16px;
+      }
+
+      .hero {
+        padding: 48px 24px;
+      }
+
+      .hero h1 {
+        font-size: 2.5rem;
+      }
+
+      .hero-tagline {
+        font-size: 1.15rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .footer-cols {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .footer-col:last-child {
+        text-align: center;
+      }
+
+      .footer-links {
+        text-align: center;
+      }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="logo-link">
+        <svg viewBox="0 0 64 64" width="32" height="32" role="img" aria-label="openEHR Explorer logo">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="wordmark">openEHR Explorer</span>
+      </a>
+      <nav class="header-nav" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#quickstart">Quick Start</a>
+        <a href="docs.html">Docs</a>
+        <a href="https://github.com/platzhersh/openehr-explorer" class="github-btn" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="GitHub">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Hero ── -->
+    <section class="hero">
+      <div class="hero-logo">
+        <svg viewBox="0 0 64 64" width="80" height="80" role="img" aria-label="openEHR Explorer logo">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1>openEHR Explorer</h1>
+      <p class="hero-tagline">Browse, query, and inspect any openEHR CDR &mdash; no curl required.</p>
+      <div class="cta-group">
+        <a href="https://github.com/platzhersh/openehr-explorer/releases" class="btn btn-primary">Download for macOS</a>
+        <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+      </div>
+      <p class="version-badge">v0.1.0 &middot; macOS &middot; Windows &middot; Linux</p>
+    </section>
+
+    <!-- ── UI Preview Strip ── -->
+    <section class="preview-strip">
+      <div class="preview-card">
+        <svg viewBox="0 0 1000 500" width="1000" height="500" role="img" aria-label="Application UI wireframe showing a three-pane layout with sidebar, main content area, and right panel">
+          <rect width="1000" height="500" fill="#0d1117"/>
+          <!-- Top bar -->
+          <rect x="0" y="0" width="1000" height="40" fill="#16213e"/>
+          <rect x="16" y="12" width="60" height="16" rx="3" fill="#2a3a5c"/>
+          <rect x="90" y="12" width="50" height="16" rx="3" fill="#2a3a5c"/>
+          <rect x="154" y="12" width="50" height="16" rx="3" fill="#2a3a5c"/>
+          <rect x="218" y="12" width="40" height="16" rx="3" fill="#2a3a5c"/>
+          <!-- Sidebar -->
+          <rect x="0" y="40" width="240" height="460" fill="#1a1a2e"/>
+          <rect x="16" y="56" width="208" height="28" rx="4" fill="#1e2a4a" stroke="#2a3a5c" stroke-width="1"/>
+          <rect x="16" y="100" width="180" height="14" rx="2" fill="#2a3a5c"/>
+          <rect x="16" y="126" width="160" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="148" width="190" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="170" width="140" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="198" width="180" height="14" rx="2" fill="#2a3a5c"/>
+          <rect x="16" y="224" width="170" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="246" width="155" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="268" width="185" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="296" width="180" height="14" rx="2" fill="#2a3a5c"/>
+          <rect x="16" y="322" width="165" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="16" y="344" width="145" height="12" rx="2" fill="#1e2a4a"/>
+          <!-- Sidebar divider -->
+          <line x1="240" y1="40" x2="240" y2="500" stroke="#2a3a5c" stroke-width="1"/>
+          <!-- Main content -->
+          <rect x="256" y="56" width="120" height="24" rx="4" fill="#2a3a5c"/>
+          <rect x="256" y="96" width="400" height="1" fill="#2a3a5c"/>
+          <!-- Key-value rows -->
+          <text x="268" y="124" font-family="monospace" font-size="11" fill="#5a6a8a">composer</text>
+          <text x="370" y="124" font-family="monospace" font-size="11" fill="#64ffda">Dr. Smith</text>
+          <text x="268" y="148" font-family="monospace" font-size="11" fill="#5a6a8a">language</text>
+          <text x="370" y="148" font-family="monospace" font-size="11" fill="#8892b0">en</text>
+          <text x="268" y="172" font-family="monospace" font-size="11" fill="#5a6a8a">territory</text>
+          <text x="370" y="172" font-family="monospace" font-size="11" fill="#8892b0">GB</text>
+          <text x="268" y="196" font-family="monospace" font-size="11" fill="#5a6a8a">time</text>
+          <text x="370" y="196" font-family="monospace" font-size="11" fill="#8892b0">2026-04-04T09:30:00Z</text>
+          <rect x="256" y="212" width="400" height="1" fill="#2a3a5c"/>
+          <!-- JSON-like block -->
+          <rect x="256" y="228" width="420" height="180" rx="4" fill="#0d1117" stroke="#2a3a5c" stroke-width="1"/>
+          <text x="272" y="252" font-family="monospace" font-size="11" fill="#5a6a8a">{</text>
+          <text x="288" y="272" font-family="monospace" font-size="11" fill="#64ffda">"_type"</text>
+          <text x="356" y="272" font-family="monospace" font-size="11" fill="#8892b0">: "COMPOSITION",</text>
+          <text x="288" y="292" font-family="monospace" font-size="11" fill="#64ffda">"archetype_id"</text>
+          <text x="404" y="292" font-family="monospace" font-size="11" fill="#8892b0">: "openEHR-EHR-...</text>
+          <text x="288" y="312" font-family="monospace" font-size="11" fill="#64ffda">"name"</text>
+          <text x="342" y="312" font-family="monospace" font-size="11" fill="#8892b0">: "Vital Signs",</text>
+          <text x="288" y="332" font-family="monospace" font-size="11" fill="#64ffda">"uid"</text>
+          <text x="326" y="332" font-family="monospace" font-size="11" fill="#8892b0">: "a1b2c3d4...",</text>
+          <text x="272" y="398" font-family="monospace" font-size="11" fill="#5a6a8a">}</text>
+          <!-- Right panel divider -->
+          <line x1="700" y1="40" x2="700" y2="500" stroke="#2a3a5c" stroke-width="1"/>
+          <!-- Right panel: FLAT paths -->
+          <rect x="700" y="40" width="300" height="460" fill="#1a1a2e"/>
+          <rect x="716" y="56" width="100" height="20" rx="3" fill="#3d9e85" opacity="0.3"/>
+          <text x="730" y="71" font-family="sans-serif" font-size="11" font-weight="600" fill="#64ffda">FLAT Paths</text>
+          <rect x="716" y="92" width="268" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="114" width="240" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="136" width="256" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="158" width="220" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="180" width="260" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="202" width="235" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="224" width="250" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="246" width="210" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="268" width="268" height="12" rx="2" fill="#1e2a4a"/>
+          <rect x="716" y="290" width="240" height="12" rx="2" fill="#1e2a4a"/>
+        </svg>
+      </div>
+      <p class="preview-caption">Template-aware composition viewer &middot; FLAT path panel &middot; AQL runner</p>
+    </section>
+
+    <!-- ── Feature Cards ── -->
+    <section class="features" id="features">
+      <h2 class="section-heading">Features</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon" aria-hidden="true">&#x1F5A5;&#xFE0F;</div>
+          <h3>Native Desktop App</h3>
+          <p>Cross-platform (macOS, Windows, Linux). No Docker, no backend, no runtime. Installs in seconds.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" aria-hidden="true">&#x1F50D;</div>
+          <h3>Template-Aware Viewer</h3>
+          <p>Compositions render with human-readable archetype labels &mdash; at0006 becomes &ldquo;Any Event&rdquo;, not noise.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" aria-hidden="true">&#x26A1;</div>
+          <h3>AQL Query Runner</h3>
+          <p>Write and execute AQL against your CDR. Results in a sortable table. Save queries, export CSV.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" aria-hidden="true">&#x1F5C2;&#xFE0F;</div>
+          <h3>FLAT Path Panel</h3>
+          <p>One-click copy of any FLAT path from the Web Template tree. Built for SDK and integration developers.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" aria-hidden="true">&#x1F50C;</div>
+          <h3>Multi-Server Profiles</h3>
+          <p>Save named connections to EHRBase, Better Platform, or any openEHR REST server. Switch instantly.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" aria-hidden="true">&#x1F980;</div>
+          <h3>Tauri-Powered</h3>
+          <p>Rust (Tauri) + Vue 3. ~10 MB bundle, &lt; 2 s launch time. No Electron overhead.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Quick Start ── -->
+    <section class="quickstart" id="quickstart">
+      <h2 class="section-heading">Get started in 30 seconds</h2>
+      <div class="quickstart-inner">
+        <h3>macOS (Homebrew)</h3>
+        <div class="code-block">
+          <span class="comment"># Coming soon &mdash; use direct download for now</span><br>
+          brew install --cask openehr-explorer
+        </div>
+
+        <h3>Direct Download</h3>
+        <div class="code-block">
+          <a href="https://github.com/platzhersh/openehr-explorer/releases">Download from GitHub Releases</a>
+        </div>
+
+        <h3>Windows</h3>
+        <div class="code-block">
+          <span class="comment"># Coming soon</span><br>
+          winget install openehr-explorer
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Ecosystem Banner ── -->
+    <section class="ecosystem">
+      <p>Part of the openEHR developer tooling ecosystem &mdash; alongside <a href="https://platzhersh.github.io/oehrpy">oehrpy</a> (Python SDK) and <a href="https://github.com/platzhersh/open-cis">Open CIS</a> (reference clinical app). No runtime dependency between them &mdash; use any combination.</p>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-cols">
+        <div class="footer-col">
+          <div class="footer-brand">
+            <svg viewBox="0 0 64 64" width="24" height="24" role="img" aria-label="openEHR Explorer logo">
+              <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+              <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+              <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+            <span class="wordmark">openEHR Explorer</span>
+          </div>
+          <p class="footer-license">MIT License</p>
+        </div>
+        <div class="footer-col">
+          <nav class="footer-links" aria-label="Footer navigation">
+            <a href="docs.html">Docs</a>
+            <a href="brand-kit.html">Brand Kit</a>
+            <a href="https://github.com/platzhersh/openehr-explorer" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://discourse.openehr.org/" target="_blank" rel="noopener noreferrer">openEHR Discourse</a>
+          </nav>
+        </div>
+        <div class="footer-col">
+          <p class="footer-heart">Built with &#10084;&#65039; for the openEHR community</p>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        &copy; 2026 Chregi Platz &middot; Not affiliated with openEHR International
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
