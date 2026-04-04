@@ -75,7 +75,7 @@ pub async fn get_composition_flat(
         &app,
         &client,
         make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/openehr.wt.flat+json"),
+            .header("Accept", "application/openehr.wt.flat.schema+json"),
     )
     .await?;
 
@@ -220,18 +220,37 @@ pub async fn create_composition(
         ));
     }
 
-    let result: Value =
-        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
+    // EHRBase returns 201/204 with Location header, but may have empty body
+    // Try to extract composition UID from Location header first, fall back to response body
+    if let Some(location) = resp.headers.get("location") {
+        // Extract composition UID from the location path
+        // Format: /rest/openehr/v1/ehr/{ehr_id}/composition/{composition_uid}
+        let composition_uid = location
+            .split('/')
+            .next_back()
+            .ok_or("Could not extract composition UID from Location header")?
+            .to_string();
 
-    // Extract composition UID from response
-    let composition_uid = result
-        .get("uid")
-        .and_then(|u| u.get("value"))
-        .and_then(|v| v.as_str())
-        .ok_or("Composition UID not found in response")?
-        .to_string();
+        return Ok(composition_uid);
+    }
 
-    Ok(composition_uid)
+    // Fall back to parsing response body if no Location header
+    if !resp.body.is_empty() {
+        let result: Value = serde_json::from_str(&resp.body)
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        // Extract composition UID from response
+        let composition_uid = result
+            .get("uid")
+            .and_then(|u| u.get("value"))
+            .and_then(|v| v.as_str())
+            .ok_or("Composition UID not found in response")?
+            .to_string();
+
+        return Ok(composition_uid);
+    }
+
+    Err("No Location header or response body found".to_string())
 }
 
 #[tauri::command]

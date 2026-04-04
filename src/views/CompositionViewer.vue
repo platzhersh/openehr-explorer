@@ -91,6 +91,21 @@ const jsonDisplay = computed(() => {
   return data ? JSON.stringify(data, null, 2) : "";
 });
 
+// Syntax highlighting
+function highlightJson(json: string): string {
+  return json
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+    .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+    .replace(/: (null)/g, ': <span class="json-null">$1</span>');
+}
+
+const highlightedJson = computed(() => highlightJson(jsonDisplay.value));
+
 // Extract flat paths from the flat composition or web template
 const flatPaths = computed(() => {
   if (flatComposition.value && typeof flatComposition.value === "object") {
@@ -177,7 +192,7 @@ async function handleDelete() {
 
         <!-- JSON View -->
         <div v-if="activeTab === 'json' || activeTab === 'flat'" class="json-view">
-          <pre class="json-pre"><code>{{ jsonDisplay }}</code></pre>
+          <pre class="json-pre"><code v-html="highlightedJson"></code></pre>
         </div>
       </div>
 
@@ -338,5 +353,27 @@ async function handleDelete() {
 
 .btn-danger:hover:not(:disabled) {
   background: rgba(255, 90, 90, 0.2);
+}
+
+/* JSON syntax highlighting */
+.json-key {
+  color: #79c0ff;
+  font-weight: 500;
+}
+
+.json-string {
+  color: #a5d6ff;
+}
+
+.json-number {
+  color: #79c0ff;
+}
+
+.json-boolean {
+  color: #ff7b72;
+}
+
+.json-null {
+  color: #8b949e;
 }
 </style>
