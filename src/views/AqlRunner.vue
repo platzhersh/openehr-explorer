@@ -48,15 +48,16 @@ async function deleteSavedQuery(id: string) {
 function exportCsv() {
   if (!queryStore.result) return;
 
-  const headers = queryStore.result.columns.map((c) => c.name);
-  const rows = queryStore.result.rows.map((row) =>
-    row.map((cell) => {
+  const headers = queryStore.result.columns.map((c) => c.path || c.name);
+  const rows = queryStore.result.rows.map((row, idx) => {
+    const rowWithNumber = [String(idx + 1), ...row.map((cell) => {
       const val = typeof cell === "object" ? JSON.stringify(cell) : String(cell ?? "");
       return `"${val.replace(/"/g, '""')}"`;
-    }),
-  );
+    })];
+    return rowWithNumber;
+  });
 
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const csv = [["#", ...headers].join(","), ...rows.map((r) => r.join(","))].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -155,13 +156,15 @@ const isComplex = (value: unknown): boolean => typeof value === "object" && valu
               <table class="results-table">
                 <thead>
                   <tr>
+                    <th class="row-number-header">#</th>
                     <th v-for="col in queryStore.result.columns" :key="col.name">
-                      {{ col.name }}
+                      {{ col.path || col.name }}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="(row, i) in queryStore.result.rows" :key="i">
+                    <td class="row-number-cell">{{ i + 1 }}</td>
                     <td v-for="(cell, j) in row" :key="j">
                       <details v-if="isComplex(cell)">
                         <summary class="cell-summary">
@@ -326,8 +329,13 @@ const isComplex = (value: unknown): boolean => typeof value === "object" && valu
   background: var(--color-surface);
   border-bottom: 2px solid var(--color-border);
   position: sticky;
-  top: 44px;
+  top: 0;
   z-index: 1;
+}
+.results-table .row-number-header {
+  width: 60px;
+  text-align: center;
+  background: var(--color-bg-secondary);
 }
 .results-table td {
   padding: 6px 16px;
@@ -339,8 +347,19 @@ const isComplex = (value: unknown): boolean => typeof value === "object" && valu
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.results-table .row-number-cell {
+  text-align: center;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  font-weight: 600;
+  position: sticky;
+  left: 0;
+}
 .results-table tr:hover td {
   background: var(--color-surface);
+}
+.results-table tr:hover .row-number-cell {
+  background: var(--color-bg-secondary);
 }
 
 .cell-summary {
