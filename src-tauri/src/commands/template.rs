@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::server::{create_client, get_profile_by_id, make_request};
+use crate::inspector::send_instrumented;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateSummary {
@@ -12,28 +13,32 @@ pub struct TemplateSummary {
 }
 
 #[tauri::command]
-pub async fn list_templates(server_id: String) -> Result<Vec<TemplateSummary>, String> {
+pub async fn list_templates(
+    app: tauri::AppHandle,
+    server_id: String,
+) -> Result<Vec<TemplateSummary>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
     let url = format!("{}/rest/openehr/v1/definition/template/adl1.4", base);
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch templates: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    let body: Value = response
-        .json()
-        .await
+    let body: Value = serde_json::from_str(&resp.body)
         .map_err(|e| format!("Failed to parse templates: {}", e))?;
 
     let templates = match body {
@@ -66,7 +71,11 @@ pub async fn list_templates(server_id: String) -> Result<Vec<TemplateSummary>, S
 }
 
 #[tauri::command]
-pub async fn get_web_template(server_id: String, template_id: String) -> Result<Value, String> {
+pub async fn get_web_template(
+    app: tauri::AppHandle,
+    server_id: String,
+    template_id: String,
+) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -77,26 +86,30 @@ pub async fn get_web_template(server_id: String, template_id: String) -> Result<
         urlencoding::encode(&template_id)
     );
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/openehr.wt+json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch web template: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/openehr.wt+json"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    response
-        .json::<Value>()
-        .await
-        .map_err(|e| format!("Failed to parse web template: {}", e))
+    serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse web template: {}", e))
 }
 
 #[tauri::command]
-pub async fn get_template_opt(server_id: String, template_id: String) -> Result<String, String> {
+pub async fn get_template_opt(
+    app: tauri::AppHandle,
+    server_id: String,
+    template_id: String,
+) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -107,52 +120,54 @@ pub async fn get_template_opt(server_id: String, template_id: String) -> Result<
         urlencoding::encode(&template_id)
     );
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/xml")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch OPT: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/xml"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read OPT: {}", e))
+    Ok(resp.body)
 }
 
 #[tauri::command]
-pub async fn upload_template(server_id: String, opt_xml: String) -> Result<String, String> {
+pub async fn upload_template(
+    app: tauri::AppHandle,
+    server_id: String,
+    opt_xml: String,
+) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
     let url = format!("{}/rest/openehr/v1/definition/template/adl1.4", base);
 
-    let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-        .header("Content-Type", "application/xml")
-        .body(opt_xml)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to upload template: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/xml")
+            .body(opt_xml),
+    )
+    .await?;
 
-    let status = response.status();
-    let body = response.text().await.unwrap_or_default();
-
-    if status.is_success() || status.as_u16() == 201 || status.as_u16() == 204 {
+    if resp.is_success || resp.status == 201 || resp.status == 204 {
         Ok(format!(
             "Template uploaded successfully (HTTP {})",
-            status.as_u16()
+            resp.status
         ))
     } else {
         Err(format!(
             "Upload failed (HTTP {}): {}",
-            status.as_u16(),
-            body
+            resp.status, resp.body
         ))
     }
 }

@@ -1,4 +1,5 @@
 mod commands;
+pub mod inspector;
 
 use commands::{composition, ehr, query, server, template};
 

@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::inspector::send_instrumented;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerProfile {
     pub id: String,
@@ -116,23 +118,27 @@ pub async fn delete_server_profile(id: String) -> Result<Vec<ServerProfile>, Str
 }
 
 #[tauri::command]
-pub async fn test_server_connection(profile: ServerProfile) -> Result<String, String> {
+pub async fn test_server_connection(
+    app: tauri::AppHandle,
+    profile: ServerProfile,
+) -> Result<String, String> {
     let client = build_client(&profile);
     let url = format!(
         "{}/rest/openehr/v1/definition/template/adl1.4",
         profile.base_url.trim_end_matches('/')
     );
 
-    let response = build_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .send()
-        .await
-        .map_err(|e| format!("Connection failed: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        build_request(&client, reqwest::Method::GET, &url, &profile.auth_method),
+    )
+    .await?;
 
-    let status = response.status();
-    if status.is_success() {
-        Ok(format!("Connected successfully (HTTP {})", status.as_u16()))
+    if resp.is_success {
+        Ok(format!("Connected successfully (HTTP {})", resp.status))
     } else {
-        Err(format!("Server returned HTTP {}", status.as_u16()))
+        Err(format!("Server returned HTTP {}", resp.status))
     }
 }
 
