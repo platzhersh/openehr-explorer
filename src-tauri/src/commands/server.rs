@@ -1,3 +1,5 @@
+use quick_xml::events::Event;
+use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -27,6 +29,16 @@ pub enum AuthMethod {
     None,
     Basic { username: String, password: String },
     Bearer { token: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerVersionInfo {
+    pub ehrbase_version: Option<String>,
+    pub sdk_version: Option<String>,
+    pub archie_version: Option<String>,
+    pub jvm_version: Option<String>,
+    pub os_version: Option<String>,
+    pub postgres_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +152,71 @@ pub async fn test_server_connection(
     } else {
         Err(format!("Server returned HTTP {}", resp.status))
     }
+}
+
+#[tauri::command]
+pub async fn get_server_version(
+    app: tauri::AppHandle,
+    profile: ServerProfile,
+) -> Result<ServerVersionInfo, String> {
+    let client = build_client(&profile);
+    let url = format!("{}/rest/status", profile.base_url.trim_end_matches('/'));
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        build_request(&client, reqwest::Method::GET, &url, &profile.auth_method),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(format!("Server returned HTTP {}", resp.status));
+    }
+
+    parse_version_xml(&resp.body)
+}
+
+fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
+    let mut reader = Reader::from_str(xml_body);
+    reader.config_mut().trim_text(true);
+
+    let mut version_info = ServerVersionInfo {
+        ehrbase_version: None,
+        sdk_version: None,
+        archie_version: None,
+        jvm_version: None,
+        os_version: None,
+        postgres_version: None,
+    };
+
+    let mut current_tag = String::new();
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => {
+                current_tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+            }
+            Ok(Event::Text(e)) => {
+                let text = e.unescape().unwrap_or_default().to_string();
+                match current_tag.as_str() {
+                    "ehrbase_version" => version_info.ehrbase_version = Some(text),
+                    "openehr_sdk_version" => version_info.sdk_version = Some(text),
+                    "archie_version" => version_info.archie_version = Some(text),
+                    "jvm_version" => version_info.jvm_version = Some(text),
+                    "os_version" => version_info.os_version = Some(text),
+                    "postgres_version" => version_info.postgres_version = Some(text),
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(format!("Error parsing XML: {}", e)),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(version_info)
 }
 
 // Re-export helpers for other command modules
