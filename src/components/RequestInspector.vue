@@ -97,12 +97,79 @@ function tryParseJson(body: string | null): unknown | null {
   }
 }
 
+// Check if response is XML
+function isXmlResponse(entry: RequestLogEntry | null): boolean {
+  if (!entry) return false;
+  const contentType = entry.response_headers["content-type"] || "";
+  return contentType.includes("application/xml") || contentType.includes("text/xml");
+}
+
+// Format XML with syntax highlighting
+function formatXml(xml: string): string {
+  // Basic XML formatting with indentation
+  let formatted = "";
+  let indent = 0;
+  const lines = xml.split(/>\s*</);
+
+  lines.forEach((line, index) => {
+    if (index > 0) line = "<" + line;
+    if (index < lines.length - 1) line = line + ">";
+
+    // Detect closing tags
+    if (line.match(/^<\/\w/)) indent--;
+
+    // Add indentation
+    formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
+
+    // Detect opening tags (not self-closing)
+    if (line.match(/^<\w[^>]*[^\/]>$/)) indent++;
+  });
+
+  return formatted.trim();
+}
+
+// Apply syntax highlighting to XML
+function highlightXml(xml: string): string {
+  return xml
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(
+      /(&lt;\/?)([\w-]+)([\s\S]*?)(&gt;)/g,
+      (_match, openBracket, tagName, content, closeBracket) => {
+        // Highlight tag names
+        const highlightedTag = `${openBracket}<span class="xml-tag">${tagName}</span>`;
+        // Highlight attributes
+        const highlightedContent = content.replace(
+          /([\w-]+)=(["'])(.*?)\2/g,
+          '<span class="xml-attr-name">$1</span>=<span class="xml-attr-value">$2$3$2</span>',
+        );
+        return `${highlightedTag}${highlightedContent}${closeBracket}`;
+      },
+    )
+    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
+    .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
+}
+
 const responseJson = computed(() =>
   selected.value ? tryParseJson(selected.value.response_body) : null,
 );
 const requestJson = computed(() =>
   selected.value ? tryParseJson(selected.value.request_body) : null,
 );
+
+const isResponseXml = computed(() => isXmlResponse(selected.value));
+const formattedXml = computed(() => {
+  if (!selected.value?.response_body || !isResponseXml.value) return "";
+  return formatXml(selected.value.response_body);
+});
+
+// Auto-switch to XML tab when XML response is detected
+watch(isResponseXml, (isXml) => {
+  if (isXml && (bodyViewTab.value === "tree" || bodyViewTab.value === "flat")) {
+    bodyViewTab.value = "xml";
+  }
+});
 
 // FLAT view: detect if response is a FLAT composition (flat key-value object)
 // or a structured COMPOSITION that could be flattened
@@ -369,10 +436,18 @@ function doClear() {
                 <div class="section-header">Response Body</div>
                 <div class="body-view-tabs">
                   <button
+                    v-if="!isResponseXml"
                     :class="['tab-btn-sm', { active: bodyViewTab === 'tree' }]"
                     @click="bodyViewTab = 'tree'"
                   >
                     Tree
+                  </button>
+                  <button
+                    v-if="isResponseXml"
+                    :class="['tab-btn-sm', { active: bodyViewTab === 'xml' }]"
+                    @click="bodyViewTab = 'xml'"
+                  >
+                    XML
                   </button>
                   <button
                     :class="['tab-btn-sm', { active: bodyViewTab === 'raw' }]"
@@ -406,6 +481,19 @@ function doClear() {
                       :search-term="treeSearch"
                     />
                   </div>
+                </div>
+
+                <!-- XML View -->
+                <div v-else-if="bodyViewTab === 'xml'" class="xml-container">
+                  <div class="xml-toolbar">
+                    <button
+                      class="btn btn-sm"
+                      @click="copyToClipboard(selected.response_body || '')"
+                    >
+                      Copy All
+                    </button>
+                  </div>
+                  <pre class="xml-body" v-html="highlightXml(formattedXml)"></pre>
                 </div>
 
                 <!-- Raw View -->
@@ -924,5 +1012,55 @@ function doClear() {
   height: 100%;
   color: var(--color-text-muted);
   font-size: 13px;
+}
+
+/* XML view */
+.xml-container {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.xml-toolbar {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+}
+
+.xml-body {
+  max-height: 400px;
+  overflow: auto;
+  padding: 8px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text);
+  white-space: pre;
+  background: var(--color-bg);
+  line-height: 1.5;
+}
+
+/* XML syntax highlighting */
+.xml-body :deep(.xml-tag) {
+  color: #6495ed;
+  font-weight: 600;
+}
+
+.xml-body :deep(.xml-attr-name) {
+  color: #ffd93d;
+}
+
+.xml-body :deep(.xml-attr-value) {
+  color: #6bff8e;
+}
+
+.xml-body :deep(.xml-comment) {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.xml-body :deep(.xml-declaration) {
+  color: #ff6b6b;
 }
 </style>
