@@ -40,7 +40,9 @@ function findNodeById(node: Record<string, unknown>, targetId: string): string |
  * Ensures all nodes in the tree have an 'inputs' property (defaults to empty array).
  * This fixes the "undefined is not an object (evaluating 'n6.inputs.forEach')" error.
  */
-export function normalizeWebTemplate(webTemplate: Record<string, unknown>): Record<string, unknown> {
+export function normalizeWebTemplate(
+  webTemplate: Record<string, unknown>,
+): Record<string, unknown> {
   if (!webTemplate) return webTemplate;
 
   const normalized = { ...webTemplate };
