@@ -360,7 +360,12 @@ async function copyEhrJson() {
         />
         <div v-if="deleteError" class="delete-error">
           <strong>Failed to delete EHR</strong>
-          <p>{{ deleteError }}</p>
+          <p class="error-detail">{{ deleteError }}</p>
+          <div v-if="deleteError.includes('HTTP 403')" class="delete-hint">
+            EHR deletion requires admin credentials. Check the
+            <strong>Admin Credentials</strong> setting in your server profile
+            (Servers &rarr; Edit).
+          </div>
         </div>
         <div class="dialog-actions">
           <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
@@ -647,14 +652,26 @@ async function copyEhrJson() {
   color: var(--color-error);
   font-size: 13px;
   line-height: 1.5;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
-.delete-error strong {
+.delete-error > strong {
   display: block;
   margin-bottom: 4px;
 }
-.delete-error p {
+.error-detail {
   margin: 0;
   color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.delete-hint {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 200, 50, 0.1);
+  border: 1px solid rgba(255, 200, 50, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 13px;
 }
 
 .dialog-actions {
