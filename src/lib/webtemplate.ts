@@ -36,6 +36,41 @@ function findNodeById(node: Record<string, unknown>, targetId: string): string |
 }
 
 /**
+ * Normalize a Web Template for medblocks-ui compatibility.
+ * Ensures all nodes in the tree have an 'inputs' property (defaults to empty array).
+ * This fixes the "undefined is not an object (evaluating 'n6.inputs.forEach')" error.
+ */
+export function normalizeWebTemplate(webTemplate: Record<string, unknown>): Record<string, unknown> {
+  if (!webTemplate) return webTemplate;
+
+  const normalized = { ...webTemplate };
+  const tree = normalized.tree as Record<string, unknown> | undefined;
+
+  if (tree) {
+    normalized.tree = normalizeNode(tree);
+  }
+
+  return normalized;
+}
+
+function normalizeNode(node: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...node };
+
+  // Ensure 'inputs' property exists (medblocks-ui expects this on all nodes)
+  if (!normalized.inputs) {
+    normalized.inputs = [];
+  }
+
+  // Recursively normalize children
+  const children = normalized.children as Record<string, unknown>[] | undefined;
+  if (children && Array.isArray(children)) {
+    normalized.children = children.map((child) => normalizeNode(child));
+  }
+
+  return normalized;
+}
+
+/**
  * Extract all FLAT paths from a Web Template tree.
  */
 export function extractFlatPaths(webTemplate: Record<string, unknown>): string[] {

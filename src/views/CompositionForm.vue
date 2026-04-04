@@ -7,6 +7,7 @@ import { useTemplateStore } from "../stores/template";
 import { useCompositionStore } from "../stores/composition";
 import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import { normalizeWebTemplate } from "../lib/webtemplate";
 
 const props = defineProps<{
   templateId?: string;
@@ -96,8 +97,9 @@ onMounted(async () => {
   // Ensure webTemplate is set on the mb-auto-form element when it becomes available
   setTimeout(async () => {
     if (mbFormRef.value && templateStore.selectedWebTemplate) {
-      (mbFormRef.value as any).webTemplate = templateStore.selectedWebTemplate;
-      console.log("Web Template loaded:", templateStore.selectedWebTemplate);
+      const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+      (mbFormRef.value as any).webTemplate = normalized;
+      console.log("Web Template loaded (normalized):", normalized);
 
       // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
       const templateId = props.templateId || (route.params.templateId as string);
@@ -548,8 +550,9 @@ watch(
           // Update webTemplate on form
           setTimeout(() => {
             if (mbFormRef.value && templateStore.selectedWebTemplate) {
-              (mbFormRef.value as any).webTemplate = templateStore.selectedWebTemplate;
-              console.log("New Web Template loaded:", templateStore.selectedWebTemplate);
+              const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+              (mbFormRef.value as any).webTemplate = normalized;
+              console.log("New Web Template loaded (normalized):", normalized);
             }
           }, 100);
 
