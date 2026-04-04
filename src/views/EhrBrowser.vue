@@ -15,6 +15,7 @@ const showCreateDialog = ref(false);
 const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
+const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "json">("detail");
 
 const ehrId = computed(() => route.params.ehrId as string | undefined);
@@ -121,6 +122,7 @@ async function handleDeleteEhr() {
   }
 
   deleting.value = true;
+  deleteError.value = null;
   try {
     await ehrStore.deleteEhr(serverStore.activeServerId, ehrId.value);
     showDeleteDialog.value = false;
@@ -131,7 +133,7 @@ async function handleDeleteEhr() {
     // Refresh list
     refresh();
   } catch (e) {
-    alert(`Failed to delete EHR: ${e}`);
+    deleteError.value = String(e);
   } finally {
     deleting.value = false;
   }
@@ -139,6 +141,7 @@ async function handleDeleteEhr() {
 
 function openDeleteDialog() {
   deleteConfirmText.value = "";
+  deleteError.value = null;
   showDeleteDialog.value = true;
 }
 
@@ -355,6 +358,10 @@ async function copyEhrJson() {
           placeholder="Enter EHR ID to confirm"
           :disabled="deleting"
         />
+        <div v-if="deleteError" class="delete-error">
+          <strong>Failed to delete EHR</strong>
+          <p>{{ deleteError }}</p>
+        </div>
         <div class="dialog-actions">
           <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
             Cancel
@@ -629,6 +636,25 @@ async function copyEhrJson() {
 .dialog .input {
   width: 100%;
   margin-bottom: 24px;
+}
+
+.delete-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.delete-error strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.delete-error p {
+  margin: 0;
+  color: var(--color-text-secondary);
 }
 
 .dialog-actions {
