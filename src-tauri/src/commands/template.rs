@@ -32,8 +32,7 @@ pub async fn get_template_example(
         return Err(format!("Server returned HTTP {}", resp.status));
     }
 
-    serde_json::from_str(&resp.body)
-        .map_err(|e| format!("Failed to parse template example: {}", e))
+    serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse template example: {}", e))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
