@@ -86,6 +86,8 @@ fn save_profiles(profiles: &[ServerProfile]) -> Result<(), String> {
 fn build_client(_profile: &ServerProfile) -> reqwest::Client {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(false)
+        .timeout(std::time::Duration::from_secs(30)) // 30 second timeout
+        .connect_timeout(std::time::Duration::from_secs(10)) // 10 second connection timeout
         .build()
         .unwrap_or_default()
 }

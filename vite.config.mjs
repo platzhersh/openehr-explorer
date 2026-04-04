@@ -16,6 +16,16 @@ export default defineConfig(async () => ({
     })
   ],
 
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'codemirror': ['codemirror', '@codemirror/view', '@codemirror/state'],
+        },
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
