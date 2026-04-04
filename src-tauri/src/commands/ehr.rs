@@ -469,14 +469,17 @@ pub async fn delete_ehr(
 
     // The standard openEHR REST API does not support DELETE on EHR.
     // EHRBase provides an admin API for EHR deletion.
-    let url = match profile.server_type {
-        ServerType::Ehrbase => format!("{}/rest/admin/ehr/{}", base, ehr_id),
-        _ => format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id),
+    let (url, auth) = match profile.server_type {
+        ServerType::Ehrbase => {
+            let admin_auth = profile.admin_auth_method.as_ref().unwrap_or(&profile.auth_method);
+            (format!("{}/rest/admin/ehr/{}", base, ehr_id), admin_auth.clone())
+        }
+        _ => (format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id), profile.auth_method.clone()),
     };
     let resp = send_instrumented(
         &app,
         &client,
-        make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method),
+        make_request(&client, reqwest::Method::DELETE, &url, &auth),
     )
     .await?;
 
