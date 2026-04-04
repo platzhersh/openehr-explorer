@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brand Kit - openEHR Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-tertiary: #0f3460;
+      --surface: #1e2a4a;
+      --surface-hover: #253456;
+      --border: #2a3a5c;
+      --text: #e0e0e0;
+      --text-secondary: #8892b0;
+      --text-muted: #5a6a8a;
+      --primary: #64ffda;
+      --primary-dim: #3d9e85;
+      --success: #6bff8e;
+      --warning: #ffd93d;
+      --error: #ff6b6b;
+      --code-bg: #0d1117;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --radius: 6px;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .header-brand:hover {
+      text-decoration: none;
+    }
+
+    .header-wordmark {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .header-nav a {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .header-nav a:hover {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .header-nav a.active {
+      color: var(--primary);
+    }
+
+    .github-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .github-pill:hover {
+      border-color: var(--primary);
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .github-pill svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Page Title */
+    .page-title {
+      text-align: center;
+      padding: 64px 0 48px;
+    }
+
+    .page-title h1 {
+      font-size: 48px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #64ffda 0%, #38bdf8 60%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .page-title p {
+      color: var(--text-secondary);
+      font-size: 17px;
+      max-width: 640px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* Sections */
+    section {
+      margin-bottom: 64px;
+    }
+
+    section > h2 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+
+    section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Logo Preview Cards */
+    .logo-previews {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .logo-card {
+      flex: 1;
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .logo-card-dark {
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+
+    .logo-card-light {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+
+    .logo-card-dark .logo-wordmark {
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 600;
+      color: #64ffda;
+    }
+
+    .logo-card-light .logo-wordmark {
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 600;
+      color: #0f3460;
+    }
+
+    .logo-card-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .logo-card-light .logo-card-label {
+      color: #64748b;
+    }
+
+    /* Note callout */
+    .note {
+      border-left: 3px solid var(--primary);
+      background: rgba(100, 255, 218, 0.05);
+      padding: 16px 20px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+    }
+
+    /* Download Table */
+    .asset-table-wrapper {
+      overflow-x: auto;
+    }
+
+    .asset-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      font-size: 14px;
+    }
+
+    .asset-table th {
+      background: var(--bg-secondary);
+      text-align: left;
+      padding: 12px 20px;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .asset-table td {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .asset-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .asset-table .disabled {
+      opacity: 0.5;
+    }
+
+    .asset-table .status-available {
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    .asset-table .status-coming {
+      color: var(--text-muted);
+    }
+
+    /* Colour Palette */
+    .swatch-group {
+      margin-bottom: 32px;
+    }
+
+    .swatch-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .swatch-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .swatch {
+      width: 100px;
+      height: 80px;
+      border-radius: 8px;
+      display: flex;
+      align-items: flex-end;
+      padding: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .swatch-wide {
+      width: 140px;
+    }
+
+    .swatch-text-light {
+      color: #fff;
+    }
+
+    .swatch-text-dark {
+      color: #1a1a2e;
+    }
+
+    .swatch-label {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .swatch-signature {
+      display: block;
+      font-size: 11px;
+      color: var(--primary);
+      margin-top: 2px;
+    }
+
+    /* Typography Cards */
+    .type-cards {
+      display: flex;
+      gap: 24px;
+    }
+
+    .type-card {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 32px;
+    }
+
+    .type-card h3 {
+      text-transform: none;
+      letter-spacing: normal;
+      font-size: 18px;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+
+    .type-sample-large {
+      font-family: var(--font-sans);
+      font-size: 48px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 16px;
+      word-break: break-word;
+    }
+
+    .type-sample-medium {
+      font-family: var(--font-sans);
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    .type-card-mono .type-sample-large {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--primary);
+      background: var(--code-bg);
+      padding: 16px;
+      border-radius: var(--radius);
+      line-height: 1.6;
+    }
+
+    .type-card-mono .type-sample-medium {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      word-break: break-all;
+    }
+
+    .type-usage {
+      font-size: 14px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+
+    /* Usage Guidelines */
+    .guidelines {
+      display: flex;
+      gap: 24px;
+    }
+
+    .guideline-card {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px;
+    }
+
+    .guideline-do {
+      border-top: 3px solid var(--success);
+    }
+
+    .guideline-dont {
+      border-top: 3px solid var(--error);
+    }
+
+    .guideline-card h3 {
+      text-transform: none;
+      letter-spacing: normal;
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+
+    .guideline-do h3 {
+      color: var(--success);
+    }
+
+    .guideline-dont h3 {
+      color: var(--error);
+    }
+
+    .guideline-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .guideline-card li {
+      position: relative;
+      padding-left: 24px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+    }
+
+    .guideline-card li::before {
+      position: absolute;
+      left: 0;
+      top: 0;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .guideline-do li::before {
+      content: "\2713";
+      color: var(--success);
+    }
+
+    .guideline-dont li::before {
+      content: "\2717";
+      color: var(--error);
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .page-title h1 {
+        font-size: 32px;
+      }
+
+      .page-title p {
+        font-size: 15px;
+      }
+
+      .logo-previews {
+        flex-direction: column;
+      }
+
+      .type-cards {
+        flex-direction: column;
+      }
+
+      .guidelines {
+        flex-direction: column;
+      }
+
+      .swatch-row {
+        gap: 12px;
+      }
+
+      .type-sample-large {
+        font-size: 32px;
+      }
+
+      .header-nav {
+        gap: 14px;
+      }
+
+      .header-nav a {
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="header-brand">
+        <svg viewBox="0 0 64 64" width="32" height="32" role="img" aria-label="openEHR Explorer logo">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="header-wordmark">openEHR Explorer</span>
+      </a>
+      <nav class="header-nav">
+        <a href="index.html">Home</a>
+        <a href="docs.html">Docs</a>
+        <a href="brand-kit.html" class="active">Brand Kit</a>
+        <a href="https://github.com/openehr-explorer/openehr-explorer" class="github-pill">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Page Title -->
+  <div class="container">
+    <div class="page-title">
+      <h1>Brand Kit</h1>
+      <p>Use these assets consistently when representing openEHR Explorer in Discourse posts, presentations, integrations, or community content.</p>
+    </div>
+  </div>
+
+  <!-- Section 1: Logo -->
+  <section class="container">
+    <h2>Logo</h2>
+
+    <div class="logo-previews">
+      <div class="logo-card logo-card-dark">
+        <span class="logo-card-label">Dark variant</span>
+        <svg viewBox="0 0 64 64" width="80" height="80" role="img" aria-label="openEHR Explorer logo — dark variant">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-wordmark">openEHR Explorer</span>
+      </div>
+      <div class="logo-card logo-card-light">
+        <span class="logo-card-label">Light variant</span>
+        <svg viewBox="0 0 64 64" width="80" height="80" role="img" aria-label="openEHR Explorer logo — light variant">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#0f3460" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#0f3460" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#0f3460" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-wordmark">openEHR Explorer</span>
+      </div>
+    </div>
+
+    <div class="note">
+      Logo SVG in progress. The approved mark until then is the wordmark "openEHR Explorer" in Inter SemiBold, colour #64ffda, on dark backgrounds. Follow the GitHub repo for updates.
+    </div>
+
+    <div class="asset-table-wrapper">
+      <table class="asset-table">
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Format</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="disabled">
+            <td>Logo &mdash; dark background</td>
+            <td>SVG</td>
+            <td class="status-coming">Coming soon</td>
+          </tr>
+          <tr class="disabled">
+            <td>Logo &mdash; light background</td>
+            <td>SVG</td>
+            <td class="status-coming">Coming soon</td>
+          </tr>
+          <tr class="disabled">
+            <td>Logo icon only</td>
+            <td>SVG</td>
+            <td class="status-coming">Coming soon</td>
+          </tr>
+          <tr class="disabled">
+            <td>Logo &mdash; dark background</td>
+            <td>PNG 2&times;</td>
+            <td class="status-coming">Coming soon</td>
+          </tr>
+          <tr>
+            <td>Colour palette reference</td>
+            <td>SVG</td>
+            <td class="status-available"><a href="assets/brand/palette.svg">&#10003; Available</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Section 2: Colour Palette -->
+  <section class="container">
+    <h2>Colour Palette</h2>
+
+    <div class="swatch-group">
+      <h3>Backgrounds</h3>
+      <div class="swatch-row">
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #1a1a2e;">#1a1a2e</div>
+          <span class="swatch-label">App Background</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #16213e;">#16213e</div>
+          <span class="swatch-label">Sidebar / Secondary</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #0f3460;">#0f3460</div>
+          <span class="swatch-label">Deep Accent</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch-group">
+      <h3>Surfaces &amp; Text</h3>
+      <div class="swatch-row">
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #1e2a4a;">#1e2a4a</div>
+          <span class="swatch-label">Surface</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #2a3a5c;">#2a3a5c</div>
+          <span class="swatch-label">Border</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-dark" style="background: #e0e0e0;">#e0e0e0</div>
+          <span class="swatch-label">Text Primary</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #8892b0;">#8892b0</div>
+          <span class="swatch-label">Text Secondary</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch-group">
+      <h3>Accents &amp; Semantic</h3>
+      <div class="swatch-row">
+        <div class="swatch-item">
+          <div class="swatch swatch-wide swatch-text-dark" style="background: #64ffda;">#64ffda</div>
+          <span class="swatch-label">Primary Teal<span class="swatch-signature">&#9733; Signature Colour</span></span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #3d9e85;">#3d9e85</div>
+          <span class="swatch-label">Primary Dim</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-dark" style="background: #6bff8e;">#6bff8e</div>
+          <span class="swatch-label">Success</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-dark" style="background: #ffd93d;">#ffd93d</div>
+          <span class="swatch-label">Warning</span>
+        </div>
+        <div class="swatch-item">
+          <div class="swatch swatch-text-light" style="background: #ff6b6b;">#ff6b6b</div>
+          <span class="swatch-label">Error</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Typography -->
+  <section class="container">
+    <h2>Typography</h2>
+
+    <div class="type-cards">
+      <div class="type-card">
+        <h3>Inter</h3>
+        <div class="type-sample-large">openEHR Explorer</div>
+        <div class="type-sample-medium">Browse, query, and inspect</div>
+        <p class="type-usage">All UI text, headings, body copy, wordmark</p>
+      </div>
+      <div class="type-card type-card-mono">
+        <h3>JetBrains Mono</h3>
+        <div class="type-sample-large">GET /rest/openehr/v1/ehr</div>
+        <div class="type-sample-medium">vital-signs/blood_pressure:0/any_event:0/systolic|magnitude</div>
+        <p class="type-usage">All code blocks, FLAT paths, AQL queries, UUIDs</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Usage Guidelines -->
+  <section class="container">
+    <h2>Usage Guidelines</h2>
+
+    <div class="guidelines">
+      <div class="guideline-card guideline-do">
+        <h3>&#10003; Do</h3>
+        <ul>
+          <li>Use #64ffda teal as the primary accent on dark (#1a1a2e+) backgrounds</li>
+          <li>Use Inter SemiBold for the wordmark at 14px minimum</li>
+          <li>Pair the logo with adequate clear space (minimum half the logo height on all sides)</li>
+          <li>Use JetBrains Mono for all code and path examples</li>
+        </ul>
+      </div>
+      <div class="guideline-card guideline-dont">
+        <h3>&#10007; Don't</h3>
+        <ul>
+          <li>Use oehrpy's blue #3b82f6 or orange #f97316 &mdash; those colours are oehrpy's identity</li>
+          <li>Place teal #64ffda on white or light backgrounds (contrast fails WCAG AA)</li>
+          <li>Recreate the logo from memory &mdash; download the SVG when available</li>
+          <li>Modify the wordmark font, weight, or letter-spacing</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    &copy; 2026 Chregi Platz &middot; MIT License &middot; Not affiliated with openEHR International
+  </footer>
+
+</body>
+</html>
