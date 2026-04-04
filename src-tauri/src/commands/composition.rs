@@ -188,13 +188,20 @@ pub async fn create_composition(
     app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
+    template_id: String,
     composition_data: Value,
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
-    let url = format!("{}/rest/openehr/v1/ehr/{}/composition", base, ehr_id);
+    // EHRBase requires template_id as query parameter for FLAT format
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/composition?templateId={}",
+        base,
+        ehr_id,
+        urlencoding::encode(&template_id)
+    );
 
     let resp = send_instrumented(
         &app,

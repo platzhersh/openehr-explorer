@@ -98,6 +98,44 @@ async function uploadFile(file: File) {
   }
 }
 
+// Syntax highlighting functions
+function highlightJson(json: string): string {
+  return json
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+    .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+    .replace(/: (null)/g, ': <span class="json-null">$1</span>');
+}
+
+function highlightXml(xml: string): string {
+  return xml
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(
+      /(&lt;\/?)([\w-:]+)([\s\S]*?)(&gt;)/g,
+      (_match, openBracket, tagName, content, closeBracket) => {
+        const highlightedTag = `${openBracket}<span class="xml-tag">${tagName}</span>`;
+        const highlightedContent = content.replace(
+          /([\w-:]+)=(["'])(.*?)\2/g,
+          '<span class="xml-attr-name">$1</span>=<span class="xml-attr-value">$2$3$2</span>',
+        );
+        return `${highlightedTag}${highlightedContent}${closeBracket}`;
+      },
+    )
+    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
+    .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
+}
+
+const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
+const highlightedOpt = computed(() =>
+  templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
+);
+
 async function handleDrop(event: DragEvent) {
   event.preventDefault();
   uploadDragOver.value = false;
@@ -220,14 +258,7 @@ function createComposition(templateId: string) {
               :class="{ active: activeTab === 'tree' }"
               @click="activeTab = 'tree'"
             >
-              Tree
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'json' }"
-              @click="activeTab = 'json'"
-            >
-              Web Template
+              OPT Tree
             </button>
             <button
               class="tab"
@@ -236,6 +267,13 @@ function createComposition(templateId: string) {
               :disabled="!templateStore.selectedOpt"
             >
               OPT XML
+            </button>
+            <button
+              class="tab"
+              :class="{ active: activeTab === 'json' }"
+              @click="activeTab = 'json'"
+            >
+              Web Template
             </button>
           </div>
         </div>
@@ -262,17 +300,17 @@ function createComposition(templateId: string) {
           <div class="json-actions">
             <button class="btn btn-sm" @click="copyToClipboard(webTemplateJson)">Copy JSON</button>
           </div>
-          <pre class="json-pre"><code>{{ webTemplateJson }}</code></pre>
+          <pre class="json-pre"><code v-html="highlightedWebTemplate"></code></pre>
         </div>
 
         <!-- OPT XML -->
-        <div v-if="activeTab === 'opt'" class="json-view">
-          <div class="json-actions">
+        <div v-if="activeTab === 'opt'" class="xml-view">
+          <div class="xml-actions">
             <button class="btn btn-sm" @click="copyToClipboard(templateStore.selectedOpt ?? '')">
               Copy XML
             </button>
           </div>
-          <pre class="json-pre"><code>{{ templateStore.selectedOpt }}</code></pre>
+          <pre class="xml-pre"><code v-html="highlightedOpt"></code></pre>
         </div>
       </template>
 
@@ -605,5 +643,57 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* JSON syntax highlighting */
+.json-pre :deep(.json-key) {
+  color: #6495ed;
+  font-weight: 600;
+}
+.json-pre :deep(.json-string) {
+  color: #6bff8e;
+}
+.json-pre :deep(.json-number) {
+  color: #ffa500;
+}
+.json-pre :deep(.json-boolean) {
+  color: #ff6b6b;
+}
+.json-pre :deep(.json-null) {
+  color: var(--color-text-muted);
+}
+
+/* XML view */
+.xml-view {
+  padding-top: 16px;
+}
+.xml-actions {
+  margin-bottom: 12px;
+}
+.xml-pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* XML syntax highlighting */
+.xml-pre :deep(.xml-tag) {
+  color: #6495ed;
+  font-weight: 600;
+}
+.xml-pre :deep(.xml-attr-name) {
+  color: #ffd93d;
+}
+.xml-pre :deep(.xml-attr-value) {
+  color: #6bff8e;
+}
+.xml-pre :deep(.xml-comment) {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.xml-pre :deep(.xml-declaration) {
+  color: #ff6b6b;
 }
 </style>

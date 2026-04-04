@@ -4,6 +4,37 @@ use serde_json::Value;
 use super::server::{create_client, get_profile_by_id, make_request};
 use crate::inspector::send_instrumented;
 
+#[tauri::command]
+pub async fn get_template_example(
+    app: tauri::AppHandle,
+    server_id: String,
+    template_id: String,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT",
+        base,
+        urlencoding::encode(&template_id)
+    );
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(format!("Server returned HTTP {}", resp.status));
+    }
+
+    serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse template example: {}", e))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateSummary {
     pub template_id: String,

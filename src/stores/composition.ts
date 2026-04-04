@@ -9,6 +9,7 @@ export const useCompositionStore = defineStore("composition", () => {
   async function createComposition(
     serverId: string,
     ehrId: string,
+    templateId: string,
     compositionData: Record<string, unknown>,
   ) {
     loading.value = true;
@@ -17,6 +18,7 @@ export const useCompositionStore = defineStore("composition", () => {
       const compositionUid = await invoke<string>("create_composition", {
         serverId,
         ehrId,
+        templateId,
         compositionData,
       });
       return compositionUid;
