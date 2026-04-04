@@ -484,9 +484,14 @@ pub async fn delete_ehr(
     .await?;
 
     if !resp.is_success {
+        let hint = if resp.status == 403 {
+            ". Hint: EHR deletion requires admin credentials. Check the Admin Credentials setting in your server profile (Servers > Edit)."
+        } else {
+            ""
+        };
         return Err(format!(
-            "Server returned HTTP {}: {}",
-            resp.status, resp.body
+            "Server returned HTTP {}: {}{}",
+            resp.status, resp.body, hint
         ));
     }
 

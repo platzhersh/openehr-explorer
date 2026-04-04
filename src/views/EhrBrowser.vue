@@ -125,7 +125,8 @@ async function handleDeleteEhr() {
     await ehrStore.deleteEhr(serverStore.activeServerId, ehrId.value);
     showDeleteDialog.value = false;
     deleteConfirmText.value = "";
-    // Navigate back to EHR list
+    // Clear detail pane and navigate back to EHR list
+    ehrStore.selectedEhr = null;
     router.push({ name: "ehrs" });
     // Refresh list
     refresh();
