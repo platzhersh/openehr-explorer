@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery } from "../stores/query";
+import AqlEditor from "../components/AqlEditor.vue";
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -130,13 +131,9 @@ const isComplex = (value: unknown): boolean => typeof value === "object" && valu
             <button class="btn btn-sm" @click="showSaveDialog = false">Cancel</button>
           </div>
 
-          <textarea
-            class="query-editor"
-            v-model="queryText"
-            @keydown="handleKeydown"
-            placeholder="Enter AQL query..."
-            spellcheck="false"
-          ></textarea>
+          <div class="editor-wrapper">
+            <AqlEditor v-model="queryText" @keydown="handleKeydown" />
+          </div>
         </div>
 
         <!-- Results -->
@@ -276,18 +273,8 @@ const isComplex = (value: unknown): boolean => typeof value === "object" && valu
   flex: 1;
 }
 
-.query-editor {
-  width: 100%;
-  min-height: 160px;
-  padding: 16px 24px;
+.editor-wrapper {
   background: var(--color-bg-secondary);
-  color: var(--color-text);
-  border: none;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
-  resize: vertical;
-  outline: none;
 }
 
 .results-section {
