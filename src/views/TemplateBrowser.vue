@@ -13,7 +13,7 @@ const serverStore = useServerStore();
 const templateStore = useTemplateStore();
 
 const searchQuery = ref("");
-const activeTab = ref<"tree" | "json" | "opt">("tree");
+const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
 const uploadDragOver = ref(false);
 const uploadStatus = ref<string | null>(null);
 const uploadError = ref<string | null>(null);
@@ -275,6 +275,13 @@ function createComposition(templateId: string) {
             >
               Web Template
             </button>
+            <button
+              class="tab"
+              :class="{ active: activeTab === 'flat' }"
+              @click="activeTab = 'flat'"
+            >
+              FLAT Paths
+            </button>
           </div>
         </div>
 
@@ -282,16 +289,6 @@ function createComposition(templateId: string) {
         <div v-if="activeTab === 'tree'" class="tree-view">
           <div v-if="wtTree" class="wt-tree">
             <WtTreeNode :node="wtTree" :depth="0" @copy="copyToClipboard" />
-          </div>
-
-          <div v-if="flatPaths.length > 0" class="flat-paths-section">
-            <h3>FLAT Paths ({{ flatPaths.length }})</h3>
-            <div class="flat-paths-list">
-              <div v-for="path in flatPaths" :key="path" class="flat-path-item">
-                <span class="path-text">{{ path }}</span>
-                <button class="copy-btn" @click="copyToClipboard(path)">Copy</button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -311,6 +308,21 @@ function createComposition(templateId: string) {
             </button>
           </div>
           <pre class="xml-pre"><code v-html="highlightedOpt"></code></pre>
+        </div>
+
+        <!-- FLAT Paths -->
+        <div v-if="activeTab === 'flat'" class="flat-view">
+          <div v-if="flatPaths.length > 0">
+            <div class="flat-paths-header">
+              <h3>FLAT Paths ({{ flatPaths.length }})</h3>
+            </div>
+            <div class="flat-paths-list">
+              <div v-for="path in flatPaths" :key="path" class="flat-path-item">
+                <span class="path-text">{{ path }}</span>
+                <button class="copy-btn" @click="copyToClipboard(path)">Copy</button>
+              </div>
+            </div>
+          </div>
         </div>
       </template>
 
@@ -597,20 +609,21 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
   white-space: nowrap;
 }
 
-.flat-paths-section {
-  margin-top: 24px;
-  border-top: 1px solid var(--color-border);
+.flat-view {
   padding-top: 16px;
 }
-.flat-paths-section h3 {
-  font-size: 14px;
+
+.flat-paths-header {
   margin-bottom: 12px;
+}
+
+.flat-paths-header h3 {
+  font-size: 14px;
   color: var(--color-text-secondary);
 }
 
 .flat-paths-list {
-  max-height: 400px;
-  overflow-y: auto;
+  border-top: 1px solid var(--color-border);
 }
 
 .flat-path-item {
