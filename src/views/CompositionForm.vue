@@ -174,9 +174,6 @@ const previewJson = computed(() => {
     try {
       const rawData = (mbFormRef.value as any).export?.() || {};
 
-      // Get template ID for path transformation
-      const templateId = props.templateId || route.params.templateId as string;
-
       // Transform paths (same logic as in handleSubmit)
       const formData: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(rawData)) {
@@ -269,7 +266,7 @@ async function handleSubmit() {
 
   try {
     // Get form data using export() method
-    let formData = {};
+    let formData: Record<string, unknown> = {};
     if (mbFormRef.value) {
       try {
         const rawData = (mbFormRef.value as any).export?.() || {};
@@ -279,10 +276,7 @@ async function handleSubmit() {
         // EHRBase expects paths like: "template_id/content/field"
         // medblocks-ui exports paths like: "template_short_name/archetype_name:0/field"
 
-        // Get template ID for path transformation
-        const templateId = props.templateId || route.params.templateId as string;
-
-        formData = {};
+        formData = {} as Record<string, unknown>;
         for (const [key, value] of Object.entries(rawData)) {
           // Skip ctx/ fields - they're added separately
           if (key.startsWith("ctx/")) {
