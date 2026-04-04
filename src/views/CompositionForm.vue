@@ -352,31 +352,20 @@ async function handleSubmit() {
     }
 
     // Build payload following EHRBase 2.x actual format
-    // medblocks-ui FLAT export is incompatible with EHRBase FLAT format
-    // We need to manually map the fields based on the /example endpoint
     const isoTime = compositionTime.value
       ? new Date(compositionTime.value).toISOString()
       : new Date().toISOString();
 
-    // Extract the actual data value from medblocks-ui's nested structure
-    let textValue = "";
-    for (const [key, value] of Object.entries(formData)) {
-      if (key.includes("/text/value") || key.includes("/name|value")) {
-        textValue = String(value);
-        break;
-      }
-    }
-
-    // Build EHRBase-compatible FLAT payload based on /example endpoint
+    // Build EHRBase-compatible FLAT payload using the transformed form data
     const payload = {
+      // Add form data fields
+      ...formData,
+
       // Context shortcuts - EHRBase expands these automatically
       "ctx/language": language.value,
       "ctx/territory": territory.value,
       "ctx/composer_name": composerName.value,
       "ctx/time": isoTime,
-
-      // Data field - simplified path matching EHRBase example
-      "minimal/minimal:0/text": textValue,
     };
 
     console.log("Final payload:", payload);
@@ -523,6 +512,48 @@ onMounted(() => {
 });
 
 watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft, { deep: true });
+
+// Watch for template changes and reset form state
+watch(
+  () => route.params.templateId,
+  async (newTemplateId, oldTemplateId) => {
+    if (newTemplateId && newTemplateId !== oldTemplateId) {
+      console.log(`Template changed from ${oldTemplateId} to ${newTemplateId}, resetting form`);
+
+      // Reset form state
+      flatData.value = {};
+      error.value = null;
+      success.value = null;
+      compositionTime.value = new Date().toISOString().slice(0, 16);
+
+      // Reset medblocks form
+      if (mbFormRef.value) {
+        (mbFormRef.value as any).reset?.();
+      }
+
+      // Load new template
+      if (serverStore.activeServerId) {
+        try {
+          await templateStore.fetchWebTemplate(serverStore.activeServerId, newTemplateId as string);
+
+          // Update webTemplate on form
+          setTimeout(() => {
+            if (mbFormRef.value && templateStore.selectedWebTemplate) {
+              (mbFormRef.value as any).webTemplate = templateStore.selectedWebTemplate;
+              console.log("New Web Template loaded:", templateStore.selectedWebTemplate);
+            }
+          }, 100);
+
+          // Load draft for new template
+          loadDraft();
+        } catch (e) {
+          console.error("Failed to fetch web template:", e);
+          error.value = `Failed to load template: ${e}`;
+        }
+      }
+    }
+  }
+);
 </script>
 
 <template>
