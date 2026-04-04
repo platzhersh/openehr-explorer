@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request};
+use super::server::{create_client, get_profile_by_id, make_request, ServerType};
 use crate::inspector::send_instrumented;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -467,7 +467,12 @@ pub async fn delete_ehr(
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
-    let url = format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id);
+    // The standard openEHR REST API does not support DELETE on EHR.
+    // EHRBase provides an admin API for EHR deletion.
+    let url = match profile.server_type {
+        ServerType::Ehrbase => format!("{}/rest/admin/ehr/{}", base, ehr_id),
+        _ => format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id),
+    };
     let resp = send_instrumented(
         &app,
         &client,
