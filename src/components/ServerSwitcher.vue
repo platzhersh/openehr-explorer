@@ -15,15 +15,9 @@ const serverStore = useServerStore();
       <option v-if="serverStore.profiles.length === 0" value="" disabled>
         No servers configured
       </option>
-      <option
-        v-for="profile in serverStore.profiles"
-        :key="profile.id"
-        :value="profile.id"
-      >
+      <option v-for="profile in serverStore.profiles" :key="profile.id" :value="profile.id">
         {{ profile.name }}
-        <template v-if="serverStore.connectionStatus[profile.id] === 'connected'">
-          [ok]
-        </template>
+        <template v-if="serverStore.connectionStatus[profile.id] === 'connected'"> [ok] </template>
       </option>
     </select>
     <div

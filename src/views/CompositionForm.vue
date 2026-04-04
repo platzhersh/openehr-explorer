@@ -60,7 +60,7 @@ onMounted(async () => {
   }
 
   // Load template
-  const templateId = props.templateId || route.params.templateId as string;
+  const templateId = props.templateId || (route.params.templateId as string);
   if (templateId) {
     try {
       await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
@@ -401,7 +401,7 @@ async function handleSubmit() {
         serverStore.activeServerId,
         selectedEhrId.value,
         props.compositionUid,
-        payload
+        payload,
       );
       success.value = `Composition updated successfully! New version: ${result}`;
       console.log("Update successful:", result);
@@ -411,7 +411,7 @@ async function handleSubmit() {
         serverStore.activeServerId,
         selectedEhrId.value,
         templateId,
-        payload
+        payload,
       );
       success.value = `Composition created successfully! UID: ${result}`;
       console.log("Create successful:", result);
@@ -464,7 +464,7 @@ function handleEhrCreated(newEhrId: string) {
 
 // Draft persistence
 const draftKey = computed(() => {
-  const templateId = props.templateId || route.params.templateId as string;
+  const templateId = props.templateId || (route.params.templateId as string);
   return `composition_draft_${templateId}_${selectedEhrId.value}`;
 });
 
@@ -565,7 +565,13 @@ watch(() => [selectedEhrId.value, composerName.value, flatData.value], saveDraft
         <div class="context-grid">
           <div class="form-field">
             <label>Composer Name *</label>
-            <input v-model="composerName" type="text" class="input" placeholder="e.g., Dr. Smith" required />
+            <input
+              v-model="composerName"
+              type="text"
+              class="input"
+              placeholder="e.g., Dr. Smith"
+              required
+            />
           </div>
           <div class="form-field">
             <label>Language</label>

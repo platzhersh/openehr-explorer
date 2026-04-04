@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, watch } from "vue";
 import { useServerStore } from "./stores/server";
+import { useInspectorStore } from "./stores/inspector";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
+import RequestInspector from "./components/RequestInspector.vue";
 
 const serverStore = useServerStore();
+const inspectorStore = useInspectorStore();
 
 onMounted(() => {
   serverStore.loadProfiles();
+  inspectorStore.startListening();
 });
+
+// Reset inspector when active server changes
+watch(
+  () => serverStore.activeServerId,
+  () => {
+    inspectorStore.reset();
+  },
+);
 </script>
 
 <template>
@@ -20,9 +32,12 @@ onMounted(() => {
       <ServerSwitcher />
       <AppSidebar />
     </aside>
-    <main class="app-main">
-      <router-view />
-    </main>
+    <div class="app-content-area">
+      <main class="app-main">
+        <router-view />
+      </main>
+      <RequestInspector />
+    </div>
   </div>
 </template>
 
@@ -95,6 +110,13 @@ body {
   font-weight: 600;
   color: var(--color-primary);
   letter-spacing: -0.3px;
+}
+
+.app-content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .app-main {

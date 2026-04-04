@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::server::{create_client, get_profile_by_id, make_request};
+use crate::inspector::send_instrumented;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AqlResult {
@@ -68,7 +69,11 @@ fn save_queries_to_file(queries: &[SavedQuery]) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn execute_aql(server_id: String, query: String) -> Result<AqlResult, String> {
+pub async fn execute_aql(
+    app: tauri::AppHandle,
+    server_id: String,
+    query: String,
+) -> Result<AqlResult, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -76,25 +81,23 @@ pub async fn execute_aql(server_id: String, query: String) -> Result<AqlResult, 
 
     let start = std::time::Instant::now();
 
-    let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .json(&serde_json::json!({ "q": query }))
-        .send()
-        .await
-        .map_err(|e| format!("AQL query failed: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&serde_json::json!({ "q": query })),
+    )
+    .await?;
 
     let elapsed = start.elapsed().as_millis() as u64;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("AQL error (HTTP {}): {}", status, body));
+    if !resp.is_success {
+        return Err(format!("AQL error (HTTP {}): {}", resp.status, resp.body));
     }
 
-    let body: Value = response
-        .json()
-        .await
+    let body: Value = serde_json::from_str(&resp.body)
         .map_err(|e| format!("Failed to parse AQL response: {}", e))?;
 
     let columns: Vec<AqlColumn> = body
@@ -108,10 +111,7 @@ pub async fn execute_aql(server_id: String, query: String) -> Result<AqlResult, 
                         .and_then(|n| n.as_str())
                         .unwrap_or("?")
                         .to_string(),
-                    path: col
-                        .get("path")
-                        .and_then(|p| p.as_str())
-                        .map(String::from),
+                    path: col.get("path").and_then(|p| p.as_str()).map(String::from),
                 })
                 .collect()
         })
@@ -122,11 +122,7 @@ pub async fn execute_aql(server_id: String, query: String) -> Result<AqlResult, 
         .and_then(|r| r.as_array())
         .map(|rs| {
             rs.iter()
-                .map(|row| {
-                    row.as_array()
-                        .cloned()
-                        .unwrap_or_else(|| vec![row.clone()])
-                })
+                .map(|row| row.as_array().cloned().unwrap_or_else(|| vec![row.clone()]))
                 .collect()
         })
         .unwrap_or_default();

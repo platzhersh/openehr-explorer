@@ -70,7 +70,7 @@ watch(
       loading.value = false;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 function goBack() {
@@ -79,9 +79,7 @@ function goBack() {
 
 async function copyJson() {
   const json =
-    activeTab.value === "flat" && flatComposition.value
-      ? flatComposition.value
-      : composition.value;
+    activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
   if (json) {
     await navigator.clipboard.writeText(JSON.stringify(json, null, 2));
   }
@@ -89,9 +87,7 @@ async function copyJson() {
 
 const jsonDisplay = computed(() => {
   const data =
-    activeTab.value === "flat" && flatComposition.value
-      ? flatComposition.value
-      : composition.value;
+    activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
   return data ? JSON.stringify(data, null, 2) : "";
 });
 
@@ -118,7 +114,7 @@ async function handleDelete() {
     await compositionStore.deleteComposition(
       serverStore.activeServerId,
       ehrId.value,
-      compositionUid.value
+      compositionUid.value,
     );
     showDeleteDialog.value = false;
     // Navigate back to EHR detail
@@ -145,11 +141,7 @@ async function handleDelete() {
           >
             Pretty
           </button>
-          <button
-            class="tab"
-            :class="{ active: activeTab === 'json' }"
-            @click="activeTab = 'json'"
-          >
+          <button class="tab" :class="{ active: activeTab === 'json' }" @click="activeTab = 'json'">
             JSON
           </button>
           <button

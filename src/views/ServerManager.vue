@@ -16,8 +16,13 @@ const form = ref<ServerProfile>({
   auth_method: { type: "none" },
 });
 
-onMounted(() => {
-  serverStore.loadProfiles();
+onMounted(async () => {
+  await serverStore.loadProfiles();
+  // Fetch version info for all profiles
+  for (const profile of serverStore.profiles) {
+    const version = await serverStore.fetchServerVersion(profile);
+    console.log(`Version for ${profile.name}:`, version);
+  }
 });
 
 function newProfile() {
@@ -92,6 +97,13 @@ function setAuthType(type: string) {
             <div class="profile-meta">
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
+              <span
+                v-if="serverStore.versionInfo[profile.id]?.ehrbase_version"
+                class="badge version-badge"
+                :title="`EHRbase ${serverStore.versionInfo[profile.id]?.ehrbase_version}`"
+              >
+                v{{ serverStore.versionInfo[profile.id]?.ehrbase_version }}
+              </span>
             </div>
           </div>
           <div class="profile-actions">
@@ -138,7 +150,11 @@ function setAuthType(type: string) {
 
         <div class="form-group">
           <label>Authentication</label>
-          <select class="input" :value="form.auth_method.type" @change="setAuthType(($event.target as HTMLSelectElement).value)">
+          <select
+            class="input"
+            :value="form.auth_method.type"
+            @change="setAuthType(($event.target as HTMLSelectElement).value)"
+          >
             <option value="none">None</option>
             <option value="basic">Basic Auth</option>
             <option value="bearer">Bearer Token</option>
@@ -231,6 +247,11 @@ function setAuthType(type: string) {
 .profile-meta {
   display: flex;
   gap: 6px;
+}
+.version-badge {
+  background: var(--color-primary-dim);
+  color: var(--color-primary);
+  font-weight: 600;
 }
 .profile-actions {
   display: flex;

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::server::{create_client, get_profile_by_id, make_request};
+use crate::inspector::send_instrumented;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EhrSummary {
@@ -42,6 +43,7 @@ pub struct EhrListResponse {
 
 #[tauri::command]
 pub async fn list_ehrs(
+    app: tauri::AppHandle,
     server_id: String,
     offset: usize,
     limit: usize,
@@ -57,23 +59,24 @@ pub async fn list_ehrs(
     );
 
     let url = format!("{}/rest/openehr/v1/query/aql", base);
-    let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!({ "q": aql }))
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch EHRs: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({ "q": aql })),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let body: Value =
+        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     let rows = body
         .get("rows")
@@ -105,29 +108,32 @@ pub async fn list_ehrs(
 }
 
 #[tauri::command]
-pub async fn get_ehr_detail(server_id: String, ehr_id: String) -> Result<EhrDetail, String> {
+pub async fn get_ehr_detail(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+) -> Result<EhrDetail, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
     // Fetch EHR status
     let status_url = format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id);
-    let ehr_response = make_request(
+    let ehr_resp = send_instrumented(
+        &app,
         &client,
-        reqwest::Method::GET,
-        &status_url,
-        &profile.auth_method,
+        make_request(
+            &client,
+            reqwest::Method::GET,
+            &status_url,
+            &profile.auth_method,
+        )
+        .header("Accept", "application/json"),
     )
-    .header("Accept", "application/json")
-    .send()
-    .await
-    .map_err(|e| format!("Failed to fetch EHR: {}", e))?;
+    .await?;
 
-    let ehr_json: Value = if ehr_response.status().is_success() {
-        ehr_response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse EHR: {}", e))?
+    let ehr_json: Value = if ehr_resp.is_success {
+        serde_json::from_str(&ehr_resp.body).map_err(|e| format!("Failed to parse EHR: {}", e))?
     } else {
         Value::Null
     };
@@ -181,22 +187,22 @@ pub async fn get_ehr_detail(server_id: String, ehr_id: String) -> Result<EhrDeta
     );
 
     let query_url = format!("{}/rest/openehr/v1/query/aql", base);
-    let comp_response = make_request(
+    let comp_resp = send_instrumented(
+        &app,
         &client,
-        reqwest::Method::POST,
-        &query_url,
-        &profile.auth_method,
+        make_request(
+            &client,
+            reqwest::Method::POST,
+            &query_url,
+            &profile.auth_method,
+        )
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "q": aql })),
     )
-    .header("Content-Type", "application/json")
-    .json(&serde_json::json!({ "q": aql }))
-    .send()
-    .await
-    .map_err(|e| format!("Failed to fetch compositions: {}", e))?;
+    .await?;
 
-    let compositions = if comp_response.status().is_success() {
-        let body: Value = comp_response
-            .json()
-            .await
+    let compositions = if comp_resp.is_success {
+        let body: Value = serde_json::from_str(&comp_resp.body)
             .map_err(|e| format!("Failed to parse compositions: {}", e))?;
 
         body.get("rows")
@@ -250,6 +256,7 @@ pub struct CreateEhrResponse {
 
 #[tauri::command]
 pub async fn create_ehr(
+    app: tauri::AppHandle,
     server_id: String,
     request: CreateEhrRequest,
 ) -> Result<CreateEhrResponse, String> {
@@ -283,15 +290,17 @@ pub async fn create_ehr(
     });
 
     // Override subject if external identity is provided
-    if request.subject_namespace.is_some() && request.subject_id.is_some() {
+    if let (Some(subject_id), Some(subject_namespace)) =
+        (request.subject_id, request.subject_namespace)
+    {
         ehr_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
                 "_type": "PARTY_REF",
                 "id": {
                     "_type": "GENERIC_ID",
-                    "value": request.subject_id.unwrap(),
-                    "scheme": request.subject_namespace.unwrap()
+                    "value": subject_id,
+                    "scheme": subject_namespace
                 },
                 "namespace": "external",
                 "type": "PERSON"
@@ -309,39 +318,35 @@ pub async fn create_ehr(
         ehr_status
     };
 
-    // Debug: print the JSON being sent
-    eprintln!("Creating EHR with JSON:\n{}", serde_json::to_string_pretty(&request_body).unwrap_or_default());
-
     let url = format!("{}/rest/openehr/v1/ehr", base);
-    let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to create EHR: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&request_body),
+    )
+    .await?;
 
-    let status = response.status();
-
-    if !status.is_success() {
-        let response_text = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status.as_u16(), response_text));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
     // EHRBase returns 201 Created with Location header, but empty body
     // Extract EHR ID from Location header: /rest/openehr/v1/ehr/{ehr_id}
-    let location = response
-        .headers()
-        .get("Location")
-        .and_then(|v| v.to_str().ok())
+    let location = resp
+        .headers
+        .get("location")
         .ok_or("Location header not found in response")?;
-
-    eprintln!("EHR created at: {}", location);
 
     // Extract EHR ID from the location path
     let ehr_id = location
         .split('/')
-        .last()
+        .next_back()
         .ok_or("Could not extract EHR ID from Location header")?
         .to_string();
 
@@ -362,6 +367,7 @@ pub struct UpdateEhrStatusRequest {
 
 #[tauri::command]
 pub async fn update_ehr_status(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     request: UpdateEhrStatusRequest,
@@ -372,21 +378,27 @@ pub async fn update_ehr_status(
 
     // First, fetch current EHR status to get the version UID
     let get_url = format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id);
-    let get_response = make_request(&client, reqwest::Method::GET, &get_url, &profile.auth_method)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch current EHR status: {}", e))?;
+    let get_resp = send_instrumented(
+        &app,
+        &client,
+        make_request(
+            &client,
+            reqwest::Method::GET,
+            &get_url,
+            &profile.auth_method,
+        )
+        .header("Accept", "application/json"),
+    )
+    .await?;
 
-    if !get_response.status().is_success() {
-        let status = get_response.status().as_u16();
-        let body = get_response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !get_resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            get_resp.status, get_resp.body
+        ));
     }
 
-    let current_status: Value = get_response
-        .json()
-        .await
+    let current_status: Value = serde_json::from_str(&get_resp.body)
         .map_err(|e| format!("Failed to parse current status: {}", e))?;
 
     let version_uid = current_status
@@ -401,14 +413,16 @@ pub async fn update_ehr_status(
     updated_status["is_modifiable"] = serde_json::json!(request.is_modifiable);
 
     // Update subject if provided
-    if request.subject_namespace.is_some() && request.subject_id.is_some() {
+    if let (Some(subject_id), Some(subject_namespace)) =
+        (request.subject_id, request.subject_namespace)
+    {
         updated_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
             "external_ref": {
                 "id": {
                     "_type": "GENERIC_ID",
-                    "value": request.subject_id.unwrap(),
-                    "scheme": request.subject_namespace.unwrap()
+                    "value": subject_id,
+                    "scheme": subject_namespace
                 },
                 "namespace": "external"
             }
@@ -417,40 +431,55 @@ pub async fn update_ehr_status(
 
     // PUT request with If-Match header
     let put_url = format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id);
-    let put_response = make_request(&client, reqwest::Method::PUT, &put_url, &profile.auth_method)
+    let put_resp = send_instrumented(
+        &app,
+        &client,
+        make_request(
+            &client,
+            reqwest::Method::PUT,
+            &put_url,
+            &profile.auth_method,
+        )
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .header("If-Match", version_uid)
-        .json(&updated_status)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to update EHR status: {}", e))?;
+        .json(&updated_status),
+    )
+    .await?;
 
-    if !put_response.status().is_success() {
-        let status = put_response.status().as_u16();
-        let body = put_response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !put_resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            put_resp.status, put_resp.body
+        ));
     }
 
     Ok("EHR status updated successfully".to_string())
 }
 
 #[tauri::command]
-pub async fn delete_ehr(server_id: String, ehr_id: String) -> Result<String, String> {
+pub async fn delete_ehr(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
     let url = format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id);
-    let response = make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to delete EHR: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
     Ok(format!("EHR {} deleted successfully", ehr_id))

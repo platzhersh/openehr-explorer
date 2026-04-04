@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::server::{create_client, get_profile_by_id, make_request};
+use crate::inspector::send_instrumented;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompositionVersion {
@@ -22,6 +23,7 @@ pub struct CommitAudit {
 
 #[tauri::command]
 pub async fn get_composition(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     composition_uid: String,
@@ -35,26 +37,27 @@ pub async fn get_composition(
         base, ehr_id, composition_uid
     );
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch composition: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    response
-        .json::<Value>()
-        .await
-        .map_err(|e| format!("Failed to parse composition: {}", e))
+    serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse composition: {}", e))
 }
 
 #[tauri::command]
 pub async fn get_composition_flat(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     composition_uid: String,
@@ -68,26 +71,27 @@ pub async fn get_composition_flat(
         base, ehr_id, composition_uid
     );
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/openehr.wt.flat+json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch FLAT composition: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/openehr.wt.flat+json"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    response
-        .json::<Value>()
-        .await
-        .map_err(|e| format!("Failed to parse FLAT composition: {}", e))
+    serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse FLAT composition: {}", e))
 }
 
 #[tauri::command]
 pub async fn get_composition_versions(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     versioned_object_uid: String,
@@ -96,27 +100,27 @@ pub async fn get_composition_versions(
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
-    // Fetch the versioned composition to get revision history
     let url = format!(
         "{}/rest/openehr/v1/ehr/{}/versioned_composition/{}/revision_history",
         base, ehr_id, versioned_object_uid
     );
 
-    let response = make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-        .header("Accept", "application/json")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch version history: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    let body: Value = response
-        .json()
-        .await
+    let body: Value = serde_json::from_str(&resp.body)
         .map_err(|e| format!("Failed to parse version history: {}", e))?;
 
     let items = body
@@ -161,9 +165,7 @@ pub async fn get_composition_versions(
                     .map(String::from),
             });
 
-            let time_committed = commit_audit
-                .as_ref()
-                .and_then(|a| a.time_committed.clone());
+            let time_committed = commit_audit.as_ref().and_then(|a| a.time_committed.clone());
 
             CompositionVersion {
                 version_id,
@@ -183,6 +185,7 @@ pub async fn get_composition_versions(
 
 #[tauri::command]
 pub async fn create_composition(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     template_id: String,
@@ -200,24 +203,25 @@ pub async fn create_composition(
         urlencoding::encode(&template_id)
     );
 
-    let response = make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-        .header("Content-Type", "application/openehr.wt.flat.schema+json")
-        .header("Accept", "application/json")
-        .json(&composition_data)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to create composition: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/openehr.wt.flat.schema+json")
+            .header("Accept", "application/json")
+            .json(&composition_data),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    let result: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let result: Value =
+        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     // Extract composition UID from response
     let composition_uid = result
@@ -232,6 +236,7 @@ pub async fn create_composition(
 
 #[tauri::command]
 pub async fn update_composition(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     composition_uid: String,
@@ -246,24 +251,25 @@ pub async fn update_composition(
         base, ehr_id, composition_uid
     );
 
-    let response = make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
-        .header("Content-Type", "application/openehr.wt.flat.schema+json")
-        .header("Accept", "application/json")
-        .json(&composition_data)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to update composition: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
+            .header("Content-Type", "application/openehr.wt.flat.schema+json")
+            .header("Accept", "application/json")
+            .json(&composition_data),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    let result: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let result: Value =
+        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     // Extract new version UID
     let new_uid = result
@@ -278,6 +284,7 @@ pub async fn update_composition(
 
 #[tauri::command]
 pub async fn delete_composition(
+    app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     composition_uid: String,
@@ -291,16 +298,22 @@ pub async fn delete_composition(
         base, ehr_id, composition_uid
     );
 
-    let response = make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to delete composition: {}", e))?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method),
+    )
+    .await?;
 
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Server returned HTTP {}: {}", status, body));
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
     }
 
-    Ok(format!("Composition {} deleted successfully", composition_uid))
+    Ok(format!(
+        "Composition {} deleted successfully",
+        composition_uid
+    ))
 }

@@ -18,16 +18,14 @@ const uploadDragOver = ref(false);
 const uploadStatus = ref<string | null>(null);
 const uploadError = ref<string | null>(null);
 
-const selectedTemplateId = computed(
-  () => route.params.templateId as string | undefined
-);
+const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
 
 watch(
   () => serverStore.activeServerId,
   (id) => {
     if (id) templateStore.fetchTemplates(id);
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(selectedTemplateId, (id) => {
@@ -44,9 +42,7 @@ function selectTemplate(id: string) {
 const filteredTemplates = computed(() => {
   if (!searchQuery.value) return templateStore.templates;
   const q = searchQuery.value.toLowerCase();
-  return templateStore.templates.filter((t) =>
-    t.template_id.toLowerCase().includes(q)
-  );
+  return templateStore.templates.filter((t) => t.template_id.toLowerCase().includes(q));
 });
 
 const webTemplateJson = computed(() => {
@@ -70,8 +66,7 @@ interface WtNode {
 }
 
 function buildWtTree(node: Record<string, unknown>): WtNode {
-  const children =
-    (node.children as Record<string, unknown>[]) ?? [];
+  const children = (node.children as Record<string, unknown>[]) ?? [];
   return {
     id: (node.id as string) ?? "",
     name: (node.name as string) ?? (node.localizedName as string) ?? "",
@@ -83,9 +78,7 @@ function buildWtTree(node: Record<string, unknown>): WtNode {
 
 const wtTree = computed(() => {
   if (!templateStore.selectedWebTemplate) return null;
-  const tree = templateStore.selectedWebTemplate.tree as
-    | Record<string, unknown>
-    | undefined;
+  const tree = templateStore.selectedWebTemplate.tree as Record<string, unknown> | undefined;
   return tree ? buildWtTree(tree) : null;
 });
 
@@ -97,10 +90,7 @@ async function uploadFile(file: File) {
 
   const text = await file.text();
   try {
-    const result = await templateStore.uploadTemplate(
-      serverStore.activeServerId,
-      text
-    );
+    const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
     uploadStatus.value = result;
     templateStore.fetchTemplates(serverStore.activeServerId);
   } catch (e) {
@@ -139,10 +129,7 @@ async function handleFileSelect() {
         // Read file using Tauri's FS plugin
         const text = await readTextFile(selected);
 
-        const result = await templateStore.uploadTemplate(
-          serverStore.activeServerId,
-          text
-        );
+        const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
         uploadStatus.value = result;
         templateStore.fetchTemplates(serverStore.activeServerId);
       } catch (e) {
@@ -172,16 +159,10 @@ function createComposition(templateId: string) {
       </div>
 
       <div class="search-bar">
-        <input
-          class="input search-input"
-          v-model="searchQuery"
-          placeholder="Filter templates..."
-        />
+        <input class="input search-input" v-model="searchQuery" placeholder="Filter templates..." />
       </div>
 
-      <div v-if="templateStore.loading && !selectedTemplateId" class="loading">
-        Loading...
-      </div>
+      <div v-if="templateStore.loading && !selectedTemplateId" class="loading">Loading...</div>
       <div v-else-if="templateStore.error" class="error-msg">
         {{ templateStore.error }}
       </div>
@@ -221,9 +202,7 @@ function createComposition(templateId: string) {
           @drop="handleDrop"
         >
           <p>Drop OPT file here to upload</p>
-          <button class="btn btn-sm" @click="handleFileSelect">
-            Or choose file...
-          </button>
+          <button class="btn btn-sm" @click="handleFileSelect">Or choose file...</button>
         </div>
         <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
         <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
@@ -281,9 +260,7 @@ function createComposition(templateId: string) {
         <!-- Web Template JSON -->
         <div v-if="activeTab === 'json'" class="json-view">
           <div class="json-actions">
-            <button class="btn btn-sm" @click="copyToClipboard(webTemplateJson)">
-              Copy JSON
-            </button>
+            <button class="btn btn-sm" @click="copyToClipboard(webTemplateJson)">Copy JSON</button>
           </div>
           <pre class="json-pre"><code>{{ webTemplateJson }}</code></pre>
         </div>
@@ -291,10 +268,7 @@ function createComposition(templateId: string) {
         <!-- OPT XML -->
         <div v-if="activeTab === 'opt'" class="json-view">
           <div class="json-actions">
-            <button
-              class="btn btn-sm"
-              @click="copyToClipboard(templateStore.selectedOpt ?? '')"
-            >
+            <button class="btn btn-sm" @click="copyToClipboard(templateStore.selectedOpt ?? '')">
               Copy XML
             </button>
           </div>
@@ -347,8 +321,8 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
               class: "toggle",
               onClick: () => (collapsed.value = !collapsed.value),
             },
-            collapsed.value ? "\u25B6" : "\u25BC"
-          )
+            collapsed.value ? "\u25B6" : "\u25BC",
+          ),
         );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
@@ -358,9 +332,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
       headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
 
       if (node.aqlPath) {
-        headerChildren.push(
-          h("span", { class: "aql-path" }, node.aqlPath)
-        );
+        headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
         headerChildren.push(
           h(
             "button",
@@ -368,8 +340,8 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
               class: "copy-btn",
               onClick: () => emit("copy", node.aqlPath),
             },
-            "Copy"
-          )
+            "Copy",
+          ),
         );
       }
 
@@ -380,8 +352,8 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
             class: "wt-node-header",
             style: { paddingLeft: `${props.depth * 20}px` },
           },
-          headerChildren
-        )
+          headerChildren,
+        ),
       );
 
       if (hasChildren && !collapsed.value) {
@@ -391,8 +363,8 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
               node: child,
               depth: props.depth + 1,
               onCopy: (v: string) => emit("copy", v),
-            })
-          )
+            }),
+          ),
         );
       }
 
