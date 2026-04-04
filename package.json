@@ -14,11 +14,17 @@
     "fmt:check": "oxfmt --check src/"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "6.20.1",
+    "@codemirror/commands": "6.10.3",
+    "@codemirror/lang-sql": "6.10.0",
+    "@codemirror/language": "6.12.3",
+    "@codemirror/state": "6.6.0",
+    "@codemirror/view": "6.41.0",
     "@tauri-apps/api": "2.10.1",
     "@tauri-apps/plugin-dialog": "2.6.0",
     "@tauri-apps/plugin-fs": "2.4.5",
     "@tauri-apps/plugin-opener": "2.5.3",
-    "monaco-editor": "0.52.2",
+    "codemirror": "6.0.2",
     "pinia": "3.0.4",
     "vue": "3.5.31",
     "vue-router": "4.6.4"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
@@ -28,19 +28,24 @@ const isResizing = ref(false);
 const templatePaths = ref<Map<string, AqlPathEntry[]>>(new Map());
 const allTemplatePaths = ref<AqlPathEntry[]>([]);
 
+// Load data after component is mounted to avoid blocking render
 onMounted(() => {
-  if (serverStore.activeServerId) {
-    queryStore.loadSavedQueries(serverStore.activeServerId);
-    templateStore.fetchTemplates(serverStore.activeServerId);
-  }
+  if (!serverStore.activeServerId) return;
+
+  // Load saved queries (local file read)
+  queryStore.loadSavedQueries(serverStore.activeServerId).catch(console.error);
+
+  // Load templates (network request for dropdown)
+  templateStore.fetchTemplates(serverStore.activeServerId).catch(console.error);
 });
 
-// Fetch templates when server changes
+// Reload when server changes
 watch(
   () => serverStore.activeServerId,
   (serverId) => {
     if (serverId) {
-      templateStore.fetchTemplates(serverId);
+      queryStore.loadSavedQueries(serverId).catch(console.error);
+      templateStore.fetchTemplates(serverId).catch(console.error);
     }
   },
 );

@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, reactive } from "vue";
-import * as monaco from "monaco-editor";
-import { useMonacoEditor } from "../composables/useMonacoEditor";
-import { registerCompletionProvider, type CompletionContext } from "../lib/aql/completionProvider";
+import { ref, watch, reactive } from "vue";
+import { useCodeMirror } from "../composables/useCodeMirror";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
+import type { AqlCompletionConfig } from "../lib/aql/codemirror-autocomplete";
 
 const props = defineProps<{
   modelValue: string;
@@ -18,15 +17,15 @@ const emit = defineEmits<{
 
 const containerEl = ref<HTMLElement | null>(null);
 
-// Completion context shared with the provider
-const completionContext = reactive<{ value: CompletionContext }>({
+// Completion config shared with CodeMirror
+const completionConfig = reactive<{ value: AqlCompletionConfig }>({
   value: {
     templatePaths: new Map(),
     allTemplatePaths: [],
   },
 });
 
-const { editor, getValue, setValue } = useMonacoEditor(containerEl, {
+const { view, getValue, setValue } = useCodeMirror(containerEl, {
   initialValue: props.modelValue,
   onExecute() {
     emit("execute");
@@ -34,17 +33,7 @@ const { editor, getValue, setValue } = useMonacoEditor(containerEl, {
   onChange(value: string) {
     emit("update:modelValue", value);
   },
-});
-
-// Register the completion provider once
-let completionDisposable: monaco.IDisposable | null = null;
-
-onMounted(() => {
-  completionDisposable = registerCompletionProvider(completionContext);
-});
-
-onBeforeUnmount(() => {
-  completionDisposable?.dispose();
+  completionConfig,
 });
 
 // Sync external value changes into editor
@@ -57,11 +46,11 @@ watch(
   },
 );
 
-// Sync template paths into completion context
+// Sync template paths into completion config
 watch(
   () => props.templatePaths,
   (paths) => {
-    completionContext.value.templatePaths = paths ?? new Map();
+    completionConfig.value.templatePaths = paths ?? new Map();
   },
   { immediate: true },
 );
@@ -69,22 +58,23 @@ watch(
 watch(
   () => props.allTemplatePaths,
   (paths) => {
-    completionContext.value.allTemplatePaths = paths ?? [];
+    completionConfig.value.allTemplatePaths = paths ?? [];
   },
   { immediate: true },
 );
 
-defineExpose({ editor, getValue, setValue });
+defineExpose({ view, getValue, setValue });
 </script>
 
 <template>
-  <div ref="containerEl" class="monaco-container"></div>
+  <div ref="containerEl" class="codemirror-container"></div>
 </template>
 
 <style scoped>
-.monaco-container {
+.codemirror-container {
   width: 100%;
   height: 100%;
   min-height: 120px;
+  overflow: auto;
 }
 </style>

@@ -47,8 +47,11 @@ export function useMonacoEditor(
     editor.value?.focus();
   }
 
-  onMounted(() => {
+  onMounted(async () => {
     if (!container.value) return;
+
+    // Defer Monaco initialization to next tick to avoid blocking initial render
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     ensureRegistered();
 
@@ -67,7 +70,11 @@ export function useMonacoEditor(
       wordWrap: "on",
       padding: { top: 12, bottom: 12 },
       suggestOnTriggerCharacters: true,
-      quickSuggestions: true,
+      quickSuggestions: {
+        other: false,
+        comments: false,
+        strings: false,
+      },
       suggest: {
         showKeywords: true,
         showFields: true,
@@ -106,6 +113,30 @@ export function useMonacoEditor(
     }
 
     editor.value = instance;
+
+    // Warm up Monaco by triggering lazy-loaded features
+    // This prevents freezing on first user interaction
+    setTimeout(() => {
+      if (instance && !instance.hasTextFocus()) {
+        // Trigger tokenization
+        instance.getModel()?.tokenization?.getLineTokens(1);
+
+        // Trigger layout calculation
+        instance.layout();
+
+        // Force a small edit and undo to warm up the text buffer
+        const model = instance.getModel();
+        if (model) {
+          const position = { lineNumber: 1, column: 1 };
+          model.pushEditOperations(
+            [],
+            [{ range: new monaco.Range(1, 1, 1, 1), text: ' ' }],
+            () => null
+          );
+          instance.trigger('warmup', 'undo', {});
+        }
+      }
+    }, 150);
   });
 
   onBeforeUnmount(() => {

@@ -20,7 +20,7 @@ export default defineConfig(async () => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          'monaco-editor': ['monaco-editor'],
+          'codemirror': ['codemirror', '@codemirror/view', '@codemirror/state'],
         },
       },
     },
