@@ -1,4 +1,4 @@
-import { autocompletion, type CompletionContext, type Completion } from "@codemirror/autocomplete";
+import { autocompletion, type CompletionContext, type Completion, startCompletion } from "@codemirror/autocomplete";
 import type { AqlPathEntry } from "./aqlPathIndex";
 import { parseAliases, findAlias } from "./aliasParser";
 
@@ -157,6 +157,36 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
         const word = context.matchBefore(/\w*/);
         if (!word || (word.from === word.to && !context.explicit)) {
           return null;
+        }
+
+        // Check if the word before cursor might be an alias (look for it in bindings)
+        const wordText = context.state.doc.sliceString(word.from, word.to);
+        const bindings = parseAliases(fullText);
+        const possibleAlias = findAlias(bindings, wordText);
+
+        // If this word is a known alias, suggest adding "/" for path completion
+        if (possibleAlias) {
+          return {
+            from: word.from,
+            options: [
+              {
+                label: `${wordText}/`,
+                type: "property",
+                info: `Access ${possibleAlias.rmType} paths`,
+                apply: (view, completion, from, to) => {
+                  // Insert the alias with slash
+                  view.dispatch({
+                    changes: { from, to, insert: `${wordText}/` },
+                    selection: { anchor: from + wordText.length + 1 },
+                  });
+                  // Re-trigger autocomplete to show path suggestions
+                  startCompletion(view);
+                },
+              },
+              ...KEYWORD_COMPLETIONS,
+              ...RM_TYPE_COMPLETIONS,
+            ],
+          };
         }
 
         return {
