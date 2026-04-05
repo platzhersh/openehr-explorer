@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "homepage": "https://platzhersh.github.io/openehr-explorer/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/platzhersh/openehr-explorer"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",

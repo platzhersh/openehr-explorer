@@ -3,6 +3,8 @@ name = "openehr-explorer"
 version = "0.1.0"
 description = "Cross-platform desktop browser for openEHR CDR instances"
 authors = ["openEHR Explorer Contributors"]
+homepage = "https://platzhersh.github.io/openehr-explorer/"
+repository = "https://github.com/platzhersh/openehr-explorer"
 edition = "2021"
 
 [lib]

@@ -4,6 +4,9 @@ pub mod settings;
 
 use commands::{composition, ehr, query, server, template, terminology};
 
+/// The official website URL for openEHR Explorer
+pub const WEBSITE_URL: &str = "https://platzhersh.github.io/openehr-explorer/";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
