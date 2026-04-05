@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { extractFlatPaths } from "../lib/webtemplate";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import OptMetadata from "../components/OptMetadata.vue";
+import SearchOverlay from "../components/SearchOverlay.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -13,7 +15,11 @@ const serverStore = useServerStore();
 const templateStore = useTemplateStore();
 
 const searchQuery = ref("");
+const panelSearchQuery = ref("");
+const showPanelSearch = ref(false);
 const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
+const currentMatchIndex = ref(0);
+const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
 const uploadDragOver = ref(false);
 const uploadStatus = ref<string | null>(null);
 const uploadError = ref<string | null>(null);
@@ -131,10 +137,11 @@ function highlightXml(xml: string): string {
     .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
 }
 
-const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
-const highlightedOpt = computed(() =>
-  templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
-);
+// Unused - replaced by highlightedWebTemplateWithSearch and highlightedOptWithSearch
+// const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
+// const highlightedOpt = computed(() =>
+//   templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
+// );
 
 async function handleDrop(event: DragEvent) {
   event.preventDefault();
@@ -186,6 +193,210 @@ async function copyToClipboard(text: string) {
 function createComposition(templateId: string) {
   router.push({ name: "compose", params: { templateId } });
 }
+
+// Search functionality
+function handleKeydown(e: KeyboardEvent) {
+  if (!selectedTemplateId.value) return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+    e.preventDefault();
+    showPanelSearch.value = true;
+    currentMatchIndex.value = 0;
+    nextTick(() => searchOverlayRef.value?.focus());
+  }
+}
+
+function closePanelSearch() {
+  showPanelSearch.value = false;
+  panelSearchQuery.value = "";
+  currentMatchIndex.value = 0;
+}
+
+watch(activeTab, () => {
+  closePanelSearch();
+});
+
+watch(selectedTemplateId, () => {
+  closePanelSearch();
+});
+
+// FLAT Paths filtering
+const filteredFlatPaths = computed(() => {
+  if (!panelSearchQuery.value) return flatPaths.value;
+  const query = panelSearchQuery.value.toLowerCase();
+  return flatPaths.value.filter((path) => path.toLowerCase().includes(query));
+});
+
+// FLAT Paths highlighting
+function highlightPathMatch(path: string, query: string): string {
+  if (!query) return path;
+
+  const regex = new RegExp(`(${escapeRegex(query)})`, "gi");
+  return path.replace(regex, '<mark class="path-search-match">$1</mark>');
+}
+
+// Tree filtering with ancestor preservation
+interface FilteredNode extends WtNode {
+  isMatch: boolean;
+  isAncestor: boolean;
+}
+
+function filterTreeNode(node: WtNode, query: string): FilteredNode | null {
+  if (!query) {
+    return { ...node, isMatch: false, isAncestor: false };
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const matchesQuery =
+    node.name.toLowerCase().includes(lowerQuery) ||
+    node.id.toLowerCase().includes(lowerQuery) ||
+    node.rmType.toLowerCase().includes(lowerQuery) ||
+    node.aqlPath.toLowerCase().includes(lowerQuery);
+
+  const filteredChildren = node.children
+    .map((child) => filterTreeNode(child, query))
+    .filter((child): child is FilteredNode => child !== null);
+
+  if (matchesQuery || filteredChildren.length > 0) {
+    return {
+      ...node,
+      children: filteredChildren,
+      isMatch: matchesQuery,
+      isAncestor: !matchesQuery && filteredChildren.length > 0,
+    };
+  }
+
+  return null;
+}
+
+const filteredWtTree = computed(() => {
+  if (!wtTree.value) return null;
+  return filterTreeNode(wtTree.value, panelSearchQuery.value);
+});
+
+const treeMatchCount = computed(() => {
+  if (!filteredWtTree.value) return 0;
+  function countMatches(node: FilteredNode): number {
+    let count = node.isMatch ? 1 : 0;
+    for (const child of node.children) {
+      count += countMatches(child as FilteredNode);
+    }
+    return count;
+  }
+  return countMatches(filteredWtTree.value);
+});
+
+// JSON/XML highlighting with search
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function highlightSearchInContent(html: string, searchQuery: string): string {
+  if (!searchQuery) return html;
+
+  // We need to search in the text content, not the HTML
+  // Strategy: find matches in plain text positions, then inject marks in HTML
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = html;
+  const plainText = tempDiv.textContent || "";
+
+  const regex = new RegExp(escapeRegex(searchQuery), "gi");
+  const matches: Array<{ start: number; end: number }> = [];
+  let match;
+
+  while ((match = regex.exec(plainText)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length });
+  }
+
+  if (matches.length === 0) return html;
+
+  // Rebuild HTML with <mark> tags
+  // This is complex because we need to preserve HTML structure
+  // Simplified approach: wrap matches in the final HTML string
+  // This may not be perfect but works for most cases
+  let result = html;
+  const escapedQuery = escapeHtml(searchQuery);
+  const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
+
+  result = result.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
+
+  return result;
+}
+
+const highlightedWebTemplateWithSearch = computed(() => {
+  let highlighted = highlightJson(webTemplateJson.value);
+  if (panelSearchQuery.value) {
+    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
+  }
+  return highlighted;
+});
+
+const highlightedOptWithSearch = computed(() => {
+  if (!templateStore.selectedOpt) return "";
+  let highlighted = highlightXml(templateStore.selectedOpt);
+  if (panelSearchQuery.value) {
+    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
+  }
+  return highlighted;
+});
+
+const jsonXmlMatches = computed(() => {
+  if (!panelSearchQuery.value) return 0;
+  const content =
+    activeTab.value === "json" ? webTemplateJson.value : templateStore.selectedOpt || "";
+  const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
+  const matches = content.match(regex);
+  return matches ? matches.length : 0;
+});
+
+function goToNextMatch() {
+  if (jsonXmlMatches.value === 0) return;
+  currentMatchIndex.value = (currentMatchIndex.value + 1) % jsonXmlMatches.value;
+  scrollToMatch();
+}
+
+function goToPreviousMatch() {
+  if (jsonXmlMatches.value === 0) return;
+  currentMatchIndex.value =
+    (currentMatchIndex.value - 1 + jsonXmlMatches.value) % jsonXmlMatches.value;
+  scrollToMatch();
+}
+
+function scrollToMatch() {
+  nextTick(() => {
+    const matches = document.querySelectorAll(".search-match");
+    if (matches[currentMatchIndex.value]) {
+      // Remove current-match class from all
+      matches.forEach((el) => el.classList.remove("current-match"));
+
+      // Add to current
+      matches[currentMatchIndex.value].classList.add("current-match");
+      matches[currentMatchIndex.value].scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  });
+}
+
+watch(panelSearchQuery, () => {
+  currentMatchIndex.value = 0;
+  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "opt")) {
+    scrollToMatch();
+  }
+});
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeydown);
+});
 </script>
 
 <template>
@@ -212,13 +423,11 @@ function createComposition(templateId: string) {
             class="template-item"
             :class="{ active: tmpl.template_id === selectedTemplateId }"
           >
-            <div @click="selectTemplate(tmpl.template_id)" style="flex: 1; cursor: pointer">
-              <div class="template-name">{{ tmpl.template_id }}</div>
-              <div class="template-meta">
-                <span v-if="tmpl.concept" class="meta-item">{{ tmpl.concept }}</span>
-                <span v-if="tmpl.created_timestamp" class="meta-item">
-                  {{ tmpl.created_timestamp }}
-                </span>
+            <div @click="selectTemplate(tmpl.template_id)" class="template-content">
+              <div class="template-id">{{ tmpl.template_id }}</div>
+              <div v-if="tmpl.concept" class="template-concept">{{ tmpl.concept }}</div>
+              <div v-if="tmpl.created_timestamp" class="template-date">
+                {{ tmpl.created_timestamp }}
               </div>
             </div>
             <button
@@ -287,41 +496,117 @@ function createComposition(templateId: string) {
 
         <!-- Tree view -->
         <div v-if="activeTab === 'tree'" class="tree-view">
-          <div v-if="wtTree" class="wt-tree">
-            <WtTreeNode :node="wtTree" :depth="0" @copy="copyToClipboard" />
+          <OptMetadata v-if="templateStore.selectedOpt" :optXml="templateStore.selectedOpt" />
+
+          <div class="info-banner">
+            <svg
+              class="info-icon"
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" />
+              <path d="M10 10V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              <circle cx="10" cy="7" r="0.75" fill="currentColor" />
+            </svg>
+            <div class="info-content">
+              <strong>About OPT Tree View:</strong> This view shows the human-readable structure
+              derived from the Web Template. Cryptic archetype node IDs (e.g., <code>at0001</code>)
+              from the raw OPT XML are automatically resolved to their meaningful labels. For the
+              unresolved XML with archetype codes, see the <strong>OPT XML</strong> tab.
+            </div>
+          </div>
+
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Search tree..."
+            :total-matches="treeMatchCount"
+            @close="closePanelSearch"
+          />
+
+          <div v-if="filteredWtTree" class="wt-tree">
+            <WtTreeNodeFiltered
+              :node="filteredWtTree"
+              :depth="0"
+              :search-query="panelSearchQuery"
+              @copy="copyToClipboard"
+            />
+          </div>
+          <div v-else-if="panelSearchQuery" class="empty-search">
+            No nodes match '{{ panelSearchQuery }}'
           </div>
         </div>
 
         <!-- Web Template JSON -->
         <div v-if="activeTab === 'json'" class="json-view">
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Search JSON..."
+            :match-count="currentMatchIndex"
+            :total-matches="jsonXmlMatches"
+            @close="closePanelSearch"
+            @next="goToNextMatch"
+            @previous="goToPreviousMatch"
+          />
           <div class="json-actions">
             <button class="btn btn-sm" @click="copyToClipboard(webTemplateJson)">Copy JSON</button>
           </div>
-          <pre class="json-pre"><code v-html="highlightedWebTemplate"></code></pre>
+          <pre class="json-pre"><code v-html="highlightedWebTemplateWithSearch"></code></pre>
         </div>
 
         <!-- OPT XML -->
         <div v-if="activeTab === 'opt'" class="xml-view">
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Search XML..."
+            :match-count="currentMatchIndex"
+            :total-matches="jsonXmlMatches"
+            @close="closePanelSearch"
+            @next="goToNextMatch"
+            @previous="goToPreviousMatch"
+          />
           <div class="xml-actions">
             <button class="btn btn-sm" @click="copyToClipboard(templateStore.selectedOpt ?? '')">
               Copy XML
             </button>
           </div>
-          <pre class="xml-pre"><code v-html="highlightedOpt"></code></pre>
+          <pre class="xml-pre"><code v-html="highlightedOptWithSearch"></code></pre>
         </div>
 
         <!-- FLAT Paths -->
         <div v-if="activeTab === 'flat'" class="flat-view">
-          <div v-if="flatPaths.length > 0">
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Filter paths..."
+            :total-matches="filteredFlatPaths.length"
+            @close="closePanelSearch"
+          />
+          <div v-if="filteredFlatPaths.length > 0">
             <div class="flat-paths-header">
-              <h3>FLAT Paths ({{ flatPaths.length }})</h3>
+              <h3>
+                FLAT Paths ({{ filteredFlatPaths.length
+                }}{{ panelSearchQuery ? ` of ${flatPaths.length}` : "" }})
+              </h3>
             </div>
             <div class="flat-paths-list">
-              <div v-for="path in flatPaths" :key="path" class="flat-path-item">
-                <span class="path-text">{{ path }}</span>
+              <div v-for="path in filteredFlatPaths" :key="path" class="flat-path-item">
+                <span class="path-text" v-html="highlightPathMatch(path, panelSearchQuery)"></span>
                 <button class="copy-btn" @click="copyToClipboard(path)">Copy</button>
               </div>
             </div>
+          </div>
+          <div v-else-if="panelSearchQuery" class="empty-search">
+            No paths match '{{ panelSearchQuery }}'
           </div>
         </div>
       </template>
@@ -422,6 +707,96 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
     };
   },
 });
+
+interface FilteredNodeType extends WtNodeType {
+  isMatch: boolean;
+  isAncestor: boolean;
+}
+
+const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
+  name: "WtTreeNodeFiltered",
+  props: {
+    node: { type: Object as PropType<FilteredNodeType>, required: true },
+    depth: { type: Number, default: 0 },
+    searchQuery: { type: String, default: "" },
+  },
+  emits: ["copy"],
+  setup(props, { emit }): () => VNode {
+    function highlightMatch(text: string, query: string): VNode[] {
+      if (!query) return [h("span", text)];
+
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+      const parts = text.split(regex);
+
+      return parts.map((part) =>
+        regex.test(part) ? h("mark", { class: "tree-search-match" }, part) : h("span", part),
+      );
+    }
+
+    return (): VNode => {
+      const node = props.node;
+      const hasChildren = node.children.length > 0;
+
+      const elements = [];
+      const headerChildren = [];
+
+      if (hasChildren) {
+        headerChildren.push(h("span", { class: "toggle-expanded" }, "\u25BC"));
+      } else {
+        headerChildren.push(h("span", { class: "toggle-spacer" }));
+      }
+
+      headerChildren.push(
+        h(
+          "span",
+          { class: ["wt-name", node.isAncestor && "ancestor"] },
+          highlightMatch(node.name || node.id, props.searchQuery),
+        ),
+      );
+      headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
+
+      if (node.aqlPath) {
+        headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
+        headerChildren.push(
+          h(
+            "button",
+            {
+              class: "copy-btn",
+              onClick: () => emit("copy", node.aqlPath),
+            },
+            "Copy",
+          ),
+        );
+      }
+
+      elements.push(
+        h(
+          "div",
+          {
+            class: ["wt-node-header", node.isMatch && "is-match", node.isAncestor && "is-ancestor"],
+            style: { paddingLeft: `${props.depth * 20}px` },
+          },
+          headerChildren,
+        ),
+      );
+
+      if (hasChildren) {
+        elements.push(
+          ...node.children.map((child) =>
+            h(WtTreeNodeFiltered, {
+              node: child,
+              depth: props.depth + 1,
+              searchQuery: props.searchQuery,
+              onCopy: (v: string) => emit("copy", v),
+            }),
+          ),
+        );
+      }
+
+      return h("div", { class: "wt-node" }, elements);
+    };
+  },
+});
 </script>
 
 <style scoped>
@@ -480,8 +855,8 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
   border-bottom: 1px solid var(--color-border);
   transition: background 0.15s;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 .template-item:hover {
   background: var(--color-surface);
@@ -491,19 +866,37 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
   border-left: 3px solid var(--color-primary);
 }
 
-.template-name {
-  font-size: 13px;
-  font-weight: 500;
-  font-family: var(--font-mono);
-}
-.template-meta {
+.template-content {
+  flex: 1;
+  cursor: pointer;
   display: flex;
-  gap: 12px;
-  margin-top: 4px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
-.meta-item {
+
+.template-id {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-concept {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-date {
   font-size: 11px;
   color: var(--color-text-muted);
+  font-family: var(--font-mono);
 }
 
 .upload-zone {
@@ -569,6 +962,44 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 
 .tree-view {
   padding-top: 16px;
+}
+
+.info-banner {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: rgba(100, 149, 237, 0.08);
+  border: 1px solid rgba(100, 149, 237, 0.2);
+  border-left: 3px solid rgba(100, 149, 237, 0.6);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.info-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: rgba(100, 149, 237, 0.8);
+}
+
+.info-content {
+  color: var(--color-text-secondary);
+}
+
+.info-content strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.info-content code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  color: rgba(100, 255, 218, 0.9);
 }
 
 :deep(.wt-node-header) {
@@ -708,5 +1139,54 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 }
 .xml-pre :deep(.xml-declaration) {
   color: #ff6b6b;
+}
+
+/* Search highlighting */
+:deep(.search-match),
+:deep(.path-search-match) {
+  background: rgba(255, 255, 0, 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+:deep(.search-match.current-match) {
+  background: rgba(255, 165, 0, 0.5);
+  outline: 1px solid rgba(255, 165, 0, 0.8);
+}
+
+:deep(.tree-search-match) {
+  background: rgba(255, 255, 0, 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+
+:deep(.wt-node-header.is-match) {
+  background: rgba(255, 255, 0, 0.1);
+}
+
+:deep(.wt-node-header.is-ancestor) {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+:deep(.wt-name.ancestor) {
+  color: var(--color-text-muted);
+}
+
+:deep(.toggle-expanded) {
+  width: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.empty-search {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--color-text-muted);
+  font-size: 14px;
 }
 </style>

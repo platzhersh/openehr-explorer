@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useCompositionStore } from "../stores/composition";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
+import SearchOverlay from "../components/SearchOverlay.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -25,6 +26,12 @@ const showFlatPaths = ref(false);
 const highlightedPath = ref<string | null>(null);
 const showDeleteDialog = ref(false);
 const deleting = ref(false);
+
+// Search state
+const showPanelSearch = ref(false);
+const panelSearchQuery = ref("");
+const currentMatchIndex = ref(0);
+const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
 
 watch(
   [() => serverStore.activeServerId, compositionUid],
@@ -73,6 +80,42 @@ watch(
   { immediate: true },
 );
 
+// Search functionality
+function handleKeydown(e: KeyboardEvent) {
+  if (!composition.value) return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+    e.preventDefault();
+    showPanelSearch.value = true;
+    currentMatchIndex.value = 0;
+    nextTick(() => searchOverlayRef.value?.focus());
+  }
+}
+
+function closePanelSearch() {
+  showPanelSearch.value = false;
+  panelSearchQuery.value = "";
+  currentMatchIndex.value = 0;
+}
+
+// Clear search when switching tabs or compositions
+watch(activeTab, () => {
+  closePanelSearch();
+});
+
+watch(compositionUid, () => {
+  closePanelSearch();
+});
+
+// Helper functions
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
@@ -104,7 +147,73 @@ function highlightJson(json: string): string {
     .replace(/: (null)/g, ': <span class="json-null">$1</span>');
 }
 
-const highlightedJson = computed(() => highlightJson(jsonDisplay.value));
+// Search highlighting in JSON/FLAT content
+function highlightSearchInContent(html: string, searchQuery: string): string {
+  if (!searchQuery) return html;
+
+  // Escape HTML entities in search query to match the escaped content
+  const escapedQuery = escapeHtml(searchQuery);
+  const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
+
+  return html.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
+}
+
+const highlightedJson = computed(() => {
+  let highlighted = highlightJson(jsonDisplay.value);
+  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "flat")) {
+    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
+  }
+  return highlighted;
+});
+
+// Match counting for JSON/FLAT views
+const jsonMatches = computed(() => {
+  if (!panelSearchQuery.value || (activeTab.value !== "json" && activeTab.value !== "flat")) {
+    return 0;
+  }
+  const content = jsonDisplay.value;
+  const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
+  const matches = content.match(regex);
+  return matches ? matches.length : 0;
+});
+
+// Match navigation for JSON/FLAT views
+function goToNextMatch() {
+  if (jsonMatches.value === 0) return;
+  currentMatchIndex.value = (currentMatchIndex.value + 1) % jsonMatches.value;
+  scrollToMatch();
+}
+
+function goToPreviousMatch() {
+  if (jsonMatches.value === 0) return;
+  currentMatchIndex.value = (currentMatchIndex.value - 1 + jsonMatches.value) % jsonMatches.value;
+  scrollToMatch();
+}
+
+function scrollToMatch() {
+  nextTick(() => {
+    const matches = document.querySelectorAll(".search-match");
+    if (matches[currentMatchIndex.value]) {
+      // Remove current-match class from all
+      matches.forEach((el) => el.classList.remove("current-match"));
+
+      // Add to current
+      matches[currentMatchIndex.value].classList.add("current-match");
+      matches[currentMatchIndex.value].scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  });
+}
+
+// Trigger scroll when search query changes
+watch(panelSearchQuery, () => {
+  currentMatchIndex.value = 0;
+  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "flat")) {
+    scrollToMatch();
+  }
+});
 
 // Extract flat paths from the flat composition or web template
 const flatPaths = computed(() => {
@@ -140,6 +249,15 @@ async function handleDelete() {
     deleting.value = false;
   }
 }
+
+// Keyboard event listeners
+onMounted(() => {
+  window.addEventListener("keydown", handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeydown);
+});
 </script>
 
 <template>
@@ -183,15 +301,52 @@ async function handleDelete() {
       <div class="main-content" :class="{ 'with-sidebar': showFlatPaths }">
         <!-- Pretty View -->
         <div v-if="activeTab === 'pretty'" class="pretty-view">
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Search composition tree..."
+            @close="closePanelSearch"
+            @next="goToNextMatch"
+            @previous="goToPreviousMatch"
+          />
           <CompositionTree
             :data="composition"
             :web-template="webTemplate"
             :highlighted-path="highlightedPath"
+            :search-query="panelSearchQuery"
           />
         </div>
 
         <!-- JSON View -->
-        <div v-if="activeTab === 'json' || activeTab === 'flat'" class="json-view">
+        <div v-if="activeTab === 'json'" class="json-view">
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Search JSON..."
+            :match-count="currentMatchIndex"
+            :total-matches="jsonMatches"
+            @close="closePanelSearch"
+            @next="goToNextMatch"
+            @previous="goToPreviousMatch"
+          />
+          <pre class="json-pre"><code v-html="highlightedJson"></code></pre>
+        </div>
+
+        <!-- FLAT View -->
+        <div v-if="activeTab === 'flat'" class="json-view">
+          <SearchOverlay
+            v-if="showPanelSearch"
+            ref="searchOverlayRef"
+            v-model="panelSearchQuery"
+            placeholder="Search FLAT..."
+            :match-count="currentMatchIndex"
+            :total-matches="jsonMatches"
+            @close="closePanelSearch"
+            @next="goToNextMatch"
+            @previous="goToPreviousMatch"
+          />
           <pre class="json-pre"><code v-html="highlightedJson"></code></pre>
         </div>
       </div>
@@ -356,24 +511,36 @@ async function handleDelete() {
 }
 
 /* JSON syntax highlighting */
-.json-key {
+:deep(.json-key) {
   color: #79c0ff;
   font-weight: 500;
 }
 
-.json-string {
+:deep(.json-string) {
   color: #a5d6ff;
 }
 
-.json-number {
+:deep(.json-number) {
   color: #79c0ff;
 }
 
-.json-boolean {
+:deep(.json-boolean) {
   color: #ff7b72;
 }
 
-.json-null {
+:deep(.json-null) {
   color: #8b949e;
+}
+
+/* Search highlighting */
+:deep(.search-match) {
+  background: rgba(255, 215, 0, 0.3);
+  padding: 2px 0;
+  border-radius: 2px;
+}
+
+:deep(.search-match.current-match) {
+  background: rgba(255, 140, 0, 0.5);
+  outline: 1px solid rgba(255, 140, 0, 0.8);
 }
 </style>

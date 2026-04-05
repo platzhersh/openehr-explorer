@@ -6,11 +6,13 @@ interface Props {
   data: Record<string, unknown>;
   webTemplate: Record<string, unknown> | null;
   highlightedPath?: string | null;
+  searchQuery?: string;
   depth?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   highlightedPath: null,
+  searchQuery: "",
   depth: 0,
 });
 
@@ -22,6 +24,11 @@ interface TreeNode {
   value: unknown;
   children: TreeNode[];
   path: string;
+}
+
+interface FilteredTreeNode extends TreeNode {
+  isMatch: boolean;
+  isAncestor: boolean;
 }
 
 function buildTree(data: unknown, parentPath: string = "", key: string = "root"): TreeNode[] {
@@ -120,15 +127,61 @@ function formatValue(fields: Record<string, unknown>): string | null {
 }
 
 const tree = computed(() => buildTree(props.data));
+
+// Tree filtering with ancestor preservation
+function filterTreeNode(node: TreeNode, query: string): FilteredTreeNode | null {
+  if (!query) {
+    return { ...node, isMatch: false, isAncestor: false };
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const matchesQuery =
+    node.label.toLowerCase().includes(lowerQuery) ||
+    node.key.toLowerCase().includes(lowerQuery) ||
+    (node.rmType && node.rmType.toLowerCase().includes(lowerQuery)) ||
+    (node.archetypeId && node.archetypeId.toLowerCase().includes(lowerQuery)) ||
+    (node.value && String(node.value).toLowerCase().includes(lowerQuery)) ||
+    node.path.toLowerCase().includes(lowerQuery);
+
+  const filteredChildren = node.children
+    .map((child) => filterTreeNode(child, query))
+    .filter((child): child is FilteredTreeNode => child !== null);
+
+  if (matchesQuery || filteredChildren.length > 0) {
+    return {
+      ...node,
+      children: filteredChildren as TreeNode[],
+      isMatch: matchesQuery,
+      isAncestor: !matchesQuery && filteredChildren.length > 0,
+    } as FilteredTreeNode;
+  }
+
+  return null;
+}
+
+const filteredTree = computed(() => {
+  if (!props.searchQuery) return tree.value;
+  return tree.value
+    .map((node) => filterTreeNode(node, props.searchQuery))
+    .filter((node): node is FilteredTreeNode => node !== null);
+});
 </script>
 
 <template>
   <div class="composition-tree">
-    <div v-for="node in tree" :key="node.path" class="tree-root">
-      <TreeNodeComponent :node="node" :depth="0" :highlighted-path="highlightedPath" />
+    <div v-if="searchQuery && filteredTree.length === 0" class="empty-state">
+      <p>No nodes match "{{ searchQuery }}"</p>
     </div>
-    <div v-if="tree.length === 0" class="empty-state">
+    <div v-else-if="filteredTree.length === 0" class="empty-state">
       <p>No data to display.</p>
+    </div>
+    <div v-for="node in filteredTree" :key="node.path" class="tree-root">
+      <TreeNodeComponent
+        :node="node"
+        :depth="0"
+        :highlighted-path="highlightedPath"
+        :search-query="searchQuery"
+      />
     </div>
   </div>
 </template>
@@ -144,6 +197,8 @@ interface TreeNodeType {
   value: unknown;
   children: TreeNodeType[];
   path: string;
+  isMatch?: boolean;
+  isAncestor?: boolean;
 }
 
 const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
@@ -152,12 +207,25 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
     node: { type: Object as PropType<TreeNodeType>, required: true },
     depth: { type: Number, default: 0 },
     highlightedPath: { type: String, default: null },
+    searchQuery: { type: String, default: "" },
   },
   setup(props): () => VNode {
     const collapsed = vueRef(props.depth > 3);
 
     const toggle = () => {
       collapsed.value = !collapsed.value;
+    };
+
+    // Helper to highlight text
+    const highlightText = (text: string): string | VNode => {
+      if (!props.searchQuery) return text;
+      const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(${escapeRegex(props.searchQuery)})`, "gi");
+      const highlighted = text.replace(regex, '<mark class="tree-search-match">$1</mark>');
+      if (highlighted !== text) {
+        return h("span", { innerHTML: highlighted });
+      }
+      return text;
     };
 
     return (): VNode => {
@@ -177,7 +245,7 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
         headerChildren.push(h("span", { class: "toggle-spacer" }));
       }
 
-      headerChildren.push(h("span", { class: "node-label" }, node.label));
+      headerChildren.push(h("span", { class: "node-label" }, highlightText(node.label)));
 
       if (node.rmType) {
         headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
@@ -195,21 +263,30 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
         h(
           "div",
           {
-            class: ["tree-node-header", { highlighted: props.highlightedPath === node.path }],
+            class: [
+              "tree-node-header",
+              {
+                highlighted: props.highlightedPath === node.path,
+                "is-match": node.isMatch,
+                "is-ancestor": node.isAncestor,
+              },
+            ],
             style: { paddingLeft: `${props.depth * 20}px` },
           },
           headerChildren,
         ),
       );
 
-      // Children
-      if (hasChildren && !collapsed.value) {
+      // Children - auto-expand if there's a search query
+      const shouldShowChildren = hasChildren && (!collapsed.value || props.searchQuery);
+      if (shouldShowChildren) {
         elements.push(
           ...node.children.map((child) =>
             h(TreeNodeComponent, {
               node: child,
               depth: props.depth + 1,
               highlightedPath: props.highlightedPath,
+              searchQuery: props.searchQuery,
             }),
           ),
         );
@@ -274,5 +351,24 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
   color: var(--color-primary);
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+/* Search highlighting */
+:deep(.tree-search-match) {
+  background: rgba(255, 215, 0, 0.4);
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+:deep(.tree-node-header.is-match) {
+  background: rgba(255, 215, 0, 0.15);
+  border-left: 3px solid rgba(255, 215, 0, 0.8);
+  padding-left: calc(var(--depth) * 20px - 3px);
+}
+
+:deep(.tree-node-header.is-ancestor) {
+  opacity: 0.6;
+  font-style: italic;
 }
 </style>
