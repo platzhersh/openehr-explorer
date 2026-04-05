@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::server::get_profile_by_id;
+use crate::inspector::send_instrumented;
 use crate::settings::{effective_terminology_url, load_settings};
 
 /// In-memory cache for terminology lookups: (system, code) -> display term
@@ -44,6 +45,7 @@ struct FhirParameter {
 
 #[tauri::command]
 pub async fn lookup_code(
+    app: tauri::AppHandle,
     server_id: String,
     system: String,
     code: String,
@@ -76,22 +78,22 @@ pub async fn lookup_code(
         urlencoding::encode(&code)
     );
 
-    // Make the request (no instrumentation needed for terminology lookups)
+    // Make the request via instrumented client (logs to Request Inspector)
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .unwrap_or_default();
 
-    let response = match client.get(&url).send().await {
+    let resp = match send_instrumented(&app, &client, client.get(&url)).await {
         Ok(resp) => resp,
         Err(_) => return Ok(None), // Graceful degradation on network error
     };
 
-    if !response.status().is_success() {
+    if !resp.is_success {
         return Ok(None); // Graceful degradation on 404/error
     }
 
-    let body: FhirLookupResponse = match response.json().await {
+    let body: FhirLookupResponse = match serde_json::from_str(&resp.body) {
         Ok(body) => body,
         Err(_) => return Ok(None),
     };
