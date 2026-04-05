@@ -301,7 +301,8 @@ fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
                 } else if tag == "items" && in_items {
                     if !current_code.is_empty() {
                         // Normalise the code before storing
-                        let (normalised_terminology, normalised_code) = normalise_term_code(&current_code);
+                        let (normalised_terminology, normalised_code) =
+                            normalise_term_code(&current_code);
 
                         // Use the normalised terminology if available, otherwise use the current_terminology from the attribute
                         let final_terminology = if !normalised_terminology.is_empty() {
