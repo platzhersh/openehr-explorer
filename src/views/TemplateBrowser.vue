@@ -322,10 +322,7 @@ function highlightSearchInContent(html: string, searchQuery: string): string {
   const escapedQuery = escapeHtml(searchQuery);
   const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
 
-  result = result.replace(
-    searchRegex,
-    `<mark class="search-match" data-match>$1</mark>`,
-  );
+  result = result.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
 
   return result;
 }
@@ -350,9 +347,7 @@ const highlightedOptWithSearch = computed(() => {
 const jsonXmlMatches = computed(() => {
   if (!panelSearchQuery.value) return 0;
   const content =
-    activeTab.value === "json"
-      ? webTemplateJson.value
-      : templateStore.selectedOpt || "";
+    activeTab.value === "json" ? webTemplateJson.value : templateStore.selectedOpt || "";
   const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
   const matches = content.match(regex);
   return matches ? matches.length : 0;
@@ -504,16 +499,23 @@ onUnmounted(() => {
           <OptMetadata v-if="templateStore.selectedOpt" :optXml="templateStore.selectedOpt" />
 
           <div class="info-banner">
-            <svg class="info-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M10 10V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <circle cx="10" cy="7" r="0.75" fill="currentColor"/>
+            <svg
+              class="info-icon"
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" />
+              <path d="M10 10V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              <circle cx="10" cy="7" r="0.75" fill="currentColor" />
             </svg>
             <div class="info-content">
               <strong>About OPT Tree View:</strong> This view shows the human-readable structure
               derived from the Web Template. Cryptic archetype node IDs (e.g., <code>at0001</code>)
-              from the raw OPT XML are automatically resolved to their meaningful labels.
-              For the unresolved XML with archetype codes, see the <strong>OPT XML</strong> tab.
+              from the raw OPT XML are automatically resolved to their meaningful labels. For the
+              unresolved XML with archetype codes, see the <strong>OPT XML</strong> tab.
             </div>
           </div>
 
@@ -527,7 +529,12 @@ onUnmounted(() => {
           />
 
           <div v-if="filteredWtTree" class="wt-tree">
-            <WtTreeNodeFiltered :node="filteredWtTree" :depth="0" :search-query="panelSearchQuery" @copy="copyToClipboard" />
+            <WtTreeNodeFiltered
+              :node="filteredWtTree"
+              :depth="0"
+              :search-query="panelSearchQuery"
+              @copy="copyToClipboard"
+            />
           </div>
           <div v-else-if="panelSearchQuery" class="empty-search">
             No nodes match '{{ panelSearchQuery }}'
@@ -586,7 +593,10 @@ onUnmounted(() => {
           />
           <div v-if="filteredFlatPaths.length > 0">
             <div class="flat-paths-header">
-              <h3>FLAT Paths ({{ filteredFlatPaths.length }}{{ panelSearchQuery ? ` of ${flatPaths.length}` : '' }})</h3>
+              <h3>
+                FLAT Paths ({{ filteredFlatPaths.length
+                }}{{ panelSearchQuery ? ` of ${flatPaths.length}` : "" }})
+              </h3>
             </div>
             <div class="flat-paths-list">
               <div v-for="path in filteredFlatPaths" :key="path" class="flat-path-item">
@@ -719,9 +729,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
       const parts = text.split(regex);
 
       return parts.map((part) =>
-        regex.test(part)
-          ? h("mark", { class: "tree-search-match" }, part)
-          : h("span", part),
+        regex.test(part) ? h("mark", { class: "tree-search-match" }, part) : h("span", part),
       );
     }
 

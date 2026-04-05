@@ -155,10 +155,7 @@ function highlightSearchInContent(html: string, searchQuery: string): string {
   const escapedQuery = escapeHtml(searchQuery);
   const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
 
-  return html.replace(
-    searchRegex,
-    `<mark class="search-match" data-match>$1</mark>`,
-  );
+  return html.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
 }
 
 const highlightedJson = computed(() => {
@@ -189,8 +186,7 @@ function goToNextMatch() {
 
 function goToPreviousMatch() {
   if (jsonMatches.value === 0) return;
-  currentMatchIndex.value =
-    (currentMatchIndex.value - 1 + jsonMatches.value) % jsonMatches.value;
+  currentMatchIndex.value = (currentMatchIndex.value - 1 + jsonMatches.value) % jsonMatches.value;
   scrollToMatch();
 }
 

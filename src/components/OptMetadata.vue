@@ -140,10 +140,21 @@ const technicalMetadata = computed(() => {
     items.push({ label: "Semantic Version", value: details["sem_ver"] });
   }
   if (details["original_namespace"]) {
-    items.push({ label: "Original Namespace", value: details["original_namespace"], monospace: true });
+    items.push({
+      label: "Original Namespace",
+      value: details["original_namespace"],
+      monospace: true,
+    });
   }
-  if (details["custodian_namespace"] && details["custodian_namespace"] !== details["original_namespace"]) {
-    items.push({ label: "Custodian Namespace", value: details["custodian_namespace"], monospace: true });
+  if (
+    details["custodian_namespace"] &&
+    details["custodian_namespace"] !== details["original_namespace"]
+  ) {
+    items.push({
+      label: "Custodian Namespace",
+      value: details["custodian_namespace"],
+      monospace: true,
+    });
   }
   if (details["build_uid"]) {
     items.push({ label: "Build UID", value: details["build_uid"], monospace: true });
@@ -239,7 +250,10 @@ async function copyToClipboard(text: string) {
           </div>
 
           <div
-            v-if="metadata.otherDetails.custodian_organisation && metadata.otherDetails.custodian_organisation !== metadata.originalAuthor.organisation"
+            v-if="
+              metadata.otherDetails.custodian_organisation &&
+              metadata.otherDetails.custodian_organisation !== metadata.originalAuthor.organisation
+            "
             class="metadata-row"
           >
             <span class="metadata-label">Custodian:</span>
