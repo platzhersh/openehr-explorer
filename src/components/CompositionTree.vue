@@ -30,6 +30,7 @@ interface TreeNode {
     terminology: string;
     code: string;
   } | null;
+  terminologyBadge?: string | null;
 }
 
 interface FilteredTreeNode extends TreeNode {
@@ -85,17 +86,21 @@ function buildTree(data: unknown, parentPath: string = "", key: string = "root")
 
     const displayValue = formatValue(valueFields);
 
-    // Detect DV_CODED_TEXT with external terminology
+    // Detect DV_CODED_TEXT terminology info
     let codedValue: TreeNode["codedValue"] = null;
+    let terminologyBadge: string | null = null;
     if (rmType === "DV_CODED_TEXT" || rmType === "DV_TEXT") {
       const defCode = obj.defining_code as Record<string, unknown> | undefined;
       if (defCode) {
         const termId = defCode.terminology_id as Record<string, unknown> | undefined;
         const terminology = (termId?.value as string) ?? "";
         const code = (defCode.code_string as string) ?? "";
-        // Only flag external terminologies (not "local" or "openehr")
-        if (terminology && terminology !== "local" && terminology !== "openehr" && code) {
-          codedValue = { terminology, code };
+        if (terminology) {
+          terminologyBadge = terminology;
+          // Only set codedValue for external terminologies (for lazy lookup)
+          if (terminology !== "local" && terminology !== "openehr" && code) {
+            codedValue = { terminology, code };
+          }
         }
       }
     }
@@ -110,6 +115,7 @@ function buildTree(data: unknown, parentPath: string = "", key: string = "root")
         children,
         path: parentPath || "/",
         codedValue,
+        terminologyBadge,
       },
     ];
   }
@@ -226,7 +232,10 @@ interface TreeNodeType {
     terminology: string;
     code: string;
   } | null;
+  terminologyBadge?: string | null;
 }
+
+const INTERNAL_TERMINOLOGIES = new Set(["openehr", "local"]);
 
 const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
   name: "TreeNodeComponent",
@@ -295,6 +304,17 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 
       if (node.rmType) {
         headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
+      }
+
+      if (node.terminologyBadge) {
+        const isInternal = INTERNAL_TERMINOLOGIES.has(node.terminologyBadge);
+        headerChildren.push(
+          h(
+            "span",
+            { class: ["badge", "term-badge", isInternal ? "term-internal" : "term-external"] },
+            node.terminologyBadge,
+          ),
+        );
       }
 
       if (node.archetypeId) {
@@ -406,6 +426,24 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
   font-size: 10px;
   font-family: var(--font-mono);
   opacity: 0.4;
+}
+
+:deep(.term-badge) {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 1;
+}
+:deep(.term-external) {
+  background: rgba(255, 165, 0, 0.15);
+  color: #ffa500;
+  border-color: rgba(255, 165, 0, 0.3);
+}
+:deep(.term-internal) {
+  background: rgba(138, 148, 158, 0.1);
+  color: var(--color-text-muted);
+  border-color: rgba(138, 148, 158, 0.2);
 }
 
 :deep(.node-value) {
