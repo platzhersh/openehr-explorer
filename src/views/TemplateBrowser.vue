@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
+import { lookupCode } from "../lib/terminology";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
@@ -33,6 +34,7 @@ const uploadError = ref<string | null>(null);
 
 const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
 const termBindings = ref<TermBinding[]>([]);
+const resolvedBindingTerms = ref<Record<string, string>>({});
 
 watch(
   () => serverStore.activeServerId,
@@ -52,11 +54,25 @@ watch(selectedTemplateId, async (id) => {
         serverId: serverStore.activeServerId,
         templateId: id,
       });
+      // Resolve display names for bound concepts
+      resolvedBindingTerms.value = {};
+      const servId = serverStore.activeServerId;
+      for (const binding of termBindings.value) {
+        lookupCode(servId, binding.terminology, binding.code).then((display) => {
+          if (display) {
+            resolvedBindingTerms.value = {
+              ...resolvedBindingTerms.value,
+              [`${binding.terminology}|${binding.code}`]: display,
+            };
+          }
+        });
+      }
     } catch {
       termBindings.value = [];
     }
   } else {
     termBindings.value = [];
+    resolvedBindingTerms.value = {};
   }
 });
 
@@ -547,6 +563,12 @@ onUnmounted(() => {
               <div v-for="(binding, idx) in termBindings" :key="idx" class="term-binding-item">
                 <span class="badge term-badge term-external">{{ binding.terminology }}</span>
                 <span class="term-code">{{ binding.code }}</span>
+                <span
+                  v-if="resolvedBindingTerms[`${binding.terminology}|${binding.code}`]"
+                  class="term-display"
+                >
+                  {{ resolvedBindingTerms[`${binding.terminology}|${binding.code}`] }}
+                </span>
                 <span v-if="binding.node_id" class="term-node-id">({{ binding.node_id }})</span>
               </div>
             </div>
@@ -1176,6 +1198,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 .term-code {
   font-family: var(--font-mono);
   color: var(--color-primary);
+  font-weight: 500;
+}
+
+.term-display {
+  color: var(--color-success);
+  font-size: 12px;
   font-weight: 500;
 }
 
