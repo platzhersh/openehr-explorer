@@ -212,6 +212,30 @@ pub struct TermBinding {
     pub node_id: String,
 }
 
+/// Normalise term binding codes from OPT format to clean (terminology_id, code) pairs.
+///
+/// Handles:
+/// - `[SNOMED-CT(2003)::364090009]` → `("SNOMED-CT", "364090009")`
+/// - `[SNOMED-CT::364090009]` → `("SNOMED-CT", "364090009")`
+/// - `364090009` → `("", "364090009")` (bare code, no terminology ID)
+fn normalise_term_code(raw: &str) -> (String, String) {
+    let trimmed = raw.trim();
+    let stripped = trimmed.trim_start_matches('[').trim_end_matches(']');
+
+    if let Some((terminology_part, code)) = stripped.split_once("::") {
+        // Remove version qualifier: SNOMED-CT(2003) → SNOMED-CT
+        let terminology_id = terminology_part
+            .split('(')
+            .next()
+            .unwrap_or(terminology_part)
+            .to_string();
+        (terminology_id, code.to_string())
+    } else {
+        // No delimiter → bare code
+        (String::new(), stripped.to_string())
+    }
+}
+
 /// Parse term_bindings from OPT XML.
 /// Returns a list of TermBinding structs extracted from <term_bindings> elements.
 fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
@@ -276,9 +300,19 @@ fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
                     current_terminology.clear();
                 } else if tag == "items" && in_items {
                     if !current_code.is_empty() {
+                        // Normalise the code before storing
+                        let (normalised_terminology, normalised_code) = normalise_term_code(&current_code);
+
+                        // Use the normalised terminology if available, otherwise use the current_terminology from the attribute
+                        let final_terminology = if !normalised_terminology.is_empty() {
+                            normalised_terminology
+                        } else {
+                            current_terminology.clone()
+                        };
+
                         bindings.push(TermBinding {
-                            terminology: current_terminology.clone(),
-                            code: current_code.clone(),
+                            terminology: final_terminology,
+                            code: normalised_code,
                             node_id: current_node_id.clone(),
                         });
                     }
@@ -304,4 +338,101 @@ pub async fn get_term_bindings(
     // Fetch OPT XML first
     let opt_xml = get_template_opt(app, server_id, template_id).await?;
     Ok(parse_term_bindings(&opt_xml))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalise_term_code_bare_code() {
+        let (terminology, code) = normalise_term_code("364090009");
+        assert_eq!(terminology, "");
+        assert_eq!(code, "364090009");
+    }
+
+    #[test]
+    fn test_normalise_term_code_snomed_unversioned() {
+        let (terminology, code) = normalise_term_code("[SNOMED-CT::364090009]");
+        assert_eq!(terminology, "SNOMED-CT");
+        assert_eq!(code, "364090009");
+    }
+
+    #[test]
+    fn test_normalise_term_code_snomed_versioned() {
+        let (terminology, code) = normalise_term_code("[SNOMED-CT(2003)::364090009]");
+        assert_eq!(terminology, "SNOMED-CT");
+        assert_eq!(code, "364090009");
+    }
+
+    #[test]
+    fn test_normalise_term_code_loinc() {
+        let (terminology, code) = normalise_term_code("[LOINC::8867-4]");
+        assert_eq!(terminology, "LOINC");
+        assert_eq!(code, "8867-4");
+    }
+
+    #[test]
+    fn test_normalise_term_code_icd10() {
+        let (terminology, code) = normalise_term_code("[ICD-10::A41.9]");
+        assert_eq!(terminology, "ICD-10");
+        assert_eq!(code, "A41.9");
+    }
+
+    #[test]
+    fn test_normalise_term_code_with_whitespace() {
+        let (terminology, code) = normalise_term_code("  [SNOMED-CT::364090009]  ");
+        assert_eq!(terminology, "SNOMED-CT");
+        assert_eq!(code, "364090009");
+    }
+
+    #[test]
+    fn test_parse_term_bindings_with_bracketed_codes() {
+        let opt_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<template xmlns="http://schemas.openehr.org/v1">
+    <term_bindings terminology="SNOMED-CT">
+        <items code="at0000">
+            <code_string>[SNOMED-CT(2003)::364090009]</code_string>
+        </items>
+        <items code="at0001">
+            <code_string>[SNOMED-CT::91302008]</code_string>
+        </items>
+    </term_bindings>
+    <term_bindings terminology="LOINC">
+        <items code="at0002">
+            <code_string>[LOINC::8867-4]</code_string>
+        </items>
+    </term_bindings>
+    <term_bindings terminology="ICD-10">
+        <items code="at0003">
+            <code_string>A41.9</code_string>
+        </items>
+    </term_bindings>
+</template>
+"#;
+
+        let bindings = parse_term_bindings(opt_xml);
+
+        assert_eq!(bindings.len(), 4);
+
+        // First binding: versioned SNOMED-CT
+        assert_eq!(bindings[0].terminology, "SNOMED-CT");
+        assert_eq!(bindings[0].code, "364090009");
+        assert_eq!(bindings[0].node_id, "at0000");
+
+        // Second binding: unversioned SNOMED-CT
+        assert_eq!(bindings[1].terminology, "SNOMED-CT");
+        assert_eq!(bindings[1].code, "91302008");
+        assert_eq!(bindings[1].node_id, "at0001");
+
+        // Third binding: LOINC
+        assert_eq!(bindings[2].terminology, "LOINC");
+        assert_eq!(bindings[2].code, "8867-4");
+        assert_eq!(bindings[2].node_id, "at0002");
+
+        // Fourth binding: bare code (should use terminology from attribute)
+        assert_eq!(bindings[3].terminology, "ICD-10");
+        assert_eq!(bindings[3].code, "A41.9");
+        assert_eq!(bindings[3].node_id, "at0003");
+    }
 }
