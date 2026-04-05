@@ -178,7 +178,7 @@ const previewRefreshTrigger = ref(0);
 
 const previewJson = computed(() => {
   // Access trigger to force re-computation
-  previewRefreshTrigger.value;
+  void previewRefreshTrigger.value;
 
   // Try to get live data from mb-auto-form if available
   if (mbFormRef.value) {

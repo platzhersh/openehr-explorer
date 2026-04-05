@@ -113,7 +113,7 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
 
         // Check if we're after an alias/ pattern (e.g., "e/", "c/", "obs/")
         // This regex captures: alias + "/" + optional path continuation
-        const aliasMatch = textBefore.match(/\b([a-zA-Z_]\w*)\/([\w/\[\]@]*)$/);
+        const aliasMatch = textBefore.match(/\b([a-zA-Z_]\w*)\/([\w/[\]@]*)$/);
 
         if (aliasMatch) {
           const alias = aliasMatch[1];

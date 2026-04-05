@@ -122,7 +122,7 @@ function formatXml(xml: string): string {
     formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
 
     // Detect opening tags (not self-closing)
-    if (line.match(/^<\w[^>]*[^\/]>$/)) indent++;
+    if (line.match(/^<\w[^>]*[^/]>$/)) indent++;
   });
 
   return formatted.trim();
