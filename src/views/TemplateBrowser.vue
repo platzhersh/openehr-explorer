@@ -29,6 +29,7 @@ const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
 const currentMatchIndex = ref(0);
 const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
 const uploadDragOver = ref(false);
+const showBoundConceptsHelp = ref(false);
 const uploadStatus = ref<string | null>(null);
 const uploadError = ref<string | null>(null);
 
@@ -558,7 +559,25 @@ onUnmounted(() => {
 
           <!-- Term Bindings -->
           <div v-if="termBindings.length > 0" class="term-bindings-section">
-            <h4>Bound Concepts</h4>
+            <h4>
+              Bound Concepts
+              <button
+                class="help-toggle"
+                :class="{ active: showBoundConceptsHelp }"
+                @click="showBoundConceptsHelp = !showBoundConceptsHelp"
+                title="What are bound concepts?"
+              >
+                ?
+              </button>
+            </h4>
+            <div v-if="showBoundConceptsHelp" class="bound-concepts-help">
+              <strong>Term bindings</strong> link archetype nodes to external terminology codes.
+              They declare the clinical meaning of each node in standard systems like SNOMED CT or
+              LOINC. For example, a "blood pressure" node bound to <code>SNOMED-CT 163020007</code>
+              tells integration systems exactly what concept this node represents, enabling
+              interoperability across different EHR systems. Display names are resolved via the
+              configured terminology server.
+            </div>
             <div class="term-bindings-list">
               <div v-for="(binding, idx) in termBindings" :key="idx" class="term-binding-item">
                 <span class="badge term-badge term-external">{{ binding.terminology }}</span>
@@ -1180,6 +1199,55 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-weight: 600;
   margin-bottom: 8px;
   color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-toggle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-text-muted);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+}
+.help-toggle:hover,
+.help-toggle.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(100, 255, 218, 0.1);
+}
+
+.bound-concepts-help {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: rgba(100, 149, 237, 0.08);
+  border: 1px solid rgba(100, 149, 237, 0.2);
+  border-left: 3px solid rgba(100, 149, 237, 0.6);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.bound-concepts-help strong {
+  color: var(--color-text);
+}
+.bound-concepts-help code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  color: rgba(100, 255, 218, 0.9);
 }
 
 .term-bindings-list {
