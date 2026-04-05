@@ -101,6 +101,9 @@ onMounted(async () => {
       (mbFormRef.value as any).webTemplate = normalized;
       console.log("Web Template loaded (normalized):", normalized);
 
+      // Inject dark theme styles into Shadow DOM
+      injectDarkThemeStyles();
+
       // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
       const templateId = props.templateId || (route.params.templateId as string);
       if (templateId && serverStore.activeServerId) {
@@ -508,6 +511,136 @@ function clearDraft() {
 
 async function copyPreviewJson() {
   await navigator.clipboard.writeText(previewJson.value);
+}
+
+// Inject dark theme styles into Shadow DOM of web components
+function injectDarkThemeStyles() {
+  if (!mbFormRef.value) return;
+
+  // Function to inject styles into a shadow root
+  const injectStyles = (shadowRoot: ShadowRoot) => {
+    // Check if styles already injected
+    if (shadowRoot.querySelector("#dark-theme-override")) return;
+
+    const style = document.createElement("style");
+    style.id = "dark-theme-override";
+    style.textContent = `
+      /* Dark theme overrides for medblocks-ui shadow DOM */
+      :host {
+        --sl-color-neutral-800: #1e2936;
+        --sl-color-neutral-900: #1a202c;
+        --sl-input-background-color: #1e2a4a;
+        --sl-input-border-color: #2a3a5c;
+        --sl-input-color: #e0e0e0;
+        --sl-focus-ring: none;
+      }
+
+      /* Fix all light backgrounds */
+      *[class*="bg-slate"],
+      *[class*="bg-gray"],
+      *[class*="bg-blue"],
+      *[class*="bg-cyan"],
+      .bg-slate-400,
+      .bg-slate-300,
+      .bg-slate-200,
+      .bg-slate-100 {
+        background-color: #2d3748 !important;
+        color: #edf2f7 !important;
+      }
+
+      /* Fix dark text on dark backgrounds */
+      *[class*="text-slate"],
+      *[class*="text-gray"],
+      .text-slate-700,
+      .text-slate-800,
+      .text-slate-900 {
+        color: #edf2f7 !important;
+      }
+
+      /* Fix borders */
+      *[class*="border-slate"],
+      *[class*="border-gray"] {
+        border-color: #4a5568 !important;
+      }
+
+      /* Fix specific depth/heading elements */
+      .p-depth,
+      [class*="p-depth"] {
+        background-color: #2d3748 !important;
+        color: #edf2f7 !important;
+        border-color: #4a5568 !important;
+      }
+
+      /* Checkbox sizing */
+      sl-checkbox {
+        --sl-toggle-size: 18px !important;
+      }
+
+      /* Input field styling to match app */
+      input,
+      textarea,
+      select {
+        background-color: #1e2a4a !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #2a3a5c !important;
+        border-radius: 6px !important;
+        padding: 6px 10px !important;
+        font-size: 13px !important;
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: #3d9e85 !important;
+        outline: none !important;
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: #5a6a8a !important;
+      }
+    `;
+    shadowRoot.appendChild(style);
+  };
+
+  // Helper to recursively find and style shadow roots
+  const processShadowRoots = (element: Element) => {
+    if (element.shadowRoot) {
+      injectStyles(element.shadowRoot);
+
+      // Process children in shadow root
+      element.shadowRoot.querySelectorAll("*").forEach((child) => {
+        processShadowRoots(child);
+      });
+    }
+
+    // Process children in light DOM
+    element.querySelectorAll("*").forEach((child) => {
+      processShadowRoots(child);
+    });
+  };
+
+  // Start processing from mb-auto-form
+  processShadowRoots(mbFormRef.value);
+
+  // Re-run after a delay to catch dynamically created elements
+  setTimeout(() => {
+    if (mbFormRef.value) {
+      processShadowRoots(mbFormRef.value);
+    }
+  }, 500);
+
+  // Also set up a MutationObserver to catch new shadow DOM elements
+  const observer = new MutationObserver(() => {
+    if (mbFormRef.value) {
+      processShadowRoots(mbFormRef.value);
+    }
+  });
+
+  observer.observe(mbFormRef.value, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 // Auto-save draft every 30 seconds

@@ -34,25 +34,28 @@
   --sl-color-neutral-900: #1a202c;
   --sl-color-neutral-950: #0f1419;
 
-  /* Input backgrounds and borders */
-  --sl-input-background-color: var(--sl-color-neutral-900);
-  --sl-input-background-color-hover: var(--sl-color-neutral-800);
-  --sl-input-background-color-focus: var(--sl-color-neutral-800);
-  --sl-input-background-color-disabled: var(--sl-color-neutral-950);
+  /* Input backgrounds and borders - match app theme */
+  --sl-input-background-color: #1e2a4a;
+  --sl-input-background-color-hover: #253456;
+  --sl-input-background-color-focus: #253456;
+  --sl-input-background-color-disabled: #16213e;
 
-  --sl-input-border-color: var(--sl-color-neutral-700);
-  --sl-input-border-color-hover: var(--sl-color-primary-500);
-  --sl-input-border-color-focus: var(--sl-color-primary-500);
+  --sl-input-border-color: #2a3a5c;
+  --sl-input-border-color-hover: #3d9e85;
+  --sl-input-border-color-focus: #3d9e85;
 
-  --sl-input-color: var(--sl-color-neutral-100);
-  --sl-input-color-hover: var(--sl-color-neutral-50);
-  --sl-input-color-focus: var(--sl-color-neutral-50);
+  --sl-input-color: #e0e0e0;
+  --sl-input-color-hover: #e0e0e0;
+  --sl-input-color-focus: #e0e0e0;
 
-  --sl-input-placeholder-color: var(--sl-color-neutral-500);
-  --sl-input-placeholder-color-disabled: var(--sl-color-neutral-600);
+  --sl-input-placeholder-color: #5a6a8a;
+  --sl-input-placeholder-color-disabled: #5a6a8a;
 
   --sl-input-border-width: 1px;
-  --sl-input-focus-ring-color: rgba(20, 184, 166, 0.25);
+  --sl-input-focus-ring-color: transparent;
+  --sl-input-border-radius-medium: 6px;
+  --sl-input-height-medium: 32px;
+  --sl-input-font-size-medium: 13px;
 
   /* Panel/card backgrounds */
   --sl-panel-background-color: var(--sl-color-neutral-800);
@@ -117,4 +120,425 @@ mb-auto-form {
   display: block;
   font-family: var(--sl-font-sans);
   font-size: var(--sl-font-size-small);
+}
+
+/* ===== Deep Styling for Shadow DOM Components ===== */
+/* Target all Shoelace inputs, selects, textareas within medblocks components */
+mb-auto-form::part(base),
+mb-auto-form::part(input),
+mb-auto-form::part(control),
+mb-auto-form::part(form-control),
+mb-input::part(base),
+mb-input::part(input),
+mb-select::part(base),
+mb-select::part(control),
+mb-textarea::part(base),
+mb-textarea::part(textarea),
+mb-checkbox::part(base),
+mb-checkbox::part(control),
+mb-radio::part(base),
+mb-radio::part(control) {
+  background-color: var(--sl-input-background-color) !important;
+  border-color: var(--sl-input-border-color) !important;
+  color: var(--sl-input-color) !important;
+}
+
+/* Remove white borders */
+mb-auto-form *,
+mb-input *,
+mb-select *,
+mb-textarea * {
+  border-color: var(--sl-input-border-color) !important;
+}
+
+/* Ensure text inputs have proper contrast - match app theme exactly */
+sl-input,
+sl-select,
+sl-textarea,
+sl-checkbox,
+sl-radio {
+  --sl-input-background-color: #1e2a4a;
+  --sl-input-background-color-hover: #253456;
+  --sl-input-background-color-focus: #253456;
+  --sl-input-border-color: #2a3a5c;
+  --sl-input-border-color-hover: #3d9e85;
+  --sl-input-border-color-focus: #3d9e85;
+  --sl-input-color: #e0e0e0;
+  --sl-input-placeholder-color: #5a6a8a;
+  --sl-input-height-medium: 32px;
+  --sl-input-font-size-medium: 13px;
+  --sl-toggle-size: 18px;
+}
+
+/* Fix combobox/select dropdowns */
+sl-select::part(listbox),
+sl-select::part(option) {
+  background-color: var(--sl-overlay-background-color);
+  color: var(--sl-input-color);
+}
+
+/* Labels should be readable */
+sl-input::part(form-control-label),
+sl-select::part(form-control-label),
+sl-textarea::part(form-control-label),
+sl-checkbox::part(label),
+sl-radio::part(label) {
+  color: var(--sl-color-neutral-300);
+}
+
+/* Fix for nested form elements (like the "Rate" field) */
+mb-auto-form [slot="content"],
+mb-auto-form .form-control,
+mb-auto-form sl-input,
+mb-auto-form sl-select,
+mb-auto-form sl-textarea {
+  background-color: transparent;
+}
+
+/* Ensure panels/cards have dark backgrounds */
+sl-card::part(base) {
+  background-color: var(--sl-panel-background-color);
+  border-color: var(--sl-panel-border-color);
+}
+
+/* Fix details/accordion components */
+sl-details::part(base),
+sl-details::part(header) {
+  background-color: var(--sl-panel-background-color);
+  border-color: var(--sl-panel-border-color);
+  color: var(--sl-color-neutral-200);
+}
+
+sl-details::part(summary) {
+  color: var(--sl-color-neutral-200);
+}
+
+/* Tree items */
+sl-tree-item::part(item),
+sl-tree-item::part(label) {
+  color: var(--sl-color-neutral-200);
+}
+
+/* Buttons */
+sl-button::part(base) {
+  background-color: var(--sl-color-neutral-800);
+  border-color: var(--sl-color-neutral-700);
+  color: var(--sl-color-neutral-100);
+}
+
+sl-button::part(base):hover {
+  background-color: var(--sl-color-neutral-700);
+  border-color: var(--sl-color-primary-500);
+}
+
+/* Dividers */
+sl-divider {
+  --color: var(--sl-color-neutral-700);
+}
+
+/* Fix any remaining white backgrounds in web components */
+mb-auto-form *::part(base),
+mb-auto-form *::part(panel),
+mb-auto-form *::part(body),
+mb-auto-form *::part(content) {
+  background-color: transparent;
+}
+
+/* Additional specificity for problematic inputs */
+mb-auto-form sl-input,
+mb-auto-form sl-select,
+mb-auto-form sl-textarea {
+  --sl-input-background-color: #1e2936;
+  --sl-input-color: #edf2f7;
+  --sl-input-border-color: #4a5568;
+}
+
+/* Ensure proper text color in all states */
+sl-input::part(input),
+sl-textarea::part(textarea),
+sl-select::part(combobox) {
+  color: #edf2f7 !important;
+}
+
+/* Fix search/filter inputs */
+sl-input[type="search"]::part(input) {
+  background-color: #1e2936;
+  color: #edf2f7;
+  border-color: #4a5568;
+}
+
+/* ===== Size and Layout Fixes ===== */
+
+/* Make input fields larger and more usable */
+sl-input,
+mb-input {
+  --sl-input-height-small: 32px;
+  --sl-input-height-medium: 40px;
+  --sl-input-height-large: 48px;
+  --sl-input-font-size-small: 13px;
+  --sl-input-font-size-medium: 14px;
+  --sl-input-font-size-large: 16px;
+}
+
+/* Style inputs to match app's standard input fields */
+sl-input::part(input),
+sl-textarea::part(textarea),
+sl-select::part(combobox) {
+  min-height: 32px !important;
+  height: 32px !important;
+  font-size: 13px !important;
+  padding: 6px 10px !important;
+  background-color: #1e2a4a !important;
+  color: #e0e0e0 !important;
+  border: 1px solid #2a3a5c !important;
+  border-radius: 6px !important;
+  font-family: var(--font-sans, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
+}
+
+sl-input::part(input):focus,
+sl-textarea::part(textarea):focus,
+sl-select::part(combobox):focus {
+  border-color: #3d9e85 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+sl-input::part(input)::placeholder,
+sl-textarea::part(textarea)::placeholder {
+  color: #5a6a8a !important;
+}
+
+/* Remove Shoelace's default focus ring */
+sl-input,
+sl-select,
+sl-textarea {
+  --sl-focus-ring: none !important;
+  --sl-input-focus-ring-color: transparent !important;
+}
+
+/* Match the base wrapper */
+sl-input::part(base),
+sl-select::part(base),
+sl-textarea::part(base) {
+  border: none !important;
+  background: transparent !important;
+}
+
+sl-input::part(form-control),
+sl-select::part(form-control),
+sl-textarea::part(form-control) {
+  background: transparent !important;
+}
+
+/* Fix checkbox sizing - make it normal size */
+sl-checkbox {
+  --sl-toggle-size: 18px !important;
+  font-size: 14px !important;
+}
+
+sl-checkbox::part(control) {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 12px !important;
+}
+
+sl-checkbox::part(base) {
+  align-items: flex-start !important;
+  font-size: 14px !important;
+}
+
+/* Additional checkbox specificity */
+mb-auto-form sl-checkbox {
+  --sl-toggle-size: 18px !important;
+}
+
+mb-auto-form sl-checkbox::part(control) {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+}
+
+/* Force checkbox icon size */
+sl-checkbox::part(checked-icon),
+sl-checkbox::part(indeterminate-icon) {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Radio button sizing */
+sl-radio {
+  --sl-toggle-size: 18px;
+}
+
+sl-radio::part(control) {
+  width: 18px;
+  height: 18px;
+}
+
+/* ===== Heading Elements (Section Headers) ===== */
+
+/* Fix the light blue/gray heading backgrounds to match dark theme */
+mb-auto-form .heading,
+mb-context,
+div[class*="heading"],
+div[class*="bg-slate"] {
+  background-color: var(--sl-color-neutral-800) !important;
+  color: var(--sl-color-neutral-100) !important;
+  border-color: var(--sl-color-neutral-700) !important;
+}
+
+/* Target specific heading elements in the shadow DOM */
+::part(heading),
+::part(header),
+::part(summary) {
+  background-color: var(--sl-color-neutral-800) !important;
+  color: var(--sl-color-neutral-100) !important;
+}
+
+/* Details/accordion headings (like "Rate", "Percent O2", etc) */
+sl-details::part(header) {
+  background-color: #2d3748 !important;
+  border: 1px solid #4a5568 !important;
+  color: #edf2f7 !important;
+  font-weight: 500;
+  padding: 12px 16px;
+}
+
+sl-details::part(summary) {
+  color: #edf2f7 !important;
+  font-size: 14px;
+}
+
+sl-details::part(summary-icon) {
+  color: #14b8a6;
+}
+
+/* Content area within details */
+sl-details::part(content) {
+  background-color: #1e2936;
+  border-left: 1px solid #4a5568;
+  border-right: 1px solid #4a5568;
+  border-bottom: 1px solid #4a5568;
+  padding: 16px;
+}
+
+/* Nested details elements */
+sl-details sl-details::part(header) {
+  background-color: #1e2936 !important;
+  border-color: #4a5568 !important;
+}
+
+sl-details sl-details::part(content) {
+  background-color: #1a202c;
+}
+
+/* Card headers */
+sl-card::part(header) {
+  background-color: #2d3748;
+  border-bottom: 1px solid #4a5568;
+  color: #edf2f7;
+  font-weight: 500;
+  padding: 12px 16px;
+}
+
+sl-card::part(body) {
+  background-color: #1e2936;
+  padding: 16px;
+}
+
+/* Form labels - make them more visible */
+sl-input::part(form-control-label),
+sl-select::part(form-control-label),
+sl-textarea::part(form-control-label) {
+  color: #cbd5e0;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+/* Helper text */
+sl-input::part(form-control-help-text),
+sl-select::part(form-control-help-text),
+sl-textarea::part(form-control-help-text) {
+  color: #718096;
+  font-size: 12px;
+}
+
+/* ===== Additional Overrides for Cyan/Teal Headings ===== */
+
+/* These target the specific light blue/cyan backgrounds visible in the screenshots */
+/* Medblocks-ui seems to use Tailwind's bg-slate-* classes for headings */
+
+/* Override any light background colors in the form */
+mb-auto-form div[style*="background"],
+mb-auto-form *[class*="bg-"] {
+  background-color: #2d3748 !important;
+}
+
+/* Specifically target slate/gray backgrounds (common in Tailwind) */
+mb-auto-form *[class*="bg-slate"],
+mb-auto-form *[class*="bg-gray"],
+mb-auto-form *[class*="bg-blue"],
+mb-auto-form *[class*="bg-cyan"] {
+  background-color: #2d3748 !important;
+  color: #edf2f7 !important;
+}
+
+/* Target text color classes that might make text dark */
+mb-auto-form *[class*="text-slate"],
+mb-auto-form *[class*="text-gray"],
+mb-auto-form *[class*="text-black"] {
+  color: #edf2f7 !important;
+}
+
+/* Override any border colors that might be light */
+mb-auto-form *[class*="border-slate"],
+mb-auto-form *[class*="border-gray"] {
+  border-color: #4a5568 !important;
+}
+
+/* Fix for "p-depth" headings visible in DevTools */
+mb-auto-form .p-depth {
+  background-color: #2d3748 !important;
+  color: #edf2f7 !important;
+  border-color: #4a5568 !important;
+}
+
+/* Fix for any divs that are acting as headers/separators */
+mb-auto-form div[class*="p-"],
+mb-auto-form div[class*="heading"] {
+  background-color: #2d3748 !important;
+  color: #edf2f7 !important;
+}
+
+/* Ensure proper spacing and padding for all form sections */
+mb-auto-form > * {
+  margin-bottom: 12px;
+}
+
+/* Fix any stray white or light backgrounds */
+mb-auto-form * {
+  background-color: transparent;
+}
+
+mb-auto-form div[style*="background-color"],
+mb-auto-form span[style*="background-color"] {
+  background-color: transparent !important;
+}
+
+/* Re-apply dark backgrounds only where needed */
+mb-auto-form sl-card,
+mb-auto-form sl-details {
+  background-color: transparent;
+}
+
+/* Checkbox label text should be readable */
+sl-checkbox::part(label),
+sl-checkbox label,
+.checkbox label {
+  color: #edf2f7 !important;
+  font-size: 14px !important;
 }
