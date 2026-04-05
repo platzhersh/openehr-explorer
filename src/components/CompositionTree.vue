@@ -209,6 +209,7 @@ const filteredTree = computed(() => {
         :depth="0"
         :highlighted-path="highlightedPath"
         :search-query="searchQuery"
+        :server-id="serverId"
       />
     </div>
   </div>
