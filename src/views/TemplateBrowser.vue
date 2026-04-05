@@ -505,7 +505,11 @@ onUnmounted(() => {
           <OptMetadata v-if="templateStore.selectedOpt" :optXml="templateStore.selectedOpt" />
 
           <div class="info-banner">
-            <div class="info-icon">ℹ️</div>
+            <svg class="info-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M10 10V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="10" cy="7" r="0.75" fill="currentColor"/>
+            </svg>
             <div class="info-content">
               <strong>About OPT Tree View:</strong> This view shows the human-readable structure
               derived from the Web Template. Cryptic archetype node IDs (e.g., <code>at0001</code>)
@@ -949,8 +953,10 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 }
 
 .info-icon {
-  font-size: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+  color: rgba(100, 149, 237, 0.8);
 }
 
 .info-content {
