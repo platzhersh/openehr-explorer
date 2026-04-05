@@ -1,7 +1,8 @@
 mod commands;
 pub mod inspector;
+pub mod settings;
 
-use commands::{composition, ehr, query, server, template};
+use commands::{composition, ehr, query, server, template, terminology};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -9,6 +10,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(terminology::TerminologyCache::default())
         .invoke_handler(tauri::generate_handler![
             // Server
             server::list_server_profiles,
@@ -35,11 +37,17 @@ pub fn run() {
             template::get_template_opt,
             template::upload_template,
             template::get_template_example,
+            template::get_term_bindings,
             // AQL Query
             query::execute_aql,
             query::list_saved_queries,
             query::save_query,
             query::delete_saved_query,
+            // Settings
+            settings::get_settings,
+            settings::save_settings,
+            // Terminology
+            terminology::lookup_code,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

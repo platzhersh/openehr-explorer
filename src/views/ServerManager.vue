@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
+import { useSettingsStore } from "../stores/settings";
 
 const serverStore = useServerStore();
+const settingsStore = useSettingsStore();
+
+const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_server_url || "");
 
 const editing = ref(false);
 const testResult = ref<string | null>(null);
@@ -32,6 +36,7 @@ function newProfile() {
     base_url: "http://localhost:8080/ehrbase",
     server_type: "ehrbase",
     auth_method: { type: "basic", username: "ehrbase-user", password: "SuperSecretPassword" },
+    terminology_url: null,
   };
   editing.value = true;
   testResult.value = null;
@@ -43,6 +48,7 @@ function editProfile(profile: ServerProfile) {
     ...profile,
     auth_method: { ...profile.auth_method } as any,
     admin_auth_method: profile.admin_auth_method ? ({ ...profile.admin_auth_method } as any) : null,
+    terminology_url: profile.terminology_url || null,
   };
   editing.value = true;
   testResult.value = null;
@@ -231,6 +237,23 @@ function setAdminAuthType(type: string) {
           </template>
         </template>
 
+        <hr class="form-divider" />
+        <div class="form-group">
+          <label>Terminology Server URL (optional)</label>
+          <input
+            class="input"
+            v-model="form.terminology_url"
+            :placeholder="
+              globalTerminologyUrl
+                ? `Using global default: ${globalTerminologyUrl}`
+                : 'No global default configured'
+            "
+          />
+          <p class="form-help">
+            Overrides the global default for this profile. Leave empty to use the global setting.
+          </p>
+        </div>
+
         <div class="form-actions">
           <button class="btn" @click="testConnection">Test Connection</button>
           <button class="btn btn-primary" @click="save">Save</button>
@@ -333,6 +356,13 @@ function setAdminAuthType(type: string) {
 }
 .form-group .input {
   width: 100%;
+}
+
+.form-help {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
 }
 
 .form-divider {

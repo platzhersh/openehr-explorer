@@ -73,6 +73,36 @@ function normalizeNode(node: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
+ * Classify a DV_CODED_TEXT Web Template node as local or external terminology.
+ * Returns:
+ * - 'local' if the node has a pre-populated list of values (archetype-internal codes)
+ * - A terminology name (e.g. 'SNOMED-CT', 'LOINC') if determinable from the template
+ * - 'external' if external but the specific terminology is unknown
+ * - null if the node is not a coded text node or cannot be classified
+ */
+export function classifyCodedTextNode(node: Record<string, unknown>): string | null {
+  const rmType = node.rmType as string | undefined;
+  if (rmType !== "DV_CODED_TEXT" && rmType !== "DV_TEXT") return null;
+
+  const inputs = node.inputs as Array<Record<string, unknown>> | undefined;
+  if (!inputs || inputs.length === 0) return null;
+
+  const codeInput = inputs.find((i) => i.suffix === "code" || i.suffix === undefined);
+  if (!codeInput) return null;
+
+  const list = codeInput.list as Array<unknown> | undefined;
+  if (list && list.length > 0) return "local";
+
+  // Check for terminology suffix with defaultValue indicating the external system
+  const termInput = inputs.find((i) => i.suffix === "terminology");
+  if (termInput?.defaultValue) {
+    return String(termInput.defaultValue);
+  }
+
+  return "external";
+}
+
+/**
  * Extract all FLAT paths from a Web Template tree.
  */
 export function extractFlatPaths(webTemplate: Record<string, unknown>): string[] {

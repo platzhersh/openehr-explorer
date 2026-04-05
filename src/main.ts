@@ -50,6 +50,11 @@ const router = createRouter({
       component: () => import("./views/ServerManager.vue"),
     },
     {
+      path: "/settings",
+      name: "settings",
+      component: () => import("./views/Settings.vue"),
+    },
+    {
       path: "/compose/:templateId",
       name: "compose",
       component: () => import("./views/CompositionForm.vue"),
