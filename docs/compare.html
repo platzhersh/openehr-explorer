@@ -18,7 +18,7 @@
       --border: #2a3a5c;
       --text: #e0e0e0;
       --text-secondary: #8892b0;
-      --text-muted: #5a6a8a;
+      --text-muted: #7b8bb0;
       --primary: #64ffda;
       --primary-dim: #3d9e85;
       --primary-bg: rgba(100,255,218,0.06);
@@ -153,7 +153,7 @@
       gap: 8px;
       font-family: var(--font-mono);
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--text-secondary);
     }
 
     /* ── Tool Column Headers ── */
@@ -275,10 +275,10 @@
 
     /* Status icons */
     .yes { color: var(--success); font-size: 16px; }
-    .no { color: var(--error); font-size: 14px; opacity: 0.6; }
+    .no { color: var(--error); font-size: 14px; opacity: 0.8; }
     .partial { color: var(--warning); font-size: 13px; }
     .planned { color: var(--planned); font-size: 12px; }
-    .note { color: var(--text-muted); font-size: 10px; font-family: var(--font-mono); }
+    .note { color: var(--text-secondary); font-size: 10px; font-family: var(--font-mono); }
     .note.primary { color: var(--primary-dim); }
 
     /* ── Score Row ── */
@@ -421,6 +421,22 @@
         font-weight: 500;
       }
 
+      /* Show tool name labels inside cells on mobile */
+      .cell[data-tool]::before {
+        content: attr(data-tool);
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 8px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+        text-transform: uppercase;
+      }
+      .cell.ours[data-tool]::before {
+        color: var(--primary-dim);
+      }
+
       .score-row {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
@@ -429,6 +445,19 @@
         grid-column: 1 / -1;
         padding: 0;
         margin-bottom: 4px;
+      }
+      .score-cell[data-tool]::before {
+        content: attr(data-tool);
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+      }
+      .score-cell.ours[data-tool]::before {
+        color: var(--primary-dim);
       }
 
       .summary-grid {
@@ -512,50 +541,50 @@
 
     <div class="feature-row">
       <div class="feat-label">No Docker / backend required</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Docker Compose</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span><br><span class="note">SaaS / hosted</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span><br><span class="note">Docker Compose</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">SaaS / hosted</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Installs in &lt; 2 min</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">dmg / exe / deb</span></div>
-      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">docker compose up</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Account required</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">dmg / exe / deb</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span><br><span class="note">docker compose up</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Account required</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Works with local EHRBase</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Multi-server profiles</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Saved + switch</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Env vars / manual</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Saved + switch</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Env vars / manual</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Supports Better Platform</div>
-      <div class="cell ours"><span class="partial">&#9681;</span><br><span class="note">Phase 2</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span><br><span class="note">Native</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br><span class="note">Native</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">CDR-agnostic (generic REST)</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <!-- ─── EHR BROWSING ─── -->
@@ -563,58 +592,58 @@
 
     <div class="feature-row">
       <div class="feat-label">Paginated EHR list</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Compositions grouped by template</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Raw canonical JSON view</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Template-aware "pretty" view &sup1;</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note primary">Unique differentiator</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note primary">Unique differentiator</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">FLAT format view</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Manual only</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual only</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Composition version history</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">One-click ID copy</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Every ID / path</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Every ID / path</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <!-- ─── TEMPLATE TOOLING ─── -->
@@ -622,42 +651,42 @@
 
     <div class="feature-row">
       <div class="feat-label">Template list &amp; metadata</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Web Template tree inspector</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Visual node tree</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Visual node tree</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">OPT drag-and-drop upload</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">FLAT path copy panel &sup2;</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note primary">Unique differentiator</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note primary">Unique differentiator</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">FLAT path validator</div>
-      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2 (oehrpy)</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br><span class="note">Phase 2 (oehrpy)</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <!-- ─── AQL ─── -->
@@ -665,42 +694,42 @@
 
     <div class="feature-row">
       <div class="feat-label">AQL query editor</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Syntax highlighting</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Raw body only</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Syntax highlighting</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Raw body only</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Tabular result view</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Auto-columns</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Raw JSON</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Auto-columns</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span><br><span class="note">Raw JSON</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Saved query library</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span><br><span class="note">Collections</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br><span class="note">Collections</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Export results to CSV</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">AQL path autocomplete</div>
-      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <!-- ─── DEVELOPER DX ─── -->
@@ -708,53 +737,53 @@
 
     <div class="feature-row">
       <div class="feat-label">Keyboard shortcuts</div>
-      <div class="cell ours"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="yes">&#10003;</span></div>
-      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Open-source / self-hostable</div>
-      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">MIT</span></div>
-      <div class="cell"><span class="yes">&#10003;</span><br><span class="note">Apache 2.0</span></div>
-      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Freemium</span></div>
-      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Proprietary</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">MIT</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br><span class="note">Apache 2.0</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Freemium</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Proprietary</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Composition diff tool</div>
-      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Synthetic data generation</div>
-      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2 (MapEHR)</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
-      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br><span class="note">Phase 2 (MapEHR)</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
     </div>
 
     <!-- ─── SCORES ─── -->
     <div class="score-section">
       <div class="score-row">
         <div class="score-label">Phase 1 score</div>
-        <div class="score-cell ours">
+        <div class="score-cell ours" data-tool="Explorer">
           <span class="score-num primary">17</span>
           <span class="score-denom">of 20</span>
         </div>
-        <div class="score-cell">
+        <div class="score-cell" data-tool="openEHRTool">
           <span class="score-num">9</span>
           <span class="score-denom">of 20</span>
         </div>
-        <div class="score-cell">
+        <div class="score-cell" data-tool="Postman">
           <span class="score-num">8</span>
           <span class="score-denom">of 20</span>
         </div>
-        <div class="score-cell">
+        <div class="score-cell" data-tool="Better Studio">
           <span class="score-num">11</span>
           <span class="score-denom">of 20</span>
         </div>
