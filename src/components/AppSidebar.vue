@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
+import { ref, onMounted } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 
 const route = useRoute();
+const appVersion = ref<string>("");
 
 const navItems = [
   { path: "/ehrs", label: "EHR Browser", icon: "H" },
@@ -13,6 +16,14 @@ const navItems = [
 function isActive(path: string): boolean {
   return route.path.startsWith(path);
 }
+
+onMounted(async () => {
+  try {
+    appVersion.value = await invoke<string>("get_app_version");
+  } catch (error) {
+    console.error("Failed to get app version:", error);
+  }
+});
 </script>
 
 <template>
@@ -30,6 +41,8 @@ function isActive(path: string): boolean {
       </router-link>
     </div>
     <div class="nav-bottom">
+      <div v-if="appVersion" class="version-display">v{{ appVersion }}</div>
+      <div class="nav-divider"></div>
       <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
         <span class="nav-icon gear-icon">
           <svg
@@ -74,8 +87,6 @@ function isActive(path: string): boolean {
 
 .nav-bottom {
   margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border);
 }
 
 .nav-item {
@@ -119,5 +130,20 @@ function isActive(path: string): boolean {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.version-display {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  letter-spacing: 0.3px;
+}
+
+.nav-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 8px 0;
 }
 </style>

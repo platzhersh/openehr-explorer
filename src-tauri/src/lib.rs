@@ -7,6 +7,12 @@ use commands::{composition, ehr, query, server, template, terminology};
 /// The official website URL for openEHR Explorer
 pub const WEBSITE_URL: &str = "https://platzhersh.github.io/openehr-explorer/";
 
+/// Get the application version from Cargo.toml
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -15,6 +21,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(terminology::TerminologyCache::default())
         .invoke_handler(tauri::generate_handler![
+            // App
+            get_app_version,
             // Server
             server::list_server_profiles,
             server::save_server_profile,
