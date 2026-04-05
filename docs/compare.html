@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tool Comparison — openEHR Explorer</title>
+  <meta name="description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, and Better Studio for openEHR development.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-tertiary: #0f3460;
+      --surface: #1e2a4a;
+      --surface-hover: #253456;
+      --border: #2a3a5c;
+      --text: #e0e0e0;
+      --text-secondary: #8892b0;
+      --text-muted: #5a6a8a;
+      --primary: #64ffda;
+      --primary-dim: #3d9e85;
+      --primary-bg: rgba(100,255,218,0.06);
+      --primary-border: rgba(100,255,218,0.18);
+      --success: #6bff8e;
+      --warning: #ffd93d;
+      --error: #ff6b6b;
+      --planned: #818cf8;
+      --code-bg: #0d1117;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --radius: 6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .header-brand:hover { text-decoration: none; }
+    .header-wordmark {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .header-nav a {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .header-nav a:hover { color: var(--text); text-decoration: none; }
+    .header-nav a.active { color: var(--primary); }
+    .github-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .github-pill:hover { border-color: var(--primary); color: var(--text); text-decoration: none; }
+    .github-pill svg { width: 16px; height: 16px; fill: currentColor; }
+
+    /* ── Container ── */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Hero ── */
+    .page-hero {
+      text-align: center;
+      padding: 64px 0 48px;
+    }
+    .page-hero h1 {
+      font-size: 48px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #64ffda 0%, #38bdf8 60%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+    .page-hero p {
+      color: var(--text-secondary);
+      font-size: 17px;
+      max-width: 640px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ── Tool Column Headers ── */
+    .tool-headers {
+      display: grid;
+      grid-template-columns: 220px repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .tool-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .tool-card.highlight {
+      border-color: var(--primary);
+      background: linear-gradient(135deg, var(--surface) 0%, var(--primary-bg) 100%);
+    }
+    .tool-card.highlight::before {
+      content: 'THIS APP';
+      position: absolute;
+      top: 8px;
+      right: -22px;
+      background: var(--primary);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      padding: 2px 28px;
+      transform: rotate(35deg);
+    }
+    .tool-name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tool-name.primary { color: var(--primary); }
+    .tool-type {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .empty-header {
+      background: transparent;
+      border: none;
+      display: flex;
+      align-items: flex-end;
+      padding-bottom: 6px;
+    }
+    .col-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ── Category Title ── */
+    .cat-title {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--primary);
+      padding: 20px 0 8px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+
+    /* ── Feature Rows ── */
+    .feature-row {
+      display: grid;
+      grid-template-columns: 220px repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 4px;
+      align-items: stretch;
+    }
+    .feature-row:hover .cell { border-color: var(--surface-hover); }
+    .feature-row:hover .cell.ours { border-color: var(--primary-border); }
+
+    .feat-label {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .cell {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 10px 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.3;
+      transition: border-color 0.15s;
+      min-height: 44px;
+      gap: 3px;
+    }
+    .cell.ours {
+      background: var(--primary-bg);
+      border-color: var(--primary-border);
+    }
+
+    /* Status icons */
+    .yes { color: var(--success); font-size: 16px; }
+    .no { color: var(--error); font-size: 14px; opacity: 0.6; }
+    .partial { color: var(--warning); font-size: 13px; }
+    .planned { color: var(--planned); font-size: 12px; }
+    .note { color: var(--text-muted); font-size: 10px; font-family: var(--font-mono); }
+    .note.primary { color: var(--primary-dim); }
+
+    /* ── Score Row ── */
+    .score-section {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .score-row {
+      display: grid;
+      grid-template-columns: 220px repeat(4, 1fr);
+      gap: 8px;
+    }
+    .score-label {
+      display: flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0 14px;
+    }
+    .score-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 4px;
+      padding: 16px 8px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+    }
+    .score-cell.ours {
+      background: var(--primary-bg);
+      border: 1px solid var(--primary-border);
+    }
+    .score-num { font-size: 24px; font-weight: 600; color: var(--text); }
+    .score-num.primary { color: var(--primary); }
+    .score-denom { font-size: 10px; color: var(--text-muted); }
+
+    /* ── Summary Box ── */
+    .summary {
+      margin-top: 56px;
+      padding: 32px;
+      background: var(--surface);
+      border: 1px solid var(--primary);
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .summary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--primary-bg) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .summary h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      position: relative;
+    }
+    .summary-item strong {
+      display: block;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .summary-item p {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── Footnotes ── */
+    .footnotes {
+      margin-top: 40px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.8;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .footnotes a { color: var(--text-secondary); }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 80px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .tool-headers,
+      .feature-row,
+      .score-row {
+        grid-template-columns: 160px repeat(4, 1fr);
+      }
+      .feat-label { font-size: 12px; padding: 8px 10px; }
+      .cell { font-size: 10px; padding: 8px 4px; }
+      .tool-name { font-size: 11px; }
+      .tool-type { font-size: 9px; }
+    }
+
+    @media (max-width: 700px) {
+      .page-hero h1 { font-size: 32px; }
+      .page-hero p { font-size: 15px; }
+
+      .tool-headers,
+      .feature-row,
+      .score-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+      .tool-headers { display: none; }
+      .empty-header { display: none; }
+
+      .feature-row {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        margin-bottom: 16px;
+      }
+      .feat-label {
+        grid-column: 1 / -1;
+        padding: 6px 0;
+        font-weight: 500;
+      }
+
+      .score-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .score-label {
+        grid-column: 1 / -1;
+        padding: 0;
+        margin-bottom: 4px;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header-nav { gap: 14px; }
+      .header-nav a { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="header-brand">
+        <svg viewBox="0 0 64 64" width="32" height="32" role="img" aria-label="openEHR Explorer logo">
+          <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+          <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+          <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="header-wordmark">openEHR Explorer</span>
+      </a>
+      <nav class="header-nav">
+        <a href="index.html">Home</a>
+        <a href="docs.html">Docs</a>
+        <a href="compare.html" class="active">Compare</a>
+        <a href="brand-kit.html">Brand Kit</a>
+        <a href="https://github.com/platzhersh/openehr-explorer" class="github-pill">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ── Hero ── -->
+    <div class="page-hero">
+      <h1>The Postman for openEHR</h1>
+      <p>How openEHR Explorer stacks up against every existing developer tool in the openEHR ecosystem. No dedicated developer GUI existed &mdash; until now.</p>
+    </div>
+
+    <!-- ── Legend ── -->
+    <div class="legend">
+      <div class="legend-item"><span class="yes">&#10003;</span> Full support</div>
+      <div class="legend-item"><span class="partial">&#9681;</span> Partial / limited</div>
+      <div class="legend-item"><span class="no">&#10007;</span> Not supported</div>
+      <div class="legend-item"><span class="planned">&#8224;</span> Planned (Phase 2)</div>
+    </div>
+
+    <!-- ── Column Headers ── -->
+    <div class="tool-headers">
+      <div class="empty-header"><span class="col-label">Feature</span></div>
+
+      <div class="tool-card highlight">
+        <div class="tool-name primary">openEHR Explorer</div>
+        <div class="tool-type">Desktop app (Tauri)<br>macOS &middot; Win &middot; Linux</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">openEHRTool v2</div>
+        <div class="tool-type">Web app (Docker)<br>CRS4 / open-source</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">Postman / curl</div>
+        <div class="tool-type">Generic REST client<br>No openEHR awareness</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">Better Studio</div>
+        <div class="tool-type">Web app (proprietary)<br>Better Platform only</div>
+      </div>
+    </div>
+
+    <!-- ─── SETUP & ACCESS ─── -->
+    <div class="cat-title">Setup &amp; Access</div>
+
+    <div class="feature-row">
+      <div class="feat-label">No Docker / backend required</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Docker Compose</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span><br><span class="note">SaaS / hosted</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Installs in &lt; 2 min</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">dmg / exe / deb</span></div>
+      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">docker compose up</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Account required</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Works with local EHRBase</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Multi-server profiles</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Saved + switch</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Env vars / manual</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Supports Better Platform</div>
+      <div class="cell ours"><span class="partial">&#9681;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span><br><span class="note">Native</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">CDR-agnostic (generic REST)</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <!-- ─── EHR BROWSING ─── -->
+    <div class="cat-title">EHR &amp; Composition Browsing</div>
+
+    <div class="feature-row">
+      <div class="feat-label">Paginated EHR list</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Compositions grouped by template</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Raw canonical JSON view</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Template-aware "pretty" view &sup1;</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note primary">Unique differentiator</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">FLAT format view</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Manual only</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Composition version history</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">One-click ID copy</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Every ID / path</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <!-- ─── TEMPLATE TOOLING ─── -->
+    <div class="cat-title">Template Tooling</div>
+
+    <div class="feature-row">
+      <div class="feat-label">Template list &amp; metadata</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Web Template tree inspector</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Visual node tree</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">OPT drag-and-drop upload</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">FLAT path copy panel &sup2;</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note primary">Unique differentiator</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">FLAT path validator</div>
+      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2 (oehrpy)</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <!-- ─── AQL ─── -->
+    <div class="cat-title">AQL Query Interface</div>
+
+    <div class="feature-row">
+      <div class="feat-label">AQL query editor</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Syntax highlighting</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Raw body only</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Tabular result view</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">Auto-columns</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Raw JSON</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Saved query library</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span><br><span class="note">Collections</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Export results to CSV</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">AQL path autocomplete</div>
+      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <!-- ─── DEVELOPER DX ─── -->
+    <div class="cat-title">Developer Experience</div>
+
+    <div class="feature-row">
+      <div class="feat-label">Keyboard shortcuts</div>
+      <div class="cell ours"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="yes">&#10003;</span></div>
+      <div class="cell"><span class="partial">&#9681;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Open-source / self-hostable</div>
+      <div class="cell ours"><span class="yes">&#10003;</span><br><span class="note">MIT</span></div>
+      <div class="cell"><span class="yes">&#10003;</span><br><span class="note">Apache 2.0</span></div>
+      <div class="cell"><span class="partial">&#9681;</span><br><span class="note">Freemium</span></div>
+      <div class="cell"><span class="no">&#10007;</span><br><span class="note">Proprietary</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Composition diff tool</div>
+      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Synthetic data generation</div>
+      <div class="cell ours"><span class="planned">&#8224;</span><br><span class="note">Phase 2 (MapEHR)</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+      <div class="cell"><span class="no">&#10007;</span></div>
+    </div>
+
+    <!-- ─── SCORES ─── -->
+    <div class="score-section">
+      <div class="score-row">
+        <div class="score-label">Phase 1 score</div>
+        <div class="score-cell ours">
+          <span class="score-num primary">17</span>
+          <span class="score-denom">of 20</span>
+        </div>
+        <div class="score-cell">
+          <span class="score-num">9</span>
+          <span class="score-denom">of 20</span>
+        </div>
+        <div class="score-cell">
+          <span class="score-num">8</span>
+          <span class="score-denom">of 20</span>
+        </div>
+        <div class="score-cell">
+          <span class="score-num">11</span>
+          <span class="score-denom">of 20</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── SUMMARY ─── -->
+    <div class="summary">
+      <h2>Unique to openEHR Explorer</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <strong>Template-aware composition rendering</strong>
+          <p>at0006 becomes "Systolic". No other tool resolves node IDs to template labels.</p>
+        </div>
+        <div class="summary-item">
+          <strong>FLAT path panel</strong>
+          <p>Every Web Template path, one click to copy. Eliminates the most common source of EHRBase integration errors.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Zero-dependency install</strong>
+          <p>No Docker, no Python, no Node runtime. A native binary that opens in &lt; 2 seconds.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Multi-server profile switcher</strong>
+          <p>Local dev, staging, colleague's EHRBase &mdash; switch without restarting or editing config.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── FOOTNOTES ─── -->
+    <div class="footnotes">
+      <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
+      <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
+      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only</p>
+      <p>Last updated April 2026.</p>
+    </div>
+
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="footer">
+    &copy; 2026 <a href="https://github.com/platzhersh" target="_blank">@platzhersh</a> &middot; MIT License &middot; Not affiliated with openEHR International
+  </footer>
+
+</body>
+</html>
