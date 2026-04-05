@@ -16,6 +16,7 @@ export interface ServerProfile {
     | { type: "basic"; username: string; password: string }
     | { type: "bearer"; token: string }
     | null;
+  terminology_url?: string | null;
 }
 
 export interface ServerVersionInfo {

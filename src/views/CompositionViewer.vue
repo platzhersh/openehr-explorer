@@ -315,6 +315,7 @@ onUnmounted(() => {
             :web-template="webTemplate"
             :highlighted-path="highlightedPath"
             :search-query="panelSearchQuery"
+            :server-id="serverStore.activeServerId"
           />
         </div>
 

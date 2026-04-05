@@ -2,16 +2,19 @@
 import { onMounted, watch } from "vue";
 import { useServerStore } from "./stores/server";
 import { useInspectorStore } from "./stores/inspector";
+import { useSettingsStore } from "./stores/settings";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
 
 const serverStore = useServerStore();
 const inspectorStore = useInspectorStore();
+const settingsStore = useSettingsStore();
 
 onMounted(() => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
+  settingsStore.loadSettings();
 });
 
 // Reset inspector when active server changes

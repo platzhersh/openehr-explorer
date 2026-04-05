@@ -15,6 +15,8 @@ pub struct ServerProfile {
     pub auth_method: AuthMethod,
     #[serde(default)]
     pub admin_auth_method: Option<AuthMethod>,
+    #[serde(default)]
+    pub terminology_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

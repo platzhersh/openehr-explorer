@@ -8,12 +8,14 @@ interface Props {
   highlightedPath?: string | null;
   searchQuery?: string;
   depth?: number;
+  serverId?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   highlightedPath: null,
   searchQuery: "",
   depth: 0,
+  serverId: null,
 });
 
 interface TreeNode {
@@ -24,6 +26,11 @@ interface TreeNode {
   value: unknown;
   children: TreeNode[];
   path: string;
+  codedValue?: {
+    terminology: string;
+    code: string;
+  } | null;
+  terminologyBadge?: string | null;
 }
 
 interface FilteredTreeNode extends TreeNode {
@@ -79,6 +86,25 @@ function buildTree(data: unknown, parentPath: string = "", key: string = "root")
 
     const displayValue = formatValue(valueFields);
 
+    // Detect DV_CODED_TEXT terminology info
+    let codedValue: TreeNode["codedValue"] = null;
+    let terminologyBadge: string | null = null;
+    if (rmType === "DV_CODED_TEXT" || rmType === "DV_TEXT") {
+      const defCode = obj.defining_code as Record<string, unknown> | undefined;
+      if (defCode) {
+        const termId = defCode.terminology_id as Record<string, unknown> | undefined;
+        const terminology = (termId?.value as string) ?? "";
+        const code = (defCode.code_string as string) ?? "";
+        if (terminology) {
+          terminologyBadge = terminology;
+          // Only set codedValue for external terminologies (for lazy lookup)
+          if (terminology !== "local" && terminology !== "openehr" && code) {
+            codedValue = { terminology, code };
+          }
+        }
+      }
+    }
+
     return [
       {
         key,
@@ -88,6 +114,8 @@ function buildTree(data: unknown, parentPath: string = "", key: string = "root")
         value: displayValue,
         children,
         path: parentPath || "/",
+        codedValue,
+        terminologyBadge,
       },
     ];
   }
@@ -181,6 +209,7 @@ const filteredTree = computed(() => {
         :depth="0"
         :highlighted-path="highlightedPath"
         :search-query="searchQuery"
+        :server-id="serverId"
       />
     </div>
   </div>
@@ -188,6 +217,7 @@ const filteredTree = computed(() => {
 
 <script lang="ts">
 import { defineComponent, h, ref as vueRef, type PropType, type VNode } from "vue";
+import { lookupCode as lookupCodeFn } from "../lib/terminology";
 
 interface TreeNodeType {
   key: string;
@@ -199,7 +229,14 @@ interface TreeNodeType {
   path: string;
   isMatch?: boolean;
   isAncestor?: boolean;
+  codedValue?: {
+    terminology: string;
+    code: string;
+  } | null;
+  terminologyBadge?: string | null;
 }
+
+const INTERNAL_TERMINOLOGIES = new Set(["openehr", "local"]);
 
 const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
   name: "TreeNodeComponent",
@@ -208,12 +245,31 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
     depth: { type: Number, default: 0 },
     highlightedPath: { type: String, default: null },
     searchQuery: { type: String, default: "" },
+    serverId: { type: String, default: null },
   },
   setup(props): () => VNode {
     const collapsed = vueRef(props.depth > 3);
+    const resolvedTerm = vueRef<string | null>(null);
+    const resolving = vueRef(false);
+    const resolved = vueRef(false);
 
     const toggle = () => {
       collapsed.value = !collapsed.value;
+    };
+
+    // Lazy terminology resolution on hover
+    const handleHover = async () => {
+      if (resolved.value || resolving.value || !props.serverId) return;
+      const cv = props.node.codedValue;
+      if (!cv) return;
+      resolving.value = true;
+      try {
+        const display = await lookupCodeFn(props.serverId, cv.terminology, cv.code);
+        resolvedTerm.value = display;
+      } finally {
+        resolving.value = false;
+        resolved.value = true;
+      }
     };
 
     // Helper to highlight text
@@ -251,12 +307,43 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
         headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
       }
 
+      if (node.terminologyBadge) {
+        const isInternal = INTERNAL_TERMINOLOGIES.has(node.terminologyBadge);
+        const tooltip = isInternal
+          ? `Internal terminology — codes defined within the openEHR reference model`
+          : `External terminology — codes from ${node.terminologyBadge} require lookup against a terminology server`;
+        headerChildren.push(
+          h(
+            "span",
+            {
+              class: ["badge", "term-badge", isInternal ? "term-internal" : "term-external"],
+              title: tooltip,
+            },
+            node.terminologyBadge,
+          ),
+        );
+      }
+
       if (node.archetypeId) {
         headerChildren.push(h("span", { class: "badge archetype-id" }, node.archetypeId));
       }
 
       if (node.value !== null && node.value !== undefined) {
-        headerChildren.push(h("span", { class: "node-value" }, String(node.value)));
+        // Show resolved terminology term if available
+        if (node.codedValue && resolvedTerm.value) {
+          headerChildren.push(
+            h("span", { class: "node-value resolved-term" }, [
+              resolvedTerm.value,
+              h(
+                "span",
+                { class: "coded-ref" },
+                ` [${node.codedValue.terminology} ${node.codedValue.code}]`,
+              ),
+            ]),
+          );
+        } else {
+          headerChildren.push(h("span", { class: "node-value" }, String(node.value)));
+        }
       }
 
       elements.push(
@@ -272,6 +359,7 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
               },
             ],
             style: { paddingLeft: `${props.depth * 20}px` },
+            onMouseenter: node.codedValue ? handleHover : undefined,
           },
           headerChildren,
         ),
@@ -287,6 +375,7 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
               depth: props.depth + 1,
               highlightedPath: props.highlightedPath,
               searchQuery: props.searchQuery,
+              serverId: props.serverId,
             }),
           ),
         );
@@ -346,11 +435,38 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
   opacity: 0.4;
 }
 
+:deep(.term-badge) {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 1;
+}
+:deep(.term-external) {
+  background: rgba(255, 165, 0, 0.15);
+  color: #ffa500;
+  border-color: rgba(255, 165, 0, 0.3);
+}
+:deep(.term-internal) {
+  background: rgba(138, 148, 158, 0.1);
+  color: var(--color-text-muted);
+  border-color: rgba(138, 148, 158, 0.2);
+}
+
 :deep(.node-value) {
   margin-left: 8px;
   color: var(--color-primary);
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+:deep(.resolved-term) {
+  color: var(--color-success);
+}
+
+:deep(.coded-ref) {
+  color: var(--color-text-muted);
+  font-size: 11px;
 }
 
 /* Search highlighting */

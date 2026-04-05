@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
-import { extractFlatPaths } from "../lib/webtemplate";
+import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
+import { lookupCode } from "../lib/terminology";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+
+interface TermBinding {
+  terminology: string;
+  code: string;
+  node_id: string;
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -21,10 +29,13 @@ const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
 const currentMatchIndex = ref(0);
 const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
 const uploadDragOver = ref(false);
+const showBoundConceptsHelp = ref(false);
 const uploadStatus = ref<string | null>(null);
 const uploadError = ref<string | null>(null);
 
 const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
+const termBindings = ref<TermBinding[]>([]);
+const resolvedBindingTerms = ref<Record<string, string>>({});
 
 watch(
   () => serverStore.activeServerId,
@@ -34,10 +45,35 @@ watch(
   { immediate: true },
 );
 
-watch(selectedTemplateId, (id) => {
+watch(selectedTemplateId, async (id) => {
   if (id && serverStore.activeServerId) {
     templateStore.fetchWebTemplate(serverStore.activeServerId, id);
     templateStore.fetchOpt(serverStore.activeServerId, id);
+    // Fetch term bindings from OPT
+    try {
+      termBindings.value = await invoke<TermBinding[]>("get_term_bindings", {
+        serverId: serverStore.activeServerId,
+        templateId: id,
+      });
+      // Resolve display names for bound concepts
+      resolvedBindingTerms.value = {};
+      const servId = serverStore.activeServerId;
+      for (const binding of termBindings.value) {
+        lookupCode(servId, binding.terminology, binding.code).then((display) => {
+          if (display) {
+            resolvedBindingTerms.value = {
+              ...resolvedBindingTerms.value,
+              [`${binding.terminology}|${binding.code}`]: display,
+            };
+          }
+        });
+      }
+    } catch {
+      termBindings.value = [];
+    }
+  } else {
+    termBindings.value = [];
+    resolvedBindingTerms.value = {};
   }
 });
 
@@ -69,6 +105,7 @@ interface WtNode {
   rmType: string;
   aqlPath: string;
   children: WtNode[];
+  terminologyType: string | null;
 }
 
 function buildWtTree(node: Record<string, unknown>): WtNode {
@@ -79,6 +116,7 @@ function buildWtTree(node: Record<string, unknown>): WtNode {
     rmType: (node.rmType as string) ?? "",
     aqlPath: (node.aqlPath as string) ?? "",
     children: children.map(buildWtTree),
+    terminologyType: classifyCodedTextNode(node),
   };
 }
 
@@ -519,6 +557,42 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Term Bindings -->
+          <div v-if="termBindings.length > 0" class="term-bindings-section">
+            <h4>
+              Bound Concepts
+              <button
+                class="help-toggle"
+                :class="{ active: showBoundConceptsHelp }"
+                @click="showBoundConceptsHelp = !showBoundConceptsHelp"
+                title="What are bound concepts?"
+              >
+                ?
+              </button>
+            </h4>
+            <div v-if="showBoundConceptsHelp" class="bound-concepts-help">
+              <strong>Term bindings</strong> link archetype nodes to external terminology codes.
+              They declare the clinical meaning of each node in standard systems like SNOMED CT or
+              LOINC. For example, a "blood pressure" node bound to <code>SNOMED-CT 163020007</code>
+              tells integration systems exactly what concept this node represents, enabling
+              interoperability across different EHR systems. Display names are resolved via the
+              configured terminology server.
+            </div>
+            <div class="term-bindings-list">
+              <div v-for="(binding, idx) in termBindings" :key="idx" class="term-binding-item">
+                <span class="badge term-badge term-external">{{ binding.terminology }}</span>
+                <span class="term-code">{{ binding.code }}</span>
+                <span
+                  v-if="resolvedBindingTerms[`${binding.terminology}|${binding.code}`]"
+                  class="term-display"
+                >
+                  {{ resolvedBindingTerms[`${binding.terminology}|${binding.code}`] }}
+                </span>
+                <span v-if="binding.node_id" class="term-node-id">({{ binding.node_id }})</span>
+              </div>
+            </div>
+          </div>
+
           <SearchOverlay
             v-if="showPanelSearch"
             ref="searchOverlayRef"
@@ -628,6 +702,7 @@ interface WtNodeType {
   rmType: string;
   aqlPath: string;
   children: WtNodeType[];
+  terminologyType: string | null;
 }
 
 const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
@@ -665,6 +740,31 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 
       headerChildren.push(h("span", { class: "wt-name" }, node.name || node.id));
       headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
+
+      // Terminology badge
+      if (node.terminologyType) {
+        if (node.terminologyType === "local") {
+          headerChildren.push(
+            h(
+              "span",
+              {
+                class: "badge term-badge term-local",
+                title: "Local codes — values are defined within the archetype (select list)",
+              },
+              "LOCAL",
+            ),
+          );
+        } else {
+          const label = node.terminologyType === "external" ? "EXTERNAL" : node.terminologyType;
+          const tooltip =
+            node.terminologyType === "external"
+              ? "External terminology — values must be looked up from an external code system"
+              : `External terminology — values from ${node.terminologyType} require lookup against a terminology server`;
+          headerChildren.push(
+            h("span", { class: "badge term-badge term-external", title: tooltip }, label),
+          );
+        }
+      }
 
       if (node.aqlPath) {
         headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
@@ -754,6 +854,31 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
         ),
       );
       headerChildren.push(h("span", { class: "badge rm-type" }, node.rmType));
+
+      // Terminology badge
+      if (node.terminologyType) {
+        if (node.terminologyType === "local") {
+          headerChildren.push(
+            h(
+              "span",
+              {
+                class: "badge term-badge term-local",
+                title: "Local codes — values are defined within the archetype (select list)",
+              },
+              "LOCAL",
+            ),
+          );
+        } else {
+          const label = node.terminologyType === "external" ? "EXTERNAL" : node.terminologyType;
+          const tooltip =
+            node.terminologyType === "external"
+              ? "External terminology — values must be looked up from an external code system"
+              : `External terminology — values from ${node.terminologyType} require lookup against a terminology server`;
+          headerChildren.push(
+            h("span", { class: "badge term-badge term-external", title: tooltip }, label),
+          );
+        }
+      }
 
       if (node.aqlPath) {
         headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
@@ -1038,6 +1163,122 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Terminology badges */
+:deep(.term-badge) {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+:deep(.term-external) {
+  background: rgba(255, 165, 0, 0.15);
+  color: #ffa500;
+  border-color: rgba(255, 165, 0, 0.3);
+}
+
+:deep(.term-local) {
+  background: rgba(107, 255, 142, 0.1);
+  color: var(--color-success);
+  border-color: rgba(107, 255, 142, 0.2);
+}
+
+/* Term bindings section */
+.term-bindings-section {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.term-bindings-section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-toggle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-text-muted);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+}
+.help-toggle:hover,
+.help-toggle.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(100, 255, 218, 0.1);
+}
+
+.bound-concepts-help {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: rgba(100, 149, 237, 0.08);
+  border: 1px solid rgba(100, 149, 237, 0.2);
+  border-left: 3px solid rgba(100, 149, 237, 0.6);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.bound-concepts-help strong {
+  color: var(--color-text);
+}
+.bound-concepts-help code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  color: rgba(100, 255, 218, 0.9);
+}
+
+.term-bindings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.term-binding-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.term-code {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.term-display {
+  color: var(--color-success);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.term-node-id {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .flat-view {
