@@ -6,6 +6,7 @@ import { useTemplateStore } from "../stores/template";
 import { extractFlatPaths } from "../lib/webtemplate";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import OptMetadata from "../components/OptMetadata.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -287,6 +288,7 @@ function createComposition(templateId: string) {
 
         <!-- Tree view -->
         <div v-if="activeTab === 'tree'" class="tree-view">
+          <OptMetadata v-if="templateStore.selectedOpt" :optXml="templateStore.selectedOpt" />
           <div v-if="wtTree" class="wt-tree">
             <WtTreeNode :node="wtTree" :depth="0" @copy="copyToClipboard" />
           </div>

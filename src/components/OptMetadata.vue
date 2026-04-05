@@ -1,0 +1,522 @@
+<script setup lang="ts">
+import { computed, ref } from "vue";
+
+interface OptMetadata {
+  originalAuthor: {
+    name?: string;
+    organisation?: string;
+    email?: string;
+    date?: string;
+  };
+  otherContributors: string[];
+  lifecycleState?: string;
+  details?: string;
+  otherDetails: Record<string, string>;
+}
+
+const props = defineProps<{
+  optXml: string;
+}>();
+
+const metadataExpanded = ref(true);
+const technicalExpanded = ref(false);
+const descriptionExpanded = ref(false);
+
+const metadata = computed<OptMetadata | null>(() => {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(props.optXml, "text/xml");
+
+    // Check for parse errors
+    const parseError = xmlDoc.querySelector("parsererror");
+    if (parseError) {
+      console.warn("XML parsing error:", parseError.textContent);
+      return null;
+    }
+
+    const description = xmlDoc.querySelector("description");
+    if (!description) {
+      return null;
+    }
+
+    // Extract original author details
+    const originalAuthor: OptMetadata["originalAuthor"] = {};
+    const authorElements = description.querySelectorAll("original_author");
+    authorElements.forEach((el) => {
+      const id = el.getAttribute("id");
+      const value = el.textContent?.trim();
+      if (id && value) {
+        originalAuthor[id as keyof typeof originalAuthor] = value;
+      }
+    });
+
+    // Extract other contributors
+    const otherContributors: string[] = [];
+    const contributorElements = description.querySelectorAll("other_contributors");
+    contributorElements.forEach((el) => {
+      const value = el.textContent?.trim();
+      if (value) {
+        // Split by comma if multiple contributors in one element
+        const contributors = value.split(",").map((c) => c.trim());
+        otherContributors.push(...contributors);
+      }
+    });
+
+    // Extract lifecycle state
+    const lifecycleState = description.querySelector("lifecycle_state")?.textContent?.trim();
+
+    // Extract details/purpose - look for <purpose> element within <details>
+    let details: string | undefined;
+    const detailsElement = description.querySelector("description > details");
+    if (detailsElement) {
+      const purposeElement = detailsElement.querySelector("purpose");
+      if (purposeElement) {
+        const purposeText = purposeElement.textContent?.trim();
+        // Only use purpose if it's meaningful (not "Not Specified", etc.)
+        if (purposeText && purposeText.toLowerCase() !== "not specified") {
+          details = purposeText;
+        }
+      }
+    }
+
+    // Extract other_details
+    const otherDetails: Record<string, string> = {};
+    const otherDetailsElements = description.querySelectorAll("other_details");
+    otherDetailsElements.forEach((el) => {
+      const id = el.getAttribute("id");
+      const value = el.textContent?.trim();
+      if (id) {
+        otherDetails[id] = value || "";
+      }
+    });
+
+    return {
+      originalAuthor,
+      otherContributors,
+      lifecycleState,
+      details,
+      otherDetails,
+    };
+  } catch (error) {
+    console.error("Error parsing OPT metadata:", error);
+    return null;
+  }
+});
+
+const lifecycleBadgeClass = computed(() => {
+  const state = metadata.value?.lifecycleState?.toLowerCase();
+  if (state === "published") return "badge-published";
+  if (state === "draft") return "badge-draft";
+  if (state === "deprecated" || state === "obsolete") return "badge-deprecated";
+  return "badge-other";
+});
+
+const authorDisplay = computed(() => {
+  const author = metadata.value?.originalAuthor;
+  if (!author) return null;
+
+  const parts = [];
+  if (author.name) parts.push(author.name);
+  if (author.organisation) parts.push(`(${author.organisation})`);
+
+  return parts.length > 0 ? parts.join(" ") : null;
+});
+
+const technicalMetadata = computed(() => {
+  const details = metadata.value?.otherDetails || {};
+  const items: { label: string; value: string; monospace?: boolean }[] = [];
+
+  if (details["MD5-CAM-1.0.1"]) {
+    items.push({ label: "MD5-CAM-1.0.1", value: details["MD5-CAM-1.0.1"], monospace: true });
+  }
+  if (details["PARENT:MD5-CAM-1.0.1"]) {
+    items.push({
+      label: "PARENT:MD5-CAM-1.0.1",
+      value: details["PARENT:MD5-CAM-1.0.1"],
+      monospace: true,
+    });
+  }
+  if (details["sem_ver"]) {
+    items.push({ label: "Semantic Version", value: details["sem_ver"] });
+  }
+  if (details["original_namespace"]) {
+    items.push({ label: "Original Namespace", value: details["original_namespace"], monospace: true });
+  }
+  if (details["custodian_namespace"] && details["custodian_namespace"] !== details["original_namespace"]) {
+    items.push({ label: "Custodian Namespace", value: details["custodian_namespace"], monospace: true });
+  }
+  if (details["build_uid"]) {
+    items.push({ label: "Build UID", value: details["build_uid"], monospace: true });
+  }
+  if (details["Generated By"]) {
+    items.push({ label: "Generated By", value: details["Generated By"] });
+  }
+
+  // Add any remaining other_details that aren't in the known list
+  const knownKeys = [
+    "MD5-CAM-1.0.1",
+    "PARENT:MD5-CAM-1.0.1",
+    "sem_ver",
+    "original_namespace",
+    "custodian_namespace",
+    "build_uid",
+    "Generated By",
+    "licence",
+    "custodian_organisation",
+    "original_publisher",
+  ];
+
+  Object.entries(details).forEach(([key, value]) => {
+    if (!knownKeys.includes(key) && value) {
+      items.push({ label: key, value });
+    }
+  });
+
+  return items;
+});
+
+const shouldShowDescription = computed(() => {
+  return metadata.value?.details && metadata.value.details.length > 0;
+});
+
+const descriptionPreview = computed(() => {
+  const details = metadata.value?.details;
+  if (!details) return "";
+
+  const maxLength = 150;
+  if (details.length <= maxLength) return details;
+
+  return details.substring(0, maxLength) + "...";
+});
+
+async function copyToClipboard(text: string) {
+  await navigator.clipboard.writeText(text);
+}
+</script>
+
+<template>
+  <div class="opt-metadata">
+    <div v-if="!metadata" class="metadata-empty">
+      <p>This template has no metadata</p>
+    </div>
+
+    <div v-else class="metadata-container">
+      <div class="metadata-header" @click="metadataExpanded = !metadataExpanded">
+        <span class="header-icon">{{ metadataExpanded ? "▼" : "▶" }}</span>
+        <h3>Template Metadata</h3>
+      </div>
+
+      <div v-if="metadataExpanded" class="metadata-content">
+        <!-- Primary Metadata -->
+        <div class="metadata-section">
+          <div v-if="metadata.lifecycleState" class="metadata-row">
+            <span class="metadata-label">Lifecycle:</span>
+            <span class="badge" :class="lifecycleBadgeClass">{{ metadata.lifecycleState }}</span>
+          </div>
+
+          <div v-if="authorDisplay" class="metadata-row">
+            <span class="metadata-label">Author:</span>
+            <span class="metadata-value">
+              <a
+                v-if="metadata.originalAuthor.email"
+                :href="`mailto:${metadata.originalAuthor.email}`"
+                class="author-link"
+              >
+                {{ authorDisplay }}
+              </a>
+              <span v-else>{{ authorDisplay }}</span>
+            </span>
+          </div>
+
+          <div v-if="metadata.originalAuthor.date" class="metadata-row">
+            <span class="metadata-label">Date:</span>
+            <span class="metadata-value">{{ metadata.originalAuthor.date }}</span>
+          </div>
+
+          <div v-if="metadata.otherContributors.length > 0" class="metadata-row">
+            <span class="metadata-label">Contributors:</span>
+            <span class="metadata-value">{{ metadata.otherContributors.join(", ") }}</span>
+          </div>
+
+          <div
+            v-if="metadata.otherDetails.custodian_organisation && metadata.otherDetails.custodian_organisation !== metadata.originalAuthor.organisation"
+            class="metadata-row"
+          >
+            <span class="metadata-label">Custodian:</span>
+            <span class="metadata-value">{{ metadata.otherDetails.custodian_organisation }}</span>
+          </div>
+
+          <div v-if="metadata.otherDetails.original_publisher" class="metadata-row">
+            <span class="metadata-label">Publisher:</span>
+            <span class="metadata-value">{{ metadata.otherDetails.original_publisher }}</span>
+          </div>
+        </div>
+
+        <!-- Description/Purpose -->
+        <div v-if="shouldShowDescription" class="metadata-section">
+          <div class="description-container">
+            <div class="description-text" :class="{ expanded: descriptionExpanded }">
+              {{ descriptionExpanded ? metadata.details : descriptionPreview }}
+            </div>
+            <button
+              v-if="metadata.details && metadata.details.length > 150"
+              class="btn-text"
+              @click="descriptionExpanded = !descriptionExpanded"
+            >
+              {{ descriptionExpanded ? "Show less" : "Show more..." }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Technical Metadata (Collapsible) -->
+        <div v-if="technicalMetadata.length > 0" class="metadata-section">
+          <div class="technical-header" @click="technicalExpanded = !technicalExpanded">
+            <span class="toggle-icon">{{ technicalExpanded ? "▼" : "▶" }}</span>
+            <span class="technical-label">Technical Metadata</span>
+          </div>
+
+          <div v-if="technicalExpanded" class="technical-content">
+            <div v-for="item in technicalMetadata" :key="item.label" class="technical-row">
+              <span class="technical-key">{{ item.label }}:</span>
+              <span class="technical-value" :class="{ monospace: item.monospace }">
+                {{ item.value }}
+              </span>
+              <button
+                v-if="item.monospace && item.value"
+                class="copy-btn-small"
+                @click="copyToClipboard(item.value)"
+                title="Copy to clipboard"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.opt-metadata {
+  margin-bottom: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.metadata-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.metadata-empty p {
+  margin: 0;
+}
+
+.metadata-container {
+  overflow: hidden;
+}
+
+.metadata-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.15s;
+}
+
+.metadata-header:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.header-icon {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  width: 12px;
+}
+
+.metadata-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.metadata-content {
+  padding: 16px;
+}
+
+.metadata-section {
+  margin-bottom: 16px;
+}
+
+.metadata-section:last-child {
+  margin-bottom: 0;
+}
+
+.metadata-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.metadata-label {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  min-width: 100px;
+}
+
+.metadata-value {
+  color: var(--color-text);
+}
+
+.author-link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.author-link:hover {
+  text-decoration: underline;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-published {
+  background: #28a745;
+  color: #fff;
+}
+
+.badge-draft {
+  background: #ffc107;
+  color: #000;
+}
+
+.badge-deprecated {
+  background: #dc3545;
+  color: #fff;
+}
+
+.badge-other {
+  background: #6c757d;
+  color: #fff;
+}
+
+.description-container {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--color-primary);
+}
+
+.description-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.description-text.expanded {
+  max-height: none;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.btn-text:hover {
+  color: var(--color-primary-dim);
+}
+
+.technical-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.technical-header:hover .technical-label {
+  color: var(--color-text);
+}
+
+.toggle-icon {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  width: 12px;
+}
+
+.technical-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: color 0.15s;
+}
+
+.technical-content {
+  padding-left: 18px;
+  margin-top: 8px;
+}
+
+.technical-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.technical-key {
+  font-weight: 500;
+  color: var(--color-text-muted);
+  min-width: 180px;
+}
+
+.technical-value {
+  color: var(--color-text-secondary);
+  flex: 1;
+  word-break: break-all;
+}
+
+.technical-value.monospace {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.copy-btn-small {
+  padding: 2px 6px;
+  font-size: 10px;
+  background: rgba(100, 255, 218, 0.1);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.copy-btn-small:hover {
+  background: rgba(100, 255, 218, 0.2);
+  border-color: var(--color-primary);
+}
+</style>
