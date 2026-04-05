@@ -703,10 +703,25 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
       // Terminology badge
       if (node.terminologyType) {
         if (node.terminologyType === "local") {
-          headerChildren.push(h("span", { class: "badge term-badge term-local" }, "LOCAL"));
+          headerChildren.push(
+            h(
+              "span",
+              {
+                class: "badge term-badge term-local",
+                title: "Local codes — values are defined within the archetype (select list)",
+              },
+              "LOCAL",
+            ),
+          );
         } else {
           const label = node.terminologyType === "external" ? "EXTERNAL" : node.terminologyType;
-          headerChildren.push(h("span", { class: "badge term-badge term-external" }, label));
+          const tooltip =
+            node.terminologyType === "external"
+              ? "External terminology — values must be looked up from an external code system"
+              : `External terminology — values from ${node.terminologyType} require lookup against a terminology server`;
+          headerChildren.push(
+            h("span", { class: "badge term-badge term-external", title: tooltip }, label),
+          );
         }
       }
 
@@ -802,10 +817,25 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
       // Terminology badge
       if (node.terminologyType) {
         if (node.terminologyType === "local") {
-          headerChildren.push(h("span", { class: "badge term-badge term-local" }, "LOCAL"));
+          headerChildren.push(
+            h(
+              "span",
+              {
+                class: "badge term-badge term-local",
+                title: "Local codes — values are defined within the archetype (select list)",
+              },
+              "LOCAL",
+            ),
+          );
         } else {
           const label = node.terminologyType === "external" ? "EXTERNAL" : node.terminologyType;
-          headerChildren.push(h("span", { class: "badge term-badge term-external" }, label));
+          const tooltip =
+            node.terminologyType === "external"
+              ? "External terminology — values must be looked up from an external code system"
+              : `External terminology — values from ${node.terminologyType} require lookup against a terminology server`;
+          headerChildren.push(
+            h("span", { class: "badge term-badge term-external", title: tooltip }, label),
+          );
         }
       }
 

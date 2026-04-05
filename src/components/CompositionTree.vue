@@ -308,10 +308,16 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 
       if (node.terminologyBadge) {
         const isInternal = INTERNAL_TERMINOLOGIES.has(node.terminologyBadge);
+        const tooltip = isInternal
+          ? `Internal terminology — codes defined within the openEHR reference model`
+          : `External terminology — codes from ${node.terminologyBadge} require lookup against a terminology server`;
         headerChildren.push(
           h(
             "span",
-            { class: ["badge", "term-badge", isInternal ? "term-internal" : "term-external"] },
+            {
+              class: ["badge", "term-badge", isInternal ? "term-internal" : "term-external"],
+              title: tooltip,
+            },
             node.terminologyBadge,
           ),
         );
