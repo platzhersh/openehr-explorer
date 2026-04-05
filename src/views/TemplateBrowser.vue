@@ -289,6 +289,17 @@ function createComposition(templateId: string) {
         <!-- Tree view -->
         <div v-if="activeTab === 'tree'" class="tree-view">
           <OptMetadata v-if="templateStore.selectedOpt" :optXml="templateStore.selectedOpt" />
+
+          <div class="info-banner">
+            <div class="info-icon">ℹ️</div>
+            <div class="info-content">
+              <strong>About OPT Tree View:</strong> This view shows the human-readable structure
+              derived from the Web Template. Cryptic archetype node IDs (e.g., <code>at0001</code>)
+              from the raw OPT XML are automatically resolved to their meaningful labels.
+              For the unresolved XML with archetype codes, see the <strong>OPT XML</strong> tab.
+            </div>
+          </div>
+
           <div v-if="wtTree" class="wt-tree">
             <WtTreeNode :node="wtTree" :depth="0" @copy="copyToClipboard" />
           </div>
@@ -571,6 +582,42 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 
 .tree-view {
   padding-top: 16px;
+}
+
+.info-banner {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: rgba(100, 149, 237, 0.08);
+  border: 1px solid rgba(100, 149, 237, 0.2);
+  border-left: 3px solid rgba(100, 149, 237, 0.6);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.info-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.info-content {
+  color: var(--color-text-secondary);
+}
+
+.info-content strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.info-content code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  color: rgba(100, 255, 218, 0.9);
 }
 
 :deep(.wt-node-header) {
