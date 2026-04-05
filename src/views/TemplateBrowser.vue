@@ -137,10 +137,11 @@ function highlightXml(xml: string): string {
     .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
 }
 
-const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
-const highlightedOpt = computed(() =>
-  templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
-);
+// Unused - replaced by highlightedWebTemplateWithSearch and highlightedOptWithSearch
+// const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
+// const highlightedOpt = computed(() =>
+//   templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
+// );
 
 async function handleDrop(event: DragEvent) {
   event.preventDefault();
@@ -427,13 +428,11 @@ onUnmounted(() => {
             class="template-item"
             :class="{ active: tmpl.template_id === selectedTemplateId }"
           >
-            <div @click="selectTemplate(tmpl.template_id)" style="flex: 1; cursor: pointer">
-              <div class="template-name">{{ tmpl.template_id }}</div>
-              <div class="template-meta">
-                <span v-if="tmpl.concept" class="meta-item">{{ tmpl.concept }}</span>
-                <span v-if="tmpl.created_timestamp" class="meta-item">
-                  {{ tmpl.created_timestamp }}
-                </span>
+            <div @click="selectTemplate(tmpl.template_id)" class="template-content">
+              <div class="template-id">{{ tmpl.template_id }}</div>
+              <div v-if="tmpl.concept" class="template-concept">{{ tmpl.concept }}</div>
+              <div v-if="tmpl.created_timestamp" class="template-date">
+                {{ tmpl.created_timestamp }}
               </div>
             </div>
             <button
@@ -719,7 +718,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
       const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
       const parts = text.split(regex);
 
-      return parts.map((part, i) =>
+      return parts.map((part) =>
         regex.test(part)
           ? h("mark", { class: "tree-search-match" }, part)
           : h("span", part),
@@ -848,8 +847,8 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   border-bottom: 1px solid var(--color-border);
   transition: background 0.15s;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 .template-item:hover {
   background: var(--color-surface);
@@ -859,19 +858,37 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   border-left: 3px solid var(--color-primary);
 }
 
-.template-name {
-  font-size: 13px;
-  font-weight: 500;
-  font-family: var(--font-mono);
-}
-.template-meta {
+.template-content {
+  flex: 1;
+  cursor: pointer;
   display: flex;
-  gap: 12px;
-  margin-top: 4px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
-.meta-item {
+
+.template-id {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-concept {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-date {
   font-size: 11px;
   color: var(--color-text-muted);
+  font-family: var(--font-mono);
 }
 
 .upload-zone {
