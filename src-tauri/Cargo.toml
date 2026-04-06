@@ -5,6 +5,7 @@ description = "Cross-platform desktop browser for openEHR CDR instances"
 authors = ["openEHR Explorer Contributors"]
 homepage = "https://platzhersh.github.io/openehr-explorer/"
 repository = "https://github.com/platzhersh/openehr-explorer"
+license = "Apache-2.0"
 edition = "2021"
 
 [lib]
