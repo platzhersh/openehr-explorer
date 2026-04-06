@@ -1,4 +1,5 @@
 mod commands;
+pub mod credentials;
 pub mod inspector;
 pub mod settings;
 

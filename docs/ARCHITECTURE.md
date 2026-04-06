@@ -185,10 +185,12 @@ graph TB
     subgraph Support["Support Modules"]
         inspector_mod["inspector.rs<br/>send_instrumented()"]
         settings_mod["settings.rs<br/>GlobalSettings R/W"]
+        credentials_mod["credentials.rs<br/>Keychain + AES-256-GCM"]
     end
 
     Commands --> inspector_mod
     Commands --> settings_mod
+    server --> credentials_mod
 ```
 
 ### HTTP Request Flow
@@ -221,6 +223,7 @@ graph LR
         profiles["profiles.json"]
         queries["saved_queries.json"]
         settings["settings.json"]
+        keyfile[".credentials-key<br/>(AES fallback only)"]
     end
 
     profiles -->|"contains"| P["ServerProfile[]<br/>id, name, base_url,<br/>server_type, auth_method,<br/>admin_auth_method,<br/>terminology_url"]
@@ -228,12 +231,39 @@ graph LR
     settings -->|"contains"| S["GlobalSettings<br/>version, terminology_server_url"]
 ```
 
+### Credential Storage (ADR-0014)
+
+Server credentials (passwords, bearer tokens) are **never stored in plaintext** on disk. The app uses a two-tier approach:
+
+```mermaid
+graph TD
+    Save["save_server_profile()"] --> Check{"OS Keychain<br/>available?"}
+    Check -->|"Yes"| KC["Store in OS Keychain<br/>(macOS Keychain, Windows<br/>Credential Manager, Linux<br/>Secret Service)"]
+    Check -->|"No"| AES["Encrypt with AES-256-GCM<br/>(key in .credentials-key)"]
+    KC --> JSON1["profiles.json stores:<br/>{type: keychain, ref_key: ...}"]
+    AES --> JSON2["profiles.json stores:<br/>{type: encrypted, ciphertext: ..., nonce: ...}"]
+
+    Load["load_profiles()"] --> Resolve["resolve_auth()"]
+    Resolve --> Plain["Returns Basic/Bearer<br/>for runtime use"]
+```
+
+| Platform | Keychain Backend | Fallback needed? |
+|----------|-----------------|------------------|
+| macOS | Keychain Services | No |
+| Windows | Credential Manager | No |
+| Linux (desktop) | Secret Service (GNOME Keyring / KDE Wallet) | Rarely |
+| Linux (headless) | N/A | Yes (AES-256-GCM) |
+
+**Migration:** On first load after upgrade, any plaintext `Basic`/`Bearer` credentials in `profiles.json` are automatically migrated to secure storage. The migration is one-way and transparent.
+
+**Implementation:** `src-tauri/src/credentials.rs` (keychain + AES helpers), `src-tauri/src/commands/server.rs` (`secure_auth()` / `resolve_auth()`)
+
 ### Why JSON Files (not SQLite)
 
 The app stores a small number of simple records (server profiles, saved queries, settings). JSON files provide:
 
 - **Zero dependencies** — no native SQLite library needed
-- **Human-readable** — users can inspect/edit config files directly
+- **Human-readable** — users can inspect/edit config files directly (credentials are encrypted)
 - **Portable** — no database migration concerns
 - **Sufficient** — the data volume is small (tens of records, not thousands)
 
@@ -242,14 +272,14 @@ The app stores a small number of simple records (server profiles, saved queries,
 All JSON file I/O follows the same pattern in Rust:
 
 ```rust
-// Read: load file → deserialize → return Vec<T>
+// Read: load file → deserialize → resolve credentials → return Vec<T>
 fn load_items() -> Vec<T> {
     let path = get_items_path();           // ~/.config/openehr-explorer/items.json
     let data = fs::read_to_string(&path).unwrap_or_default();
     serde_json::from_str(&data).unwrap_or_default()
 }
 
-// Write: serialize → write file
+// Write: secure credentials → serialize → write file
 fn save_items(items: &[T]) -> Result<(), String> {
     let path = get_items_path();
     let data = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
@@ -273,7 +303,7 @@ graph TD
     Profile -->|"admin_auth_method<br/>(optional)"| AdminAuth["Used for EHR deletion<br/>and admin operations"]
 ```
 
-Credentials are stored locally in `profiles.json`. Each profile supports:
+Credentials are stored securely using the OS keychain or AES-256-GCM encryption (see [Credential Storage](#credential-storage-adr-0014) above). Each profile supports:
 - **Regular auth** — used for all standard API calls
 - **Admin auth** (optional) — used for destructive operations (EHR deletion)
 
