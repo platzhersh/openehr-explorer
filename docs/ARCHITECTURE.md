@@ -185,7 +185,7 @@ graph TB
     subgraph Support["Support Modules"]
         inspector_mod["inspector.rs<br/>send_instrumented()"]
         settings_mod["settings.rs<br/>GlobalSettings R/W"]
-        credentials_mod["credentials.rs<br/>Keychain + AES-256-GCM"]
+        credentials_mod["credentials.rs<br/>AES-256-GCM encryption"]
     end
 
     Commands --> inspector_mod
@@ -233,30 +233,24 @@ graph LR
 
 ### Credential Storage (ADR-0014)
 
-Server credentials (passwords, bearer tokens) are **never stored in plaintext** on disk. The app uses a two-tier approach:
+Server credentials (passwords, bearer tokens) are **never stored in plaintext** on disk. They are encrypted with AES-256-GCM before writing to `profiles.json`:
 
 ```mermaid
 graph TD
-    Save["save_server_profile()"] --> Check{"OS Keychain<br/>available?"}
-    Check -->|"Yes"| KC["Store in OS Keychain<br/>(macOS Keychain, Windows<br/>Credential Manager, Linux<br/>Secret Service)"]
-    Check -->|"No"| AES["Encrypt with AES-256-GCM<br/>(key in .credentials-key)"]
-    KC --> JSON1["profiles.json stores:<br/>{type: keychain, ref_key: ...}"]
-    AES --> JSON2["profiles.json stores:<br/>{type: encrypted, ciphertext: ..., nonce: ...}"]
+    Save["save_server_profile()"] --> Encrypt["secure_auth()<br/>AES-256-GCM encrypt"]
+    Encrypt --> JSON["profiles.json stores:<br/>{type: encrypted,<br/>ciphertext: ..., nonce: ...}"]
 
-    Load["load_profiles()"] --> Resolve["resolve_auth()"]
-    Resolve --> Plain["Returns Basic/Bearer<br/>for runtime use"]
+    Load["load_profiles()"] --> Decrypt["resolve_auth()<br/>AES-256-GCM decrypt"]
+    Decrypt --> Plain["Returns Basic/Bearer<br/>for runtime use"]
 ```
 
-| Platform | Keychain Backend | Fallback needed? |
-|----------|-----------------|------------------|
-| macOS | Keychain Services | No |
-| Windows | Credential Manager | No |
-| Linux (desktop) | Secret Service (GNOME Keyring / KDE Wallet) | Rarely |
-| Linux (headless) | N/A | Yes (AES-256-GCM) |
+- **Algorithm:** AES-256-GCM (authenticated encryption)
+- **Key:** Random 256-bit key in `.credentials-key` (generated on first run, `0600` permissions on Unix)
+- **Cross-platform:** Works identically on macOS, Windows, and Linux — no system dependencies
 
-**Migration:** On first load after upgrade, any plaintext `Basic`/`Bearer` credentials in `profiles.json` are automatically migrated to secure storage. The migration is one-way and transparent.
+**Migration:** On first load after upgrade, any plaintext `Basic`/`Bearer` credentials in `profiles.json` are automatically encrypted. The migration is one-way and transparent.
 
-**Implementation:** `src-tauri/src/credentials.rs` (keychain + AES helpers), `src-tauri/src/commands/server.rs` (`secure_auth()` / `resolve_auth()`)
+**Implementation:** `src-tauri/src/credentials.rs` (AES helpers), `src-tauri/src/commands/server.rs` (`secure_auth()` / `resolve_auth()`)
 
 ### Why JSON Files (not SQLite)
 

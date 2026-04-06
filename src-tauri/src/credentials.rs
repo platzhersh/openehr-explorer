@@ -7,62 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const SERVICE_NAME: &str = "openehr-explorer";
 const KEY_FILE_NAME: &str = ".credentials-key";
-
-// --- Keychain helpers ---
-
-/// Store a JSON-serialised credential in the OS keychain.
-pub fn keychain_store(ref_key: &str, json: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new(SERVICE_NAME, ref_key).map_err(|e| e.to_string())?;
-    entry.set_password(json).map_err(|e| e.to_string())
-}
-
-/// Retrieve a JSON-serialised credential from the OS keychain.
-pub fn keychain_retrieve(ref_key: &str) -> Result<String, String> {
-    let entry = keyring::Entry::new(SERVICE_NAME, ref_key).map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
-}
-
-/// Delete a credential from the OS keychain.
-pub fn keychain_delete(ref_key: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new(SERVICE_NAME, ref_key).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()), // Already gone
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-/// Check whether the OS keychain backend is available and fully functional.
-/// Performs a write → read → delete roundtrip to verify the calling binary
-/// has actual keychain access (important on macOS where access is tied to
-/// the binary's code signing identity and may change between recompiles).
-pub fn keychain_available() -> bool {
-    let test_value = "__probe_test_value__";
-    let entry = match keyring::Entry::new(SERVICE_NAME, "__probe__") {
-        Ok(e) => e,
-        Err(_) => return false,
-    };
-
-    // Write
-    if entry.set_password(test_value).is_err() {
-        return false;
-    }
-
-    // Read back
-    let read_ok = match entry.get_password() {
-        Ok(val) => val == test_value,
-        Err(_) => false,
-    };
-
-    // Clean up
-    entry.delete_credential().ok();
-
-    read_ok
-}
-
-// --- AES-256-GCM encryption helpers ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedPayload {

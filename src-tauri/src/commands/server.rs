@@ -39,11 +39,7 @@ pub enum AuthMethod {
     Bearer {
         token: String,
     },
-    /// Credential stored in the OS keychain (macOS Keychain, Windows Credential Manager, etc.)
-    Keychain {
-        ref_key: String,
-    },
-    /// Credential encrypted with AES-256-GCM (fallback when no keychain is available)
+    /// Credential encrypted with AES-256-GCM at rest
     Encrypted {
         ciphertext: String,
         nonce: String,
@@ -81,15 +77,11 @@ fn dirs_config_dir() -> PathBuf {
     }
 }
 
-/// Resolve a stored `AuthMethod` (Keychain/Encrypted) back to its plaintext form (Basic/Bearer).
+/// Resolve a stored `AuthMethod` (Encrypted) back to its plaintext form (Basic/Bearer).
 /// `None`, `Basic`, and `Bearer` pass through unchanged.
 fn resolve_auth(auth: &AuthMethod) -> Result<AuthMethod, String> {
     match auth {
         AuthMethod::None | AuthMethod::Basic { .. } | AuthMethod::Bearer { .. } => Ok(auth.clone()),
-        AuthMethod::Keychain { ref_key } => {
-            let json = credentials::keychain_retrieve(ref_key)?;
-            serde_json::from_str::<AuthMethod>(&json).map_err(|e| e.to_string())
-        }
         AuthMethod::Encrypted { ciphertext, nonce } => {
             let payload = credentials::EncryptedPayload {
                 ciphertext: ciphertext.clone(),
@@ -101,41 +93,20 @@ fn resolve_auth(auth: &AuthMethod) -> Result<AuthMethod, String> {
     }
 }
 
-/// Convert a plaintext `AuthMethod` (Basic/Bearer) into a secure stored form.
-/// Uses the OS keychain when available, otherwise falls back to AES-256-GCM encryption.
-/// `None`, `Keychain`, and `Encrypted` pass through unchanged.
-fn secure_auth(
-    profile_id: &str,
-    key_suffix: &str,
-    auth: &AuthMethod,
-) -> Result<AuthMethod, String> {
+/// Encrypt a plaintext `AuthMethod` (Basic/Bearer) for storage on disk.
+/// `None` and already `Encrypted` variants pass through unchanged.
+fn secure_auth(auth: &AuthMethod) -> Result<AuthMethod, String> {
     match auth {
-        AuthMethod::None | AuthMethod::Keychain { .. } | AuthMethod::Encrypted { .. } => {
-            Ok(auth.clone())
-        }
+        AuthMethod::None | AuthMethod::Encrypted { .. } => Ok(auth.clone()),
         AuthMethod::Basic { .. } | AuthMethod::Bearer { .. } => {
             let json = serde_json::to_string(auth).map_err(|e| e.to_string())?;
-            let ref_key = format!("{}:{}", profile_id, key_suffix);
-
-            if credentials::keychain_available() {
-                credentials::keychain_store(&ref_key, &json)?;
-                Ok(AuthMethod::Keychain { ref_key })
-            } else {
-                let payload = credentials::encrypt(&json)?;
-                Ok(AuthMethod::Encrypted {
-                    ciphertext: payload.ciphertext,
-                    nonce: payload.nonce,
-                })
-            }
+            let payload = credentials::encrypt(&json)?;
+            Ok(AuthMethod::Encrypted {
+                ciphertext: payload.ciphertext,
+                nonce: payload.nonce,
+            })
         }
     }
-}
-
-/// Delete stored credentials for a profile from keychain.
-/// Uses well-known ref_key format since loaded profiles have resolved auth.
-fn delete_profile_credentials(profile_id: &str) {
-    credentials::keychain_delete(&format!("{}:auth", profile_id)).ok();
-    credentials::keychain_delete(&format!("{}:admin_auth", profile_id)).ok();
 }
 
 /// Load profiles from disk and resolve all credentials to plaintext for runtime use.
@@ -161,25 +132,15 @@ fn load_profiles() -> Vec<ServerProfile> {
     });
 
     if needs_migration {
-        // Migrate plaintext credentials to secure storage
+        // Migrate plaintext credentials to encrypted storage
         let mut stored_profiles = profiles.clone();
         for profile in &mut stored_profiles {
-            if matches!(
-                &profile.auth_method,
-                AuthMethod::Basic { .. } | AuthMethod::Bearer { .. }
-            ) {
-                if let Ok(secured) = secure_auth(&profile.id, "auth", &profile.auth_method) {
-                    profile.auth_method = secured;
-                }
+            if let Ok(secured) = secure_auth(&profile.auth_method) {
+                profile.auth_method = secured;
             }
             if let Some(ref admin_auth) = profile.admin_auth_method {
-                if matches!(
-                    admin_auth,
-                    AuthMethod::Basic { .. } | AuthMethod::Bearer { .. }
-                ) {
-                    if let Ok(secured) = secure_auth(&profile.id, "admin_auth", admin_auth) {
-                        profile.admin_auth_method = Some(secured);
-                    }
+                if let Ok(secured) = secure_auth(admin_auth) {
+                    profile.admin_auth_method = Some(secured);
                 }
             }
         }
@@ -191,7 +152,7 @@ fn load_profiles() -> Vec<ServerProfile> {
             fs::write(&path, json).ok();
         }
         log::info!(
-            "Migrated {} profile(s) to secure credential storage",
+            "Migrated {} profile(s) to encrypted credential storage",
             profiles.len()
         );
     }
@@ -230,17 +191,17 @@ fn load_profiles() -> Vec<ServerProfile> {
     profiles
 }
 
-/// Save profiles to disk with credentials secured (keychain or encrypted).
+/// Save profiles to disk with credentials encrypted.
 fn save_profiles(profiles: &[ServerProfile]) -> Result<(), String> {
     let path = get_profiles_path();
 
-    // Secure credentials before writing to disk
+    // Encrypt credentials before writing to disk
     let stored_profiles: Result<Vec<ServerProfile>, String> = profiles
         .iter()
         .map(|p| {
-            let secured_auth = secure_auth(&p.id, "auth", &p.auth_method)?;
+            let secured_auth = secure_auth(&p.auth_method)?;
             let secured_admin = match &p.admin_auth_method {
-                Some(auth) => Some(secure_auth(&p.id, "admin_auth", auth)?),
+                Some(auth) => Some(secure_auth(auth)?),
                 None => None,
             };
             Ok(ServerProfile {
@@ -278,9 +239,9 @@ fn build_request(
         AuthMethod::None => req,
         AuthMethod::Basic { username, password } => req.basic_auth(username, Some(password)),
         AuthMethod::Bearer { token } => req.bearer_auth(token),
-        // Keychain/Encrypted should already be resolved before reaching here
-        AuthMethod::Keychain { .. } | AuthMethod::Encrypted { .. } => {
-            log::warn!("Unresolved credential reference passed to build_request — skipping auth");
+        // Encrypted should already be resolved before reaching here
+        AuthMethod::Encrypted { .. } => {
+            log::warn!("Unresolved encrypted credential passed to build_request — skipping auth");
             req
         }
     }
@@ -306,8 +267,6 @@ pub async fn save_server_profile(profile: ServerProfile) -> Result<Vec<ServerPro
 #[tauri::command]
 pub async fn delete_server_profile(id: String) -> Result<Vec<ServerProfile>, String> {
     let mut profiles = load_profiles();
-    // Clean up keychain entries for the deleted profile
-    delete_profile_credentials(&id);
     profiles.retain(|p| p.id != id);
     save_profiles(&profiles)?;
     Ok(profiles)
