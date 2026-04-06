@@ -42,7 +42,7 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 |---|:---:|:---:|:---:|:---:|
 | **Type** | Desktop app (Tauri) | Web app (Docker) | Generic REST client | Web app (SaaS) |
 | **Platforms** | macOS · Win · Linux | Any (Docker) | Any | Browser |
-| **License** | MIT | Apache 2.0 | Freemium | Proprietary |
+| **License** | Apache 2.0 | Apache 2.0 | Freemium | Proprietary |
 
 ### ⚙️ Setup & Access
 
@@ -96,7 +96,7 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 | Feature | **openEHR Explorer** | openEHRTool v2 | Postman / curl | Better Studio |
 |---|:---:|:---:|:---:|:---:|
 | Keyboard shortcuts (Cmd+K, Cmd+Enter) | ✅ | ❌ | ✅ | ⚠️ |
-| Open-source | ✅ MIT | ✅ Apache 2.0 | ⚠️ Freemium | ❌ |
+| Open-source | ✅ Apache 2.0 | ✅ Apache 2.0 | ⚠️ Freemium | ❌ |
 | Composition diff tool | 🔵 Phase 2 | ❌ | ❌ | ❌ |
 | Synthetic data generation | 🔵 Phase 2 | ❌ | ❌ | ❌ |
 
@@ -126,4 +126,4 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE) for details.
