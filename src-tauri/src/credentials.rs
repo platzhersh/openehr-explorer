@@ -34,22 +34,32 @@ pub fn keychain_delete(ref_key: &str) -> Result<(), String> {
     }
 }
 
-/// Check whether the OS keychain backend is available.
+/// Check whether the OS keychain backend is available and fully functional.
+/// Performs a write → read → delete roundtrip to verify the calling binary
+/// has actual keychain access (important on macOS where access is tied to
+/// the binary's code signing identity and may change between recompiles).
 pub fn keychain_available() -> bool {
-    // Try a harmless probe: create an entry and check for backend errors.
-    match keyring::Entry::new(SERVICE_NAME, "__probe__") {
-        Ok(entry) => {
-            // Try to get a password — a NoEntry error means the backend works.
-            match entry.get_password() {
-                Err(keyring::Error::NoEntry) => true,
-                Ok(_) => true,
-                Err(keyring::Error::NoStorageAccess(_)) => false,
-                Err(keyring::Error::PlatformFailure(_)) => false,
-                Err(_) => false,
-            }
-        }
-        Err(_) => false,
+    let test_value = "__probe_test_value__";
+    let entry = match keyring::Entry::new(SERVICE_NAME, "__probe__") {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+
+    // Write
+    if entry.set_password(test_value).is_err() {
+        return false;
     }
+
+    // Read back
+    let read_ok = match entry.get_password() {
+        Ok(val) => val == test_value,
+        Err(_) => false,
+    };
+
+    // Clean up
+    entry.delete_credential().ok();
+
+    read_ok
 }
 
 // --- AES-256-GCM encryption helpers ---

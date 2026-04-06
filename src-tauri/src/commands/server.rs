@@ -196,14 +196,33 @@ fn load_profiles() -> Vec<ServerProfile> {
         );
     }
 
-    // Resolve all credentials to plaintext for runtime use
+    // Resolve all credentials to plaintext for runtime use.
+    // If resolution fails (e.g. keychain access denied after recompile on macOS),
+    // fall back to AuthMethod::None so the frontend shows a valid state and the
+    // user can re-enter credentials.
     for profile in &mut profiles {
-        if let Ok(resolved) = resolve_auth(&profile.auth_method) {
-            profile.auth_method = resolved;
+        match resolve_auth(&profile.auth_method) {
+            Ok(resolved) => profile.auth_method = resolved,
+            Err(e) => {
+                log::warn!(
+                    "Failed to resolve credentials for profile '{}': {}. Auth reset to None.",
+                    profile.name,
+                    e
+                );
+                profile.auth_method = AuthMethod::None;
+            }
         }
         if let Some(ref admin_auth) = profile.admin_auth_method {
-            if let Ok(resolved) = resolve_auth(admin_auth) {
-                profile.admin_auth_method = Some(resolved);
+            match resolve_auth(admin_auth) {
+                Ok(resolved) => profile.admin_auth_method = Some(resolved),
+                Err(e) => {
+                    log::warn!(
+                        "Failed to resolve admin credentials for profile '{}': {}. Admin auth reset to None.",
+                        profile.name,
+                        e
+                    );
+                    profile.admin_auth_method = Some(AuthMethod::None);
+                }
             }
         }
     }
