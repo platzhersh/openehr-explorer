@@ -408,42 +408,44 @@ async function copyEhrJson() {
             <button class="close-btn" @click="showHelpPopover = false">&times;</button>
           </div>
           <table class="help-table">
-            <tr>
-              <td class="help-example">fde80e0e...</td>
-              <td>EHR ID prefix match</td>
-            </tr>
-            <tr>
-              <td class="help-example">subject:value</td>
-              <td>Subject ID contains match</td>
-            </tr>
-            <tr>
-              <td class="help-example">namespace:value</td>
-              <td>Subject namespace exact match</td>
-            </tr>
-            <tr>
-              <td class="help-example">system:value</td>
-              <td>System ID exact match</td>
-            </tr>
-            <tr>
-              <td class="help-example">modifiable:true|false</td>
-              <td>EHR status is_modifiable</td>
-            </tr>
-            <tr>
-              <td class="help-example">hasCompositions:true</td>
-              <td>Has compositions (false not supported)</td>
-            </tr>
-            <tr style="opacity: 0.5">
-              <td class="help-example">created-on:YYYY-MM-DD</td>
-              <td>⚠️ Not supported (EHRBase limitation)</td>
-            </tr>
-            <tr style="opacity: 0.5">
-              <td class="help-example">created-before:YYYY-MM-DD</td>
-              <td>⚠️ Not supported (EHRBase limitation)</td>
-            </tr>
-            <tr style="opacity: 0.5">
-              <td class="help-example">created-after:YYYY-MM-DD</td>
-              <td>⚠️ Not supported (EHRBase limitation)</td>
-            </tr>
+            <tbody>
+              <tr>
+                <td class="help-example">fde80e0e...</td>
+                <td>EHR ID prefix match</td>
+              </tr>
+              <tr>
+                <td class="help-example">subject:value</td>
+                <td>Subject ID contains match</td>
+              </tr>
+              <tr>
+                <td class="help-example">namespace:value</td>
+                <td>Subject namespace exact match</td>
+              </tr>
+              <tr>
+                <td class="help-example">system:value</td>
+                <td>System ID exact match</td>
+              </tr>
+              <tr>
+                <td class="help-example">modifiable:true|false</td>
+                <td>EHR status is_modifiable</td>
+              </tr>
+              <tr>
+                <td class="help-example">hasCompositions:true</td>
+                <td>Has compositions (false not supported)</td>
+              </tr>
+              <tr style="opacity: 0.5">
+                <td class="help-example">created-on:YYYY-MM-DD</td>
+                <td>⚠️ Not supported (EHRBase limitation)</td>
+              </tr>
+              <tr style="opacity: 0.5">
+                <td class="help-example">created-before:YYYY-MM-DD</td>
+                <td>⚠️ Not supported (EHRBase limitation)</td>
+              </tr>
+              <tr style="opacity: 0.5">
+                <td class="help-example">created-after:YYYY-MM-DD</td>
+                <td>⚠️ Not supported (EHRBase limitation)</td>
+              </tr>
+            </tbody>
           </table>
           <p class="help-note">
             Combine terms with spaces (implicit AND). Dates must be YYYY-MM-DD.
