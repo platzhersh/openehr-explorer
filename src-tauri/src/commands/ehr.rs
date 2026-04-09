@@ -1,4 +1,3 @@
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -542,15 +541,6 @@ fn escape_aql_string(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-/// Parse a YYYY-MM-DD string into a NaiveDate, returning a user-friendly error.
-fn parse_date(field: &str, value: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| {
-        format!(
-            "{}: expects a date in YYYY-MM-DD format (e.g. 2026-03-12), got '{}'",
-            field, value
-        )
-    })
-}
 
 /// Build an AQL query string from the given search criteria.
 /// Returns an error if no criteria are provided (to prevent full-table scans).
@@ -643,31 +633,14 @@ FROM EHR e CONTAINS EHR_STATUS s"
     }
 
     // Date handling: created_on takes precedence over created_before/created_after
-    if let Some(ref date_str) = criteria.created_on {
-        let date = parse_date("created_on", date_str)?;
-        predicates.push(format!(
-            "e/time_created/value >= '{}T00:00:00'",
-            date.format("%Y-%m-%d")
-        ));
-        predicates.push(format!(
-            "e/time_created/value <= '{}T23:59:59'",
-            date.format("%Y-%m-%d")
-        ));
-    } else {
-        if let Some(ref date_str) = criteria.created_before {
-            let date = parse_date("created_before", date_str)?;
-            predicates.push(format!(
-                "e/time_created/value < '{}T00:00:00'",
-                date.format("%Y-%m-%d")
-            ));
-        }
-        if let Some(ref date_str) = criteria.created_after {
-            let date = parse_date("created_after", date_str)?;
-            predicates.push(format!(
-                "e/time_created/value > '{}T23:59:59'",
-                date.format("%Y-%m-%d")
-            ));
-        }
+    // NOTE: EHRBase does not support filtering on e/time_created in WHERE clauses
+    // This is a known AQL limitation - EHR-level attributes cannot be used in predicates
+    if criteria.created_on.is_some() || criteria.created_before.is_some() || criteria.created_after.is_some() {
+        return Err(
+            "Date filters (created-on, created-before, created-after) are not currently supported \
+             due to EHRBase limitations. EHR-level attributes like time_created cannot be used in \
+             WHERE clauses. Use the paginated list view and sort by creation date instead.".to_string()
+        );
     }
 
     // Check if any criteria was provided (either predicates or has_compositions:true)
@@ -851,25 +824,28 @@ mod tests {
     fn test_created_on() {
         let mut c = empty_criteria();
         c.created_on = Some("2026-03-12".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value >= '2026-03-12T00:00:00'"));
-        assert!(aql.contains("e/time_created/value <= '2026-03-12T23:59:59'"));
+        let result = build_ehr_search_aql(&c);
+        // Date filters are not supported due to EHRBase limitations
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
     fn test_created_before() {
         let mut c = empty_criteria();
         c.created_before = Some("2026-03-12".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value < '2026-03-12T00:00:00'"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
     fn test_created_after() {
         let mut c = empty_criteria();
         c.created_after = Some("2026-03-12".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value > '2026-03-12T23:59:59'"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
@@ -877,9 +853,9 @@ mod tests {
         let mut c = empty_criteria();
         c.created_after = Some("2026-03-01".to_string());
         c.created_before = Some("2026-03-31".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value < '2026-03-31T00:00:00'"));
-        assert!(aql.contains("e/time_created/value > '2026-03-01T23:59:59'"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
@@ -888,13 +864,9 @@ mod tests {
         c.created_on = Some("2026-03-15".to_string());
         c.created_before = Some("2026-03-31".to_string());
         c.created_after = Some("2026-03-01".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        // created_on should be present
-        assert!(aql.contains("e/time_created/value >= '2026-03-15T00:00:00'"));
-        assert!(aql.contains("e/time_created/value <= '2026-03-15T23:59:59'"));
-        // created_before/after should NOT be present
-        assert!(!aql.contains("2026-03-31"));
-        assert!(!aql.contains("2026-03-01"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
@@ -922,8 +894,9 @@ mod tests {
         let mut c = empty_criteria();
         c.created_on = Some("not-a-date".to_string());
         let result = build_ehr_search_aql(&c);
+        // Date filters are not supported, so we get that error instead of validation error
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("YYYY-MM-DD"));
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]

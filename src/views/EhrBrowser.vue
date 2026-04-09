@@ -370,7 +370,7 @@ async function copyEhrJson() {
           <input
             class="input search-input"
             v-model="searchQuery"
-            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:...  created-on:..."
+            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:true"
             @keydown="onSearchKeydown"
             @input="onSearchInput"
             @focus="showHistory = searchHistory.length > 0 && !searchQuery"
@@ -429,17 +429,17 @@ async function copyEhrJson() {
               <td class="help-example">hasCompositions:true</td>
               <td>Has compositions (false not supported)</td>
             </tr>
-            <tr>
+            <tr style="opacity: 0.5;">
               <td class="help-example">created-on:YYYY-MM-DD</td>
-              <td>Created on that day</td>
+              <td>⚠️ Not supported (EHRBase limitation)</td>
             </tr>
-            <tr>
+            <tr style="opacity: 0.5;">
               <td class="help-example">created-before:YYYY-MM-DD</td>
-              <td>Created before that date</td>
+              <td>⚠️ Not supported (EHRBase limitation)</td>
             </tr>
-            <tr>
+            <tr style="opacity: 0.5;">
               <td class="help-example">created-after:YYYY-MM-DD</td>
-              <td>Created after that date</td>
+              <td>⚠️ Not supported (EHRBase limitation)</td>
             </tr>
           </table>
           <p class="help-note">

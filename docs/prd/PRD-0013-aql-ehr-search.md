@@ -68,9 +68,9 @@ The single search bar is retained but gains typed attribute syntax alongside fre
 | `modifiable:false` | EHR status is_modifiable = false |
 | `hasCompositions:true` | EHR has at least one composition |
 | `hasCompositions:false` | ⚠️ **Not supported** (AQL limitation) |
-| `created-on:2026-03-12` | EHR created on that calendar day (00:00:00–23:59:59) |
-| `created-before:2026-03-12` | EHR created strictly before 2026-03-12T00:00:00 |
-| `created-after:2026-03-12` | EHR created strictly after 2026-03-12T23:59:59 |
+| `created-on:2026-03-12` | ⚠️ **Not supported** (EHRBase limitation) |
+| `created-before:2026-03-12` | ⚠️ **Not supported** (EHRBase limitation) |
+| `created-after:2026-03-12` | ⚠️ **Not supported** (EHRBase limitation) |
 
 Multiple terms can be combined with a space (implicit AND):
 
@@ -236,6 +236,24 @@ The `hasCompositions:false` filter is **not currently supported** due to AQL lim
 - Use external filtering after fetching all EHRs via the REST API
 
 This limitation may be addressed in a future PRD if AQL or CDR implementations provide better support for negation queries.
+
+### Date Filters Not Supported
+
+The date filters `created-on`, `created-before`, and `created-after` are **not currently supported** due to EHRBase implementation limitations. While the openEHR specification defines `time_created` as an attribute of the EHR object, EHRBase does not support filtering on EHR-level attributes in AQL WHERE clauses.
+
+**Error from EHRBase:** `"Not implemented: WHERE: identified path 'time_created/value' for type EHR not supported"`
+
+**Why this happens:**
+1. EHRBase's AQL implementation only supports WHERE predicates on contained objects (COMPOSITION, EHR_STATUS, etc.)
+2. EHR-level attributes like `time_created` and `system_id` can be SELECTed but cannot be used in WHERE clauses
+3. This is an implementation gap in EHRBase, not a limitation of the AQL specification itself
+
+**Workaround:** Users who need to filter by creation date can:
+- Use the paginated list view which shows `time_created` for all EHRs
+- Sort results manually by date in the UI
+- Export the full EHR list and filter externally
+
+This limitation may be addressed if EHRBase adds support for WHERE predicates on EHR-level attributes in a future release.
 
 ## Technical Notes
 
