@@ -67,7 +67,7 @@ The single search bar is retained but gains typed attribute syntax alongside fre
 | `modifiable:true` | EHR status is_modifiable = true |
 | `modifiable:false` | EHR status is_modifiable = false |
 | `hasCompositions:true` | EHR has at least one composition |
-| `hasCompositions:false` | EHR has no compositions |
+| `hasCompositions:false` | ⚠️ **Not supported** (AQL limitation) |
 | `created-on:2026-03-12` | EHR created on that calendar day (00:00:00–23:59:59) |
 | `created-before:2026-03-12` | EHR created strictly before 2026-03-12T00:00:00 |
 | `created-after:2026-03-12` | EHR created strictly after 2026-03-12T23:59:59 |
@@ -219,6 +219,23 @@ Search results replace the paginated list in the EHR list panel. Layout changes 
 - Composition-level search — searching within compositions (e.g., "EHRs where blood pressure > 140") is out of scope for this PRD.
 - Sorting search results — results are returned in the order the CDR returns them (typically insertion order). Sorting is a future enhancement.
 - Saved search profiles — persisting named searches to disk is deferred to a future PRD.
+
+## Known Limitations
+
+### hasCompositions:false Not Supported
+
+The `hasCompositions:false` filter is **not currently supported** due to AQL limitations. AQL does not provide a clean way to query for "EHRs that do NOT contain any compositions" because:
+
+1. The `NOT EXISTS` clause in AQL requires a correlated subquery, which EHRBase does not support in the expected syntax
+2. AQL's containment model is designed for positive assertions (what IS contained), not negative assertions (what is NOT contained)
+3. Alternative approaches (LEFT JOIN patterns, COUNT aggregations) are not supported by the AQL grammar
+
+**Workaround:** Users who need to find EHRs without compositions can:
+- Use `hasCompositions:true` to find EHRs *with* compositions, then infer the inverse from the full list
+- Use the paginated list view and manually inspect composition counts
+- Use external filtering after fetching all EHRs via the REST API
+
+This limitation may be addressed in a future PRD if AQL or CDR implementations provide better support for negation queries.
 
 ## Technical Notes
 

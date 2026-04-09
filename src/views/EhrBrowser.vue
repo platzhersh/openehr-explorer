@@ -426,8 +426,8 @@ async function copyEhrJson() {
               <td>EHR status is_modifiable</td>
             </tr>
             <tr>
-              <td class="help-example">hasCompositions:true|false</td>
-              <td>Has/lacks compositions</td>
+              <td class="help-example">hasCompositions:true</td>
+              <td>Has compositions (false not supported)</td>
             </tr>
             <tr>
               <td class="help-example">created-on:YYYY-MM-DD</td>

@@ -629,8 +629,14 @@ FROM EHR e CONTAINS EHR_STATUS s"
 
     if let Some(has_comp) = criteria.has_compositions {
         if !has_comp {
-            // For has_compositions:false, we use NOT EXISTS with composition in the same EHR
-            predicates.push("NOT EXISTS COMPOSITION c".to_string());
+            // For has_compositions:false, AQL doesn't provide a clean way to express "no compositions"
+            // The best approach is to use a workaround: count compositions and filter where count = 0
+            // However, this requires a complex subquery that may not be supported by all CDRs
+            // For now, we'll document this as unsupported and suggest using the inverse search
+            return Err(
+                "hasCompositions:false is not currently supported due to AQL limitations. \
+                 To find EHRs with compositions, use hasCompositions:true instead.".to_string()
+            );
         }
         // For has_compositions:true, the FROM clause already includes COMPOSITION c,
         // so we don't need an additional predicate
@@ -835,8 +841,10 @@ mod tests {
     fn test_has_compositions_false() {
         let mut c = empty_criteria();
         c.has_compositions = Some(false);
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("NOT EXISTS COMPOSITION c"));
+        let result = build_ehr_search_aql(&c);
+        // hasCompositions:false is not currently supported due to AQL limitations
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
