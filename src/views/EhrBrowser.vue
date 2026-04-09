@@ -433,25 +433,10 @@ async function copyEhrJson() {
                 <td class="help-example">hasCompositions:true</td>
                 <td>Has compositions (false not supported)</td>
               </tr>
-              <tr style="opacity: 0.5">
-                <td class="help-example">created-on:YYYY-MM-DD</td>
-                <td>⚠️ Not supported (EHRBase limitation)</td>
-              </tr>
-              <tr style="opacity: 0.5">
-                <td class="help-example">created-before:YYYY-MM-DD</td>
-                <td>⚠️ Not supported (EHRBase limitation)</td>
-              </tr>
-              <tr style="opacity: 0.5">
-                <td class="help-example">created-after:YYYY-MM-DD</td>
-                <td>⚠️ Not supported (EHRBase limitation)</td>
-              </tr>
             </tbody>
           </table>
           <p class="help-note">
-            Combine terms with spaces (implicit AND). Dates must be YYYY-MM-DD.
-          </p>
-          <p class="help-note help-warning">
-            created-on overrides created-before/created-after if both are present.
+            Combine terms with spaces (implicit AND).
           </p>
           <p class="help-note">
             Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
