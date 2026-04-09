@@ -541,7 +541,6 @@ fn escape_aql_string(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-
 /// Build an AQL query string from the given search criteria.
 /// Returns an error if no criteria are provided (to prevent full-table scans).
 pub fn build_ehr_search_aql(criteria: &EhrSearchCriteria) -> Result<String, String> {
@@ -625,7 +624,8 @@ FROM EHR e CONTAINS EHR_STATUS s"
             // For now, we'll document this as unsupported and suggest using the inverse search
             return Err(
                 "hasCompositions:false is not currently supported due to AQL limitations. \
-                 To find EHRs with compositions, use hasCompositions:true instead.".to_string()
+                 To find EHRs with compositions, use hasCompositions:true instead."
+                    .to_string(),
             );
         }
         // For has_compositions:true, the FROM clause already includes COMPOSITION c,
@@ -635,11 +635,15 @@ FROM EHR e CONTAINS EHR_STATUS s"
     // Date handling: created_on takes precedence over created_before/created_after
     // NOTE: EHRBase does not support filtering on e/time_created in WHERE clauses
     // This is a known AQL limitation - EHR-level attributes cannot be used in predicates
-    if criteria.created_on.is_some() || criteria.created_before.is_some() || criteria.created_after.is_some() {
+    if criteria.created_on.is_some()
+        || criteria.created_before.is_some()
+        || criteria.created_after.is_some()
+    {
         return Err(
             "Date filters (created-on, created-before, created-after) are not currently supported \
              due to EHRBase limitations. EHR-level attributes like time_created cannot be used in \
-             WHERE clauses. Use the paginated list view and sort by creation date instead.".to_string()
+             WHERE clauses. Use the paginated list view and sort by creation date instead."
+                .to_string(),
         );
     }
 
