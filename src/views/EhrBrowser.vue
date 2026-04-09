@@ -975,6 +975,31 @@ async function copyEhrJson() {
   flex: 1;
 }
 
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--color-text-muted);
+}
+.empty-state h3 {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.empty-state p {
+  font-size: 13px;
+}
+.empty-state a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.empty-state a:hover {
+  text-decoration: underline;
+}
+
 .ehr-item {
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
