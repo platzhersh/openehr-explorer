@@ -35,6 +35,7 @@ pub fn run() {
             ehr::create_ehr,
             ehr::update_ehr_status,
             ehr::delete_ehr,
+            ehr::search_ehrs,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,

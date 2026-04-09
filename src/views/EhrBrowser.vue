@@ -2,7 +2,7 @@
 import { ref, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
-import { useEhrStore, type CompositionSummary } from "../stores/ehr";
+import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 
 const route = useRoute();
@@ -17,6 +17,12 @@ const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "json">("detail");
+const showHelpPopover = ref(false);
+const validationError = ref<string | null>(null);
+const searchHistory = ref<string[]>([]);
+const showHistory = ref(false);
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 const ehrId = computed(() => route.params.ehrId as string | undefined);
 
@@ -33,9 +39,199 @@ watch(
 
 watch(ehrId, (id) => {
   if (id && serverStore.activeServerId) {
+    // If we have search results and the selected EHR is in them, pre-populate from search data
+    if (ehrStore.searchActive) {
+      const searchResult = ehrStore.searchResults.find((r) => r.ehr_id === id);
+      if (searchResult) {
+        // Still fetch full detail for compositions, but we have metadata already
+        ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
+        return;
+      }
+    }
     ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
   }
 });
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseSearchInput(raw: string): {
+  criteria: EhrSearchCriteria | null;
+  error: string | null;
+  warning: string | null;
+} {
+  const trimmed = raw.trim();
+  if (!trimmed) return { criteria: null, error: null, warning: null };
+
+  const criteria: EhrSearchCriteria = {};
+  let warning: string | null = null;
+  const tokens = trimmed.split(/\s+/);
+
+  for (const token of tokens) {
+    const colonIdx = token.indexOf(":");
+    if (colonIdx === -1) {
+      // No colon — treat as EHR ID prefix
+      if (criteria.ehr_id_prefix) {
+        criteria.ehr_id_prefix += token; // append if multiple bare tokens
+      } else {
+        criteria.ehr_id_prefix = token;
+      }
+      continue;
+    }
+
+    const prefix = token.substring(0, colonIdx);
+    const value = token.substring(colonIdx + 1);
+
+    if (!value) {
+      return { criteria: null, error: `${prefix}: value cannot be empty.`, warning: null };
+    }
+
+    switch (prefix) {
+      case "subject":
+        criteria.subject_id = value;
+        break;
+      case "namespace":
+        criteria.subject_namespace = value;
+        break;
+      case "system":
+        criteria.system_id = value;
+        break;
+      case "modifiable":
+        if (value !== "true" && value !== "false") {
+          return { criteria: null, error: "modifiable: expects 'true' or 'false'.", warning: null };
+        }
+        criteria.modifiable = value === "true";
+        break;
+      case "hasCompositions":
+        if (value !== "true" && value !== "false") {
+          return {
+            criteria: null,
+            error: "hasCompositions: expects 'true' or 'false'.",
+            warning: null,
+          };
+        }
+        criteria.has_compositions = value === "true";
+        break;
+      case "created-on":
+        if (!DATE_RE.test(value)) {
+          return {
+            criteria: null,
+            error: "created-on: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
+            warning: null,
+          };
+        }
+        criteria.created_on = value;
+        break;
+      case "created-before":
+        if (!DATE_RE.test(value)) {
+          return {
+            criteria: null,
+            error: "created-before: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
+            warning: null,
+          };
+        }
+        criteria.created_before = value;
+        break;
+      case "created-after":
+        if (!DATE_RE.test(value)) {
+          return {
+            criteria: null,
+            error: "created-after: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
+            warning: null,
+          };
+        }
+        criteria.created_after = value;
+        break;
+      default:
+        // Unknown prefix — treat as EHR ID prefix (safe fallback)
+        if (criteria.ehr_id_prefix) {
+          criteria.ehr_id_prefix += token;
+        } else {
+          criteria.ehr_id_prefix = token;
+        }
+        break;
+    }
+  }
+
+  // Conflict resolution: created_on overrides created_before/created_after
+  if (criteria.created_on && (criteria.created_before || criteria.created_after)) {
+    warning = "created-on overrides created-before/created-after. Only created-on is used.";
+    delete criteria.created_before;
+    delete criteria.created_after;
+  }
+
+  return { criteria, error: null, warning };
+}
+
+function executeSearch() {
+  validationError.value = null;
+  const raw = searchQuery.value.trim();
+
+  if (!raw) {
+    clearSearch();
+    return;
+  }
+
+  const { criteria, error } = parseSearchInput(raw);
+
+  if (error) {
+    validationError.value = error;
+    return;
+  }
+
+  if (!criteria) {
+    clearSearch();
+    return;
+  }
+
+  if (!serverStore.activeServerId) return;
+
+  // Add to history
+  if (!searchHistory.value.includes(raw)) {
+    searchHistory.value.unshift(raw);
+    if (searchHistory.value.length > 10) searchHistory.value.pop();
+  }
+
+  showHistory.value = false;
+  ehrStore.searchEhrs(serverStore.activeServerId, criteria);
+}
+
+function onSearchKeydown(e: KeyboardEvent) {
+  if (e.key === "Enter") {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    executeSearch();
+  }
+}
+
+function onSearchInput() {
+  validationError.value = null;
+  if (debounceTimer) clearTimeout(debounceTimer);
+  if (!searchQuery.value.trim()) {
+    clearSearch();
+    return;
+  }
+  debounceTimer = setTimeout(() => {
+    executeSearch();
+  }, 600);
+}
+
+function clearSearch() {
+  searchQuery.value = "";
+  validationError.value = null;
+  ehrStore.clearSearch();
+  if (serverStore.activeServerId) {
+    ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
+  }
+}
+
+function hideHistoryDelayed() {
+  setTimeout(() => (showHistory.value = false), 200);
+}
+
+function selectHistoryItem(item: string) {
+  searchQuery.value = item;
+  showHistory.value = false;
+  executeSearch();
+}
 
 function selectEhr(id: string) {
   router.push({ name: "ehr-detail", params: { ehrId: id } });
@@ -66,7 +262,11 @@ function nextPage() {
 
 function refresh() {
   if (serverStore.activeServerId) {
-    ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
+    if (ehrStore.searchActive) {
+      executeSearch();
+    } else {
+      ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
+    }
   }
 }
 
@@ -74,19 +274,9 @@ async function copyToClipboard(text: string) {
   await navigator.clipboard.writeText(text);
 }
 
-const filteredEhrs = computed(() => {
-  let ehrs = ehrStore.ehrs;
-
-  // Filter by search query
-  if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase();
-    ehrs = ehrs.filter(
-      (e) => e.ehr_id.toLowerCase().includes(q) || e.subject_id?.toLowerCase().includes(q),
-    );
-  }
-
-  // Sort by time_created descending (newest first)
-  return [...ehrs].sort((a, b) => {
+// Sort paginated EHRs by time_created descending (only when not searching)
+const sortedEhrs = computed(() => {
+  return [...ehrStore.ehrs].sort((a, b) => {
     if (!a.time_created && !b.time_created) return 0;
     if (!a.time_created) return 1;
     if (!b.time_created) return -1;
@@ -165,7 +355,10 @@ async function copyEhrJson() {
   <div class="ehr-browser">
     <div class="panel-left">
       <div class="panel-header">
-        <h2>EHRs</h2>
+        <h2 v-if="ehrStore.searchActive">
+          EHRs — Search Results ({{ ehrStore.searchResults.length }})
+        </h2>
+        <h2 v-else>EHRs</h2>
         <div class="header-actions">
           <button class="btn btn-sm btn-primary" @click="showCreateDialog = true">+ New EHR</button>
           <button class="btn btn-sm" @click="refresh">Refresh</button>
@@ -173,23 +366,172 @@ async function copyEhrJson() {
       </div>
 
       <div class="search-bar">
-        <input
-          class="input search-input"
-          v-model="searchQuery"
-          placeholder="Search by EHR ID or subject..."
-        />
+        <div class="search-input-wrapper">
+          <input
+            class="input search-input"
+            v-model="searchQuery"
+            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:...  created-on:..."
+            @keydown="onSearchKeydown"
+            @input="onSearchInput"
+            @focus="showHistory = searchHistory.length > 0 && !searchQuery"
+            @blur="hideHistoryDelayed"
+          />
+          <button v-if="searchQuery" class="clear-btn" @click="clearSearch" title="Clear search">
+            &times;
+          </button>
+          <button
+            class="help-btn"
+            @click="showHelpPopover = !showHelpPopover"
+            title="Search syntax help"
+          >
+            ?
+          </button>
+        </div>
+
+        <!-- Validation error -->
+        <div v-if="validationError" class="search-validation-error">
+          {{ validationError }}
+        </div>
+
+        <!-- Search error from backend -->
+        <div v-if="ehrStore.searchError" class="search-validation-error">
+          Search failed: {{ ehrStore.searchError }}
+        </div>
+
+        <!-- Help popover -->
+        <div v-if="showHelpPopover" class="help-popover">
+          <div class="help-popover-header">
+            <strong>Search Syntax</strong>
+            <button class="close-btn" @click="showHelpPopover = false">&times;</button>
+          </div>
+          <table class="help-table">
+            <tr>
+              <td class="help-example">fde80e0e...</td>
+              <td>EHR ID prefix match</td>
+            </tr>
+            <tr>
+              <td class="help-example">subject:value</td>
+              <td>Subject ID contains match</td>
+            </tr>
+            <tr>
+              <td class="help-example">namespace:value</td>
+              <td>Subject namespace exact match</td>
+            </tr>
+            <tr>
+              <td class="help-example">system:value</td>
+              <td>System ID exact match</td>
+            </tr>
+            <tr>
+              <td class="help-example">modifiable:true|false</td>
+              <td>EHR status is_modifiable</td>
+            </tr>
+            <tr>
+              <td class="help-example">hasCompositions:true|false</td>
+              <td>Has/lacks compositions</td>
+            </tr>
+            <tr>
+              <td class="help-example">created-on:YYYY-MM-DD</td>
+              <td>Created on that day</td>
+            </tr>
+            <tr>
+              <td class="help-example">created-before:YYYY-MM-DD</td>
+              <td>Created before that date</td>
+            </tr>
+            <tr>
+              <td class="help-example">created-after:YYYY-MM-DD</td>
+              <td>Created after that date</td>
+            </tr>
+          </table>
+          <p class="help-note">
+            Combine terms with spaces (implicit AND). Dates must be YYYY-MM-DD.
+          </p>
+          <p class="help-note help-warning">
+            created-on overrides created-before/created-after if both are present.
+          </p>
+          <p class="help-note">
+            Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
+            Inspector.
+          </p>
+        </div>
+
+        <!-- Search history dropdown -->
+        <div v-if="showHistory && searchHistory.length > 0" class="history-dropdown">
+          <div
+            v-for="item in searchHistory"
+            :key="item"
+            class="history-item"
+            @mousedown.prevent="selectHistoryItem(item)"
+          >
+            {{ item }}
+          </div>
+        </div>
       </div>
 
-      <div v-if="ehrStore.loading" class="loading">Loading...</div>
-      <div v-else-if="ehrStore.error" class="error-msg">{{ ehrStore.error }}</div>
+      <!-- Back to list link when search is active -->
+      <div v-if="ehrStore.searchActive" class="back-to-list">
+        <a href="#" @click.prevent="clearSearch">&larr; Back to list</a>
+      </div>
+
+      <!-- Limit reached banner -->
+      <div v-if="ehrStore.searchActive && ehrStore.searchLimitReached" class="limit-banner">
+        Showing first 200 results — refine your search to narrow down.
+      </div>
+
+      <!-- Loading state -->
+      <div v-if="ehrStore.searchLoading || ehrStore.loading" class="loading">
+        <span class="spinner"></span> Loading...
+      </div>
+      <div v-else-if="!ehrStore.searchActive && ehrStore.error" class="error-msg">
+        {{ ehrStore.error }}
+      </div>
       <div v-else-if="!serverStore.activeServerId" class="empty-state">
         <h3>No server selected</h3>
         <p>Configure a server in the Servers tab.</p>
       </div>
+
+      <!-- Search results -->
+      <div v-else-if="ehrStore.searchActive">
+        <div
+          v-if="ehrStore.searchResults.length === 0 && !ehrStore.searchLoading"
+          class="empty-state"
+        >
+          <h3>No EHRs match your search.</h3>
+          <p><a href="#" @click.prevent="clearSearch">Clear search</a></p>
+        </div>
+        <div v-else class="ehr-list">
+          <div
+            v-for="ehr in ehrStore.searchResults"
+            :key="ehr.ehr_id"
+            class="ehr-item"
+            :class="{ active: ehr.ehr_id === ehrId }"
+            @click="selectEhr(ehr.ehr_id)"
+          >
+            <div class="ehr-id">
+              <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
+              <button
+                class="copy-btn"
+                @click.stop="copyToClipboard(ehr.ehr_id)"
+                title="Copy full ID"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="ehr-meta">
+              <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
+              <span v-if="ehr.subject_id" class="meta-item">Subject: {{ ehr.subject_id }}</span>
+              <span v-if="ehr.subject_namespace" class="meta-item"
+                >NS: {{ ehr.subject_namespace }}</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Normal paginated list -->
       <div v-else>
         <div class="ehr-list">
           <div
-            v-for="ehr in filteredEhrs"
+            v-for="ehr in sortedEhrs"
             :key="ehr.ehr_id"
             class="ehr-item"
             :class="{ active: ehr.ehr_id === ehrId }"
@@ -471,9 +813,162 @@ async function copyEhrJson() {
 
 .search-bar {
   padding: 8px 16px;
+  position: relative;
+}
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .search-input {
+  flex: 1;
+  font-size: 12px;
+}
+.clear-btn,
+.help-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.clear-btn:hover,
+.help-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.search-validation-error {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-error);
+  font-size: 12px;
+}
+
+.help-popover {
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  right: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.help-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.help-popover-header strong {
+  font-size: 13px;
+}
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+.help-table {
   width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.help-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.help-example {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+.help-note {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 6px 0 0;
+}
+.help-warning {
+  color: var(--color-warning, #e6a817);
+}
+
+.history-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  right: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.history-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+}
+.history-item:hover {
+  background: var(--color-surface);
+}
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.back-to-list {
+  padding: 4px 16px 8px;
+}
+.back-to-list a {
+  font-size: 12px;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.back-to-list a:hover {
+  text-decoration: underline;
+}
+
+.limit-banner {
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  background: rgba(255, 200, 50, 0.1);
+  border: 1px solid rgba(255, 200, 50, 0.3);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .ehr-list {
