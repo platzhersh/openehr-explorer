@@ -432,15 +432,15 @@ async function copyEhrJson() {
               <td class="help-example">hasCompositions:true</td>
               <td>Has compositions (false not supported)</td>
             </tr>
-            <tr style="opacity: 0.5;">
+            <tr style="opacity: 0.5">
               <td class="help-example">created-on:YYYY-MM-DD</td>
               <td>⚠️ Not supported (EHRBase limitation)</td>
             </tr>
-            <tr style="opacity: 0.5;">
+            <tr style="opacity: 0.5">
               <td class="help-example">created-before:YYYY-MM-DD</td>
               <td>⚠️ Not supported (EHRBase limitation)</td>
             </tr>
-            <tr style="opacity: 0.5;">
+            <tr style="opacity: 0.5">
               <td class="help-example">created-after:YYYY-MM-DD</td>
               <td>⚠️ Not supported (EHRBase limitation)</td>
             </tr>
