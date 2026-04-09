@@ -1,4 +1,3 @@
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -542,20 +541,29 @@ fn escape_aql_string(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-/// Parse a YYYY-MM-DD string into a NaiveDate, returning a user-friendly error.
-fn parse_date(field: &str, value: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| {
-        format!(
-            "{}: expects a date in YYYY-MM-DD format (e.g. 2026-03-12), got '{}'",
-            field, value
-        )
-    })
-}
-
 /// Build an AQL query string from the given search criteria.
 /// Returns an error if no criteria are provided (to prevent full-table scans).
 pub fn build_ehr_search_aql(criteria: &EhrSearchCriteria) -> Result<String, String> {
-    let base = "\
+    // Determine if we need to include COMPOSITION in the FROM clause
+    let has_compositions_filter = criteria.has_compositions == Some(true);
+
+    let base = if has_compositions_filter {
+        // When filtering for EHRs with compositions, we query compositions
+        // and join with EHR_STATUS data. Use DISTINCT to avoid duplicates.
+        // This uses the standard pattern: FROM EHR e [archetype_id] CONTAINS COMPOSITION c [archetype_id]
+        "\
+SELECT DISTINCT \
+e/ehr_id/value, \
+e/time_created/value, \
+e/ehr_status/subject/external_ref/id/value AS subject_id, \
+e/ehr_status/subject/external_ref/namespace AS subject_namespace, \
+e/ehr_status/is_modifiable AS modifiable, \
+e/ehr_status/is_queryable AS queryable, \
+e/system_id/value AS system_id \
+FROM EHR e CONTAINS COMPOSITION c"
+    } else {
+        // Standard query without composition requirement
+        "\
 SELECT \
 e/ehr_id/value, \
 e/time_created/value, \
@@ -564,9 +572,18 @@ s/subject/external_ref/namespace AS subject_namespace, \
 s/is_modifiable AS modifiable, \
 s/is_queryable AS queryable, \
 e/system_id/value AS system_id \
-FROM EHR e CONTAINS EHR_STATUS s";
+FROM EHR e CONTAINS EHR_STATUS s"
+    };
 
     let mut predicates: Vec<String> = Vec::new();
+
+    // Determine the correct path prefix for EHR_STATUS fields
+    // When filtering by compositions, we access ehr_status via the EHR object path
+    let status_prefix = if has_compositions_filter {
+        "e/ehr_status"
+    } else {
+        "s"
+    };
 
     if let Some(ref prefix) = criteria.ehr_id_prefix {
         predicates.push(format!(
@@ -577,14 +594,16 @@ FROM EHR e CONTAINS EHR_STATUS s";
 
     if let Some(ref subject_id) = criteria.subject_id {
         predicates.push(format!(
-            "s/subject/external_ref/id/value LIKE '%{}%'",
+            "{}/subject/external_ref/id/value LIKE '%{}%'",
+            status_prefix,
             escape_aql_string(subject_id)
         ));
     }
 
     if let Some(ref ns) = criteria.subject_namespace {
         predicates.push(format!(
-            "s/subject/external_ref/namespace = '{}'",
+            "{}/subject/external_ref/namespace = '{}'",
+            status_prefix,
             escape_aql_string(ns)
         ));
     }
@@ -594,55 +613,53 @@ FROM EHR e CONTAINS EHR_STATUS s";
     }
 
     if let Some(modifiable) = criteria.modifiable {
-        predicates.push(format!("s/is_modifiable = {}", modifiable));
+        predicates.push(format!("{}/is_modifiable = {}", status_prefix, modifiable));
     }
 
     if let Some(has_comp) = criteria.has_compositions {
-        if has_comp {
-            predicates.push(
-                "EXISTS (SELECT c FROM EHR e2 CONTAINS COMPOSITION c WHERE e2/ehr_id/value = e/ehr_id/value)".to_string()
-            );
-        } else {
-            predicates.push(
-                "NOT EXISTS (SELECT c FROM EHR e2 CONTAINS COMPOSITION c WHERE e2/ehr_id/value = e/ehr_id/value)".to_string()
+        if !has_comp {
+            // For has_compositions:false, AQL doesn't provide a clean way to express "no compositions"
+            // The best approach is to use a workaround: count compositions and filter where count = 0
+            // However, this requires a complex subquery that may not be supported by all CDRs
+            // For now, we'll document this as unsupported and suggest using the inverse search
+            return Err(
+                "hasCompositions:false is not currently supported due to AQL limitations. \
+                 To find EHRs with compositions, use hasCompositions:true instead."
+                    .to_string(),
             );
         }
+        // For has_compositions:true, the FROM clause already includes COMPOSITION c,
+        // so we don't need an additional predicate
     }
 
     // Date handling: created_on takes precedence over created_before/created_after
-    if let Some(ref date_str) = criteria.created_on {
-        let date = parse_date("created_on", date_str)?;
-        predicates.push(format!(
-            "e/time_created/value >= '{}T00:00:00'",
-            date.format("%Y-%m-%d")
-        ));
-        predicates.push(format!(
-            "e/time_created/value <= '{}T23:59:59'",
-            date.format("%Y-%m-%d")
-        ));
-    } else {
-        if let Some(ref date_str) = criteria.created_before {
-            let date = parse_date("created_before", date_str)?;
-            predicates.push(format!(
-                "e/time_created/value < '{}T00:00:00'",
-                date.format("%Y-%m-%d")
-            ));
-        }
-        if let Some(ref date_str) = criteria.created_after {
-            let date = parse_date("created_after", date_str)?;
-            predicates.push(format!(
-                "e/time_created/value > '{}T23:59:59'",
-                date.format("%Y-%m-%d")
-            ));
-        }
+    // NOTE: EHRBase does not support filtering on e/time_created in WHERE clauses
+    // This is a known AQL limitation - EHR-level attributes cannot be used in predicates
+    if criteria.created_on.is_some()
+        || criteria.created_before.is_some()
+        || criteria.created_after.is_some()
+    {
+        return Err(
+            "Date filters (created-on, created-before, created-after) are not currently supported \
+             due to EHRBase limitations. EHR-level attributes like time_created cannot be used in \
+             WHERE clauses. Use the paginated list view and sort by creation date instead."
+                .to_string(),
+        );
     }
 
-    if predicates.is_empty() {
+    // Check if any criteria was provided (either predicates or has_compositions:true)
+    if predicates.is_empty() && !has_compositions_filter {
         return Err("At least one search criterion must be provided".to_string());
     }
 
-    let where_clause = predicates.join(" AND ");
-    Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
+    // Build the final query
+    if predicates.is_empty() {
+        // Only has_compositions:true, no WHERE clause needed
+        Ok(format!("{} LIMIT 200", base))
+    } else {
+        let where_clause = predicates.join(" AND ");
+        Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
+    }
 }
 
 #[tauri::command]
@@ -790,40 +807,49 @@ mod tests {
         let mut c = empty_criteria();
         c.has_compositions = Some(true);
         let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("EXISTS (SELECT c FROM EHR e2 CONTAINS COMPOSITION c WHERE e2/ehr_id/value = e/ehr_id/value)"));
+        // When searching for EHRs with compositions, COMPOSITION is included in FROM clause
+        // EHR_STATUS is accessed via path notation (e/ehr_status/...)
+        assert!(aql.contains("FROM EHR e CONTAINS COMPOSITION c"));
+        assert!(aql.contains("SELECT DISTINCT"));
+        assert!(aql.contains("e/ehr_status/"));
     }
 
     #[test]
     fn test_has_compositions_false() {
         let mut c = empty_criteria();
         c.has_compositions = Some(false);
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("NOT EXISTS (SELECT c FROM EHR e2 CONTAINS COMPOSITION c WHERE e2/ehr_id/value = e/ehr_id/value)"));
+        let result = build_ehr_search_aql(&c);
+        // hasCompositions:false is not currently supported due to AQL limitations
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
     fn test_created_on() {
         let mut c = empty_criteria();
         c.created_on = Some("2026-03-12".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value >= '2026-03-12T00:00:00'"));
-        assert!(aql.contains("e/time_created/value <= '2026-03-12T23:59:59'"));
+        let result = build_ehr_search_aql(&c);
+        // Date filters are not supported due to EHRBase limitations
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
     fn test_created_before() {
         let mut c = empty_criteria();
         c.created_before = Some("2026-03-12".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value < '2026-03-12T00:00:00'"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
     fn test_created_after() {
         let mut c = empty_criteria();
         c.created_after = Some("2026-03-12".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value > '2026-03-12T23:59:59'"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
@@ -831,9 +857,9 @@ mod tests {
         let mut c = empty_criteria();
         c.created_after = Some("2026-03-01".to_string());
         c.created_before = Some("2026-03-31".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/time_created/value < '2026-03-31T00:00:00'"));
-        assert!(aql.contains("e/time_created/value > '2026-03-01T23:59:59'"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
@@ -842,13 +868,9 @@ mod tests {
         c.created_on = Some("2026-03-15".to_string());
         c.created_before = Some("2026-03-31".to_string());
         c.created_after = Some("2026-03-01".to_string());
-        let aql = build_ehr_search_aql(&c).unwrap();
-        // created_on should be present
-        assert!(aql.contains("e/time_created/value >= '2026-03-15T00:00:00'"));
-        assert!(aql.contains("e/time_created/value <= '2026-03-15T23:59:59'"));
-        // created_before/after should NOT be present
-        assert!(!aql.contains("2026-03-31"));
-        assert!(!aql.contains("2026-03-01"));
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]
@@ -876,8 +898,9 @@ mod tests {
         let mut c = empty_criteria();
         c.created_on = Some("not-a-date".to_string());
         let result = build_ehr_search_aql(&c);
+        // Date filters are not supported, so we get that error instead of validation error
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("YYYY-MM-DD"));
+        assert!(result.unwrap_err().contains("not currently supported"));
     }
 
     #[test]

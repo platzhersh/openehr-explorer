@@ -370,7 +370,10 @@ async function copyEhrJson() {
           <input
             class="input search-input"
             v-model="searchQuery"
-            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:...  created-on:..."
+            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:true"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
             @keydown="onSearchKeydown"
             @input="onSearchInput"
             @focus="showHistory = searchHistory.length > 0 && !searchQuery"
@@ -405,49 +408,34 @@ async function copyEhrJson() {
             <button class="close-btn" @click="showHelpPopover = false">&times;</button>
           </div>
           <table class="help-table">
-            <tr>
-              <td class="help-example">fde80e0e...</td>
-              <td>EHR ID prefix match</td>
-            </tr>
-            <tr>
-              <td class="help-example">subject:value</td>
-              <td>Subject ID contains match</td>
-            </tr>
-            <tr>
-              <td class="help-example">namespace:value</td>
-              <td>Subject namespace exact match</td>
-            </tr>
-            <tr>
-              <td class="help-example">system:value</td>
-              <td>System ID exact match</td>
-            </tr>
-            <tr>
-              <td class="help-example">modifiable:true|false</td>
-              <td>EHR status is_modifiable</td>
-            </tr>
-            <tr>
-              <td class="help-example">hasCompositions:true|false</td>
-              <td>Has/lacks compositions</td>
-            </tr>
-            <tr>
-              <td class="help-example">created-on:YYYY-MM-DD</td>
-              <td>Created on that day</td>
-            </tr>
-            <tr>
-              <td class="help-example">created-before:YYYY-MM-DD</td>
-              <td>Created before that date</td>
-            </tr>
-            <tr>
-              <td class="help-example">created-after:YYYY-MM-DD</td>
-              <td>Created after that date</td>
-            </tr>
+            <tbody>
+              <tr>
+                <td class="help-example">fde80e0e...</td>
+                <td>EHR ID prefix match</td>
+              </tr>
+              <tr>
+                <td class="help-example">subject:value</td>
+                <td>Subject ID contains match</td>
+              </tr>
+              <tr>
+                <td class="help-example">namespace:value</td>
+                <td>Subject namespace exact match</td>
+              </tr>
+              <tr>
+                <td class="help-example">system:value</td>
+                <td>System ID exact match</td>
+              </tr>
+              <tr>
+                <td class="help-example">modifiable:true|false</td>
+                <td>EHR status is_modifiable</td>
+              </tr>
+              <tr>
+                <td class="help-example">hasCompositions:true</td>
+                <td>Has compositions (false not supported)</td>
+              </tr>
+            </tbody>
           </table>
-          <p class="help-note">
-            Combine terms with spaces (implicit AND). Dates must be YYYY-MM-DD.
-          </p>
-          <p class="help-note help-warning">
-            created-on overrides created-before/created-after if both are present.
-          </p>
+          <p class="help-note">Combine terms with spaces (implicit AND).</p>
           <p class="help-note">
             Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
             Inspector.
@@ -973,6 +961,31 @@ async function copyEhrJson() {
 
 .ehr-list {
   flex: 1;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--color-text-muted);
+}
+.empty-state h3 {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.empty-state p {
+  font-size: 13px;
+}
+.empty-state a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.empty-state a:hover {
+  text-decoration: underline;
 }
 
 .ehr-item {

@@ -67,10 +67,10 @@ The single search bar is retained but gains typed attribute syntax alongside fre
 | `modifiable:true` | EHR status is_modifiable = true |
 | `modifiable:false` | EHR status is_modifiable = false |
 | `hasCompositions:true` | EHR has at least one composition |
-| `hasCompositions:false` | EHR has no compositions |
-| `created-on:2026-03-12` | EHR created on that calendar day (00:00:00–23:59:59) |
-| `created-before:2026-03-12` | EHR created strictly before 2026-03-12T00:00:00 |
-| `created-after:2026-03-12` | EHR created strictly after 2026-03-12T23:59:59 |
+| `hasCompositions:false` | ⚠️ **Not supported** (AQL limitation) |
+| `created-on:2026-03-12` | ⚠️ **Not supported** (EHRBase limitation) |
+| `created-before:2026-03-12` | ⚠️ **Not supported** (EHRBase limitation) |
+| `created-after:2026-03-12` | ⚠️ **Not supported** (EHRBase limitation) |
 
 Multiple terms can be combined with a space (implicit AND):
 
@@ -219,6 +219,41 @@ Search results replace the paginated list in the EHR list panel. Layout changes 
 - Composition-level search — searching within compositions (e.g., "EHRs where blood pressure > 140") is out of scope for this PRD.
 - Sorting search results — results are returned in the order the CDR returns them (typically insertion order). Sorting is a future enhancement.
 - Saved search profiles — persisting named searches to disk is deferred to a future PRD.
+
+## Known Limitations
+
+### hasCompositions:false Not Supported
+
+The `hasCompositions:false` filter is **not currently supported** due to AQL limitations. AQL does not provide a clean way to query for "EHRs that do NOT contain any compositions" because:
+
+1. The `NOT EXISTS` clause in AQL requires a correlated subquery, which EHRBase does not support in the expected syntax
+2. AQL's containment model is designed for positive assertions (what IS contained), not negative assertions (what is NOT contained)
+3. Alternative approaches (LEFT JOIN patterns, COUNT aggregations) are not supported by the AQL grammar
+
+**Workaround:** Users who need to find EHRs without compositions can:
+- Use `hasCompositions:true` to find EHRs *with* compositions, then infer the inverse from the full list
+- Use the paginated list view and manually inspect composition counts
+- Use external filtering after fetching all EHRs via the REST API
+
+This limitation may be addressed in a future PRD if AQL or CDR implementations provide better support for negation queries.
+
+### Date Filters Not Supported
+
+The date filters `created-on`, `created-before`, and `created-after` are **not currently supported** due to EHRBase implementation limitations. While the openEHR specification defines `time_created` as an attribute of the EHR object, EHRBase does not support filtering on EHR-level attributes in AQL WHERE clauses.
+
+**Error from EHRBase:** `"Not implemented: WHERE: identified path 'time_created/value' for type EHR not supported"`
+
+**Why this happens:**
+1. EHRBase's AQL implementation only supports WHERE predicates on contained objects (COMPOSITION, EHR_STATUS, etc.)
+2. EHR-level attributes like `time_created` and `system_id` can be SELECTed but cannot be used in WHERE clauses
+3. This is an implementation gap in EHRBase, not a limitation of the AQL specification itself
+
+**Workaround:** Users who need to filter by creation date can:
+- Use the paginated list view which shows `time_created` for all EHRs
+- Sort results manually by date in the UI
+- Export the full EHR list and filter externally
+
+This limitation may be addressed if EHRBase adds support for WHERE predicates on EHR-level attributes in a future release.
 
 ## Technical Notes
 
