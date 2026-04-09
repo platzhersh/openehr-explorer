@@ -435,9 +435,7 @@ async function copyEhrJson() {
               </tr>
             </tbody>
           </table>
-          <p class="help-note">
-            Combine terms with spaces (implicit AND).
-          </p>
+          <p class="help-note">Combine terms with spaces (implicit AND).</p>
           <p class="help-note">
             Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
             Inspector.
