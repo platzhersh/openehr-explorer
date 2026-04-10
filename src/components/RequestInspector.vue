@@ -40,9 +40,9 @@ watch(
   },
 );
 
-// Keyboard shortcut: Ctrl+Shift+L
+// Keyboard shortcut: Ctrl+Shift+I (Inspector)
 function handleKeydown(e: KeyboardEvent) {
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "L") {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "I" || e.key === "i")) {
     e.preventDefault();
     toggleDrawer();
   }
