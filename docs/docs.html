@@ -701,25 +701,27 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
-        <h3>v0.2.0 — EHR Browser Search</h3>
+        <h3>v0.2.0 — EHR Browser Search &amp; Enhanced Features</h3>
         <ul>
-          <li><strong>EHR Browser:</strong> Paginated listing, create, delete</li>
+          <li><strong>EHR Browser Search:</strong> Server-side AQL-backed search with attribute filters (subject, namespace, system, modifiable, hasCompositions)</li>
+          <li><strong>Server Version Detection:</strong> Auto-detect and display CDR version for EHRBase and Better Platform</li>
+          <li><strong>Global Keyboard Shortcuts:</strong> Navigate with Cmd+1-4, open settings with Cmd+,, toggle inspector with Cmd+Shift+I</li>
         </ul>
 
         <h3>v0.1.0 — Initial Release</h3>
         <ul>
-          <li><strong>EHR Browser:</strong> Actual search support by system, creation date, subject</li>
+          <li><strong>EHR Browser:</strong> Paginated listing, create, delete EHRs</li>
           <li><strong>Composition Viewer:</strong> Pretty / JSON / FLAT views, path panel, version navigation</li>
           <li><strong>Composition CRUD:</strong> Create, edit, delete compositions in FLAT format</li>
           <li><strong>Template Browser:</strong> List templates, inspect Web Template tree, upload OPT</li>
-          <li><strong>AQL Runner:</strong> Execute queries, sortable results table, saved queries, CSV export</li>
+          <li><strong>AQL Runner:</strong> Execute queries with 3-layer autocomplete (keywords, RM paths, template-aware paths), sortable results table, saved queries, CSV export, auto-format</li>
           <li><strong>Server Manager:</strong> Multi-server profiles with EHRBase and Better Platform support</li>
-          <li><strong>Request Inspector:</strong> View raw HTTP requests/responses for debugging</li>
+          <li><strong>Request Inspector:</strong> View raw HTTP requests/responses for debugging with Tree/Raw/FLAT views, copy as curl</li>
         </ul>
 
         <div class="note">
           <div class="callout-title">What's next?</div>
-          See the <a href="https://github.com/platzhersh/openehr-explorer">GitHub repository</a> for the roadmap. Key planned features include AQL autocomplete (v0.2.0) and a synthetic data generator.
+          See the <a href="https://github.com/platzhersh/openehr-explorer">GitHub repository</a> for the roadmap. Planned features include composition diff tool and synthetic data generation.
         </div>
       </section>
 
