@@ -32,6 +32,7 @@ Add global keyboard shortcuts that work from any view:
 | Shortcut | Action | Context |
 |----------|--------|---------|
 | `Ctrl/Cmd + Shift + I` | Toggle Request Inspector | Global |
+| `Ctrl/Cmd + Shift + D` | Open Documentation | Global |
 | `Ctrl/Cmd + Enter` | Execute AQL query | AQL Runner |
 | `Escape` | Close dialog / panel | Global |
 
@@ -59,6 +60,11 @@ Industry standard across VS Code, Slack, Chrome, Figma, and most desktop applica
 - **I** = Inspector (mnemonic)
 - Similar to browser DevTools shortcuts (F12, Cmd+Opt+I)
 - Shift modifier prevents conflict with text input fields
+
+### Why `Ctrl/Cmd + Shift + D` for Documentation?
+- **D** = Documentation (mnemonic)
+- Shift modifier prevents conflict with text input fields
+- Opens external documentation in user's default browser
 
 ### Why Number Keys (1-4)?
 - Common pattern in developer tools (VS Code, terminals, browsers)

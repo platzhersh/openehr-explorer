@@ -2,6 +2,7 @@
 import { useRoute } from "vue-router";
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 const route = useRoute();
 const appVersion = ref<string>("");
@@ -15,6 +16,10 @@ const navItems = [
 
 function isActive(path: string): boolean {
   return route.path.startsWith(path);
+}
+
+async function openDocumentation() {
+  await openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
 }
 
 onMounted(async () => {
@@ -43,6 +48,28 @@ onMounted(async () => {
     <div class="nav-bottom">
       <div v-if="appVersion" class="version-display">v{{ appVersion }}</div>
       <div class="nav-divider"></div>
+      <a @click="openDocumentation" class="nav-item external-link" role="button" tabindex="0">
+        <span class="nav-icon doc-icon">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M6 2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path d="M7 7h6M7 11h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Documentation</span>
+        <svg class="external-icon" width="10" height="10" viewBox="0 0 12 12" fill="none">
+          <path d="M3 1h8v8M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </a>
       <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
         <span class="nav-icon gear-icon">
           <svg
@@ -126,10 +153,26 @@ onMounted(async () => {
   color: #fff;
 }
 
-.gear-icon {
+.gear-icon,
+.doc-icon {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.external-link {
+  cursor: pointer;
+  position: relative;
+}
+
+.external-icon {
+  margin-left: auto;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.external-link:hover .external-icon {
+  opacity: 1;
 }
 
 .version-display {
