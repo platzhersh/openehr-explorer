@@ -62,12 +62,22 @@ onMounted(async () => {
               stroke="currentColor"
               stroke-width="1.5"
             />
-            <path d="M7 7h6M7 11h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path
+              d="M7 7h6M7 11h6M7 15h4"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
         </span>
         <span class="nav-label">Documentation</span>
         <svg class="external-icon" width="10" height="10" viewBox="0 0 12 12" fill="none">
-          <path d="M3 1h8v8M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path
+            d="M3 1h8v8M11 1L1 11"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+          />
         </svg>
       </a>
       <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
