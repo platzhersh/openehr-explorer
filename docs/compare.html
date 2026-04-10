@@ -564,8 +564,8 @@
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">Multi-server profiles</div>
-      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Saved + switch</span></div>
+      <div class="feat-label">Multi-server profiles with version detection</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Auto version detect</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Env vars / manual</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
@@ -594,6 +594,14 @@
       <div class="feat-label">Paginated EHR list</div>
       <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Server-side EHR search (subject, namespace, system, etc.)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note primary">AQL-backed search</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
     </div>
@@ -726,7 +734,7 @@
 
     <div class="feature-row">
       <div class="feat-label">AQL path autocomplete</div>
-      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note primary">3-layer CodeMirror</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
@@ -736,8 +744,16 @@
     <div class="cat-title">Developer Experience</div>
 
     <div class="feature-row">
-      <div class="feat-label">Keyboard shortcuts</div>
-      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="feat-label">Request Inspector (view all HTTP traffic)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note primary">Bottom drawer panel</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br><span class="note">Native feature</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Keyboard shortcuts (navigation + actions)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Cmd+1-4, Cmd+Shift+I</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
@@ -772,20 +788,20 @@
       <div class="score-row">
         <div class="score-label">Phase 1 score</div>
         <div class="score-cell ours" data-tool="Explorer">
-          <span class="score-num primary">17</span>
-          <span class="score-denom">of 20</span>
+          <span class="score-num primary">20</span>
+          <span class="score-denom">of 23</span>
         </div>
         <div class="score-cell" data-tool="openEHRTool">
-          <span class="score-num">9</span>
-          <span class="score-denom">of 20</span>
+          <span class="score-num">9.5</span>
+          <span class="score-denom">of 23</span>
         </div>
         <div class="score-cell" data-tool="Postman">
-          <span class="score-num">8</span>
-          <span class="score-denom">of 20</span>
+          <span class="score-num">9</span>
+          <span class="score-denom">of 23</span>
         </div>
         <div class="score-cell" data-tool="Better Studio">
-          <span class="score-num">11</span>
-          <span class="score-denom">of 20</span>
+          <span class="score-num">11.5</span>
+          <span class="score-denom">of 23</span>
         </div>
       </div>
     </div>

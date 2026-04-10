@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, watch } from "vue";
+import { onMounted, onUnmounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useServerStore } from "./stores/server";
 import { useInspectorStore } from "./stores/inspector";
 import { useSettingsStore } from "./stores/settings";
@@ -7,14 +8,51 @@ import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
 
+const router = useRouter();
 const serverStore = useServerStore();
 const inspectorStore = useInspectorStore();
 const settingsStore = useSettingsStore();
+
+// Global keyboard shortcuts for navigation
+function handleKeydown(e: KeyboardEvent) {
+  if (e.metaKey || e.ctrlKey) {
+    // Ctrl/Cmd + 1: Switch to EHR Browser
+    if (e.key === "1") {
+      e.preventDefault();
+      router.push("/ehrs");
+    }
+    // Ctrl/Cmd + 2: Switch to Template Browser
+    else if (e.key === "2") {
+      e.preventDefault();
+      router.push("/templates");
+    }
+    // Ctrl/Cmd + 3: Switch to AQL Runner
+    else if (e.key === "3") {
+      e.preventDefault();
+      router.push("/aql");
+    }
+    // Ctrl/Cmd + 4: Switch to Server Manager
+    else if (e.key === "4") {
+      e.preventDefault();
+      router.push("/servers");
+    }
+    // Ctrl/Cmd + ,: Open Settings
+    else if (e.key === ",") {
+      e.preventDefault();
+      router.push("/settings");
+    }
+  }
+}
 
 onMounted(() => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
   settingsStore.loadSettings();
+  document.addEventListener("keydown", handleKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("keydown", handleKeydown);
 });
 
 // Reset inspector when active server changes
