@@ -506,10 +506,12 @@ subject:6f4b5848 hasCompositions:true</div>
         <h2>AQL Runner</h2>
         <p>The AQL Runner is a query editor for the Archetype Query Language (AQL), the standard query language for openEHR data.</p>
         <ul>
-          <li>Write AQL queries with syntax highlighting.</li>
+          <li>Write AQL queries with <strong>syntax highlighting</strong> and intelligent autocomplete.</li>
           <li>Execute queries against the connected CDR and see results in a sortable table.</li>
           <li><strong>Save queries:</strong> Save frequently used queries with a name and description for quick access.</li>
           <li><strong>Export CSV:</strong> Export query results as CSV files for further analysis.</li>
+          <li><strong>Format:</strong> Auto-format queries with the Format button or <code>Shift+Alt+F</code>.</li>
+          <li><strong>Execute:</strong> Run queries with <code>Ctrl/Cmd + Enter</code>.</li>
         </ul>
         <div class="code-block">SELECT
   e/ehr_id/value as ehr_id,
@@ -519,9 +521,37 @@ FROM EHR e
   CONTAINS COMPOSITION c
 ORDER BY c/name/value ASC
 LIMIT 10</div>
+
+        <h3>Intelligent Autocomplete</h3>
+        <p>The AQL editor provides three layers of context-aware autocomplete powered by CodeMirror:</p>
+
+        <h4>Layer 1: Keywords & RM Types</h4>
+        <p>Autocomplete for AQL keywords and openEHR Reference Model types:</p>
+        <ul>
+          <li><strong>Keywords:</strong> <code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, <code>CONTAINS</code>, <code>ORDER BY</code>, <code>LIMIT</code>, etc.</li>
+          <li><strong>RM Types:</strong> <code>EHR</code>, <code>COMPOSITION</code>, <code>OBSERVATION</code>, <code>EVALUATION</code>, <code>INSTRUCTION</code>, <code>ACTION</code>, etc.</li>
+          <li><strong>Functions:</strong> <code>COUNT(*)</code>, <code>MAX()</code>, <code>MIN()</code>, <code>SUM()</code>, <code>AVG()</code></li>
+        </ul>
+
+        <h4>Layer 2: Static RM Paths</h4>
+        <p>After typing an alias followed by <code>/</code> (e.g., <code>e/</code>, <code>c/</code>), autocomplete suggests standard RM paths:</p>
+        <ul>
+          <li><strong>EHR paths:</strong> <code>ehr_id/value</code>, <code>time_created/value</code>, <code>ehr_status/subject/external_ref/id/value</code>, etc.</li>
+          <li><strong>COMPOSITION paths:</strong> <code>uid/value</code>, <code>name/value</code>, <code>archetype_details/template_id/value</code>, <code>context/start_time/value</code>, etc.</li>
+        </ul>
+
+        <h4>Layer 3: Template-Aware Paths</h4>
+        <p>Select a <strong>Context Template</strong> from the dropdown to enable template-specific path completions. When you type an archetype-constrained alias (e.g., <code>obs/</code> for an OBSERVATION), autocomplete suggests actual data paths from the Web Template:</p>
+        <ul>
+          <li>Paths are extracted from the selected template's Web Template definition</li>
+          <li>Completions show human-readable labels with RM type hints</li>
+          <li>Full AQL paths are inserted automatically</li>
+        </ul>
+        <p>Example: With a vital signs template selected, typing <code>obs/</code> suggests paths like <code>data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude</code> with the label "Systolic".</p>
+
         <div class="note">
-          <div class="callout-title">Coming in v0.2.0</div>
-          AQL autocomplete with archetype-aware suggestions, powered by a CodeMirror-based editor.
+          <div class="callout-title">Pro Tip</div>
+          Autocomplete activates as you type. Press <code>Ctrl+Space</code> to manually trigger suggestions at any time.
         </div>
       </section>
 
