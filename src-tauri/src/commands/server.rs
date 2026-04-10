@@ -46,15 +46,6 @@ pub struct ServerVersionInfo {
     pub postgres_version: Option<String>,
 }
 
-impl ServerVersionInfo {
-    fn has_any(&self) -> bool {
-        self.server_version.is_some()
-            || self.ehrbase_version.is_some()
-            || self.sdk_version.is_some()
-            || self.archie_version.is_some()
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ProfileStore {
     profiles: Vec<ServerProfile>,
@@ -178,74 +169,48 @@ pub async fn get_server_version(
     let client = build_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
-    // Try /rest/status first (works for EHRBase, may work for others)
-    let status_url = format!("{}/rest/status", base);
-    let resp = send_instrumented(
-        &app,
-        &client,
-        build_request(
-            &client,
-            reqwest::Method::GET,
-            &status_url,
-            &profile.auth_method,
-        ),
-    )
-    .await;
+    match profile.server_type {
+        ServerType::Ehrbase => {
+            // EHRBase: GET /rest/status → XML with <ehrbase_version>
+            let url = format!("{}/rest/status", base);
+            let resp = send_instrumented(
+                &app,
+                &client,
+                build_request(&client, reqwest::Method::GET, &url, &profile.auth_method),
+            )
+            .await?;
 
-    if let Ok(ref resp) = resp {
-        if resp.is_success {
-            // Try JSON first (Better Platform / generic), then XML (EHRBase)
-            if let Ok(info) = parse_version_json(&resp.body) {
-                if info.has_any() {
-                    return Ok(info);
-                }
+            if !resp.is_success {
+                return Err(format!("Server returned HTTP {}", resp.status));
             }
-            if let Ok(info) = parse_version_xml(&resp.body) {
-                if info.has_any() {
-                    return Ok(info);
-                }
+            parse_version_xml(&resp.body)
+        }
+        ServerType::BetterPlatform => {
+            // Better Platform: OPTIONS /rest/v1 → JSON with solutionVersion
+            let url = format!("{}/rest/v1", base);
+            let resp = send_instrumented(
+                &app,
+                &client,
+                // No auth required for OPTIONS, but include it in case the
+                // server is behind a proxy that requires it
+                build_request(
+                    &client,
+                    reqwest::Method::OPTIONS,
+                    &url,
+                    &profile.auth_method,
+                ),
+            )
+            .await?;
+
+            if !resp.is_success {
+                return Err(format!("Server returned HTTP {}", resp.status));
             }
+            parse_version_json(&resp.body)
+        }
+        ServerType::Generic => {
+            Err("Version detection is not available for generic openEHR servers".to_string())
         }
     }
-
-    // Fallback: try the openEHR REST API conformance endpoint which should
-    // return solution/version info for any compliant server
-    let conformance_url = format!("{}/rest/openehr/v1/", base);
-    if let Ok(resp2) = send_instrumented(
-        &app,
-        &client,
-        build_request(
-            &client,
-            reqwest::Method::GET,
-            &conformance_url,
-            &profile.auth_method,
-        ),
-    )
-    .await
-    {
-        if resp2.is_success {
-            if let Ok(info) = parse_version_json(&resp2.body) {
-                if info.has_any() {
-                    return Ok(info);
-                }
-            }
-        }
-        // Also check response headers from this endpoint
-        if let Some(version) = extract_version_from_headers(&resp2.headers) {
-            return Ok(ServerVersionInfo {
-                server_version: Some(version),
-                ..Default::default()
-            });
-        }
-    }
-
-    // If /rest/status returned a network error, propagate it
-    if let Err(e) = resp {
-        return Err(e);
-    }
-
-    // No strategy found version info
-    Err("Could not determine server version".to_string())
 }
 
 fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
@@ -293,67 +258,13 @@ fn parse_version_json(body: &str) -> Result<ServerVersionInfo, String> {
     let mut info = ServerVersionInfo::default();
 
     if let Some(obj) = json.as_object() {
-        // openEHR REST API conformance fields (solution_version, solution)
-        if let Some(v) = obj.get("solution_version").and_then(|v| v.as_str()) {
+        // Better Platform: OPTIONS /rest/v1 returns { "solutionVersion": "3.0.0", ... }
+        if let Some(v) = obj.get("solutionVersion").and_then(|v| v.as_str()) {
             info.server_version = Some(v.to_string());
-        }
-        // General version fields
-        if info.server_version.is_none() {
-            for key in [
-                "version",
-                "softwareVersion",
-                "software_version",
-                "server_version",
-            ] {
-                if let Some(v) = obj.get(key).and_then(|v| v.as_str()) {
-                    info.server_version = Some(v.to_string());
-                    break;
-                }
-            }
-        }
-        // EHRBase-style fields
-        if let Some(v) = obj.get("ehrbase_version").and_then(|v| v.as_str()) {
-            info.ehrbase_version = Some(v.to_string());
-        }
-        // Build info fallback
-        if info.server_version.is_none() {
-            if let Some(v) = obj.get("build").and_then(|v| v.as_str()) {
-                info.server_version = Some(v.to_string());
-            }
         }
     }
 
     Ok(info)
-}
-
-fn extract_version_from_headers(
-    headers: &std::collections::HashMap<String, String>,
-) -> Option<String> {
-    // Check custom version headers first
-    for key in [
-        "x-version",
-        "x-server-version",
-        "x-better-version",
-        "x-api-version",
-    ] {
-        if let Some(v) = headers.get(key) {
-            return Some(v.clone());
-        }
-    }
-
-    // Check Server header for version info (e.g. "Better/2.5.0" or "EHRBase/2.0")
-    if let Some(server) = headers.get("server") {
-        // Skip generic server names like "nginx", "Apache"
-        let lower = server.to_lowercase();
-        if !lower.starts_with("nginx")
-            && !lower.starts_with("apache")
-            && !lower.starts_with("cloudflare")
-        {
-            return Some(server.clone());
-        }
-    }
-
-    None
 }
 
 // Re-export helpers for other command modules
