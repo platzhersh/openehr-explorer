@@ -340,6 +340,7 @@
       <a href="#template-browser" class="sidebar-link">Template Browser</a>
       <a href="#aql-runner" class="sidebar-link">AQL Runner</a>
       <a href="#flat-path-panel" class="sidebar-link">FLAT Path Panel</a>
+      <a href="#request-inspector" class="sidebar-link">Request Inspector</a>
 
       <div class="sidebar-group-title">Configuration</div>
       <a href="#server-profiles" class="sidebar-link">Server Profiles</a>
@@ -422,6 +423,15 @@ winget install openehr-explorer</div>
           <li>Switch between servers instantly using the sidebar dropdown — no restart needed.</li>
         </ul>
         <p>Server profiles are stored locally and never sent to any external service. You can configure as many profiles as you need.</p>
+
+        <h3>Server Version Detection</h3>
+        <p>Each server profile displays the detected CDR version on the profile card. Version detection happens automatically when you test a connection or connect to a server.</p>
+        <ul>
+          <li><strong>EHRBase:</strong> Fetches version from <code>GET /rest/status</code> (displays <code>ehrbase_version</code>)</li>
+          <li><strong>Better Platform:</strong> Fetches version from <code>OPTIONS /rest/v1</code> (displays <code>solutionVersion</code>)</li>
+          <li><strong>Generic:</strong> Version detection not available — liveness check only</li>
+        </ul>
+        <p>Click the <strong>"Test"</strong> button on any profile card to verify connectivity and refresh the version number.</p>
       </section>
 
       <section id="ehr-browser">
@@ -434,6 +444,39 @@ winget install openehr-explorer</div>
           <li><strong>Delete EHR:</strong> Open an EHR's detail view and click "Delete EHR". You must type the EHR ID to confirm — this prevents accidental deletion.</li>
         </ul>
         <p>The browser uses AQL-based listing for efficient pagination, even on CDRs with thousands of records.</p>
+
+        <h3>Search</h3>
+        <p>The EHR Browser supports powerful server-side search using typed attribute syntax. All searches execute AQL queries against the CDR and are visible in the Request Inspector.</p>
+
+        <h4>Search Syntax</h4>
+        <p>Enter search terms in the search bar using these attribute filters:</p>
+        <table>
+          <thead>
+            <tr><th>Syntax</th><th>Description</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>EHR ID</td><td>Prefix match (no keyword needed)</td><td><code>fde80e0e-04eb</code></td></tr>
+            <tr><td><code>subject:...</code></td><td>Subject ID contains</td><td><code>subject:6f4b5848</code></td></tr>
+            <tr><td><code>namespace:...</code></td><td>Subject namespace exact match</td><td><code>namespace:patnr</code></td></tr>
+            <tr><td><code>system:...</code></td><td>System ID exact match</td><td><code>system:dev.cistec.io</code></td></tr>
+            <tr><td><code>modifiable:true</code></td><td>EHR is modifiable</td><td><code>modifiable:true</code></td></tr>
+            <tr><td><code>modifiable:false</code></td><td>EHR is not modifiable</td><td><code>modifiable:false</code></td></tr>
+            <tr><td><code>hasCompositions:true</code></td><td>EHR has at least one composition</td><td><code>hasCompositions:true</code></td></tr>
+          </tbody>
+        </table>
+
+        <h4>Combining Search Terms</h4>
+        <p>Combine multiple terms with spaces (implicit AND logic):</p>
+        <div class="code-block">namespace:patnr modifiable:true
+subject:6f4b5848 hasCompositions:true</div>
+
+        <h4>Search Help</h4>
+        <p>Click the <strong>?</strong> icon next to the search bar to view the full syntax reference and examples.</p>
+
+        <div class="note">
+          <div class="callout-title">Search Limitations</div>
+          The <code>hasCompositions:false</code> filter is not supported due to AQL limitations. Date filters (<code>created-on</code>, <code>created-before</code>, <code>created-after</code>) are not supported due to EHRBase implementation constraints.
+        </div>
       </section>
 
       <section id="composition-viewer">
@@ -494,6 +537,65 @@ LIMIT 10</div>
         <div class="code-block">vital-signs/blood_pressure:0/any_event:0/systolic|magnitude</div>
       </section>
 
+      <section id="request-inspector">
+        <h2>Request Inspector</h2>
+        <p>The Request Inspector is a bottom drawer panel that captures every HTTP request openEHR Explorer makes to the connected CDR. It provides full visibility into the API conversation for debugging and learning.</p>
+
+        <h3>Opening the Inspector</h3>
+        <ul>
+          <li>Keyboard shortcut: <code>Cmd+Shift+I</code> (macOS) / <code>Ctrl+Shift+I</code> (Windows/Linux)</li>
+          <li>Toggle between three height states: Collapsed (tab bar only), Half (default), Expanded (full window)</li>
+          <li>Red dot badge on collapsed tab indicates recent 4xx or 5xx errors</li>
+        </ul>
+
+        <h3>Request Log</h3>
+        <p>The left pane shows a reverse-chronological list of all CDR requests:</p>
+        <ul>
+          <li>Color-coded method badges: <code>GET</code> (blue), <code>POST</code> (green), <code>PUT</code> (amber), <code>DELETE</code> (red)</li>
+          <li>HTTP status color coding: 2xx (green), 3xx (blue), 4xx (orange), 5xx (red)</li>
+          <li>Request duration in milliseconds</li>
+          <li>Filter by method, status class, or URL path</li>
+          <li>Most recent entry is auto-selected</li>
+        </ul>
+
+        <h3>Request Detail Panel</h3>
+        <p>The right pane shows full details of the selected request, with two tabs:</p>
+
+        <h4>Request Tab</h4>
+        <ul>
+          <li><strong>Summary:</strong> Method, URL, duration, timestamp</li>
+          <li><strong>Request Headers:</strong> Key-value table with copy buttons</li>
+          <li><strong>Request Body:</strong> Shown for POST/PUT requests in Tree/Raw/FLAT views</li>
+          <li><strong>Copy as curl:</strong> One-click to copy a complete curl command that reproduces the exact request</li>
+        </ul>
+
+        <h4>Response Tab</h4>
+        <ul>
+          <li><strong>Summary:</strong> Status code, content type, response size</li>
+          <li><strong>Response Headers:</strong> Key-value table with copy buttons</li>
+          <li><strong>Response Body:</strong> Three view modes:
+            <ul>
+              <li><strong>Tree View (default):</strong> Interactive, collapsible JSON tree with openEHR-aware rendering (<code>_type</code> pills, archetype labels, DV type formatting)</li>
+              <li><strong>Raw JSON:</strong> Syntax-highlighted, read-only JSON editor with line numbers</li>
+              <li><strong>FLAT View:</strong> FLAT path → value table (available when response contains a composition)</li>
+            </ul>
+          </li>
+        </ul>
+
+        <h3>Use Cases</h3>
+        <ul>
+          <li><strong>Debugging:</strong> See exactly what was sent when a composition was rejected with 422</li>
+          <li><strong>Learning:</strong> Understand what a CREATE EHR request looks like (method, URL, body, response)</li>
+          <li><strong>Reproduction:</strong> Copy as curl to reproduce requests in CI or external tools</li>
+          <li><strong>Verification:</strong> Verify that stored compositions contain correct FLAT path values</li>
+        </ul>
+
+        <div class="note">
+          <div class="callout-title">Privacy Notice</div>
+          Sensitive headers (<code>Authorization</code>, <code>Cookie</code>) are redacted to <code>[REDACTED]</code> by default. Request history is session-scoped and cleared when switching server profiles.
+        </div>
+      </section>
+
       <!-- Configuration -->
       <section id="server-profiles">
         <h2>Server Profiles</h2>
@@ -535,6 +637,7 @@ LIMIT 10</div>
             <tr><td><code>Ctrl/Cmd + 3</code></td><td>Switch to AQL Runner</td><td>Global</td></tr>
             <tr><td><code>Ctrl/Cmd + 4</code></td><td>Switch to Server Manager</td><td>Global</td></tr>
             <tr><td><code>Ctrl/Cmd + Enter</code></td><td>Execute AQL query</td><td>AQL Runner</td></tr>
+            <tr><td><code>Ctrl/Cmd + Shift + I</code></td><td>Toggle Request Inspector</td><td>Global</td></tr>
             <tr><td><code>Escape</code></td><td>Close dialog / panel</td><td>Global</td></tr>
           </tbody>
         </table>
