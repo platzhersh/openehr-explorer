@@ -11,6 +11,8 @@ const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_s
 const editing = ref(false);
 const testResult = ref<string | null>(null);
 const testError = ref<string | null>(null);
+const cardTestLoading = ref<Record<string, boolean>>({});
+const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
 
 const form = ref<ServerProfile>({
   id: "",
@@ -74,6 +76,19 @@ async function testConnection() {
   }
 }
 
+async function testProfileConnection(profile: ServerProfile) {
+  cardTestLoading.value[profile.id] = true;
+  delete cardTestResult.value[profile.id];
+  try {
+    const result = await serverStore.testConnection(profile);
+    cardTestResult.value[profile.id] = { success: true, message: result };
+  } catch (e) {
+    cardTestResult.value[profile.id] = { success: false, message: String(e) };
+  } finally {
+    cardTestLoading.value[profile.id] = false;
+  }
+}
+
 function setAuthType(type: string) {
   if (type === "none") {
     form.value.auth_method = { type: "none" };
@@ -118,15 +133,29 @@ function setAdminAuthType(type: string) {
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
               <span
-                v-if="serverStore.versionInfo[profile.id]?.ehrbase_version"
+                v-if="serverStore.versionInfo[profile.id]?.server_version"
                 class="badge version-badge"
-                :title="`EHRbase ${serverStore.versionInfo[profile.id]?.ehrbase_version}`"
+                :title="serverStore.versionInfo[profile.id]?.server_version ?? ''"
               >
-                v{{ serverStore.versionInfo[profile.id]?.ehrbase_version }}
+                v{{ serverStore.versionInfo[profile.id]?.server_version }}
               </span>
+            </div>
+            <div
+              v-if="cardTestResult[profile.id]"
+              class="card-test-result"
+              :class="cardTestResult[profile.id].success ? 'success' : 'error'"
+            >
+              {{ cardTestResult[profile.id].message }}
             </div>
           </div>
           <div class="profile-actions">
+            <button
+              class="btn btn-sm"
+              @click="testProfileConnection(profile)"
+              :disabled="cardTestLoading[profile.id]"
+            >
+              {{ cardTestLoading[profile.id] ? "Testing..." : "Test" }}
+            </button>
             <button class="btn btn-sm" @click="serverStore.setActiveServer(profile.id)">
               {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
             </button>
@@ -328,9 +357,21 @@ function setAdminAuthType(type: string) {
   color: var(--color-primary);
   font-weight: 600;
 }
+.card-test-result {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.card-test-result.success {
+  color: var(--color-success);
+}
+.card-test-result.error {
+  color: var(--color-error);
+}
 .profile-actions {
   display: flex;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .profile-form {

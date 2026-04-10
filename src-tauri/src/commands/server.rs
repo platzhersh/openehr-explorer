@@ -35,8 +35,9 @@ pub enum AuthMethod {
     Bearer { token: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerVersionInfo {
+    pub server_version: Option<String>,
     pub ehrbase_version: Option<String>,
     pub sdk_version: Option<String>,
     pub archie_version: Option<String>,
@@ -166,34 +167,57 @@ pub async fn get_server_version(
     profile: ServerProfile,
 ) -> Result<ServerVersionInfo, String> {
     let client = build_client(&profile);
-    let url = format!("{}/rest/status", profile.base_url.trim_end_matches('/'));
+    let base = profile.base_url.trim_end_matches('/');
 
-    let resp = send_instrumented(
-        &app,
-        &client,
-        build_request(&client, reqwest::Method::GET, &url, &profile.auth_method),
-    )
-    .await?;
+    match profile.server_type {
+        ServerType::Ehrbase => {
+            // EHRBase: GET /rest/status → XML with <ehrbase_version>
+            let url = format!("{}/rest/status", base);
+            let resp = send_instrumented(
+                &app,
+                &client,
+                build_request(&client, reqwest::Method::GET, &url, &profile.auth_method),
+            )
+            .await?;
 
-    if !resp.is_success {
-        return Err(format!("Server returned HTTP {}", resp.status));
+            if !resp.is_success {
+                return Err(format!("Server returned HTTP {}", resp.status));
+            }
+            parse_version_xml(&resp.body)
+        }
+        ServerType::BetterPlatform => {
+            // Better Platform: OPTIONS /rest/v1 → JSON with solutionVersion
+            let url = format!("{}/rest/v1", base);
+            let resp = send_instrumented(
+                &app,
+                &client,
+                // No auth required for OPTIONS, but include it in case the
+                // server is behind a proxy that requires it
+                build_request(
+                    &client,
+                    reqwest::Method::OPTIONS,
+                    &url,
+                    &profile.auth_method,
+                ),
+            )
+            .await?;
+
+            if !resp.is_success {
+                return Err(format!("Server returned HTTP {}", resp.status));
+            }
+            parse_version_json(&resp.body)
+        }
+        ServerType::Generic => {
+            Err("Version detection is not available for generic openEHR servers".to_string())
+        }
     }
-
-    parse_version_xml(&resp.body)
 }
 
 fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
     let mut reader = Reader::from_str(xml_body);
     reader.config_mut().trim_text(true);
 
-    let mut version_info = ServerVersionInfo {
-        ehrbase_version: None,
-        sdk_version: None,
-        archie_version: None,
-        jvm_version: None,
-        os_version: None,
-        postgres_version: None,
-    };
+    let mut version_info = ServerVersionInfo::default();
 
     let mut current_tag = String::new();
     let mut buf = Vec::new();
@@ -206,7 +230,10 @@ fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
             Ok(Event::Text(e)) => {
                 let text = e.unescape().unwrap_or_default().to_string();
                 match current_tag.as_str() {
-                    "ehrbase_version" => version_info.ehrbase_version = Some(text),
+                    "ehrbase_version" => {
+                        version_info.server_version = Some(text.clone());
+                        version_info.ehrbase_version = Some(text);
+                    }
                     "openehr_sdk_version" => version_info.sdk_version = Some(text),
                     "archie_version" => version_info.archie_version = Some(text),
                     "jvm_version" => version_info.jvm_version = Some(text),
@@ -223,6 +250,21 @@ fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
     }
 
     Ok(version_info)
+}
+
+fn parse_version_json(body: &str) -> Result<ServerVersionInfo, String> {
+    let json: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+
+    let mut info = ServerVersionInfo::default();
+
+    if let Some(obj) = json.as_object() {
+        // Better Platform: OPTIONS /rest/v1 returns { "solutionVersion": "3.0.0", ... }
+        if let Some(v) = obj.get("solutionVersion").and_then(|v| v.as_str()) {
+            info.server_version = Some(v.to_string());
+        }
+    }
+
+    Ok(info)
 }
 
 // Re-export helpers for other command modules

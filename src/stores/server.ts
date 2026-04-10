@@ -20,6 +20,7 @@ export interface ServerProfile {
 }
 
 export interface ServerVersionInfo {
+  server_version: string | null;
   ehrbase_version: string | null;
   sdk_version: string | null;
   archie_version: string | null;
@@ -63,6 +64,8 @@ export const useServerStore = defineStore("server", () => {
     try {
       const result = await invoke<string>("test_server_connection", { profile });
       connectionStatus.value[profile.id] = "connected";
+      // Also fetch version info on successful connection test
+      fetchServerVersion(profile);
       return result;
     } catch (e) {
       connectionStatus.value[profile.id] = "error";
