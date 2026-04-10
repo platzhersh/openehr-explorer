@@ -36,6 +36,11 @@ function handleKeydown(e: KeyboardEvent) {
       e.preventDefault();
       router.push("/servers");
     }
+    // Ctrl/Cmd + ,: Open Settings
+    else if (e.key === ",") {
+      e.preventDefault();
+      router.push("/settings");
+    }
   }
 }
 
