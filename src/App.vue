@@ -7,6 +7,7 @@ import { useSettingsStore } from "./stores/settings";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 const router = useRouter();
 const serverStore = useServerStore();
@@ -16,8 +17,13 @@ const settingsStore = useSettingsStore();
 // Global keyboard shortcuts for navigation
 function handleKeydown(e: KeyboardEvent) {
   if (e.metaKey || e.ctrlKey) {
+    // Ctrl/Cmd + Shift + D: Open Documentation
+    if (e.shiftKey && (e.key === "D" || e.key === "d")) {
+      e.preventDefault();
+      openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
+    }
     // Ctrl/Cmd + 1: Switch to EHR Browser
-    if (e.key === "1") {
+    else if (e.key === "1") {
       e.preventDefault();
       router.push("/ehrs");
     }
