@@ -208,28 +208,34 @@ pub async fn get_server_version(
         }
     }
 
-    // Fallback for Better Platform / Generic: extract version from response
-    // headers of a known-working endpoint
-    if !matches!(profile.server_type, ServerType::Ehrbase) {
-        let template_url = format!("{}/rest/openehr/v1/definition/template/adl1.4", base);
-        if let Ok(resp2) = send_instrumented(
-            &app,
+    // Fallback: try the openEHR REST API conformance endpoint which should
+    // return solution/version info for any compliant server
+    let conformance_url = format!("{}/rest/openehr/v1/", base);
+    if let Ok(resp2) = send_instrumented(
+        &app,
+        &client,
+        build_request(
             &client,
-            build_request(
-                &client,
-                reqwest::Method::GET,
-                &template_url,
-                &profile.auth_method,
-            ),
-        )
-        .await
-        {
-            if let Some(version) = extract_version_from_headers(&resp2.headers) {
-                return Ok(ServerVersionInfo {
-                    server_version: Some(version),
-                    ..Default::default()
-                });
+            reqwest::Method::GET,
+            &conformance_url,
+            &profile.auth_method,
+        ),
+    )
+    .await
+    {
+        if resp2.is_success {
+            if let Ok(info) = parse_version_json(&resp2.body) {
+                if info.has_any() {
+                    return Ok(info);
+                }
             }
+        }
+        // Also check response headers from this endpoint
+        if let Some(version) = extract_version_from_headers(&resp2.headers) {
+            return Ok(ServerVersionInfo {
+                server_version: Some(version),
+                ..Default::default()
+            });
         }
     }
 
@@ -238,12 +244,7 @@ pub async fn get_server_version(
         return Err(e);
     }
 
-    // /rest/status returned a non-success HTTP code and no fallback worked
-    let resp = resp.unwrap();
-    if !resp.is_success {
-        return Err(format!("Server returned HTTP {}", resp.status));
-    }
-
+    // No strategy found version info
     Err("Could not determine server version".to_string())
 }
 
@@ -291,25 +292,30 @@ fn parse_version_json(body: &str) -> Result<ServerVersionInfo, String> {
 
     let mut info = ServerVersionInfo::default();
 
-    // Try common version field names
     if let Some(obj) = json.as_object() {
-        // Direct version fields
-        for key in [
-            "version",
-            "softwareVersion",
-            "software_version",
-            "server_version",
-        ] {
-            if let Some(v) = obj.get(key).and_then(|v| v.as_str()) {
-                info.server_version = Some(v.to_string());
-                break;
+        // openEHR REST API conformance fields (solution_version, solution)
+        if let Some(v) = obj.get("solution_version").and_then(|v| v.as_str()) {
+            info.server_version = Some(v.to_string());
+        }
+        // General version fields
+        if info.server_version.is_none() {
+            for key in [
+                "version",
+                "softwareVersion",
+                "software_version",
+                "server_version",
+            ] {
+                if let Some(v) = obj.get(key).and_then(|v| v.as_str()) {
+                    info.server_version = Some(v.to_string());
+                    break;
+                }
             }
         }
-        // EHRBase-style fields (in case EHRBase returns JSON in the future)
+        // EHRBase-style fields
         if let Some(v) = obj.get("ehrbase_version").and_then(|v| v.as_str()) {
             info.ehrbase_version = Some(v.to_string());
         }
-        // Build/product info
+        // Build info fallback
         if info.server_version.is_none() {
             if let Some(v) = obj.get("build").and_then(|v| v.as_str()) {
                 info.server_version = Some(v.to_string());
