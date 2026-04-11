@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-11
 **Status:** Proposed
-**Related:** ADR-0011 (Centralized Request Instrumentation)
+**Related:** ADR-0011 (Centralized Request Instrumentation), ADR-0016 (Content Security Policy and Subresource Integrity)
 
 ---
 
@@ -36,10 +36,6 @@ While the current escaping catches this trivial case, more sophisticated payload
 Server profile base URLs accept any string. While `reqwest` rejects non-HTTP schemes, there is no frontend validation to warn users about:
 - Plain `http://` URLs for non-localhost servers (credentials sent unencrypted)
 - Malformed URLs that would fail at runtime
-
-### CDN scripts without Subresource Integrity
-
-`index.html` loads `medblocks-ui` from unpkg.com and Shoelace CSS from jsdelivr.net without `integrity` attributes. A CDN compromise or DNS hijack could inject arbitrary JavaScript.
 
 ---
 
@@ -82,16 +78,6 @@ In `ServerManager.vue`, validate the base URL on save:
 - Display a warning badge when using `http://` for a non-localhost host
 - Prevent saving profiles with `javascript:`, `data:`, `file:`, or other dangerous schemes
 
-### 4. Add Subresource Integrity hashes to CDN resources
-
-Add `integrity` and `crossorigin="anonymous"` attributes to the CDN `<script>` and `<link>` tags in `index.html`. Generate hashes with:
-
-```bash
-curl -sf <URL> | openssl dgst -sha384 -binary | openssl base64 -A
-```
-
-Long-term, consider bundling these dependencies locally (via npm) to eliminate CDN dependency entirely.
-
 ---
 
 ## Consequences
@@ -99,13 +85,11 @@ Long-term, consider bundling these dependencies locally (via npm) to eliminate C
 ### Positive
 - Eliminates all known XSS vectors from server-controlled data
 - URL validation prevents credential leakage over plain HTTP to remote servers
-- SRI hashes protect against CDN supply chain attacks
-- Defence-in-depth alongside the CSP policy added in the quick-fix round
+- Defence-in-depth alongside CSP (ADR-0016) and secure credential storage (ADR-0015)
 
 ### Negative
 - Adding highlight.js increases the frontend bundle size (~30-50 KB gzipped for JSON + XML grammars)
 - URL validation may require users to update existing profiles that use `http://` for remote servers
-- SRI hashes must be updated whenever CDN dependency versions change
 
 ### Neutral
 - The AQL runner intentionally sends user-typed queries to the server — this is by design and not an XSS concern (it's server-side, and the server enforces its own authorization)
@@ -125,7 +109,6 @@ Long-term, consider bundling these dependencies locally (via npm) to eliminate C
 | `src/components/RequestInspector.vue` | Replace `highlightXml()` with library call |
 | `src/components/CompositionTree.vue` | Replace `innerHTML` with `h()` render function |
 | `src/views/ServerManager.vue` | Add URL validation on save |
-| `index.html` | Add `integrity` attributes to CDN tags |
 
 ### Testing
 
