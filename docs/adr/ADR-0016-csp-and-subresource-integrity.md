@@ -93,9 +93,9 @@ The `crossorigin="anonymous"` attribute has been added as a prerequisite. The ac
 
 | Item | Status |
 |---|---|
-| CSP policy in `tauri.conf.json` | Done (this commit) |
-| `crossorigin="anonymous"` on CDN tags | Done (this commit) |
-| SRI `integrity` hashes on CDN tags | Pending — requires network access to compute hashes |
+| CSP policy in `tauri.conf.json` | Done |
+| `crossorigin="anonymous"` on CDN tags | Done |
+| SRI `integrity` hashes on CDN tags | Done — hashes generated and applied to `index.html` |
 
 ---
 
