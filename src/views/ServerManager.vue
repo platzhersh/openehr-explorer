@@ -13,6 +13,8 @@ const testResult = ref<string | null>(null);
 const testError = ref<string | null>(null);
 const cardTestLoading = ref<Record<string, boolean>>({});
 const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
+const urlValidationError = ref<string | null>(null);
+const urlValidationWarning = ref<string | null>(null);
 
 const form = ref<ServerProfile>({
   id: "",
@@ -37,12 +39,14 @@ function newProfile() {
     name: "",
     base_url: "http://localhost:8080/ehrbase",
     server_type: "ehrbase",
-    auth_method: { type: "basic", username: "ehrbase-user", password: "SuperSecretPassword" },
+    auth_method: { type: "basic", username: "", password: "" },
     terminology_url: null,
   };
   editing.value = true;
   testResult.value = null;
   testError.value = null;
+  urlValidationError.value = null;
+  urlValidationWarning.value = null;
 }
 
 function editProfile(profile: ServerProfile) {
@@ -55,9 +59,64 @@ function editProfile(profile: ServerProfile) {
   editing.value = true;
   testResult.value = null;
   testError.value = null;
+  urlValidationError.value = null;
+  urlValidationWarning.value = null;
+  validateBaseUrl(profile.base_url);
+}
+
+function validateBaseUrl(url: string): boolean {
+  urlValidationError.value = null;
+  urlValidationWarning.value = null;
+
+  if (!url || url.trim() === "") {
+    urlValidationError.value = "Base URL is required";
+    return false;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    urlValidationError.value = "Invalid URL format";
+    return false;
+  }
+
+  // Check for dangerous schemes
+  const dangerousSchemes = ["javascript", "data", "file", "vbscript", "about"];
+  if (dangerousSchemes.includes(parsedUrl.protocol.replace(":", ""))) {
+    urlValidationError.value = `Dangerous URL scheme '${parsedUrl.protocol}' is not allowed`;
+    return false;
+  }
+
+  // Only allow http and https
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    urlValidationError.value = "URL must use http:// or https:// protocol";
+    return false;
+  }
+
+  // Warn about http:// for non-localhost servers
+  if (parsedUrl.protocol === "http:") {
+    const isLocalhost =
+      parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1" ||
+      parsedUrl.hostname === "::1" ||
+      parsedUrl.hostname.startsWith("192.168.") ||
+      parsedUrl.hostname.startsWith("10.") ||
+      parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
+
+    if (!isLocalhost) {
+      urlValidationWarning.value =
+        "Using HTTP for a remote server will send credentials unencrypted. Consider using HTTPS.";
+    }
+  }
+
+  return true;
 }
 
 async function save() {
+  if (!validateBaseUrl(form.value.base_url)) {
+    return;
+  }
   await serverStore.saveProfile(form.value);
   editing.value = false;
 }
@@ -108,6 +167,28 @@ function setAdminAuthType(type: string) {
     form.value.admin_auth_method = { type: "bearer", token: "" };
   }
 }
+
+function isInsecureHttpUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "http:") {
+      return false;
+    }
+
+    // Check if it's localhost or private network
+    const isLocalhost =
+      parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1" ||
+      parsedUrl.hostname === "::1" ||
+      parsedUrl.hostname.startsWith("192.168.") ||
+      parsedUrl.hostname.startsWith("10.") ||
+      parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
+
+    return !isLocalhost;
+  } catch {
+    return false;
+  }
+}
 </script>
 
 <template>
@@ -138,6 +219,13 @@ function setAdminAuthType(type: string) {
                 :title="serverStore.versionInfo[profile.id]?.server_version ?? ''"
               >
                 v{{ serverStore.versionInfo[profile.id]?.server_version }}
+              </span>
+              <span
+                v-if="isInsecureHttpUrl(profile.base_url)"
+                class="badge warning-badge"
+                title="Using HTTP for a remote server (credentials sent unencrypted)"
+              >
+                ⚠️ HTTP
               </span>
             </div>
             <div
@@ -185,7 +273,18 @@ function setAdminAuthType(type: string) {
             class="input"
             v-model="form.base_url"
             placeholder="http://localhost:8080/ehrbase"
+            @input="validateBaseUrl(form.base_url)"
+            :class="{ 'input-error': urlValidationError, 'input-warning': urlValidationWarning }"
           />
+          <div v-if="urlValidationError" class="validation-message error">
+            {{ urlValidationError }}
+          </div>
+          <div
+            v-if="urlValidationWarning && !urlValidationError"
+            class="validation-message warning"
+          >
+            ⚠️ {{ urlValidationWarning }}
+          </div>
         </div>
 
         <div class="form-group">
@@ -357,6 +456,12 @@ function setAdminAuthType(type: string) {
   color: var(--color-primary);
   font-weight: 600;
 }
+.warning-badge {
+  background: rgba(255, 193, 7, 0.15);
+  color: #f59e0b;
+  font-weight: 600;
+  border: 1px solid #fbbf24;
+}
 .card-test-result {
   margin-top: 6px;
   font-size: 12px;
@@ -433,5 +538,30 @@ function setAdminAuthType(type: string) {
   background: rgba(255, 107, 107, 0.1);
   color: var(--color-error);
   border: 1px solid var(--color-error);
+}
+
+.validation-message {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.validation-message.error {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+.validation-message.warning {
+  background: rgba(255, 193, 7, 0.1);
+  color: #f59e0b;
+  border: 1px solid #fbbf24;
+}
+
+.input-error {
+  border-color: var(--color-error) !important;
+}
+.input-warning {
+  border-color: #fbbf24 !important;
 }
 </style>
