@@ -55,8 +55,9 @@ impl CredentialManager {
     }
 
     /// Store a secret for a profile field (e.g. "abc-123:password").
-    /// For the OS keychain backend, performs a read-back verification to
-    /// ensure the secret was actually persisted.
+    /// For the OS keychain backend, performs a read-back verification
+    /// using a FRESH Entry object (not the one that wrote) to ensure
+    /// the secret was truly persisted to the system store.
     pub fn store_secret(
         &self,
         profile_id: &str,
@@ -72,8 +73,12 @@ impl CredentialManager {
                 entry
                     .set_password(&secret)
                     .map_err(|e| format!("Keychain store error: {e}"))?;
-                // Read-back verification: ensure the secret was actually persisted
-                let readback = entry
+                // Read-back with a FRESH entry to catch phantom writes where
+                // the Entry object caches the value in-memory but never
+                // actually persists it to the system credential store.
+                let verify = keyring::Entry::new(SERVICE_NAME, &account)
+                    .map_err(|e| format!("Keychain verify entry error: {e}"))?;
+                let readback = verify
                     .get_password()
                     .map_err(|e| format!("Keychain read-back failed: {e}"))?;
                 if readback != secret {
@@ -172,31 +177,37 @@ impl CredentialManager {
     // --- Private helpers ---
 
     /// Probe whether the OS keychain is usable by performing a full
-    /// write → read → delete cycle. A read-only probe is insufficient
-    /// because some platforms (e.g. unsigned macOS apps) allow reads
-    /// but deny writes.
+    /// write → read-back (fresh entry) → delete cycle. Uses a separate
+    /// Entry object for the read-back to catch backends that cache
+    /// values in-memory without actually persisting to the system store.
     fn keychain_available() -> bool {
         let probe_account = "__openehr_probe__";
         let probe_secret = "__probe_value__";
 
-        let entry = match keyring::Entry::new(SERVICE_NAME, probe_account) {
+        // Write with one Entry object
+        let write_entry = match keyring::Entry::new(SERVICE_NAME, probe_account) {
             Ok(e) => e,
             Err(_) => return false,
         };
-
-        // Try to write a test value
-        if entry.set_password(probe_secret).is_err() {
+        if write_entry.set_password(probe_secret).is_err() {
             return false;
         }
 
-        // Try to read it back
-        let read_ok = match entry.get_password() {
+        // Read back with a FRESH Entry object to verify true persistence
+        let read_entry = match keyring::Entry::new(SERVICE_NAME, probe_account) {
+            Ok(e) => e,
+            Err(_) => {
+                let _ = write_entry.delete_credential();
+                return false;
+            }
+        };
+        let read_ok = match read_entry.get_password() {
             Ok(val) => val == probe_secret,
             Err(_) => false,
         };
 
-        // Clean up the probe entry
-        let _ = entry.delete_credential();
+        // Clean up
+        let _ = write_entry.delete_credential();
 
         read_ok
     }
