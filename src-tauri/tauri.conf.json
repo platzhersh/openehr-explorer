@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src ipc: http://ipc.localhost https: http:; img-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com"
     }
   },
   "bundle": {

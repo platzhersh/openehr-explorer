@@ -37,7 +37,7 @@ function newProfile() {
     name: "",
     base_url: "http://localhost:8080/ehrbase",
     server_type: "ehrbase",
-    auth_method: { type: "basic", username: "ehrbase-user", password: "SuperSecretPassword" },
+    auth_method: { type: "basic", username: "", password: "" },
     terminology_url: null,
   };
   editing.value = true;
