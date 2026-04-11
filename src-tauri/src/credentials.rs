@@ -55,6 +55,8 @@ impl CredentialManager {
     }
 
     /// Store a secret for a profile field (e.g. "abc-123:password").
+    /// For the OS keychain backend, performs a read-back verification to
+    /// ensure the secret was actually persisted.
     pub fn store_secret(
         &self,
         profile_id: &str,
@@ -69,7 +71,17 @@ impl CredentialManager {
                     .map_err(|e| format!("Keychain entry error: {e}"))?;
                 entry
                     .set_password(&secret)
-                    .map_err(|e| format!("Keychain store error: {e}"))
+                    .map_err(|e| format!("Keychain store error: {e}"))?;
+                // Read-back verification: ensure the secret was actually persisted
+                let readback = entry
+                    .get_password()
+                    .map_err(|e| format!("Keychain read-back failed: {e}"))?;
+                if readback != secret {
+                    return Err(
+                        "Keychain verification failed: stored value does not match".to_string()
+                    );
+                }
+                Ok(())
             }
             StorageBackend::EncryptedFile => {
                 let key = self.file_key.as_ref().ok_or("Encryption key not loaded")?;
@@ -159,19 +171,34 @@ impl CredentialManager {
 
     // --- Private helpers ---
 
-    /// Probe whether the OS keychain is usable.
+    /// Probe whether the OS keychain is usable by performing a full
+    /// write → read → delete cycle. A read-only probe is insufficient
+    /// because some platforms (e.g. unsigned macOS apps) allow reads
+    /// but deny writes.
     fn keychain_available() -> bool {
-        let test_entry = match keyring::Entry::new(SERVICE_NAME, "__probe__") {
+        let probe_account = "__openehr_probe__";
+        let probe_secret = "__probe_value__";
+
+        let entry = match keyring::Entry::new(SERVICE_NAME, probe_account) {
             Ok(e) => e,
             Err(_) => return false,
         };
-        // Try to read a non-existent entry. If we get NoEntry, the backend works.
-        // If we get a platform error, it's not available.
-        match test_entry.get_password() {
-            Err(keyring::Error::NoEntry) => true,
-            Ok(_) => true, // unexpected but keychain works
-            Err(_) => false,
+
+        // Try to write a test value
+        if entry.set_password(probe_secret).is_err() {
+            return false;
         }
+
+        // Try to read it back
+        let read_ok = match entry.get_password() {
+            Ok(val) => val == probe_secret,
+            Err(_) => false,
+        };
+
+        // Clean up the probe entry
+        let _ = entry.delete_credential();
+
+        read_ok
     }
 
     /// Load or generate the file-encryption key.

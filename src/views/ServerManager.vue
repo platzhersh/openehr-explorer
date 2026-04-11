@@ -140,9 +140,15 @@ async function save() {
   if (!validateBaseUrl(form.value.base_url)) {
     return;
   }
-  await serverStore.saveProfile(form.value);
-  editingExistingId.value = null;
-  editing.value = false;
+  testResult.value = null;
+  testError.value = null;
+  try {
+    await serverStore.saveProfile(form.value);
+    editingExistingId.value = null;
+    editing.value = false;
+  } catch (e) {
+    testError.value = `Save failed: ${String(e)}`;
+  }
 }
 
 async function remove(id: string) {
