@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
 
@@ -7,6 +9,7 @@ const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
 
 const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_server_url || "");
+const configDir = ref<string | null>(null);
 
 const editing = ref(false);
 const testResult = ref<string | null>(null);
@@ -29,7 +32,19 @@ onMounted(async () => {
     const version = await serverStore.fetchServerVersion(profile);
     console.log(`Version for ${profile.name}:`, version);
   }
+  // Load config directory path
+  try {
+    configDir.value = await invoke<string>("get_config_dir");
+  } catch (e) {
+    console.error("Failed to get config dir:", e);
+  }
 });
+
+async function openConfigDir() {
+  if (configDir.value) {
+    await revealItemInDir(configDir.value);
+  }
+}
 
 function newProfile() {
   form.value = {
@@ -168,6 +183,21 @@ function setAdminAuthType(type: string) {
           <h3>No servers configured</h3>
           <p>Add a server profile to connect to an openEHR CDR.</p>
         </div>
+      </div>
+
+      <!-- Settings file info -->
+      <div v-if="!editing && configDir" class="config-info">
+        <h3>Settings Files</h3>
+        <p class="config-hint">
+          Application data is stored in the following files:
+        </p>
+        <ul class="config-file-list">
+          <li><code>profiles.json</code> &mdash; Server profiles</li>
+          <li><code>saved_queries.json</code> &mdash; Saved AQL queries</li>
+          <li><code>settings.json</code> &mdash; Global settings</li>
+        </ul>
+        <p class="config-path">{{ configDir }}</p>
+        <button class="btn btn-sm" @click="openConfigDir">Open Directory</button>
       </div>
 
       <!-- Edit form -->
@@ -433,5 +463,49 @@ function setAdminAuthType(type: string) {
   background: rgba(255, 107, 107, 0.1);
   color: var(--color-error);
   border: 1px solid var(--color-error);
+}
+
+.config-info {
+  flex: 0 0 auto;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  align-self: flex-start;
+  min-width: 260px;
+}
+.config-info h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.config-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.config-file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px 0;
+}
+.config-file-list li {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.config-file-list code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text);
+}
+.config-path {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  word-break: break-all;
+  margin-bottom: 10px;
+  line-height: 1.4;
 }
 </style>
