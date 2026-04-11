@@ -3,6 +3,7 @@ use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use zeroize::Zeroize;
 
 use crate::credentials::{harden_file_permissions, CredentialManager, StorageBackend};
@@ -162,10 +163,16 @@ fn dirs_config_dir() -> PathBuf {
 // Credential helpers
 // ---------------------------------------------------------------------------
 
-fn cred_manager() -> CredentialManager {
-    let config_dir = get_config_dir();
-    fs::create_dir_all(&config_dir).ok();
-    CredentialManager::new(&config_dir)
+/// Singleton credential manager — the keychain probe runs exactly once
+/// per application lifetime, preventing backend flipping between calls.
+static CREDENTIAL_MANAGER: OnceLock<CredentialManager> = OnceLock::new();
+
+fn cred_manager() -> &'static CredentialManager {
+    CREDENTIAL_MANAGER.get_or_init(|| {
+        let config_dir = get_config_dir();
+        fs::create_dir_all(&config_dir).ok();
+        CredentialManager::new(&config_dir)
+    })
 }
 
 /// Extract secrets from an AuthMethod and store them in the credential manager.
@@ -367,9 +374,9 @@ pub fn migrate_plaintext_credentials() {
             // Parse as full ServerProfile (legacy format with secrets)
             if let Ok(full) = serde_json::from_value::<ServerProfile>(profile_val.clone()) {
                 // Store secrets in credential manager
-                if store_auth_secrets(&mgr, &full.id, "", &full.auth_method, &config_dir).is_ok() {
+                if store_auth_secrets(mgr, &full.id, "", &full.auth_method, &config_dir).is_ok() {
                     if let Some(ref admin) = full.admin_auth_method {
-                        store_auth_secrets(&mgr, &full.id, "admin_", admin, &config_dir).ok();
+                        store_auth_secrets(mgr, &full.id, "admin_", admin, &config_dir).ok();
                     }
                     new_profiles.push(StoredProfile {
                         id: full.id,
@@ -447,7 +454,7 @@ pub async fn list_server_profiles() -> Result<Vec<ServerProfilePublic>, String> 
     let stored = load_stored_profiles();
     let mut public = Vec::with_capacity(stored.len());
     for sp in &stored {
-        let resolved = load_resolved_profile(&mgr, sp, &config_dir)?;
+        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
         public.push(to_public_profile(&resolved, mgr.backend()));
     }
     Ok(public)
@@ -461,9 +468,9 @@ pub async fn save_server_profile(
     let mgr = cred_manager();
 
     // Store secrets in credential manager
-    store_auth_secrets(&mgr, &profile.id, "", &profile.auth_method, &config_dir)?;
+    store_auth_secrets(mgr, &profile.id, "", &profile.auth_method, &config_dir)?;
     if let Some(ref admin) = profile.admin_auth_method {
-        store_auth_secrets(&mgr, &profile.id, "admin_", admin, &config_dir)?;
+        store_auth_secrets(mgr, &profile.id, "admin_", admin, &config_dir)?;
     } else {
         // Clean up admin secrets if admin auth is removed
         mgr.delete_secret(&profile.id, "admin_password", &config_dir)?;
@@ -492,7 +499,7 @@ pub async fn save_server_profile(
     // Return public list
     let mut public = Vec::with_capacity(profiles.len());
     for sp in &profiles {
-        let resolved = load_resolved_profile(&mgr, sp, &config_dir)?;
+        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
         public.push(to_public_profile(&resolved, mgr.backend()));
     }
     Ok(public)
@@ -513,7 +520,7 @@ pub async fn delete_server_profile(id: String) -> Result<Vec<ServerProfilePublic
     // Return public list
     let mut public = Vec::with_capacity(profiles.len());
     for sp in &profiles {
-        let resolved = load_resolved_profile(&mgr, sp, &config_dir)?;
+        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
         public.push(to_public_profile(&resolved, mgr.backend()));
     }
     Ok(public)
@@ -706,7 +713,7 @@ pub fn get_profile_by_id(id: &str) -> Result<ServerProfile, String> {
         .into_iter()
         .find(|p| p.id == id)
         .ok_or_else(|| format!("Server profile '{}' not found", id))?;
-    load_resolved_profile(&mgr, &sp, &config_dir)
+    load_resolved_profile(mgr, &sp, &config_dir)
 }
 
 pub fn make_request(
