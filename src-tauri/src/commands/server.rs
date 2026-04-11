@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use zeroize::Zeroize;
 
 use crate::credentials::{harden_file_permissions, CredentialManager, StorageBackend};
 use crate::inspector::send_instrumented;
