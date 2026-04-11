@@ -340,6 +340,7 @@
       <a href="#template-browser" class="sidebar-link">Template Browser</a>
       <a href="#aql-runner" class="sidebar-link">AQL Runner</a>
       <a href="#flat-path-panel" class="sidebar-link">FLAT Path Panel</a>
+      <a href="#request-inspector" class="sidebar-link">Request Inspector</a>
 
       <div class="sidebar-group-title">Configuration</div>
       <a href="#server-profiles" class="sidebar-link">Server Profiles</a>
@@ -385,8 +386,8 @@ winget install openehr-explorer</div>
 
         <h3>Linux</h3>
         <p>Download the <code>.AppImage</code> from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Make it executable and run:</p>
-        <div class="code-block">chmod +x openehr-explorer_0.1.0_amd64.AppImage
-./openehr-explorer_0.1.0_amd64.AppImage</div>
+        <div class="code-block">chmod +x openehr-explorer_0.2.0_amd64.AppImage
+./openehr-explorer_0.2.0_amd64.AppImage</div>
       </section>
 
       <section id="first-connection">
@@ -422,6 +423,15 @@ winget install openehr-explorer</div>
           <li>Switch between servers instantly using the sidebar dropdown — no restart needed.</li>
         </ul>
         <p>Server profiles are stored locally and never sent to any external service. You can configure as many profiles as you need.</p>
+
+        <h3>Server Version Detection</h3>
+        <p>Each server profile displays the detected CDR version on the profile card. Version detection happens automatically when you test a connection or connect to a server.</p>
+        <ul>
+          <li><strong>EHRBase:</strong> Fetches version from <code>GET /rest/status</code> (displays <code>ehrbase_version</code>)</li>
+          <li><strong>Better Platform:</strong> Fetches version from <code>OPTIONS /rest/v1</code> (displays <code>solutionVersion</code>)</li>
+          <li><strong>Generic:</strong> Version detection not available — liveness check only</li>
+        </ul>
+        <p>Click the <strong>"Test"</strong> button on any profile card to verify connectivity and refresh the version number.</p>
       </section>
 
       <section id="ehr-browser">
@@ -434,6 +444,39 @@ winget install openehr-explorer</div>
           <li><strong>Delete EHR:</strong> Open an EHR's detail view and click "Delete EHR". You must type the EHR ID to confirm — this prevents accidental deletion.</li>
         </ul>
         <p>The browser uses AQL-based listing for efficient pagination, even on CDRs with thousands of records.</p>
+
+        <h3>Search</h3>
+        <p>The EHR Browser supports powerful server-side search using typed attribute syntax. All searches execute AQL queries against the CDR and are visible in the Request Inspector.</p>
+
+        <h4>Search Syntax</h4>
+        <p>Enter search terms in the search bar using these attribute filters:</p>
+        <table>
+          <thead>
+            <tr><th>Syntax</th><th>Description</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>EHR ID</td><td>Prefix match (no keyword needed)</td><td><code>fde80e0e-04eb</code></td></tr>
+            <tr><td><code>subject:...</code></td><td>Subject ID contains</td><td><code>subject:6f4b5848</code></td></tr>
+            <tr><td><code>namespace:...</code></td><td>Subject namespace exact match</td><td><code>namespace:patnr</code></td></tr>
+            <tr><td><code>system:...</code></td><td>System ID exact match</td><td><code>system:dev.cistec.io</code></td></tr>
+            <tr><td><code>modifiable:true</code></td><td>EHR is modifiable</td><td><code>modifiable:true</code></td></tr>
+            <tr><td><code>modifiable:false</code></td><td>EHR is not modifiable</td><td><code>modifiable:false</code></td></tr>
+            <tr><td><code>hasCompositions:true</code></td><td>EHR has at least one composition</td><td><code>hasCompositions:true</code></td></tr>
+          </tbody>
+        </table>
+
+        <h4>Combining Search Terms</h4>
+        <p>Combine multiple terms with spaces (implicit AND logic):</p>
+        <div class="code-block">namespace:patnr modifiable:true
+subject:6f4b5848 hasCompositions:true</div>
+
+        <h4>Search Help</h4>
+        <p>Click the <strong>?</strong> icon next to the search bar to view the full syntax reference and examples.</p>
+
+        <div class="note">
+          <div class="callout-title">Search Limitations</div>
+          The <code>hasCompositions:false</code> filter is not supported due to AQL limitations. Date filters (<code>created-on</code>, <code>created-before</code>, <code>created-after</code>) are not supported due to EHRBase implementation constraints.
+        </div>
       </section>
 
       <section id="composition-viewer">
@@ -463,10 +506,12 @@ winget install openehr-explorer</div>
         <h2>AQL Runner</h2>
         <p>The AQL Runner is a query editor for the Archetype Query Language (AQL), the standard query language for openEHR data.</p>
         <ul>
-          <li>Write AQL queries with syntax highlighting.</li>
+          <li>Write AQL queries with <strong>syntax highlighting</strong> and intelligent autocomplete.</li>
           <li>Execute queries against the connected CDR and see results in a sortable table.</li>
           <li><strong>Save queries:</strong> Save frequently used queries with a name and description for quick access.</li>
           <li><strong>Export CSV:</strong> Export query results as CSV files for further analysis.</li>
+          <li><strong>Format:</strong> Auto-format queries with the Format button or <code>Shift+Alt+F</code>.</li>
+          <li><strong>Execute:</strong> Run queries with <code>Ctrl/Cmd + Enter</code>.</li>
         </ul>
         <div class="code-block">SELECT
   e/ehr_id/value as ehr_id,
@@ -476,9 +521,37 @@ FROM EHR e
   CONTAINS COMPOSITION c
 ORDER BY c/name/value ASC
 LIMIT 10</div>
+
+        <h3>Intelligent Autocomplete</h3>
+        <p>The AQL editor provides three layers of context-aware autocomplete powered by CodeMirror:</p>
+
+        <h4>Layer 1: Keywords & RM Types</h4>
+        <p>Autocomplete for AQL keywords and openEHR Reference Model types:</p>
+        <ul>
+          <li><strong>Keywords:</strong> <code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, <code>CONTAINS</code>, <code>ORDER BY</code>, <code>LIMIT</code>, etc.</li>
+          <li><strong>RM Types:</strong> <code>EHR</code>, <code>COMPOSITION</code>, <code>OBSERVATION</code>, <code>EVALUATION</code>, <code>INSTRUCTION</code>, <code>ACTION</code>, etc.</li>
+          <li><strong>Functions:</strong> <code>COUNT(*)</code>, <code>MAX()</code>, <code>MIN()</code>, <code>SUM()</code>, <code>AVG()</code></li>
+        </ul>
+
+        <h4>Layer 2: Static RM Paths</h4>
+        <p>After typing an alias followed by <code>/</code> (e.g., <code>e/</code>, <code>c/</code>), autocomplete suggests standard RM paths:</p>
+        <ul>
+          <li><strong>EHR paths:</strong> <code>ehr_id/value</code>, <code>time_created/value</code>, <code>ehr_status/subject/external_ref/id/value</code>, etc.</li>
+          <li><strong>COMPOSITION paths:</strong> <code>uid/value</code>, <code>name/value</code>, <code>archetype_details/template_id/value</code>, <code>context/start_time/value</code>, etc.</li>
+        </ul>
+
+        <h4>Layer 3: Template-Aware Paths</h4>
+        <p>Select a <strong>Context Template</strong> from the dropdown to enable template-specific path completions. When you type an archetype-constrained alias (e.g., <code>obs/</code> for an OBSERVATION), autocomplete suggests actual data paths from the Web Template:</p>
+        <ul>
+          <li>Paths are extracted from the selected template's Web Template definition</li>
+          <li>Completions show human-readable labels with RM type hints</li>
+          <li>Full AQL paths are inserted automatically</li>
+        </ul>
+        <p>Example: With a vital signs template selected, typing <code>obs/</code> suggests paths like <code>data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude</code> with the label "Systolic".</p>
+
         <div class="note">
-          <div class="callout-title">Coming in v0.2.0</div>
-          AQL autocomplete with archetype-aware suggestions, powered by a CodeMirror-based editor.
+          <div class="callout-title">Pro Tip</div>
+          Autocomplete activates as you type. Press <code>Ctrl+Space</code> to manually trigger suggestions at any time.
         </div>
       </section>
 
@@ -492,6 +565,65 @@ LIMIT 10</div>
         </ul>
         <p>Example FLAT path:</p>
         <div class="code-block">vital-signs/blood_pressure:0/any_event:0/systolic|magnitude</div>
+      </section>
+
+      <section id="request-inspector">
+        <h2>Request Inspector</h2>
+        <p>The Request Inspector is a bottom drawer panel that captures every HTTP request openEHR Explorer makes to the connected CDR. It provides full visibility into the API conversation for debugging and learning.</p>
+
+        <h3>Opening the Inspector</h3>
+        <ul>
+          <li>Keyboard shortcut: <code>Cmd+Shift+I</code> (macOS) / <code>Ctrl+Shift+I</code> (Windows/Linux)</li>
+          <li>Toggle between three height states: Collapsed (tab bar only), Half (default), Expanded (full window)</li>
+          <li>Red dot badge on collapsed tab indicates recent 4xx or 5xx errors</li>
+        </ul>
+
+        <h3>Request Log</h3>
+        <p>The left pane shows a reverse-chronological list of all CDR requests:</p>
+        <ul>
+          <li>Color-coded method badges: <code>GET</code> (blue), <code>POST</code> (green), <code>PUT</code> (amber), <code>DELETE</code> (red)</li>
+          <li>HTTP status color coding: 2xx (green), 3xx (blue), 4xx (orange), 5xx (red)</li>
+          <li>Request duration in milliseconds</li>
+          <li>Filter by method, status class, or URL path</li>
+          <li>Most recent entry is auto-selected</li>
+        </ul>
+
+        <h3>Request Detail Panel</h3>
+        <p>The right pane shows full details of the selected request, with two tabs:</p>
+
+        <h4>Request Tab</h4>
+        <ul>
+          <li><strong>Summary:</strong> Method, URL, duration, timestamp</li>
+          <li><strong>Request Headers:</strong> Key-value table with copy buttons</li>
+          <li><strong>Request Body:</strong> Shown for POST/PUT requests in Tree/Raw/FLAT views</li>
+          <li><strong>Copy as curl:</strong> One-click to copy a complete curl command that reproduces the exact request</li>
+        </ul>
+
+        <h4>Response Tab</h4>
+        <ul>
+          <li><strong>Summary:</strong> Status code, content type, response size</li>
+          <li><strong>Response Headers:</strong> Key-value table with copy buttons</li>
+          <li><strong>Response Body:</strong> Three view modes:
+            <ul>
+              <li><strong>Tree View (default):</strong> Interactive, collapsible JSON tree with openEHR-aware rendering (<code>_type</code> pills, archetype labels, DV type formatting)</li>
+              <li><strong>Raw JSON:</strong> Syntax-highlighted, read-only JSON editor with line numbers</li>
+              <li><strong>FLAT View:</strong> FLAT path → value table (available when response contains a composition)</li>
+            </ul>
+          </li>
+        </ul>
+
+        <h3>Use Cases</h3>
+        <ul>
+          <li><strong>Debugging:</strong> See exactly what was sent when a composition was rejected with 422</li>
+          <li><strong>Learning:</strong> Understand what a CREATE EHR request looks like (method, URL, body, response)</li>
+          <li><strong>Reproduction:</strong> Copy as curl to reproduce requests in CI or external tools</li>
+          <li><strong>Verification:</strong> Verify that stored compositions contain correct FLAT path values</li>
+        </ul>
+
+        <div class="note">
+          <div class="callout-title">Privacy Notice</div>
+          Sensitive headers (<code>Authorization</code>, <code>Cookie</code>) are redacted to <code>[REDACTED]</code> by default. Request history is session-scoped and cleared when switching server profiles.
+        </div>
       </section>
 
       <!-- Configuration -->
@@ -534,7 +666,10 @@ LIMIT 10</div>
             <tr><td><code>Ctrl/Cmd + 2</code></td><td>Switch to Template Browser</td><td>Global</td></tr>
             <tr><td><code>Ctrl/Cmd + 3</code></td><td>Switch to AQL Runner</td><td>Global</td></tr>
             <tr><td><code>Ctrl/Cmd + 4</code></td><td>Switch to Server Manager</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + ,</code></td><td>Open Settings</td><td>Global</td></tr>
             <tr><td><code>Ctrl/Cmd + Enter</code></td><td>Execute AQL query</td><td>AQL Runner</td></tr>
+            <tr><td><code>Ctrl/Cmd + Shift + I</code></td><td>Toggle Request Inspector</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + Shift + D</code></td><td>Open Documentation</td><td>Global</td></tr>
             <tr><td><code>Escape</code></td><td>Close dialog / panel</td><td>Global</td></tr>
           </tbody>
         </table>
@@ -567,20 +702,27 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.2.0 — EHR Browser Search &amp; Enhanced Features</h3>
+        <ul>
+          <li><strong>EHR Browser Search:</strong> Server-side AQL-backed search with attribute filters (subject, namespace, system, modifiable, hasCompositions)</li>
+          <li><strong>Server Version Detection:</strong> Auto-detect and display CDR version for EHRBase and Better Platform</li>
+          <li><strong>Global Keyboard Shortcuts:</strong> Navigate with Cmd+1-4, open settings with Cmd+,, toggle inspector with Cmd+Shift+I</li>
+        </ul>
+
         <h3>v0.1.0 — Initial Release</h3>
         <ul>
-          <li><strong>EHR Browser:</strong> Paginated listing, create, delete</li>
+          <li><strong>EHR Browser:</strong> Paginated listing, create, delete EHRs</li>
           <li><strong>Composition Viewer:</strong> Pretty / JSON / FLAT views, path panel, version navigation</li>
           <li><strong>Composition CRUD:</strong> Create, edit, delete compositions in FLAT format</li>
           <li><strong>Template Browser:</strong> List templates, inspect Web Template tree, upload OPT</li>
-          <li><strong>AQL Runner:</strong> Execute queries, sortable results table, saved queries, CSV export</li>
+          <li><strong>AQL Runner:</strong> Execute queries with 3-layer autocomplete (keywords, RM paths, template-aware paths), sortable results table, saved queries, CSV export, auto-format</li>
           <li><strong>Server Manager:</strong> Multi-server profiles with EHRBase and Better Platform support</li>
-          <li><strong>Request Inspector:</strong> View raw HTTP requests/responses for debugging</li>
+          <li><strong>Request Inspector:</strong> View raw HTTP requests/responses for debugging with Tree/Raw/FLAT views, copy as curl</li>
         </ul>
 
         <div class="note">
           <div class="callout-title">What's next?</div>
-          See the <a href="https://github.com/platzhersh/openehr-explorer">GitHub repository</a> for the roadmap. Key planned features include AQL autocomplete (v0.2.0) and a synthetic data generator.
+          See the <a href="https://github.com/platzhersh/openehr-explorer">GitHub repository</a> for the roadmap. Planned features include composition diff tool and synthetic data generation.
         </div>
       </section>
 

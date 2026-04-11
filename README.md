@@ -6,12 +6,14 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 
 ## Features
 
-- **Server Connection Manager** — Save and switch between multiple CDR instances
-- **EHR Browser** — Paginated list of EHRs with composition grouping by template
+- **Server Connection Manager** — Save and switch between multiple CDR instances with auto version detection
+- **EHR Browser** — Paginated list with server-side AQL search (subject, namespace, system, modifiable, hasCompositions)
 - **Composition Viewer** — Template-aware "pretty" view with human-readable labels, raw JSON, and FLAT format
 - **FLAT Path Panel** — One-click copy of FLAT paths for SDK development
 - **Template Browser** — Inspect Web Template trees, view OPT XML, drag-and-drop upload
-- **AQL Query Runner** — Execute AQL queries with tabular results, saved queries, CSV export
+- **AQL Query Runner** — Execute AQL queries with 3-layer autocomplete, tabular results, saved queries, CSV export
+- **Request Inspector** — View all HTTP traffic with request/response details, copy as curl
+- **Keyboard Shortcuts** — Navigate with Cmd+1-4, toggle inspector with Cmd+Shift+I, execute queries with Cmd+Enter
 
 ## Prerequisites
 
@@ -51,7 +53,7 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 | No Docker / backend required | ✅ | ❌ Docker Compose | ✅ | ❌ Account required |
 | Installs in < 2 min | ✅ dmg / exe / deb | ⚠️ `docker compose up` | ✅ | ❌ |
 | Works with local EHRBase | ✅ | ✅ | ✅ | ❌ |
-| Multi-server profiles (save & switch) | ✅ | ❌ | ⚠️ Collections | ❌ |
+| Multi-server profiles with version detection | ✅ Auto detect | ❌ | ⚠️ Collections | ❌ |
 | Supports Better Platform | ⚠️ Phase 2 | ⚠️ Partial | ✅ | ✅ Native |
 | CDR-agnostic (generic openEHR REST) | ✅ | ⚠️ Partial | ✅ | ❌ |
 
@@ -60,6 +62,7 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 | Feature | **openEHR Explorer** | openEHRTool v2 | Postman / curl | Better Studio |
 |---|:---:|:---:|:---:|:---:|
 | Paginated EHR list | ✅ | ✅ | ❌ | ✅ |
+| Server-side EHR search (subject, namespace, system, etc.) | ✅ AQL-backed | ⚠️ | ❌ | ✅ |
 | Compositions grouped by template | ✅ | ⚠️ | ❌ | ✅ |
 | Raw canonical JSON view | ✅ | ✅ | ✅ | ✅ |
 | **Template-aware "pretty" view** ¹ | ✅ ⭐ | ❌ | ❌ | ⚠️ |
@@ -81,6 +84,8 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 
 > ² One-click copy of every FLAT path from the Web Template tree — eliminates the #1 developer pain point when building compositions.
 
+> ³ Three layers: (1) AQL keywords & RM types, (2) Static RM paths for EHR/COMPOSITION, (3) Template-specific archetype paths extracted from Web Templates.
+
 ### 🔍 AQL Query Interface
 
 | Feature | **openEHR Explorer** | openEHRTool v2 | Postman / curl | Better Studio |
@@ -89,13 +94,14 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 | Tabular result view | ✅ | ✅ | ❌ Raw JSON | ✅ |
 | Saved query library | ✅ | ⚠️ | ✅ Collections | ⚠️ |
 | Export results to CSV | ✅ | ⚠️ | ❌ | ⚠️ |
-| AQL path autocomplete | 🔵 Phase 2 | ❌ | ❌ | ⚠️ |
+| **AQL path autocomplete (3-layer CodeMirror)** ³ | ✅ ⭐ | ❌ | ❌ | ⚠️ |
 
 ### 🛠️ Developer Experience
 
 | Feature | **openEHR Explorer** | openEHRTool v2 | Postman / curl | Better Studio |
 |---|:---:|:---:|:---:|:---:|
-| Keyboard shortcuts (Cmd+K, Cmd+Enter) | ✅ | ❌ | ✅ | ⚠️ |
+| Request Inspector (view all HTTP traffic) | ✅ Bottom drawer | ❌ | ✅ Native | ❌ |
+| Keyboard shortcuts (navigation + actions) | ✅ Cmd+1-4, Cmd+Shift+I | ❌ | ✅ | ⚠️ |
 | Open-source | ✅ Apache 2.0 | ✅ Apache 2.0 | ⚠️ Freemium | ❌ |
 | Composition diff tool | 🔵 Phase 2 | ❌ | ❌ | ❌ |
 | Synthetic data generation | 🔵 Phase 2 | ❌ | ❌ | ❌ |
@@ -104,12 +110,14 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 
 | | **openEHR Explorer** | openEHRTool v2 | Postman / curl | Better Studio |
 |---|:---:|:---:|:---:|:---:|
-| **Phase 1 score** (of 20 features) | **17 / 20** | 9 / 20 | 8 / 20 | 11 / 20 |
+| **Phase 1 score** (of 24 features) | **21 / 24** | 9.5 / 24 | 9.5 / 24 | 12 / 24 |
 
 #### Unique to openEHR Explorer
 
 - **Template-aware composition rendering** — `at0006` becomes `"Systolic"`. No other tool resolves node IDs to template labels.
+- **3-layer AQL autocomplete** — Keywords, RM paths, and template-aware path suggestions powered by CodeMirror.
 - **FLAT path panel** — Every Web Template path, one click to copy. Eliminates the most common source of EHRBase integration errors.
+- **Request Inspector** — See every HTTP request/response with tree/raw/FLAT views, copy as curl.
 - **Zero-dependency install** — No Docker, no Python, no Node runtime. A native binary that opens in < 2 seconds.
 - **Multi-server profile switcher** — Local dev, staging, colleague's EHRBase — switch without restarting or editing config.
 

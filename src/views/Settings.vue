@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
 
 const settingsStore = useSettingsStore();
@@ -11,10 +13,17 @@ const form = ref<GlobalSettings>({
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
 const saveError = ref<string | null>(null);
+const configDir = ref<string | null>(null);
 
 onMounted(async () => {
   await settingsStore.loadSettings();
   form.value = { ...settingsStore.settings };
+  // Load config directory path
+  try {
+    configDir.value = await invoke<string>("get_config_dir");
+  } catch (e) {
+    console.error("Failed to get config dir:", e);
+  }
 });
 
 async function save() {
@@ -33,6 +42,12 @@ async function save() {
     saveError.value = String(e);
   } finally {
     saving.value = false;
+  }
+}
+
+async function openConfigDir() {
+  if (configDir.value) {
+    await revealItemInDir(configDir.value);
   }
 }
 </script>
@@ -70,6 +85,19 @@ async function save() {
 
       <div v-if="saveResult" class="save-result success">{{ saveResult }}</div>
       <div v-if="saveError" class="save-result error">{{ saveError }}</div>
+    </div>
+
+    <!-- Settings Files Info -->
+    <div v-if="configDir" class="config-info">
+      <h3>Settings Files</h3>
+      <p class="config-hint">Application data is stored in the following files:</p>
+      <ul class="config-file-list">
+        <li><code>profiles.json</code> &mdash; Server profiles</li>
+        <li><code>saved_queries.json</code> &mdash; Saved AQL queries</li>
+        <li><code>settings.json</code> &mdash; Global settings</li>
+      </ul>
+      <p class="config-path">{{ configDir }}</p>
+      <button class="btn btn-sm" @click="openConfigDir">Open Directory</button>
     </div>
   </div>
 </template>
@@ -146,5 +174,47 @@ async function save() {
   background: rgba(255, 107, 107, 0.1);
   color: var(--color-error);
   border: 1px solid var(--color-error);
+}
+
+.config-info {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.config-info h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.config-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.config-file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px 0;
+}
+.config-file-list li {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.config-file-list code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text);
+}
+.config-path {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  word-break: break-all;
+  margin-bottom: 10px;
+  line-height: 1.4;
 }
 </style>

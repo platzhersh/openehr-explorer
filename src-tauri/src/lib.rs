@@ -1,4 +1,5 @@
 mod commands;
+pub mod credentials;
 pub mod inspector;
 pub mod settings;
 
@@ -15,6 +16,9 @@ fn get_app_version() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Migrate any plaintext credentials from profiles.json to secure storage
+    server::migrate_plaintext_credentials();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -28,13 +32,16 @@ pub fn run() {
             server::save_server_profile,
             server::delete_server_profile,
             server::test_server_connection,
+            server::test_unsaved_connection,
             server::get_server_version,
+            server::get_credential_backend,
             // EHR
             ehr::list_ehrs,
             ehr::get_ehr_detail,
             ehr::create_ehr,
             ehr::update_ehr_status,
             ehr::delete_ehr,
+            ehr::search_ehrs,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,
@@ -55,6 +62,7 @@ pub fn run() {
             query::save_query,
             query::delete_saved_query,
             // Settings
+            settings::get_config_dir,
             settings::get_settings,
             settings::save_settings,
             // Terminology

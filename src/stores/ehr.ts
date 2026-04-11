@@ -35,6 +35,34 @@ export interface EhrListResponse {
   limit: number;
 }
 
+export interface EhrSearchCriteria {
+  ehr_id_prefix?: string;
+  subject_id?: string;
+  subject_namespace?: string;
+  system_id?: string;
+  modifiable?: boolean;
+  has_compositions?: boolean;
+  created_on?: string;
+  created_before?: string;
+  created_after?: string;
+}
+
+export interface EhrSearchResult {
+  ehr_id: string;
+  time_created: string | null;
+  subject_id: string | null;
+  subject_namespace: string | null;
+  is_modifiable: boolean | null;
+  is_queryable: boolean | null;
+  system_id: string | null;
+}
+
+export interface EhrSearchResponse {
+  results: EhrSearchResult[];
+  total: number;
+  limit_reached: boolean;
+}
+
 export const useEhrStore = defineStore("ehr", () => {
   const ehrs = ref<EhrSummary[]>([]);
   const total = ref(0);
@@ -43,6 +71,13 @@ export const useEhrStore = defineStore("ehr", () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const selectedEhr = ref<EhrDetail | null>(null);
+
+  // Search state (PRD-0013)
+  const searchResults = ref<EhrSearchResult[]>([]);
+  const searchActive = ref(false);
+  const searchLoading = ref(false);
+  const searchError = ref<string | null>(null);
+  const searchLimitReached = ref(false);
 
   async function fetchEhrs(serverId: string, page = 0) {
     loading.value = true;
@@ -150,6 +185,31 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  async function searchEhrs(serverId: string, criteria: EhrSearchCriteria) {
+    searchLoading.value = true;
+    searchError.value = null;
+    searchActive.value = true;
+    try {
+      const result = await invoke<EhrSearchResponse>("search_ehrs", {
+        serverId,
+        criteria,
+      });
+      searchResults.value = result.results;
+      searchLimitReached.value = result.limit_reached;
+    } catch (e) {
+      searchError.value = String(e);
+    } finally {
+      searchLoading.value = false;
+    }
+  }
+
+  function clearSearch() {
+    searchResults.value = [];
+    searchActive.value = false;
+    searchError.value = null;
+    searchLimitReached.value = false;
+  }
+
   return {
     ehrs,
     total,
@@ -158,8 +218,15 @@ export const useEhrStore = defineStore("ehr", () => {
     loading,
     error,
     selectedEhr,
+    searchResults,
+    searchActive,
+    searchLoading,
+    searchError,
+    searchLimitReached,
     fetchEhrs,
     fetchEhrDetail,
+    searchEhrs,
+    clearSearch,
     createEhr,
     updateEhrStatus,
     deleteEhr,

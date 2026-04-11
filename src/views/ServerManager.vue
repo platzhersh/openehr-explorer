@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { useServerStore, type ServerProfile } from "../stores/server";
+import { useServerStore, type ServerProfile, type ServerProfileInput } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
 
 const serverStore = useServerStore();
@@ -9,10 +9,15 @@ const settingsStore = useSettingsStore();
 const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_server_url || "");
 
 const editing = ref(false);
+const editingExistingId = ref<string | null>(null);
 const testResult = ref<string | null>(null);
 const testError = ref<string | null>(null);
+const cardTestLoading = ref<Record<string, boolean>>({});
+const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
+const urlValidationError = ref<string | null>(null);
+const urlValidationWarning = ref<string | null>(null);
 
-const form = ref<ServerProfile>({
+const form = ref<ServerProfileInput>({
   id: "",
   name: "",
   base_url: "",
@@ -22,9 +27,8 @@ const form = ref<ServerProfile>({
 
 onMounted(async () => {
   await serverStore.loadProfiles();
-  // Fetch version info for all profiles
   for (const profile of serverStore.profiles) {
-    const version = await serverStore.fetchServerVersion(profile);
+    const version = await serverStore.fetchServerVersion(profile.id);
     console.log(`Version for ${profile.name}:`, version);
   }
 });
@@ -35,29 +39,116 @@ function newProfile() {
     name: "",
     base_url: "http://localhost:8080/ehrbase",
     server_type: "ehrbase",
-    auth_method: { type: "basic", username: "ehrbase-user", password: "SuperSecretPassword" },
+    auth_method: { type: "basic", username: "", password: "" },
     terminology_url: null,
   };
+  editingExistingId.value = null;
   editing.value = true;
   testResult.value = null;
   testError.value = null;
+  urlValidationError.value = null;
+  urlValidationWarning.value = null;
 }
 
 function editProfile(profile: ServerProfile) {
+  // Convert public profile to input form. Secret fields are empty
+  // (user must re-enter them to change; otherwise backend keeps existing secrets).
   form.value = {
-    ...profile,
-    auth_method: { ...profile.auth_method } as any,
-    admin_auth_method: profile.admin_auth_method ? ({ ...profile.admin_auth_method } as any) : null,
+    id: profile.id,
+    name: profile.name,
+    base_url: profile.base_url,
+    server_type: profile.server_type,
+    auth_method: publicAuthToInput(profile.auth_method),
+    admin_auth_method: profile.admin_auth_method
+      ? publicAuthToInput(profile.admin_auth_method)
+      : null,
     terminology_url: profile.terminology_url || null,
   };
+  editingExistingId.value = profile.id;
   editing.value = true;
   testResult.value = null;
   testError.value = null;
+  urlValidationError.value = null;
+  urlValidationWarning.value = null;
+  validateBaseUrl(profile.base_url);
+}
+
+/** Convert a public auth (no secrets) to an input auth (with empty secret fields). */
+function publicAuthToInput(
+  auth:
+    | { type: "none" }
+    | { type: "basic"; username: string; has_password: boolean }
+    | { type: "bearer"; has_token: boolean },
+): ServerProfileInput["auth_method"] {
+  switch (auth.type) {
+    case "none":
+      return { type: "none" };
+    case "basic":
+      return { type: "basic", username: auth.username, password: "" };
+    case "bearer":
+      return { type: "bearer", token: "" };
+  }
+}
+
+function validateBaseUrl(url: string): boolean {
+  urlValidationError.value = null;
+  urlValidationWarning.value = null;
+
+  if (!url || url.trim() === "") {
+    urlValidationError.value = "Base URL is required";
+    return false;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    urlValidationError.value = "Invalid URL format";
+    return false;
+  }
+
+  const dangerousSchemes = ["javascript", "data", "file", "vbscript", "about"];
+  if (dangerousSchemes.includes(parsedUrl.protocol.replace(":", ""))) {
+    urlValidationError.value = `Dangerous URL scheme '${parsedUrl.protocol}' is not allowed`;
+    return false;
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    urlValidationError.value = "URL must use http:// or https:// protocol";
+    return false;
+  }
+
+  if (parsedUrl.protocol === "http:") {
+    const isLocalhost =
+      parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1" ||
+      parsedUrl.hostname === "::1" ||
+      parsedUrl.hostname.startsWith("192.168.") ||
+      parsedUrl.hostname.startsWith("10.") ||
+      parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
+
+    if (!isLocalhost) {
+      urlValidationWarning.value =
+        "Using HTTP for a remote server will send credentials unencrypted. Consider using HTTPS.";
+    }
+  }
+
+  return true;
 }
 
 async function save() {
-  await serverStore.saveProfile(form.value);
-  editing.value = false;
+  if (!validateBaseUrl(form.value.base_url)) {
+    return;
+  }
+  testResult.value = null;
+  testError.value = null;
+  try {
+    await serverStore.saveProfile(form.value);
+    editingExistingId.value = null;
+    editing.value = false;
+  } catch (e) {
+    testError.value = `Save failed: ${String(e)}`;
+  }
 }
 
 async function remove(id: string) {
@@ -68,9 +159,23 @@ async function testConnection() {
   testResult.value = null;
   testError.value = null;
   try {
-    testResult.value = await serverStore.testConnection(form.value);
+    // For unsaved profiles (or profiles being edited), use unsaved connection test
+    testResult.value = await serverStore.testUnsavedConnection(form.value);
   } catch (e) {
     testError.value = String(e);
+  }
+}
+
+async function testProfileConnection(profile: ServerProfile) {
+  cardTestLoading.value[profile.id] = true;
+  delete cardTestResult.value[profile.id];
+  try {
+    const result = await serverStore.testConnection(profile.id);
+    cardTestResult.value[profile.id] = { success: true, message: result };
+  } catch (e) {
+    cardTestResult.value[profile.id] = { success: false, message: String(e) };
+  } finally {
+    cardTestLoading.value[profile.id] = false;
   }
 }
 
@@ -91,6 +196,67 @@ function setAdminAuthType(type: string) {
     form.value.admin_auth_method = { type: "basic", username: "", password: "" };
   } else if (type === "bearer") {
     form.value.admin_auth_method = { type: "bearer", token: "" };
+  }
+}
+
+function isInsecureHttpUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "http:") {
+      return false;
+    }
+
+    const isLocalhost =
+      parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1" ||
+      parsedUrl.hostname === "::1" ||
+      parsedUrl.hostname.startsWith("192.168.") ||
+      parsedUrl.hostname.startsWith("10.") ||
+      parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
+
+    return !isLocalhost;
+  } catch {
+    return false;
+  }
+}
+
+/** Check if we are editing a profile that already has a saved secret for a field. */
+function existingProfileHasPassword(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing) return false;
+  return existing.auth_method.type === "basic" && existing.auth_method.has_password;
+}
+
+function existingProfileHasToken(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing) return false;
+  return existing.auth_method.type === "bearer" && existing.auth_method.has_token;
+}
+
+function existingProfileHasAdminPassword(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing || !existing.admin_auth_method) return false;
+  return existing.admin_auth_method.type === "basic" && existing.admin_auth_method.has_password;
+}
+
+function existingProfileHasAdminToken(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing || !existing.admin_auth_method) return false;
+  return existing.admin_auth_method.type === "bearer" && existing.admin_auth_method.has_token;
+}
+
+function credentialBackendLabel(backend: string): string {
+  switch (backend) {
+    case "os_keychain":
+      return "OS Keychain";
+    case "encrypted_file":
+      return "Encrypted File";
+    default:
+      return backend;
   }
 }
 </script>
@@ -118,15 +284,42 @@ function setAdminAuthType(type: string) {
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
               <span
-                v-if="serverStore.versionInfo[profile.id]?.ehrbase_version"
+                v-if="serverStore.versionInfo[profile.id]?.server_version"
                 class="badge version-badge"
-                :title="`EHRbase ${serverStore.versionInfo[profile.id]?.ehrbase_version}`"
+                :title="serverStore.versionInfo[profile.id]?.server_version ?? ''"
               >
-                v{{ serverStore.versionInfo[profile.id]?.ehrbase_version }}
+                v{{ serverStore.versionInfo[profile.id]?.server_version }}
               </span>
+              <span
+                v-if="isInsecureHttpUrl(profile.base_url)"
+                class="badge warning-badge"
+                title="Using HTTP for a remote server (credentials sent unencrypted)"
+              >
+                ⚠️ HTTP
+              </span>
+              <span
+                class="badge secure-badge"
+                :title="`Credentials stored via ${credentialBackendLabel(profile.credential_backend)}`"
+              >
+                🔒 {{ credentialBackendLabel(profile.credential_backend) }}
+              </span>
+            </div>
+            <div
+              v-if="cardTestResult[profile.id]"
+              class="card-test-result"
+              :class="cardTestResult[profile.id].success ? 'success' : 'error'"
+            >
+              {{ cardTestResult[profile.id].message }}
             </div>
           </div>
           <div class="profile-actions">
+            <button
+              class="btn btn-sm"
+              @click="testProfileConnection(profile)"
+              :disabled="cardTestLoading[profile.id]"
+            >
+              {{ cardTestLoading[profile.id] ? "Testing..." : "Test" }}
+            </button>
             <button class="btn btn-sm" @click="serverStore.setActiveServer(profile.id)">
               {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
             </button>
@@ -143,7 +336,7 @@ function setAdminAuthType(type: string) {
 
       <!-- Edit form -->
       <div v-if="editing" class="profile-form">
-        <h3>{{ form.id ? "Edit" : "Add" }} Server Profile</h3>
+        <h3>{{ editingExistingId ? "Edit" : "Add" }} Server Profile</h3>
 
         <div class="form-group">
           <label>Name</label>
@@ -156,7 +349,18 @@ function setAdminAuthType(type: string) {
             class="input"
             v-model="form.base_url"
             placeholder="http://localhost:8080/ehrbase"
+            @input="validateBaseUrl(form.base_url)"
+            :class="{ 'input-error': urlValidationError, 'input-warning': urlValidationWarning }"
           />
+          <div v-if="urlValidationError" class="validation-message error">
+            {{ urlValidationError }}
+          </div>
+          <div
+            v-if="urlValidationWarning && !urlValidationError"
+            class="validation-message warning"
+          >
+            ⚠️ {{ urlValidationWarning }}
+          </div>
         </div>
 
         <div class="form-group">
@@ -188,14 +392,33 @@ function setAdminAuthType(type: string) {
           </div>
           <div class="form-group">
             <label>Password</label>
-            <input class="input" type="password" v-model="(form.auth_method as any).password" />
+            <input
+              class="input"
+              type="password"
+              v-model="(form.auth_method as any).password"
+              :placeholder="
+                existingProfileHasPassword() ? 'Password saved securely (leave empty to keep)' : ''
+              "
+            />
+            <p v-if="existingProfileHasPassword()" class="form-help secure-hint">
+              🔒 Password is stored securely. Leave empty to keep the existing password.
+            </p>
           </div>
         </template>
 
         <template v-if="form.auth_method.type === 'bearer'">
           <div class="form-group">
             <label>Token</label>
-            <input class="input" v-model="(form.auth_method as any).token" />
+            <input
+              class="input"
+              v-model="(form.auth_method as any).token"
+              :placeholder="
+                existingProfileHasToken() ? 'Token saved securely (leave empty to keep)' : ''
+              "
+            />
+            <p v-if="existingProfileHasToken()" class="form-help secure-hint">
+              🔒 Token is stored securely. Leave empty to keep the existing token.
+            </p>
           </div>
         </template>
 
@@ -225,14 +448,31 @@ function setAdminAuthType(type: string) {
                 class="input"
                 type="password"
                 v-model="(form.admin_auth_method as any).password"
+                :placeholder="
+                  existingProfileHasAdminPassword()
+                    ? 'Password saved securely (leave empty to keep)'
+                    : ''
+                "
               />
+              <p v-if="existingProfileHasAdminPassword()" class="form-help secure-hint">
+                🔒 Password is stored securely. Leave empty to keep the existing password.
+              </p>
             </div>
           </template>
 
           <template v-if="form.admin_auth_method?.type === 'bearer'">
             <div class="form-group">
               <label>Admin Token</label>
-              <input class="input" v-model="(form.admin_auth_method as any).token" />
+              <input
+                class="input"
+                v-model="(form.admin_auth_method as any).token"
+                :placeholder="
+                  existingProfileHasAdminToken() ? 'Token saved securely (leave empty to keep)' : ''
+                "
+              />
+              <p v-if="existingProfileHasAdminToken()" class="form-help secure-hint">
+                🔒 Token is stored securely. Leave empty to keep the existing token.
+              </p>
             </div>
           </template>
         </template>
@@ -322,15 +562,40 @@ function setAdminAuthType(type: string) {
 .profile-meta {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .version-badge {
   background: var(--color-primary-dim);
   color: var(--color-primary);
   font-weight: 600;
 }
+.warning-badge {
+  background: rgba(255, 193, 7, 0.15);
+  color: #f59e0b;
+  font-weight: 600;
+  border: 1px solid #fbbf24;
+}
+.secure-badge {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  font-weight: 600;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.card-test-result {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.card-test-result.success {
+  color: var(--color-success);
+}
+.card-test-result.error {
+  color: var(--color-error);
+}
 .profile-actions {
   display: flex;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .profile-form {
@@ -365,6 +630,10 @@ function setAdminAuthType(type: string) {
   line-height: 1.4;
 }
 
+.secure-hint {
+  color: #22c55e;
+}
+
 .form-divider {
   border: none;
   border-top: 1px solid var(--color-border);
@@ -392,5 +661,30 @@ function setAdminAuthType(type: string) {
   background: rgba(255, 107, 107, 0.1);
   color: var(--color-error);
   border: 1px solid var(--color-error);
+}
+
+.validation-message {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.validation-message.error {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+.validation-message.warning {
+  background: rgba(255, 193, 7, 0.1);
+  color: #f59e0b;
+  border: 1px solid #fbbf24;
+}
+
+.input-error {
+  border-color: var(--color-error) !important;
+}
+.input-warning {
+  border-color: #fbbf24 !important;
 }
 </style>

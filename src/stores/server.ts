@@ -2,7 +2,27 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+/** Public profile returned from the backend — secrets are NOT included. */
 export interface ServerProfile {
+  id: string;
+  name: string;
+  base_url: string;
+  server_type: "ehrbase" | "better_platform" | "generic";
+  auth_method:
+    | { type: "none" }
+    | { type: "basic"; username: string; has_password: boolean }
+    | { type: "bearer"; has_token: boolean };
+  admin_auth_method?:
+    | { type: "none" }
+    | { type: "basic"; username: string; has_password: boolean }
+    | { type: "bearer"; has_token: boolean }
+    | null;
+  terminology_url?: string | null;
+  credential_backend: string;
+}
+
+/** Input profile sent to the backend during save — includes credential values. */
+export interface ServerProfileInput {
   id: string;
   name: string;
   base_url: string;
@@ -20,6 +40,7 @@ export interface ServerProfile {
 }
 
 export interface ServerVersionInfo {
+  server_version: string | null;
   ehrbase_version: string | null;
   sdk_version: string | null;
   archie_version: string | null;
@@ -45,7 +66,7 @@ export const useServerStore = defineStore("server", () => {
     }
   }
 
-  async function saveProfile(profile: ServerProfile) {
+  async function saveProfile(profile: ServerProfileInput) {
     profiles.value = await invoke<ServerProfile[]>("save_server_profile", { profile });
     if (!activeServerId.value) {
       activeServerId.value = profile.id;
@@ -59,25 +80,31 @@ export const useServerStore = defineStore("server", () => {
     }
   }
 
-  async function testConnection(profile: ServerProfile): Promise<string> {
+  async function testConnection(profileId: string): Promise<string> {
     try {
-      const result = await invoke<string>("test_server_connection", { profile });
-      connectionStatus.value[profile.id] = "connected";
+      const result = await invoke<string>("test_server_connection", { profileId });
+      connectionStatus.value[profileId] = "connected";
+      fetchServerVersion(profileId);
       return result;
     } catch (e) {
-      connectionStatus.value[profile.id] = "error";
+      connectionStatus.value[profileId] = "error";
       throw e;
     }
+  }
+
+  async function testUnsavedConnection(profile: ServerProfileInput): Promise<string> {
+    const result = await invoke<string>("test_unsaved_connection", { profile });
+    return result;
   }
 
   function setActiveServer(id: string) {
     activeServerId.value = id;
   }
 
-  async function fetchServerVersion(profile: ServerProfile): Promise<ServerVersionInfo | null> {
+  async function fetchServerVersion(profileId: string): Promise<ServerVersionInfo | null> {
     try {
-      const version = await invoke<ServerVersionInfo>("get_server_version", { profile });
-      versionInfo.value[profile.id] = version;
+      const version = await invoke<ServerVersionInfo>("get_server_version", { profileId });
+      versionInfo.value[profileId] = version;
       return version;
     } catch (e) {
       console.error("Failed to fetch server version:", e);
@@ -95,6 +122,7 @@ export const useServerStore = defineStore("server", () => {
     saveProfile,
     deleteProfile,
     testConnection,
+    testUnsavedConnection,
     setActiveServer,
     fetchServerVersion,
   };

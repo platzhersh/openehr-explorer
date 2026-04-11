@@ -501,3 +501,420 @@ pub async fn delete_ehr(
 
     Ok(format!("EHR {} deleted successfully", ehr_id))
 }
+
+// --- AQL-backed EHR search (PRD-0013) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EhrSearchCriteria {
+    pub ehr_id_prefix: Option<String>,
+    pub subject_id: Option<String>,
+    pub subject_namespace: Option<String>,
+    pub system_id: Option<String>,
+    pub modifiable: Option<bool>,
+    pub has_compositions: Option<bool>,
+    pub created_on: Option<String>,     // YYYY-MM-DD
+    pub created_before: Option<String>, // YYYY-MM-DD
+    pub created_after: Option<String>,  // YYYY-MM-DD
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EhrSearchResult {
+    pub ehr_id: String,
+    pub time_created: Option<String>,
+    pub subject_id: Option<String>,
+    pub subject_namespace: Option<String>,
+    pub is_modifiable: Option<bool>,
+    pub is_queryable: Option<bool>,
+    pub system_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EhrSearchResponse {
+    pub results: Vec<EhrSearchResult>,
+    pub total: usize,
+    pub limit_reached: bool,
+}
+
+/// Escape a string value for safe interpolation into AQL single-quoted literals.
+/// Doubles any embedded single quotes (' -> '').
+fn escape_aql_string(s: &str) -> String {
+    s.replace('\'', "''")
+}
+
+/// Build an AQL query string from the given search criteria.
+/// Returns an error if no criteria are provided (to prevent full-table scans).
+pub fn build_ehr_search_aql(criteria: &EhrSearchCriteria) -> Result<String, String> {
+    // Determine if we need to include COMPOSITION in the FROM clause
+    let has_compositions_filter = criteria.has_compositions == Some(true);
+
+    let base = if has_compositions_filter {
+        // When filtering for EHRs with compositions, we query compositions
+        // and join with EHR_STATUS data. Use DISTINCT to avoid duplicates.
+        // This uses the standard pattern: FROM EHR e [archetype_id] CONTAINS COMPOSITION c [archetype_id]
+        "\
+SELECT DISTINCT \
+e/ehr_id/value, \
+e/time_created/value, \
+e/ehr_status/subject/external_ref/id/value AS subject_id, \
+e/ehr_status/subject/external_ref/namespace AS subject_namespace, \
+e/ehr_status/is_modifiable AS modifiable, \
+e/ehr_status/is_queryable AS queryable, \
+e/system_id/value AS system_id \
+FROM EHR e CONTAINS COMPOSITION c"
+    } else {
+        // Standard query without composition requirement
+        "\
+SELECT \
+e/ehr_id/value, \
+e/time_created/value, \
+s/subject/external_ref/id/value AS subject_id, \
+s/subject/external_ref/namespace AS subject_namespace, \
+s/is_modifiable AS modifiable, \
+s/is_queryable AS queryable, \
+e/system_id/value AS system_id \
+FROM EHR e CONTAINS EHR_STATUS s"
+    };
+
+    let mut predicates: Vec<String> = Vec::new();
+
+    // Determine the correct path prefix for EHR_STATUS fields
+    // When filtering by compositions, we access ehr_status via the EHR object path
+    let status_prefix = if has_compositions_filter {
+        "e/ehr_status"
+    } else {
+        "s"
+    };
+
+    if let Some(ref prefix) = criteria.ehr_id_prefix {
+        predicates.push(format!(
+            "e/ehr_id/value LIKE '{}%'",
+            escape_aql_string(prefix)
+        ));
+    }
+
+    if let Some(ref subject_id) = criteria.subject_id {
+        predicates.push(format!(
+            "{}/subject/external_ref/id/value LIKE '%{}%'",
+            status_prefix,
+            escape_aql_string(subject_id)
+        ));
+    }
+
+    if let Some(ref ns) = criteria.subject_namespace {
+        predicates.push(format!(
+            "{}/subject/external_ref/namespace = '{}'",
+            status_prefix,
+            escape_aql_string(ns)
+        ));
+    }
+
+    if let Some(ref sys) = criteria.system_id {
+        predicates.push(format!("e/system_id/value = '{}'", escape_aql_string(sys)));
+    }
+
+    if let Some(modifiable) = criteria.modifiable {
+        predicates.push(format!("{}/is_modifiable = {}", status_prefix, modifiable));
+    }
+
+    if let Some(has_comp) = criteria.has_compositions {
+        if !has_comp {
+            // For has_compositions:false, AQL doesn't provide a clean way to express "no compositions"
+            // The best approach is to use a workaround: count compositions and filter where count = 0
+            // However, this requires a complex subquery that may not be supported by all CDRs
+            // For now, we'll document this as unsupported and suggest using the inverse search
+            return Err(
+                "hasCompositions:false is not currently supported due to AQL limitations. \
+                 To find EHRs with compositions, use hasCompositions:true instead."
+                    .to_string(),
+            );
+        }
+        // For has_compositions:true, the FROM clause already includes COMPOSITION c,
+        // so we don't need an additional predicate
+    }
+
+    // Date handling: created_on takes precedence over created_before/created_after
+    // NOTE: EHRBase does not support filtering on e/time_created in WHERE clauses
+    // This is a known AQL limitation - EHR-level attributes cannot be used in predicates
+    if criteria.created_on.is_some()
+        || criteria.created_before.is_some()
+        || criteria.created_after.is_some()
+    {
+        return Err(
+            "Date filters (created-on, created-before, created-after) are not currently supported \
+             due to EHRBase limitations. EHR-level attributes like time_created cannot be used in \
+             WHERE clauses. Use the paginated list view and sort by creation date instead."
+                .to_string(),
+        );
+    }
+
+    // Check if any criteria was provided (either predicates or has_compositions:true)
+    if predicates.is_empty() && !has_compositions_filter {
+        return Err("At least one search criterion must be provided".to_string());
+    }
+
+    // Build the final query
+    if predicates.is_empty() {
+        // Only has_compositions:true, no WHERE clause needed
+        Ok(format!("{} LIMIT 200", base))
+    } else {
+        let where_clause = predicates.join(" AND ");
+        Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
+    }
+}
+
+#[tauri::command]
+pub async fn search_ehrs(
+    app: tauri::AppHandle,
+    server_id: String,
+    criteria: EhrSearchCriteria,
+) -> Result<EhrSearchResponse, String> {
+    let aql = build_ehr_search_aql(&criteria)?;
+
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!("{}/rest/openehr/v1/query/aql", base);
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({ "q": aql })),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
+    }
+
+    let body: Value =
+        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let rows = body
+        .get("rows")
+        .and_then(|r| r.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let results: Vec<EhrSearchResult> = rows
+        .iter()
+        .filter_map(|row| {
+            let arr = row.as_array()?;
+            Some(EhrSearchResult {
+                ehr_id: arr.first()?.as_str()?.to_string(),
+                time_created: arr.get(1).and_then(|v| v.as_str()).map(String::from),
+                subject_id: arr.get(2).and_then(|v| v.as_str()).map(String::from),
+                subject_namespace: arr.get(3).and_then(|v| v.as_str()).map(String::from),
+                is_modifiable: arr.get(4).and_then(|v| v.as_bool()),
+                is_queryable: arr.get(5).and_then(|v| v.as_bool()),
+                system_id: arr.get(6).and_then(|v| v.as_str()).map(String::from),
+            })
+        })
+        .collect();
+
+    let total = results.len();
+    let limit_reached = total >= 200;
+
+    Ok(EhrSearchResponse {
+        results,
+        total,
+        limit_reached,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_criteria() -> EhrSearchCriteria {
+        EhrSearchCriteria {
+            ehr_id_prefix: None,
+            subject_id: None,
+            subject_namespace: None,
+            system_id: None,
+            modifiable: None,
+            has_compositions: None,
+            created_on: None,
+            created_before: None,
+            created_after: None,
+        }
+    }
+
+    #[test]
+    fn test_empty_criteria_returns_error() {
+        let result = build_ehr_search_aql(&empty_criteria());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("At least one search criterion"));
+    }
+
+    #[test]
+    fn test_ehr_id_prefix() {
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("fde80e0e".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("e/ehr_id/value LIKE 'fde80e0e%'"));
+        assert!(aql.contains("LIMIT 200"));
+    }
+
+    #[test]
+    fn test_subject_id_contains() {
+        let mut c = empty_criteria();
+        c.subject_id = Some("6f4b5848".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/id/value LIKE '%6f4b5848%'"));
+    }
+
+    #[test]
+    fn test_subject_namespace_exact() {
+        let mut c = empty_criteria();
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+    }
+
+    #[test]
+    fn test_system_id_exact() {
+        let mut c = empty_criteria();
+        c.system_id = Some("dev.cistec.io".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("e/system_id/value = 'dev.cistec.io'"));
+    }
+
+    #[test]
+    fn test_modifiable_true() {
+        let mut c = empty_criteria();
+        c.modifiable = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/is_modifiable = true"));
+    }
+
+    #[test]
+    fn test_modifiable_false() {
+        let mut c = empty_criteria();
+        c.modifiable = Some(false);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/is_modifiable = false"));
+    }
+
+    #[test]
+    fn test_has_compositions_true() {
+        let mut c = empty_criteria();
+        c.has_compositions = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        // When searching for EHRs with compositions, COMPOSITION is included in FROM clause
+        // EHR_STATUS is accessed via path notation (e/ehr_status/...)
+        assert!(aql.contains("FROM EHR e CONTAINS COMPOSITION c"));
+        assert!(aql.contains("SELECT DISTINCT"));
+        assert!(aql.contains("e/ehr_status/"));
+    }
+
+    #[test]
+    fn test_has_compositions_false() {
+        let mut c = empty_criteria();
+        c.has_compositions = Some(false);
+        let result = build_ehr_search_aql(&c);
+        // hasCompositions:false is not currently supported due to AQL limitations
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_created_on() {
+        let mut c = empty_criteria();
+        c.created_on = Some("2026-03-12".to_string());
+        let result = build_ehr_search_aql(&c);
+        // Date filters are not supported due to EHRBase limitations
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_created_before() {
+        let mut c = empty_criteria();
+        c.created_before = Some("2026-03-12".to_string());
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_created_after() {
+        let mut c = empty_criteria();
+        c.created_after = Some("2026-03-12".to_string());
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_created_before_and_after_range() {
+        let mut c = empty_criteria();
+        c.created_after = Some("2026-03-01".to_string());
+        c.created_before = Some("2026-03-31".to_string());
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_created_on_overrides_before_after() {
+        let mut c = empty_criteria();
+        c.created_on = Some("2026-03-15".to_string());
+        c.created_before = Some("2026-03-31".to_string());
+        c.created_after = Some("2026-03-01".to_string());
+        let result = build_ehr_search_aql(&c);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_multi_criteria_and() {
+        let mut c = empty_criteria();
+        c.subject_namespace = Some("patnr".to_string());
+        c.modifiable = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+        assert!(aql.contains("s/is_modifiable = true"));
+        assert!(aql.contains(" AND "));
+    }
+
+    #[test]
+    fn test_escape_single_quotes() {
+        let mut c = empty_criteria();
+        c.subject_id = Some("O'Brien".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("O''Brien"));
+        assert!(!aql.contains("O'B")); // unescaped single quote should not appear
+    }
+
+    #[test]
+    fn test_invalid_date_format() {
+        let mut c = empty_criteria();
+        c.created_on = Some("not-a-date".to_string());
+        let result = build_ehr_search_aql(&c);
+        // Date filters are not supported, so we get that error instead of validation error
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_aql_has_correct_select_columns() {
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("abc".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("e/ehr_id/value"));
+        assert!(aql.contains("e/time_created/value"));
+        assert!(aql.contains("s/subject/external_ref/id/value AS subject_id"));
+        assert!(aql.contains("s/subject/external_ref/namespace AS subject_namespace"));
+        assert!(aql.contains("s/is_modifiable AS modifiable"));
+        assert!(aql.contains("s/is_queryable AS queryable"));
+        assert!(aql.contains("e/system_id/value AS system_id"));
+        assert!(aql.contains("FROM EHR e CONTAINS EHR_STATUS s"));
+    }
+}
