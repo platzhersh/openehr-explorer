@@ -96,6 +96,27 @@ In `ServerManager.vue`, validate the base URL on save:
 
 ---
 
+## Implementation Status
+
+| Feature | Status | Notes |
+|---|---|---|
+| URL validation | ✅ Done | Implemented in `ServerManager.vue:67-114,171-191` |
+| Replace syntax highlighting with library | ⏳ Pending | highlight.js integration needed |
+| Fix `innerHTML` in search highlighting | ⏳ Pending | Need to use `h()` render functions |
+
+### URL Validation Implementation Details
+
+Implemented in `src/views/ServerManager.vue`:
+- **Validation function** (`validateBaseUrl`, lines 67-114): Checks URL format, scheme restrictions, and localhost detection
+- **Visual feedback**: Real-time validation on input with error/warning messages and colored borders
+- **Profile card warnings** (`isInsecureHttpUrl`, lines 171-191): Warning badge on profiles using HTTP for remote servers
+- **Save prevention**: Blocks saving profiles with invalid URLs or dangerous schemes
+- **Supported schemes**: Only `http://` and `https://` allowed
+- **Blocked schemes**: `javascript:`, `data:`, `file:`, `vbscript:`, `about:`
+- **Localhost detection**: Recognizes `localhost`, `127.0.0.1`, `::1`, and private IP ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+
+---
+
 ## Implementation Notes
 
 ### Files to modify
@@ -108,7 +129,7 @@ In `ServerManager.vue`, validate the base URL on save:
 | `src/views/TemplateBrowser.vue` | Replace `highlightJson()`, `highlightXml()`, fix `innerHTML` in search |
 | `src/components/RequestInspector.vue` | Replace `highlightXml()` with library call |
 | `src/components/CompositionTree.vue` | Replace `innerHTML` with `h()` render function |
-| `src/views/ServerManager.vue` | Add URL validation on save |
+| `src/views/ServerManager.vue` | ✅ Add URL validation on save |
 
 ### Testing
 
