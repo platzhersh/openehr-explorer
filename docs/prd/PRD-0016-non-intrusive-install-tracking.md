@@ -1,4 +1,4 @@
-# PRD-0013: Non-Intrusive Install Tracking and Usage Analytics
+# PRD-0016: Non-Intrusive Install Tracking and Usage Analytics
 
 **Date:** 2026-04-07
 **Status:** Draft
@@ -180,5 +180,5 @@ As an open-source project seeking adoption in the openEHR community, understandi
 
 ## Related
 
-- ADR-0014: Use Tauri Updater Plugin with GitHub Releases
-- ADR-0015: Use Aptabase for Opt-In Usage Analytics
+- ADR-0017: Use Tauri Updater Plugin with GitHub Releases
+- ADR-0018: Use Aptabase for Opt-In Usage Analytics

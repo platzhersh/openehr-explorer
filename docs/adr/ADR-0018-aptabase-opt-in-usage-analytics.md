@@ -1,8 +1,8 @@
-# ADR-0015: Use Aptabase for Opt-In Usage Analytics
+# ADR-0018: Use Aptabase for Opt-In Usage Analytics
 
 **Date:** 2026-04-07
 **Status:** Proposed
-**Related:** PRD-0013 (Non-Intrusive Install Tracking and Usage Analytics)
+**Related:** PRD-0016 (Non-Intrusive Install Tracking and Usage Analytics)
 
 ---
 
@@ -157,5 +157,5 @@ Events are deliberately coarse-grained to avoid accidental PII collection:
 - [Aptabase — Privacy-First Analytics for Apps](https://aptabase.com)
 - [Aptabase Tauri Plugin](https://github.com/aptabase/tauri-plugin-aptabase)
 - [Aptabase Self-Hosting Guide](https://github.com/aptabase/aptabase)
-- PRD-0013: Non-Intrusive Install Tracking and Usage Analytics
-- ADR-0014: Use Tauri Updater Plugin with GitHub Releases
+- PRD-0016: Non-Intrusive Install Tracking and Usage Analytics
+- ADR-0017: Use Tauri Updater Plugin with GitHub Releases
