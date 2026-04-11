@@ -30,4 +30,8 @@ uuid = { version = "1.11.0", features = ["v4"] }
 urlencoding = "2.1.3"
 quick-xml = "0.37.2"
 chrono = { version = "0.4.39", features = ["serde"] }
+keyring = { version = "3.6.1", features = ["sync-secret-service", "vendored"] }
+zeroize = { version = "1.8.1", features = ["derive"] }
+aes-gcm = "0.10.3"
+rand = "0.8.5"
 
