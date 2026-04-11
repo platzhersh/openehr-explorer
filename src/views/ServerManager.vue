@@ -279,7 +279,10 @@ function isInsecureHttpUrl(url: string): boolean {
           <div v-if="urlValidationError" class="validation-message error">
             {{ urlValidationError }}
           </div>
-          <div v-if="urlValidationWarning && !urlValidationError" class="validation-message warning">
+          <div
+            v-if="urlValidationWarning && !urlValidationError"
+            class="validation-message warning"
+          >
             ⚠️ {{ urlValidationWarning }}
           </div>
         </div>
