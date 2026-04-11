@@ -56,6 +56,7 @@ pub fn run() {
             query::save_query,
             query::delete_saved_query,
             // Settings
+            settings::get_config_dir,
             settings::get_settings,
             settings::save_settings,
             // Terminology

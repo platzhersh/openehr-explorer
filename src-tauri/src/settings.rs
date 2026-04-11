@@ -75,6 +75,15 @@ pub fn effective_terminology_url(
 }
 
 #[tauri::command]
+pub async fn get_config_dir() -> Result<String, String> {
+    let config_dir = dirs_config_dir().join("openehr-explorer");
+    config_dir
+        .to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Could not determine config directory".to_string())
+}
+
+#[tauri::command]
 pub async fn get_settings() -> Result<GlobalSettings, String> {
     Ok(load_settings())
 }
