@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { useServerStore, type ServerProfile } from "../stores/server";
+import { useServerStore, type ServerProfile, type ServerProfileInput } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
 
 const serverStore = useServerStore();
@@ -9,6 +9,7 @@ const settingsStore = useSettingsStore();
 const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_server_url || "");
 
 const editing = ref(false);
+const editingExistingId = ref<string | null>(null);
 const testResult = ref<string | null>(null);
 const testError = ref<string | null>(null);
 const cardTestLoading = ref<Record<string, boolean>>({});
@@ -16,7 +17,7 @@ const cardTestResult = ref<Record<string, { success: boolean; message: string }>
 const urlValidationError = ref<string | null>(null);
 const urlValidationWarning = ref<string | null>(null);
 
-const form = ref<ServerProfile>({
+const form = ref<ServerProfileInput>({
   id: "",
   name: "",
   base_url: "",
@@ -26,9 +27,8 @@ const form = ref<ServerProfile>({
 
 onMounted(async () => {
   await serverStore.loadProfiles();
-  // Fetch version info for all profiles
   for (const profile of serverStore.profiles) {
-    const version = await serverStore.fetchServerVersion(profile);
+    const version = await serverStore.fetchServerVersion(profile.id);
     console.log(`Version for ${profile.name}:`, version);
   }
 });
@@ -42,6 +42,7 @@ function newProfile() {
     auth_method: { type: "basic", username: "", password: "" },
     terminology_url: null,
   };
+  editingExistingId.value = null;
   editing.value = true;
   testResult.value = null;
   testError.value = null;
@@ -50,18 +51,43 @@ function newProfile() {
 }
 
 function editProfile(profile: ServerProfile) {
+  // Convert public profile to input form. Secret fields are empty
+  // (user must re-enter them to change; otherwise backend keeps existing secrets).
   form.value = {
-    ...profile,
-    auth_method: { ...profile.auth_method } as any,
-    admin_auth_method: profile.admin_auth_method ? ({ ...profile.admin_auth_method } as any) : null,
+    id: profile.id,
+    name: profile.name,
+    base_url: profile.base_url,
+    server_type: profile.server_type,
+    auth_method: publicAuthToInput(profile.auth_method),
+    admin_auth_method: profile.admin_auth_method
+      ? publicAuthToInput(profile.admin_auth_method)
+      : null,
     terminology_url: profile.terminology_url || null,
   };
+  editingExistingId.value = profile.id;
   editing.value = true;
   testResult.value = null;
   testError.value = null;
   urlValidationError.value = null;
   urlValidationWarning.value = null;
   validateBaseUrl(profile.base_url);
+}
+
+/** Convert a public auth (no secrets) to an input auth (with empty secret fields). */
+function publicAuthToInput(
+  auth:
+    | { type: "none" }
+    | { type: "basic"; username: string; has_password: boolean }
+    | { type: "bearer"; has_token: boolean },
+): ServerProfileInput["auth_method"] {
+  switch (auth.type) {
+    case "none":
+      return { type: "none" };
+    case "basic":
+      return { type: "basic", username: auth.username, password: "" };
+    case "bearer":
+      return { type: "bearer", token: "" };
+  }
 }
 
 function validateBaseUrl(url: string): boolean {
@@ -81,20 +107,17 @@ function validateBaseUrl(url: string): boolean {
     return false;
   }
 
-  // Check for dangerous schemes
   const dangerousSchemes = ["javascript", "data", "file", "vbscript", "about"];
   if (dangerousSchemes.includes(parsedUrl.protocol.replace(":", ""))) {
     urlValidationError.value = `Dangerous URL scheme '${parsedUrl.protocol}' is not allowed`;
     return false;
   }
 
-  // Only allow http and https
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     urlValidationError.value = "URL must use http:// or https:// protocol";
     return false;
   }
 
-  // Warn about http:// for non-localhost servers
   if (parsedUrl.protocol === "http:") {
     const isLocalhost =
       parsedUrl.hostname === "localhost" ||
@@ -117,8 +140,15 @@ async function save() {
   if (!validateBaseUrl(form.value.base_url)) {
     return;
   }
-  await serverStore.saveProfile(form.value);
-  editing.value = false;
+  testResult.value = null;
+  testError.value = null;
+  try {
+    await serverStore.saveProfile(form.value);
+    editingExistingId.value = null;
+    editing.value = false;
+  } catch (e) {
+    testError.value = `Save failed: ${String(e)}`;
+  }
 }
 
 async function remove(id: string) {
@@ -129,7 +159,8 @@ async function testConnection() {
   testResult.value = null;
   testError.value = null;
   try {
-    testResult.value = await serverStore.testConnection(form.value);
+    // For unsaved profiles (or profiles being edited), use unsaved connection test
+    testResult.value = await serverStore.testUnsavedConnection(form.value);
   } catch (e) {
     testError.value = String(e);
   }
@@ -139,7 +170,7 @@ async function testProfileConnection(profile: ServerProfile) {
   cardTestLoading.value[profile.id] = true;
   delete cardTestResult.value[profile.id];
   try {
-    const result = await serverStore.testConnection(profile);
+    const result = await serverStore.testConnection(profile.id);
     cardTestResult.value[profile.id] = { success: true, message: result };
   } catch (e) {
     cardTestResult.value[profile.id] = { success: false, message: String(e) };
@@ -175,7 +206,6 @@ function isInsecureHttpUrl(url: string): boolean {
       return false;
     }
 
-    // Check if it's localhost or private network
     const isLocalhost =
       parsedUrl.hostname === "localhost" ||
       parsedUrl.hostname === "127.0.0.1" ||
@@ -187,6 +217,46 @@ function isInsecureHttpUrl(url: string): boolean {
     return !isLocalhost;
   } catch {
     return false;
+  }
+}
+
+/** Check if we are editing a profile that already has a saved secret for a field. */
+function existingProfileHasPassword(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing) return false;
+  return existing.auth_method.type === "basic" && existing.auth_method.has_password;
+}
+
+function existingProfileHasToken(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing) return false;
+  return existing.auth_method.type === "bearer" && existing.auth_method.has_token;
+}
+
+function existingProfileHasAdminPassword(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing || !existing.admin_auth_method) return false;
+  return existing.admin_auth_method.type === "basic" && existing.admin_auth_method.has_password;
+}
+
+function existingProfileHasAdminToken(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing || !existing.admin_auth_method) return false;
+  return existing.admin_auth_method.type === "bearer" && existing.admin_auth_method.has_token;
+}
+
+function credentialBackendLabel(backend: string): string {
+  switch (backend) {
+    case "os_keychain":
+      return "OS Keychain";
+    case "encrypted_file":
+      return "Encrypted File";
+    default:
+      return backend;
   }
 }
 </script>
@@ -227,6 +297,12 @@ function isInsecureHttpUrl(url: string): boolean {
               >
                 ⚠️ HTTP
               </span>
+              <span
+                class="badge secure-badge"
+                :title="`Credentials stored via ${credentialBackendLabel(profile.credential_backend)}`"
+              >
+                🔒 {{ credentialBackendLabel(profile.credential_backend) }}
+              </span>
             </div>
             <div
               v-if="cardTestResult[profile.id]"
@@ -260,7 +336,7 @@ function isInsecureHttpUrl(url: string): boolean {
 
       <!-- Edit form -->
       <div v-if="editing" class="profile-form">
-        <h3>{{ form.id ? "Edit" : "Add" }} Server Profile</h3>
+        <h3>{{ editingExistingId ? "Edit" : "Add" }} Server Profile</h3>
 
         <div class="form-group">
           <label>Name</label>
@@ -316,14 +392,33 @@ function isInsecureHttpUrl(url: string): boolean {
           </div>
           <div class="form-group">
             <label>Password</label>
-            <input class="input" type="password" v-model="(form.auth_method as any).password" />
+            <input
+              class="input"
+              type="password"
+              v-model="(form.auth_method as any).password"
+              :placeholder="
+                existingProfileHasPassword() ? 'Password saved securely (leave empty to keep)' : ''
+              "
+            />
+            <p v-if="existingProfileHasPassword()" class="form-help secure-hint">
+              🔒 Password is stored securely. Leave empty to keep the existing password.
+            </p>
           </div>
         </template>
 
         <template v-if="form.auth_method.type === 'bearer'">
           <div class="form-group">
             <label>Token</label>
-            <input class="input" v-model="(form.auth_method as any).token" />
+            <input
+              class="input"
+              v-model="(form.auth_method as any).token"
+              :placeholder="
+                existingProfileHasToken() ? 'Token saved securely (leave empty to keep)' : ''
+              "
+            />
+            <p v-if="existingProfileHasToken()" class="form-help secure-hint">
+              🔒 Token is stored securely. Leave empty to keep the existing token.
+            </p>
           </div>
         </template>
 
@@ -353,14 +448,31 @@ function isInsecureHttpUrl(url: string): boolean {
                 class="input"
                 type="password"
                 v-model="(form.admin_auth_method as any).password"
+                :placeholder="
+                  existingProfileHasAdminPassword()
+                    ? 'Password saved securely (leave empty to keep)'
+                    : ''
+                "
               />
+              <p v-if="existingProfileHasAdminPassword()" class="form-help secure-hint">
+                🔒 Password is stored securely. Leave empty to keep the existing password.
+              </p>
             </div>
           </template>
 
           <template v-if="form.admin_auth_method?.type === 'bearer'">
             <div class="form-group">
               <label>Admin Token</label>
-              <input class="input" v-model="(form.admin_auth_method as any).token" />
+              <input
+                class="input"
+                v-model="(form.admin_auth_method as any).token"
+                :placeholder="
+                  existingProfileHasAdminToken() ? 'Token saved securely (leave empty to keep)' : ''
+                "
+              />
+              <p v-if="existingProfileHasAdminToken()" class="form-help secure-hint">
+                🔒 Token is stored securely. Leave empty to keep the existing token.
+              </p>
             </div>
           </template>
         </template>
@@ -450,6 +562,7 @@ function isInsecureHttpUrl(url: string): boolean {
 .profile-meta {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .version-badge {
   background: var(--color-primary-dim);
@@ -461,6 +574,12 @@ function isInsecureHttpUrl(url: string): boolean {
   color: #f59e0b;
   font-weight: 600;
   border: 1px solid #fbbf24;
+}
+.secure-badge {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  font-weight: 600;
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 .card-test-result {
   margin-top: 6px;
@@ -509,6 +628,10 @@ function isInsecureHttpUrl(url: string): boolean {
   font-size: 12px;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+.secure-hint {
+  color: #22c55e;
 }
 
 .form-divider {

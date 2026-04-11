@@ -1,7 +1,7 @@
 # ADR-0015: Secure Credential Storage
 
 **Date:** 2026-04-11
-**Status:** Proposed
+**Status:** Accepted
 **Related:** ADR-0014 (XSS Hardening and Input Validation)
 
 ---
