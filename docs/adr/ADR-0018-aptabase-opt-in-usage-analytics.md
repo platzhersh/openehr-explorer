@@ -90,6 +90,40 @@ tauri::Builder::default()
 
 The Aptabase plugin initializes but only sends events when the frontend explicitly calls `trackEvent()` — which is gated behind the consent check.
 
+### Local development: separate dev Aptabase app
+
+To avoid polluting the production dashboard with developer clicks, local dev
+builds target a **separate Aptabase project** rather than the production one.
+Both projects live in the same Aptabase account on the free tier; the only
+difference is the app key.
+
+| Environment | App key source | Project name |
+|---|---|---|
+| Production release binaries | `secrets.APTABASE_APP_KEY` in GitHub Actions | `openehr-explorer` |
+| Local `npm run tauri dev` | `.env.analytics.local` (gitignored) | `openehr-explorer-dev` |
+
+Rationale:
+
+- **Clean metrics.** Real-user feature-adoption data isn't drowned out by
+  developers repeatedly clicking "Run AQL" during debugging.
+- **No infrastructure.** Cheaper and simpler than self-hosting Aptabase via
+  Docker or wiring up `A-DEV-*` local keys. Two free-tier projects cost
+  nothing and take about 60 seconds to provision.
+- **Same code path.** Dev and prod binaries exercise the exact same
+  `tauri-plugin-aptabase` integration — we're not conditionally compiling
+  instrumentation out or stubbing the transport, so regressions in the
+  analytics pipeline surface during development, not after release.
+- **Key is never committed.** The dev key lives in `.env.analytics.local` at
+  the repo root. `*.local` is already covered by `.gitignore`, so the file
+  is invisible to git. The `npm run dev:analytics` script sources this file
+  before invoking `tauri dev`, and falls back to an empty key (plugin
+  auto-disables) if the file is missing — so cloning the repo and running
+  `npm run dev:analytics` never surprises a new contributor with network
+  traffic.
+
+See `scripts/dev-with-analytics.sh` for the wrapper and
+`README.md` for the one-time setup steps.
+
 ### Event Schema
 
 Events are deliberately coarse-grained to avoid accidental PII collection:

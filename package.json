@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:analytics": "bash scripts/dev-with-analytics.sh",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
