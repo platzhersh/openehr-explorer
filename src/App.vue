@@ -61,10 +61,25 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-async function emitAppLaunched() {
-  // Safe to call unconditionally: useAnalytics no-ops when the consent
-  // toggle is off. Called after any consent-dialog decision so an accepting
-  // user's first launch is counted immediately.
+async function emitLaunchEvents() {
+  // Two events fire at the start of every session:
+  //
+  //   1. `session_started { consent }`  — ALWAYS, regardless of consent
+  //      toggle. This is the denominator used to compute opt-in rate; it
+  //      carries nothing except the consent value itself. See ADR-0018.
+  //   2. `app_launched  { version, os }` — ONLY if the user has opted in.
+  //      Gives us the OS/version distribution for the opt-in population.
+  //
+  // Deferred until after any first-run consent-dialog decision so the
+  // `consent` prop on `session_started` is never "pending".
+  const consent = settingsStore.settings.analytics_enabled ? "yes" : "no";
+  try {
+    await analytics.trackUngated("session_started", { consent });
+  } catch (e) {
+    console.debug("[analytics] session_started failed:", e);
+  }
+
+  // Feature telemetry — consent-gated no-op for opted-out users.
   try {
     const version = await invoke<string>("get_app_version");
     analytics.track("app_launched", {
@@ -86,7 +101,7 @@ async function handleConsentDecision(accepted: boolean) {
     analytics_enabled: accepted,
     analytics_consent_asked: true,
   });
-  await emitAppLaunched();
+  await emitLaunchEvents();
 }
 
 onMounted(async () => {
@@ -104,7 +119,7 @@ onMounted(async () => {
     // the user might be about to opt out of.
     showAnalyticsConsent.value = true;
   } else {
-    await emitAppLaunched();
+    await emitLaunchEvents();
   }
 });
 

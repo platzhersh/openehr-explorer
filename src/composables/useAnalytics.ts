@@ -41,6 +41,14 @@ export type AnalyticsProps = Record<string, AnalyticsPropValue>;
  */
 export type AnalyticsEvent =
   // --- app lifecycle ---
+  /**
+   * `session_started` is the ONE event that is NOT gated on the consent
+   * toggle — see `trackUngated` below and ADR-0018 for the rationale. It
+   * fires once per launch with a single `consent: "yes" | "no"` prop so we
+   * can compute the opt-in rate and see total session counts. No version,
+   * OS, or any other data rides on it.
+   */
+  | "session_started"
   | "app_launched"
   // --- server ---
   | "server_connected"
@@ -74,10 +82,39 @@ export type AnalyticsEvent =
 export function useAnalytics() {
   const settings = useSettingsStore();
 
+  /**
+   * Send an event to Aptabase via the Rust plugin, IF the user has opted
+   * in. Drops silently otherwise. This is what nearly every call site in
+   * the app should use — `ehr_created`, `aql_executed`, and so on.
+   */
   async function track(event: AnalyticsEvent, props?: AnalyticsProps): Promise<void> {
     // Consent gate — if the user has not opted in, drop the event on the floor.
     if (!settings.settings.analytics_enabled) return;
+    await sendEvent(event, props);
+  }
 
+  /**
+   * Send an event to Aptabase REGARDLESS of the consent toggle.
+   *
+   * This deliberately bypasses the consent gate and must be used for
+   * `session_started` only, which fires exactly once per launch with a
+   * `consent: "yes" | "no"` prop. The event exists so we can see the
+   * denominator ("how many total sessions happened?") and compute an
+   * opt-in rate. Opted-out users therefore send exactly ONE anonymous
+   * event per launch — and nothing else — with no version, no OS, no
+   * feature usage, no IDs, no URLs.
+   *
+   * See ADR-0018 "Consent model" for the rationale and the wording of
+   * the user-facing disclosure.
+   */
+  async function trackUngated(
+    event: AnalyticsEvent,
+    props?: AnalyticsProps,
+  ): Promise<void> {
+    await sendEvent(event, props);
+  }
+
+  async function sendEvent(event: AnalyticsEvent, props?: AnalyticsProps): Promise<void> {
     try {
       await invoke("plugin:aptabase|track_event", {
         name: event,
@@ -90,5 +127,5 @@ export function useAnalytics() {
     }
   }
 
-  return { track };
+  return { track, trackUngated };
 }

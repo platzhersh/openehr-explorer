@@ -61,6 +61,13 @@ defineEmits<{
         </div>
 
         <p class="footnote">
+          <strong>Even if you say no</strong>, the app sends a single
+          <em>session_started</em> ping once per launch so we can count total
+          sessions and see how many people opt in. It contains only one field
+          &mdash; your consent choice (yes/no) &mdash; and nothing else: no
+          version, no OS, no feature usage.
+        </p>
+        <p class="footnote">
           Data is sent to
           <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a>, a
           privacy-first, GDPR-compliant analytics service. No cookies, no fingerprinting.
