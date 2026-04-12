@@ -45,6 +45,7 @@ export type AnalyticsEvent =
   // --- server ---
   | "server_connected"
   | "server_profile_created"
+  | "server_profile_updated"
   | "server_profile_deleted"
   // --- EHR ---
   | "ehr_browsed"
@@ -67,7 +68,8 @@ export type AnalyticsEvent =
   | "template_uploaded"
   // --- settings / engagement ---
   | "settings_saved"
-  | "documentation_opened";
+  | "documentation_opened"
+  | "inspector_toggled";
 
 export function useAnalytics() {
   const settings = useSettingsStore();

@@ -9,11 +9,13 @@ import {
   methodClass,
 } from "../stores/inspector";
 import type { RequestLogEntry } from "../stores/inspector";
+import { useAnalytics } from "../composables/useAnalytics";
 import JsonTreeNode from "./JsonTreeNode.vue";
 
 type DrawerState = "collapsed" | "half" | "expanded";
 
 const store = useInspectorStore();
+const analytics = useAnalytics();
 
 const drawerState = ref<DrawerState>(
   (localStorage.getItem("inspector-drawer-state") as DrawerState) || "collapsed",
@@ -24,8 +26,14 @@ const treeSearch = ref("");
 const showClearConfirm = ref(false);
 const flatFilter = ref("");
 
-// Persist drawer state
-watch(drawerState, (s) => localStorage.setItem("inspector-drawer-state", s));
+// Persist drawer state. The `watch` callback only fires on mutations,
+// not on the initial read from localStorage, so we don't emit an
+// `inspector_toggled` event on every app launch. `state` is a fixed enum
+// ("collapsed" | "half" | "expanded"), safe to send as a prop.
+watch(drawerState, (s) => {
+  localStorage.setItem("inspector-drawer-state", s);
+  void analytics.track("inspector_toggled", { state: s });
+});
 watch(bodyViewTab, (t) => localStorage.setItem("inspector-body-tab", t));
 
 // Auto-scroll log when new entry arrives

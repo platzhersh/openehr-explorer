@@ -158,6 +158,8 @@ async function save() {
       // Platform-distribution signal — server_type is a known enum so it's
       // safe to include. Never URL, name, or auth material.
       void analytics.track("server_profile_created", { server_type: serverType });
+    } else {
+      void analytics.track("server_profile_updated", { server_type: serverType });
     }
   } catch (e) {
     testError.value = `Save failed: ${String(e)}`;
