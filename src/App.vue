@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "./stores/server";
@@ -10,7 +10,13 @@ import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
 import UpdateNotification from "./components/UpdateNotification.vue";
+import AnalyticsConsentDialog from "./components/AnalyticsConsentDialog.vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
+
+// First-run consent dialog visibility. Driven by the persisted
+// `analytics_consent_asked` flag: shown once, then the flag flips to true
+// and the dialog never appears again.
+const showAnalyticsConsent = ref(false);
 
 const router = useRouter();
 const serverStore = useServerStore();
@@ -54,16 +60,10 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(async () => {
-  serverStore.loadProfiles();
-  inspectorStore.startListening();
-  // Settings must be loaded before the first analytics call so the consent
-  // flag is accurate — otherwise the composable would gate on a stale default.
-  await settingsStore.loadSettings();
-  document.addEventListener("keydown", handleKeydown);
-
-  // Emit the canonical `app_launched` event. Safe to call unconditionally:
-  // useAnalytics no-ops when the consent toggle is off.
+async function emitAppLaunched() {
+  // Safe to call unconditionally: useAnalytics no-ops when the consent
+  // toggle is off. Called after any consent-dialog decision so an accepting
+  // user's first launch is counted immediately.
   try {
     const version = await invoke<string>("get_app_version");
     analytics.track("app_launched", {
@@ -72,6 +72,38 @@ onMounted(async () => {
     });
   } catch (e) {
     console.debug("[analytics] app_launched failed:", e);
+  }
+}
+
+async function handleConsentDecision(accepted: boolean) {
+  // Persist BOTH flags in the same save so we atomically record "we asked"
+  // and "here's the answer". If the user accepts, `analytics_enabled` is
+  // true before the next `analytics.track()` call sees it.
+  showAnalyticsConsent.value = false;
+  await settingsStore.saveSettings({
+    ...settingsStore.settings,
+    analytics_enabled: accepted,
+    analytics_consent_asked: true,
+  });
+  await emitAppLaunched();
+}
+
+onMounted(async () => {
+  serverStore.loadProfiles();
+  inspectorStore.startListening();
+  // Settings must be loaded before the first analytics call so the consent
+  // flag is accurate — otherwise the composable would gate on a stale default.
+  await settingsStore.loadSettings();
+  document.addEventListener("keydown", handleKeydown);
+
+  if (!settingsStore.settings.analytics_consent_asked) {
+    // First run (or upgrade from a version without the flag): show the
+    // one-time consent dialog. Hold off on emitting app_launched until the
+    // user has made a choice so we don't silently track the session that
+    // the user might be about to opt out of.
+    showAnalyticsConsent.value = true;
+  } else {
+    await emitAppLaunched();
   }
 });
 
@@ -104,6 +136,11 @@ watch(
       </main>
       <RequestInspector />
     </div>
+    <AnalyticsConsentDialog
+      v-if="showAnalyticsConsent"
+      @accept="handleConsentDecision(true)"
+      @decline="handleConsentDecision(false)"
+    />
   </div>
 </template>
 

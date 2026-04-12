@@ -3,6 +3,7 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
+import ToggleSwitch from "../components/ToggleSwitch.vue";
 
 const settingsStore = useSettingsStore();
 
@@ -11,6 +12,7 @@ const form = ref<GlobalSettings>({
   terminology_server_url: null,
   check_updates_on_startup: true,
   analytics_enabled: false,
+  analytics_consent_asked: false,
 });
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
@@ -84,10 +86,10 @@ async function openConfigDir() {
         <div class="section-divider"></div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" v-model="form.check_updates_on_startup" />
-            <span>Check for updates on app startup</span>
-          </label>
+          <ToggleSwitch
+            v-model="form.check_updates_on_startup"
+            label="Check for updates on app startup"
+          />
           <p class="form-help">
             When enabled, openEHR Explorer checks GitHub Releases on launch and shows a notification
             if a new version is available. No personal data is sent; only the current app version
@@ -101,10 +103,10 @@ async function openConfigDir() {
         <div class="section-divider"></div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" v-model="form.analytics_enabled" />
-            <span>Help improve openEHR Explorer by sharing anonymous usage data</span>
-          </label>
+          <ToggleSwitch
+            v-model="form.analytics_enabled"
+            label="Help improve openEHR Explorer by sharing anonymous usage data"
+          />
           <p class="form-help">
             When enabled, openEHR Explorer sends coarse-grained, anonymous feature-usage events
             to <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a>

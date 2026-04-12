@@ -17,6 +17,15 @@ pub struct GlobalSettings {
     /// from the Settings page.
     #[serde(default)]
     pub analytics_enabled: bool,
+    /// Tracks whether we've already prompted the user for an analytics
+    /// consent decision. Defaults to `false`, which means "never asked" —
+    /// the frontend shows a one-time first-run dialog when it sees this
+    /// flag, then flips it to `true` regardless of which choice the user
+    /// made. This is how we distinguish "user explicitly opted out" from
+    /// "we haven't asked yet" without having to make `analytics_enabled`
+    /// an `Option<bool>`.
+    #[serde(default)]
+    pub analytics_consent_asked: bool,
 }
 
 fn default_version() -> u32 {
@@ -34,6 +43,7 @@ impl Default for GlobalSettings {
             terminology_server_url: Some("https://tx.fhir.ch/r4".to_string()),
             check_updates_on_startup: true,
             analytics_enabled: false,
+            analytics_consent_asked: false,
         }
     }
 }
