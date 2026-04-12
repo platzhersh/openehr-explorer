@@ -2,6 +2,9 @@
 import { ref, onMounted } from "vue";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { useSettingsStore } from "../stores/settings";
+
+const settingsStore = useSettingsStore();
 
 const update = ref<Update | null>(null);
 const dismissed = ref(false);
@@ -11,6 +14,16 @@ const totalBytes = ref(0);
 const error = ref<string | null>(null);
 
 onMounted(async () => {
+  // Respect the user's preference. Settings are loaded by App.vue on mount,
+  // but this component mounts alongside App, so ensure settings are loaded
+  // before reading the flag.
+  if (!settingsStore.loaded) {
+    await settingsStore.loadSettings();
+  }
+  if (!settingsStore.settings.check_updates_on_startup) {
+    return;
+  }
+
   try {
     const result = await check();
     if (result?.available) {

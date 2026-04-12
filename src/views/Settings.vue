@@ -9,6 +9,7 @@ const settingsStore = useSettingsStore();
 const form = ref<GlobalSettings>({
   version: 1,
   terminology_server_url: null,
+  check_updates_on_startup: true,
 });
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
@@ -73,6 +74,23 @@ async function openConfigDir() {
           <p class="form-help">
             Used for resolving external codes (SNOMED CT, LOINC, etc.) unless a server profile
             overrides it. Leave empty to disable code resolution globally.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Updates</h3>
+        <div class="section-divider"></div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="form.check_updates_on_startup" />
+            <span>Check for updates on app startup</span>
+          </label>
+          <p class="form-help">
+            When enabled, openEHR Explorer checks GitHub Releases on launch and shows a notification
+            if a new version is available. No personal data is sent; only the current app version
+            and platform are transmitted as part of the update request.
           </p>
         </div>
       </div>
@@ -147,6 +165,17 @@ async function openConfigDir() {
 }
 .form-group .input {
   width: 100%;
+}
+.form-group .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--color-text);
+  font-weight: 500;
+}
+.form-group .checkbox-label input[type="checkbox"] {
+  cursor: pointer;
 }
 .form-help {
   margin-top: 4px;

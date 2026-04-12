@@ -5,12 +5,14 @@ import { invoke } from "@tauri-apps/api/core";
 export interface GlobalSettings {
   version: number;
   terminology_server_url: string | null;
+  check_updates_on_startup: boolean;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
   const settings = ref<GlobalSettings>({
     version: 1,
     terminology_server_url: null,
+    check_updates_on_startup: true,
   });
   const loaded = ref(false);
 

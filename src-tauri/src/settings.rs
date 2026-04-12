@@ -10,10 +10,16 @@ pub struct GlobalSettings {
     pub version: u32,
     #[serde(default)]
     pub terminology_server_url: Option<String>,
+    #[serde(default = "default_check_updates_on_startup")]
+    pub check_updates_on_startup: bool,
 }
 
 fn default_version() -> u32 {
     1
+}
+
+fn default_check_updates_on_startup() -> bool {
+    true
 }
 
 impl Default for GlobalSettings {
@@ -21,6 +27,7 @@ impl Default for GlobalSettings {
         Self {
             version: 1,
             terminology_server_url: Some("https://tx.fhir.ch/r4".to_string()),
+            check_updates_on_startup: true,
         }
     }
 }
