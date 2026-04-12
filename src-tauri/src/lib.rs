@@ -4,9 +4,22 @@ pub mod inspector;
 pub mod settings;
 
 use commands::{composition, ehr, query, server, template, terminology};
+use tauri_plugin_aptabase::EventTracker;
 
 /// The official website URL for openEHR Explorer
 pub const WEBSITE_URL: &str = "https://platzhersh.github.io/openehr-explorer/";
+
+/// Aptabase App Key injected at compile time via the `APTABASE_APP_KEY` env var.
+///
+/// When empty (e.g. local dev builds without the var set, or forks that have not
+/// provisioned their own key) the Aptabase plugin gracefully no-ops: no events
+/// are dispatched and nothing is sent over the network. The key is expected to
+/// be provided in CI only — see `.github/workflows/ci.yml` — so malicious forks
+/// cannot accidentally bake it into their binaries.
+const APTABASE_APP_KEY: &str = match option_env!("APTABASE_APP_KEY") {
+    Some(k) => k,
+    None => "",
+};
 
 /// Get the application version from Cargo.toml
 #[tauri::command]
@@ -25,6 +38,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_aptabase::Builder::new(APTABASE_APP_KEY).build())
         .manage(terminology::TerminologyCache::default())
         .invoke_handler(tauri::generate_handler![
             // App
@@ -70,6 +84,14 @@ pub fn run() {
             // Terminology
             terminology::lookup_code,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Flush any pending Aptabase events before shutdown so the
+                // final buffered payload is not lost. Safe no-op when the
+                // plugin was initialised without a key.
+                app_handle.flush_events_blocking();
+            }
+        });
 }

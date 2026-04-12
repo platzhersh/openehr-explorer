@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useCompositionStore } from "../stores/composition";
+import { useAnalytics } from "../composables/useAnalytics";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
@@ -12,6 +13,7 @@ const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const compositionStore = useCompositionStore();
+const analytics = useAnalytics();
 
 const ehrId = computed(() => route.params.ehrId as string);
 const compositionUid = computed(() => route.params.compositionUid as string);
@@ -39,6 +41,9 @@ watch(
     if (!serverId || !uid) return;
     loading.value = true;
     error.value = null;
+    // Track the initial composition open with the default format — subsequent
+    // tab changes are tracked in the `watch(activeTab)` handler below.
+    void analytics.track("composition_viewed", { format: activeTab.value });
     try {
       composition.value = await invoke("get_composition", {
         serverId,
@@ -99,8 +104,11 @@ function closePanelSearch() {
 }
 
 // Clear search when switching tabs or compositions
-watch(activeTab, () => {
+watch(activeTab, (tab) => {
   closePanelSearch();
+  // Track which composition-view format the user prefers. `format` is a
+  // known-enum string, not free text — safe to send.
+  void analytics.track("composition_viewed", { format: tab });
 });
 
 watch(compositionUid, () => {
@@ -241,6 +249,7 @@ async function handleDelete() {
       compositionUid.value,
     );
     showDeleteDialog.value = false;
+    void analytics.track("composition_deleted");
     // Navigate back to EHR detail
     router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
   } catch (e) {

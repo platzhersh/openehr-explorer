@@ -53,10 +53,50 @@ Aptabase is purpose-built for desktop and mobile apps with privacy as a core con
 └─────────────────────────────────────────────┘
 ```
 
-- **Default: OFF** — no events sent until the user explicitly enables analytics
+- **Default: OFF** — feature-usage events are not sent until the user explicitly enables analytics
 - Consent preference persisted in the settings store (`src/stores/settings.ts`) and local config
-- Toggling OFF immediately stops all event collection
+- Toggling OFF immediately stops **all feature-usage** event collection (see the session-counter carveout below)
 - No "nag" prompts — the toggle lives in Settings and is never shown as a popup
+
+### Session-counter carveout
+
+There is **one** event that is emitted regardless of the consent toggle:
+
+| Event | Props | When |
+|---|---|---|
+| `session_started` | `{ consent: "yes" \| "no" }` | Once per app launch, after the first-run consent dialog has been answered |
+
+Rationale: we need a denominator to compute the opt-in rate. Without a ping
+from opted-out sessions the project can measure "how many opted-in users are
+active" but cannot answer "of everyone who runs the app, what fraction
+chooses to share data?" — which is the primary signal for whether our
+consent UI is clear and trustworthy, and the only way to detect if opt-in
+rates collapse after a UI change.
+
+The carveout is designed to minimise its footprint:
+
+- **Exactly one event per launch.** Not one per action, not one per view.
+- **Exactly one prop.** `consent: "yes" | "no"` — nothing else. No app
+  version, no OS, no architecture, no locale, no feature usage, no
+  identifiers.
+- **Deferred until consent is answered.** On a first-run session, the ping
+  does not fire until the user has picked yes or no in
+  `AnalyticsConsentDialog.vue`. If the user quits without answering,
+  nothing is sent.
+- **Explicitly disclosed.** Both the first-run consent dialog and the
+  Settings page state that a single `session_started` ping fires even when
+  analytics are off, and describe exactly what it contains.
+- **Implemented via a separate code path.** `useAnalytics` exposes two
+  functions: `track()` (consent-gated — used by every feature event) and
+  `trackUngated()` (bypasses the gate). `trackUngated` is reserved for
+  `session_started` and is documented loudly so reviewers know to push
+  back on any new call site.
+
+Every other event — `app_launched`, `aql_executed`, `composition_viewed`,
+etc. — remains strictly opt-in. In particular, the version/OS distribution
+signal lives on `app_launched { version, os }`, which is still
+consent-gated; opted-out sessions contribute the count but never the
+metadata.
 
 ### Implementation
 
@@ -90,21 +130,73 @@ tauri::Builder::default()
 
 The Aptabase plugin initializes but only sends events when the frontend explicitly calls `trackEvent()` — which is gated behind the consent check.
 
+### Local development: separate dev Aptabase app
+
+To avoid polluting the production dashboard with developer clicks, local dev
+builds target a **separate Aptabase project** rather than the production one.
+Both projects live in the same Aptabase account on the free tier; the only
+difference is the app key.
+
+| Environment | App key source | Project name |
+|---|---|---|
+| Production release binaries | `secrets.APTABASE_APP_KEY` in GitHub Actions | `openehr-explorer` |
+| Local `npm run tauri dev` | `.env.analytics.local` (gitignored) | `openehr-explorer-dev` |
+
+Rationale:
+
+- **Clean metrics.** Real-user feature-adoption data isn't drowned out by
+  developers repeatedly clicking "Run AQL" during debugging.
+- **No infrastructure.** Cheaper and simpler than self-hosting Aptabase via
+  Docker or wiring up `A-DEV-*` local keys. Two free-tier projects cost
+  nothing and take about 60 seconds to provision.
+- **Same code path.** Dev and prod binaries exercise the exact same
+  `tauri-plugin-aptabase` integration — we're not conditionally compiling
+  instrumentation out or stubbing the transport, so regressions in the
+  analytics pipeline surface during development, not after release.
+- **Key is never committed.** The dev key lives in `.env.analytics.local` at
+  the repo root. `*.local` is already covered by `.gitignore`, so the file
+  is invisible to git. The `npm run dev:analytics` script sources this file
+  before invoking `tauri dev`, and falls back to an empty key (plugin
+  auto-disables) if the file is missing — so cloning the repo and running
+  `npm run dev:analytics` never surprises a new contributor with network
+  traffic.
+
+See `scripts/dev-with-analytics.sh` for the wrapper and
+`README.md` for the one-time setup steps.
+
 ### Event Schema
 
-Events are deliberately coarse-grained to avoid accidental PII collection:
+Events are deliberately coarse-grained to avoid accidental PII collection.
+The `Gated?` column indicates whether the event is suppressed when
+`analytics_enabled` is `false` — every event except `session_started` is
+gated; see the **Session-counter carveout** section above.
 
-| Event | Properties | Purpose |
-|---|---|---|
-| `app_launched` | `version`, `os`, `arch` | Active installs, platform distribution |
-| `server_connected` | `server_type` | CDR platform usage (ehrbase/better/generic) |
-| `ehr_browsed` | — | Feature adoption |
-| `composition_viewed` | `format` | Preferred viewing format |
-| `aql_executed` | — | Feature adoption |
-| `template_inspected` | — | Feature adoption |
-| `composition_created` | — | Feature adoption |
-| `composition_edited` | — | Feature adoption |
-| `settings_changed` | `setting_key` | Which settings users customize |
+| Event | Gated? | Properties | Purpose |
+|---|---|---|---|
+| `session_started` | **no** | `consent` (`yes`/`no`) | Total session count + opt-in rate denominator |
+| `app_launched` | yes | `version`, `os` | Platform distribution among opt-in users |
+| `server_connected` | yes | `server_type` | CDR platform usage (ehrbase / better_platform / generic) |
+| `server_profile_created` | yes | `server_type` | New profile writes by CDR platform |
+| `server_profile_updated` | yes | `server_type` | Profile-edit activity |
+| `server_profile_deleted` | yes | — | Profile churn |
+| `ehr_browsed` | yes | — | Feature adoption |
+| `ehr_created` | yes | — | Write workflow adoption |
+| `ehr_deleted` | yes | — | Destructive-action signal |
+| `ehr_searched` | yes | — | Search-feature discovery |
+| `composition_viewed` | yes | `format` (`pretty`/`json`/`flat`) | Preferred viewing format |
+| `composition_created` | yes | — | Write workflow adoption |
+| `composition_edited` | yes | — | Write workflow adoption |
+| `composition_deleted` | yes | — | Destructive-action signal |
+| `aql_executed` | yes | — | Feature adoption |
+| `aql_query_saved` | yes | — | Query-library engagement |
+| `aql_query_loaded` | yes | — | Query reuse |
+| `aql_query_deleted` | yes | — | Query-library cleanup |
+| `aql_results_exported` | yes | — | CSV export usage |
+| `template_inspected` | yes | — | Feature adoption |
+| `template_uploaded` | yes | — | Template-management writes |
+| `settings_saved` | yes | — | Settings-touch count |
+| `documentation_opened` | yes | — | Docs engagement (shortcut + sidebar) |
+| `inspector_toggled` | yes | `state` (`collapsed`/`half`/`expanded`) | Request-inspector usage |
 
 **Hard rules:**
 - Never include free-text fields (query text, template names, server URLs)

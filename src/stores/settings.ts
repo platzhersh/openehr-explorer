@@ -6,6 +6,8 @@ export interface GlobalSettings {
   version: number;
   terminology_server_url: string | null;
   check_updates_on_startup: boolean;
+  analytics_enabled: boolean;
+  analytics_consent_asked: boolean;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -13,6 +15,8 @@ export const useSettingsStore = defineStore("settings", () => {
     version: 1,
     terminology_server_url: null,
     check_updates_on_startup: true,
+    analytics_enabled: false,
+    analytics_consent_asked: false,
   });
   const loaded = ref(false);
 

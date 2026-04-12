@@ -2,9 +2,11 @@
 import { ref, computed, onMounted } from "vue";
 import { useServerStore, type ServerProfile, type ServerProfileInput } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
+import { useAnalytics } from "../composables/useAnalytics";
 
 const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
+const analytics = useAnalytics();
 
 const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_server_url || "");
 
@@ -140,12 +142,25 @@ async function save() {
   if (!validateBaseUrl(form.value.base_url)) {
     return;
   }
+  // Snapshot before save — editingExistingId is null when creating a brand
+  // new profile, so we use it to distinguish created-vs-updated. Updates are
+  // deliberately NOT tracked to keep event volume down; only the initial
+  // create is recorded.
+  const wasCreating = editingExistingId.value === null;
+  const serverType = form.value.server_type;
   testResult.value = null;
   testError.value = null;
   try {
     await serverStore.saveProfile(form.value);
     editingExistingId.value = null;
     editing.value = false;
+    if (wasCreating) {
+      // Platform-distribution signal — server_type is a known enum so it's
+      // safe to include. Never URL, name, or auth material.
+      void analytics.track("server_profile_created", { server_type: serverType });
+    } else {
+      void analytics.track("server_profile_updated", { server_type: serverType });
+    }
   } catch (e) {
     testError.value = `Save failed: ${String(e)}`;
   }
@@ -153,6 +168,7 @@ async function save() {
 
 async function remove(id: string) {
   await serverStore.deleteProfile(id);
+  void analytics.track("server_profile_deleted");
 }
 
 async function testConnection() {

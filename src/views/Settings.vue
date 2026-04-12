@@ -3,6 +3,10 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
+import { useAnalytics } from "../composables/useAnalytics";
+import ToggleSwitch from "../components/ToggleSwitch.vue";
+
+const analytics = useAnalytics();
 
 const settingsStore = useSettingsStore();
 
@@ -10,6 +14,8 @@ const form = ref<GlobalSettings>({
   version: 1,
   terminology_server_url: null,
   check_updates_on_startup: true,
+  analytics_enabled: false,
+  analytics_consent_asked: false,
 });
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
@@ -39,6 +45,9 @@ async function save() {
     };
     await settingsStore.saveSettings(toSave);
     saveResult.value = "Settings saved successfully.";
+    // Count of settings saves — not which specific setting changed, to
+    // avoid a per-toggle event storm and to keep the schema coarse.
+    void analytics.track("settings_saved");
   } catch (e) {
     saveError.value = String(e);
   } finally {
@@ -83,14 +92,46 @@ async function openConfigDir() {
         <div class="section-divider"></div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" v-model="form.check_updates_on_startup" />
-            <span>Check for updates on app startup</span>
-          </label>
+          <ToggleSwitch
+            v-model="form.check_updates_on_startup"
+            label="Check for updates on app startup"
+          />
           <p class="form-help">
             When enabled, openEHR Explorer checks GitHub Releases on launch and shows a notification
             if a new version is available. No personal data is sent; only the current app version
             and platform are transmitted as part of the update request.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Analytics</h3>
+        <div class="section-divider"></div>
+
+        <div class="form-group">
+          <ToggleSwitch
+            v-model="form.analytics_enabled"
+            label="Help improve openEHR Explorer by sharing anonymous usage data"
+          />
+          <p class="form-help">
+            When enabled, openEHR Explorer sends coarse-grained, anonymous feature-usage events to
+            <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a> (a
+            privacy-first, GDPR-compliant analytics service). We collect: app version, OS and
+            architecture, which features are used (e.g. <em>aql_executed</em>,
+            <em>composition_viewed</em>), and the CDR platform type
+            (<em>ehrbase</em>/<em>better_platform</em>/<em>generic</em>).
+          </p>
+          <p class="form-help">
+            We <strong>never</strong> collect server URLs, credentials, patient data, EHR IDs,
+            composition content, query text, template content, or anything you type. No cookies, no
+            fingerprinting, no IP logging. Default is <strong>off</strong>.
+          </p>
+          <p class="form-help">
+            <strong>One exception:</strong> regardless of this toggle, the app sends a single
+            <em>session_started</em> ping once per launch so the project can count total sessions
+            and see how many users opt in. That ping contains only your consent choice (<em>yes</em>
+            or <em>no</em>) and nothing else &mdash; no version, OS, or feature usage. When you
+            toggle this off, <strong>all other</strong> event collection stops immediately.
           </p>
         </div>
       </div>
@@ -156,7 +197,12 @@ async function openConfigDir() {
 .form-group {
   margin-bottom: 16px;
 }
-.form-group label {
+/* Exclude ToggleSwitch's root <label> — Vue scoped CSS also tags the root
+   element of child components with the parent's scope attribute, so a bare
+   `.form-group label` would otherwise hit the toggle and clobber its
+   `display: inline-flex` with `display: block`, killing the gap between
+   the switch and its text. */
+.form-group label:not(.toggle) {
   display: block;
   font-size: 13px;
   font-weight: 600;
@@ -166,22 +212,18 @@ async function openConfigDir() {
 .form-group .input {
   width: 100%;
 }
-.form-group .checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  color: var(--color-text);
-  font-weight: 500;
-}
-.form-group .checkbox-label input[type="checkbox"] {
-  cursor: pointer;
-}
 .form-help {
   margin-top: 4px;
   font-size: 12px;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+.form-help a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.form-help a:hover {
+  text-decoration: underline;
 }
 
 .form-actions {

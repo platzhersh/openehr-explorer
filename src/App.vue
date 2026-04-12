@@ -1,19 +1,28 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "./stores/server";
 import { useInspectorStore } from "./stores/inspector";
 import { useSettingsStore } from "./stores/settings";
+import { useAnalytics } from "./composables/useAnalytics";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
 import UpdateNotification from "./components/UpdateNotification.vue";
+import AnalyticsConsentDialog from "./components/AnalyticsConsentDialog.vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
+
+// First-run consent dialog visibility. Driven by the persisted
+// `analytics_consent_asked` flag: shown once, then the flag flips to true
+// and the dialog never appears again.
+const showAnalyticsConsent = ref(false);
 
 const router = useRouter();
 const serverStore = useServerStore();
 const inspectorStore = useInspectorStore();
 const settingsStore = useSettingsStore();
+const analytics = useAnalytics();
 
 // Global keyboard shortcuts for navigation
 function handleKeydown(e: KeyboardEvent) {
@@ -22,6 +31,7 @@ function handleKeydown(e: KeyboardEvent) {
     if (e.shiftKey && (e.key === "D" || e.key === "d")) {
       e.preventDefault();
       openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
+      void analytics.track("documentation_opened");
     }
     // Ctrl/Cmd + 1: Switch to EHR Browser
     else if (e.key === "1") {
@@ -51,11 +61,66 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+async function emitLaunchEvents() {
+  // Two events fire at the start of every session:
+  //
+  //   1. `session_started { consent }`  — ALWAYS, regardless of consent
+  //      toggle. This is the denominator used to compute opt-in rate; it
+  //      carries nothing except the consent value itself. See ADR-0018.
+  //   2. `app_launched  { version, os }` — ONLY if the user has opted in.
+  //      Gives us the OS/version distribution for the opt-in population.
+  //
+  // Deferred until after any first-run consent-dialog decision so the
+  // `consent` prop on `session_started` is never "pending".
+  const consent = settingsStore.settings.analytics_enabled ? "yes" : "no";
+  try {
+    await analytics.trackUngated("session_started", { consent });
+  } catch (e) {
+    console.debug("[analytics] session_started failed:", e);
+  }
+
+  // Feature telemetry — consent-gated no-op for opted-out users.
+  try {
+    const version = await invoke<string>("get_app_version");
+    analytics.track("app_launched", {
+      version,
+      os: navigator.platform || "unknown",
+    });
+  } catch (e) {
+    console.debug("[analytics] app_launched failed:", e);
+  }
+}
+
+async function handleConsentDecision(accepted: boolean) {
+  // Persist BOTH flags in the same save so we atomically record "we asked"
+  // and "here's the answer". If the user accepts, `analytics_enabled` is
+  // true before the next `analytics.track()` call sees it.
+  showAnalyticsConsent.value = false;
+  await settingsStore.saveSettings({
+    ...settingsStore.settings,
+    analytics_enabled: accepted,
+    analytics_consent_asked: true,
+  });
+  await emitLaunchEvents();
+}
+
+onMounted(async () => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
-  settingsStore.loadSettings();
+  // Settings must be loaded before the first analytics call so the consent
+  // flag is accurate — otherwise the composable would gate on a stale default.
+  await settingsStore.loadSettings();
   document.addEventListener("keydown", handleKeydown);
+
+  if (!settingsStore.settings.analytics_consent_asked) {
+    // First run (or upgrade from a version without the flag): show the
+    // one-time consent dialog. Hold off on emitting app_launched until the
+    // user has made a choice so we don't silently track the session that
+    // the user might be about to opt out of.
+    showAnalyticsConsent.value = true;
+  } else {
+    await emitLaunchEvents();
+  }
 });
 
 onUnmounted(() => {
@@ -87,6 +152,11 @@ watch(
       </main>
       <RequestInspector />
     </div>
+    <AnalyticsConsentDialog
+      v-if="showAnalyticsConsent"
+      @accept="handleConsentDecision(true)"
+      @decline="handleConsentDecision(false)"
+    />
   </div>
 </template>
 

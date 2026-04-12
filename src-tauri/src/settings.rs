@@ -12,6 +12,20 @@ pub struct GlobalSettings {
     pub terminology_server_url: Option<String>,
     #[serde(default = "default_check_updates_on_startup")]
     pub check_updates_on_startup: bool,
+    /// Opt-in flag for anonymous usage analytics (Aptabase). Defaults to `false`
+    /// per ADR-0018 — no events are sent unless the user explicitly enables it
+    /// from the Settings page.
+    #[serde(default)]
+    pub analytics_enabled: bool,
+    /// Tracks whether we've already prompted the user for an analytics
+    /// consent decision. Defaults to `false`, which means "never asked" —
+    /// the frontend shows a one-time first-run dialog when it sees this
+    /// flag, then flips it to `true` regardless of which choice the user
+    /// made. This is how we distinguish "user explicitly opted out" from
+    /// "we haven't asked yet" without having to make `analytics_enabled`
+    /// an `Option<bool>`.
+    #[serde(default)]
+    pub analytics_consent_asked: bool,
 }
 
 fn default_version() -> u32 {
@@ -28,6 +42,8 @@ impl Default for GlobalSettings {
             version: 1,
             terminology_server_url: Some("https://tx.fhir.ch/r4".to_string()),
             check_updates_on_startup: true,
+            analytics_enabled: false,
+            analytics_consent_asked: false,
         }
     }
 }

@@ -3,9 +3,12 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
+import { useAnalytics } from "../composables/useAnalytics";
 import AqlEditor from "../components/AqlEditor.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
+
+const analytics = useAnalytics();
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -103,6 +106,8 @@ function clearContextTemplate() {
 async function runQuery() {
   if (!serverStore.activeServerId || !queryText.value.trim()) return;
   await queryStore.executeAql(serverStore.activeServerId, queryText.value);
+  // Feature-adoption ping only — NEVER include the query text itself.
+  void analytics.track("aql_executed");
 }
 
 function formatQuery() {
@@ -121,18 +126,25 @@ async function saveCurrentQuery() {
   await queryStore.saveQuery(query);
   showSaveDialog.value = false;
   saveName.value = "";
+  // Count only — never the query name or body.
+  void analytics.track("aql_query_saved");
 }
 
 function loadQuery(query: SavedQuery) {
   queryText.value = query.query;
+  void analytics.track("aql_query_loaded");
 }
 
 async function deleteSavedQuery(id: string) {
   await queryStore.deleteSavedQuery(id);
+  void analytics.track("aql_query_deleted");
 }
 
 function exportCsv() {
   if (!queryStore.result) return;
+  // Feature-usage signal only — row counts intentionally omitted because
+  // they correlate with dataset size on customer servers.
+  void analytics.track("aql_results_exported");
 
   const headers = queryStore.result.columns.map((c) => c.path || c.name);
   const rows = queryStore.result.rows.map((row, idx) => {
