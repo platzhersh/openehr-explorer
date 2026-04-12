@@ -7,6 +7,7 @@ import { useSettingsStore } from "./stores/settings";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
+import UpdateNotification from "./components/UpdateNotification.vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 const router = useRouter();
@@ -80,6 +81,7 @@ watch(
       <AppSidebar />
     </aside>
     <div class="app-content-area">
+      <UpdateNotification />
       <main class="app-main">
         <router-view />
       </main>
