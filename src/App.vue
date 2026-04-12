@@ -31,6 +31,7 @@ function handleKeydown(e: KeyboardEvent) {
     if (e.shiftKey && (e.key === "D" || e.key === "d")) {
       e.preventDefault();
       openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
+      void analytics.track("documentation_opened");
     }
     // Ctrl/Cmd + 1: Switch to EHR Browser
     else if (e.key === "1") {

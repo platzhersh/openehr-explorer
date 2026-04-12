@@ -3,7 +3,10 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
+import { useAnalytics } from "../composables/useAnalytics";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
+
+const analytics = useAnalytics();
 
 const settingsStore = useSettingsStore();
 
@@ -42,6 +45,9 @@ async function save() {
     };
     await settingsStore.saveSettings(toSave);
     saveResult.value = "Settings saved successfully.";
+    // Count of settings saves — not which specific setting changed, to
+    // avoid a per-toggle event storm and to keep the schema coarse.
+    void analytics.track("settings_saved");
   } catch (e) {
     saveError.value = String(e);
   } finally {

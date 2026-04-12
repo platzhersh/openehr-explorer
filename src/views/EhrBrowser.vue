@@ -200,6 +200,10 @@ function executeSearch() {
   }
 
   showHistory.value = false;
+  // Feature-adoption ping only — never the query text itself or the raw
+  // criteria. Users construct search queries with patient identifiers
+  // encoded in the input, so the text is treated as PII and stays local.
+  void analytics.track("ehr_searched");
   ehrStore.searchEhrs(serverStore.activeServerId, criteria);
 }
 
@@ -306,6 +310,7 @@ const compositionsByTemplate = computed(() => {
 
 function handleEhrCreated(newEhrId: string) {
   showCreateDialog.value = false;
+  void analytics.track("ehr_created");
   refresh();
   // Navigate to the new EHR
   router.push({ name: "ehr-detail", params: { ehrId: newEhrId } });
@@ -325,6 +330,7 @@ async function handleDeleteEhr() {
     await ehrStore.deleteEhr(serverStore.activeServerId, ehrId.value);
     showDeleteDialog.value = false;
     deleteConfirmText.value = "";
+    void analytics.track("ehr_deleted");
     // Clear detail pane and navigate back to EHR list
     ehrStore.selectedEhr = null;
     router.push({ name: "ehrs" });

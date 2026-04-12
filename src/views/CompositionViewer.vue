@@ -249,6 +249,7 @@ async function handleDelete() {
       compositionUid.value,
     );
     showDeleteDialog.value = false;
+    void analytics.track("composition_deleted");
     // Navigate back to EHR detail
     router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
   } catch (e) {

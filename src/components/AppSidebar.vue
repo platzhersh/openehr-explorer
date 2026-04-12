@@ -3,8 +3,10 @@ import { useRoute } from "vue-router";
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useAnalytics } from "../composables/useAnalytics";
 
 const route = useRoute();
+const analytics = useAnalytics();
 const appVersion = ref<string>("");
 
 const navItems = [
@@ -20,6 +22,7 @@ function isActive(path: string): boolean {
 
 async function openDocumentation() {
   await openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
+  void analytics.track("documentation_opened");
 }
 
 onMounted(async () => {

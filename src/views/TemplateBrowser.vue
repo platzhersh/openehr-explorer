@@ -141,6 +141,7 @@ async function uploadFile(file: File) {
   try {
     const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
     uploadStatus.value = result;
+    void analytics.track("template_uploaded");
     templateStore.fetchTemplates(serverStore.activeServerId);
   } catch (e) {
     uploadError.value = String(e);
@@ -219,6 +220,7 @@ async function handleFileSelect() {
 
         const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
         uploadStatus.value = result;
+        void analytics.track("template_uploaded");
         templateStore.fetchTemplates(serverStore.activeServerId);
       } catch (e) {
         uploadError.value = String(e);

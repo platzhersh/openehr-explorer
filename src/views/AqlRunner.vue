@@ -126,18 +126,25 @@ async function saveCurrentQuery() {
   await queryStore.saveQuery(query);
   showSaveDialog.value = false;
   saveName.value = "";
+  // Count only — never the query name or body.
+  void analytics.track("aql_query_saved");
 }
 
 function loadQuery(query: SavedQuery) {
   queryText.value = query.query;
+  void analytics.track("aql_query_loaded");
 }
 
 async function deleteSavedQuery(id: string) {
   await queryStore.deleteSavedQuery(id);
+  void analytics.track("aql_query_deleted");
 }
 
 function exportCsv() {
   if (!queryStore.result) return;
+  // Feature-usage signal only — row counts intentionally omitted because
+  // they correlate with dataset size on customer servers.
+  void analytics.track("aql_results_exported");
 
   const headers = queryStore.result.columns.map((c) => c.path || c.name);
   const rows = queryStore.result.rows.map((row, idx) => {
