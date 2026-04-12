@@ -114,25 +114,24 @@ async function openConfigDir() {
             label="Help improve openEHR Explorer by sharing anonymous usage data"
           />
           <p class="form-help">
-            When enabled, openEHR Explorer sends coarse-grained, anonymous feature-usage events
-            to <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a>
-            (a privacy-first, GDPR-compliant analytics service). We collect: app version, OS
-            and architecture, which features are used (e.g. <em>aql_executed</em>,
+            When enabled, openEHR Explorer sends coarse-grained, anonymous feature-usage events to
+            <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a> (a
+            privacy-first, GDPR-compliant analytics service). We collect: app version, OS and
+            architecture, which features are used (e.g. <em>aql_executed</em>,
             <em>composition_viewed</em>), and the CDR platform type
             (<em>ehrbase</em>/<em>better_platform</em>/<em>generic</em>).
           </p>
           <p class="form-help">
             We <strong>never</strong> collect server URLs, credentials, patient data, EHR IDs,
-            composition content, query text, template content, or anything you type. No cookies,
-            no fingerprinting, no IP logging. Default is <strong>off</strong>.
+            composition content, query text, template content, or anything you type. No cookies, no
+            fingerprinting, no IP logging. Default is <strong>off</strong>.
           </p>
           <p class="form-help">
             <strong>One exception:</strong> regardless of this toggle, the app sends a single
             <em>session_started</em> ping once per launch so the project can count total sessions
-            and see how many users opt in. That ping contains only your consent choice
-            (<em>yes</em> or <em>no</em>) and nothing else &mdash; no version, OS, or feature
-            usage. When you toggle this off, <strong>all other</strong> event collection stops
-            immediately.
+            and see how many users opt in. That ping contains only your consent choice (<em>yes</em>
+            or <em>no</em>) and nothing else &mdash; no version, OS, or feature usage. When you
+            toggle this off, <strong>all other</strong> event collection stops immediately.
           </p>
         </div>
       </div>

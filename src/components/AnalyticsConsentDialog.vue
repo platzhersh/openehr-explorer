@@ -44,7 +44,9 @@ defineEmits<{
             <li>
               Which features you use (e.g. <em>aql_executed</em>, <em>composition_viewed</em>)
             </li>
-            <li>The CDR platform type (<em>ehrbase</em> / <em>better_platform</em> / <em>generic</em>)</li>
+            <li>
+              The CDR platform type (<em>ehrbase</em> / <em>better_platform</em> / <em>generic</em>)
+            </li>
           </ul>
         </div>
 
@@ -61,11 +63,10 @@ defineEmits<{
         </div>
 
         <p class="footnote">
-          <strong>Even if you say no</strong>, the app sends a single
-          <em>session_started</em> ping once per launch so we can count total
-          sessions and see how many people opt in. It contains only one field
-          &mdash; your consent choice (yes/no) &mdash; and nothing else: no
-          version, no OS, no feature usage.
+          <strong>Even if you say no</strong>, the app sends a single <em>session_started</em> ping
+          once per launch so we can count total sessions and see how many people opt in. It contains
+          only one field &mdash; your consent choice (yes/no) &mdash; and nothing else: no version,
+          no OS, no feature usage.
         </p>
         <p class="footnote">
           Data is sent to

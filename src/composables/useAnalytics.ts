@@ -107,10 +107,7 @@ export function useAnalytics() {
    * See ADR-0018 "Consent model" for the rationale and the wording of
    * the user-facing disclosure.
    */
-  async function trackUngated(
-    event: AnalyticsEvent,
-    props?: AnalyticsProps,
-  ): Promise<void> {
+  async function trackUngated(event: AnalyticsEvent, props?: AnalyticsProps): Promise<void> {
     await sendEvent(event, props);
   }
 

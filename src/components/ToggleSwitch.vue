@@ -22,13 +22,7 @@ defineProps<{
 
 <template>
   <label class="toggle" :class="{ 'is-disabled': disabled }">
-    <input
-      :id="id"
-      v-model="model"
-      type="checkbox"
-      :disabled="disabled"
-      class="toggle-input"
-    />
+    <input :id="id" v-model="model" type="checkbox" :disabled="disabled" class="toggle-input" />
     <span class="toggle-track" aria-hidden="true">
       <span class="toggle-thumb"></span>
     </span>
