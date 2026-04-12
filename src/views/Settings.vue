@@ -185,7 +185,12 @@ async function openConfigDir() {
 .form-group {
   margin-bottom: 16px;
 }
-.form-group label {
+/* Exclude ToggleSwitch's root <label> — Vue scoped CSS also tags the root
+   element of child components with the parent's scope attribute, so a bare
+   `.form-group label` would otherwise hit the toggle and clobber its
+   `display: inline-flex` with `display: block`, killing the gap between
+   the switch and its text. */
+.form-group label:not(.toggle) {
   display: block;
   font-size: 13px;
   font-weight: 600;
@@ -195,22 +200,18 @@ async function openConfigDir() {
 .form-group .input {
   width: 100%;
 }
-.form-group .checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  color: var(--color-text);
-  font-weight: 500;
-}
-.form-group .checkbox-label input[type="checkbox"] {
-  cursor: pointer;
-}
 .form-help {
   margin-top: 4px;
   font-size: 12px;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+.form-help a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.form-help a:hover {
+  text-decoration: underline;
 }
 
 .form-actions {
