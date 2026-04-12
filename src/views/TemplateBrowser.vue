@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
+import { useAnalytics } from "../composables/useAnalytics";
 import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -21,6 +22,7 @@ const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const templateStore = useTemplateStore();
+const analytics = useAnalytics();
 
 const searchQuery = ref("");
 const panelSearchQuery = ref("");
@@ -79,6 +81,9 @@ watch(selectedTemplateId, async (id) => {
 
 function selectTemplate(id: string) {
   router.push({ name: "template-detail", params: { templateId: id } });
+  // Feature-adoption ping only — the template_id is an archetype identifier
+  // that could be customer-specific, so it's deliberately NOT included.
+  void analytics.track("template_inspected");
 }
 
 const filteredTemplates = computed(() => {

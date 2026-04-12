@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
+import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "./stores/server";
 import { useInspectorStore } from "./stores/inspector";
 import { useSettingsStore } from "./stores/settings";
+import { useAnalytics } from "./composables/useAnalytics";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
@@ -14,6 +16,7 @@ const router = useRouter();
 const serverStore = useServerStore();
 const inspectorStore = useInspectorStore();
 const settingsStore = useSettingsStore();
+const analytics = useAnalytics();
 
 // Global keyboard shortcuts for navigation
 function handleKeydown(e: KeyboardEvent) {
@@ -51,11 +54,25 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
-  settingsStore.loadSettings();
+  // Settings must be loaded before the first analytics call so the consent
+  // flag is accurate — otherwise the composable would gate on a stale default.
+  await settingsStore.loadSettings();
   document.addEventListener("keydown", handleKeydown);
+
+  // Emit the canonical `app_launched` event. Safe to call unconditionally:
+  // useAnalytics no-ops when the consent toggle is off.
+  try {
+    const version = await invoke<string>("get_app_version");
+    analytics.track("app_launched", {
+      version,
+      os: navigator.platform || "unknown",
+    });
+  } catch (e) {
+    console.debug("[analytics] app_launched failed:", e);
+  }
 });
 
 onUnmounted(() => {

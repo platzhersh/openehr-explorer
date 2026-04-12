@@ -12,6 +12,11 @@ pub struct GlobalSettings {
     pub terminology_server_url: Option<String>,
     #[serde(default = "default_check_updates_on_startup")]
     pub check_updates_on_startup: bool,
+    /// Opt-in flag for anonymous usage analytics (Aptabase). Defaults to `false`
+    /// per ADR-0018 — no events are sent unless the user explicitly enables it
+    /// from the Settings page.
+    #[serde(default)]
+    pub analytics_enabled: bool,
 }
 
 fn default_version() -> u32 {
@@ -28,6 +33,7 @@ impl Default for GlobalSettings {
             version: 1,
             terminology_server_url: Some("https://tx.fhir.ch/r4".to_string()),
             check_updates_on_startup: true,
+            analytics_enabled: false,
         }
     }
 }

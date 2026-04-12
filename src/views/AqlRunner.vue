@@ -3,9 +3,12 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
+import { useAnalytics } from "../composables/useAnalytics";
 import AqlEditor from "../components/AqlEditor.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
+
+const analytics = useAnalytics();
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -103,6 +106,8 @@ function clearContextTemplate() {
 async function runQuery() {
   if (!serverStore.activeServerId || !queryText.value.trim()) return;
   await queryStore.executeAql(serverStore.activeServerId, queryText.value);
+  // Feature-adoption ping only — NEVER include the query text itself.
+  void analytics.track("aql_executed");
 }
 
 function formatQuery() {

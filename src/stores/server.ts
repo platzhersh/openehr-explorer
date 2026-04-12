@@ -85,6 +85,18 @@ export const useServerStore = defineStore("server", () => {
       const result = await invoke<string>("test_server_connection", { profileId });
       connectionStatus.value[profileId] = "connected";
       fetchServerVersion(profileId);
+
+      // Fire a coarse-grained analytics event recording only the CDR platform
+      // type — never the URL, host, or credentials. Lazy-imported to avoid a
+      // cycle between the server store and the analytics composable.
+      const profile = profiles.value.find((p) => p.id === profileId);
+      if (profile) {
+        const { useAnalytics } = await import("../composables/useAnalytics");
+        void useAnalytics().track("server_connected", {
+          server_type: profile.server_type,
+        });
+      }
+
       return result;
     } catch (e) {
       connectionStatus.value[profileId] = "error";

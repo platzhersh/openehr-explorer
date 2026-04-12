@@ -134,6 +134,13 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Injected at compile time into `src-tauri/src/lib.rs` via `option_env!`.
+          # If the secret is not configured the const resolves to an empty
+          # string and the Aptabase plugin disables itself at runtime. Storing
+          # the key as a GitHub Actions secret (instead of checking it into
+          # source) prevents forks and malicious PRs from baking our write
+          # token into their binaries — see PRD-0016.
+          APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
           # Use Developer ID signing if secrets are configured, otherwise
           # fall back to ad-hoc signing (-) so macOS shows "unidentified
           # developer" instead of "file is damaged"
@@ -200,6 +207,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
 
       - name: Upload NSIS installer artifact
         uses: actions/upload-artifact@v6
@@ -259,6 +267,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v6

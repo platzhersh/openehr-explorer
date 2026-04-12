@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
+import { useAnalytics } from "../composables/useAnalytics";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const ehrStore = useEhrStore();
+const analytics = useAnalytics();
+
+onMounted(() => {
+  // Track that the user opened the EHR browser. No IDs, URLs, or counts — just
+  // a coarse feature-adoption ping so we know the view is actually being used.
+  void analytics.track("ehr_browsed");
+});
 const searchQuery = ref("");
 const currentPage = ref(0);
 const showCreateDialog = ref(false);

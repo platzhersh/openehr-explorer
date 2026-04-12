@@ -10,6 +10,7 @@ const form = ref<GlobalSettings>({
   version: 1,
   terminology_server_url: null,
   check_updates_on_startup: true,
+  analytics_enabled: false,
 });
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
@@ -91,6 +92,32 @@ async function openConfigDir() {
             When enabled, openEHR Explorer checks GitHub Releases on launch and shows a notification
             if a new version is available. No personal data is sent; only the current app version
             and platform are transmitted as part of the update request.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Analytics</h3>
+        <div class="section-divider"></div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="form.analytics_enabled" />
+            <span>Help improve openEHR Explorer by sharing anonymous usage data</span>
+          </label>
+          <p class="form-help">
+            When enabled, openEHR Explorer sends coarse-grained, anonymous feature-usage events
+            to <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a>
+            (a privacy-first, GDPR-compliant analytics service). We collect: app version, OS
+            and architecture, which features are used (e.g. <em>aql_executed</em>,
+            <em>composition_viewed</em>), and the CDR platform type
+            (<em>ehrbase</em>/<em>better_platform</em>/<em>generic</em>).
+          </p>
+          <p class="form-help">
+            We <strong>never</strong> collect server URLs, credentials, patient data, EHR IDs,
+            composition content, query text, template content, or anything you type. No cookies,
+            no fingerprinting, no IP logging. You can toggle this off at any time and event
+            collection stops immediately. Default is <strong>off</strong>.
           </p>
         </div>
       </div>

@@ -5,9 +5,12 @@ import { useServerStore } from "../stores/server";
 import { useEhrStore } from "../stores/ehr";
 import { useTemplateStore } from "../stores/template";
 import { useCompositionStore } from "../stores/composition";
+import { useAnalytics } from "../composables/useAnalytics";
 import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
+
+const analytics = useAnalytics();
 
 const props = defineProps<{
   templateId?: string;
@@ -403,6 +406,7 @@ async function handleSubmit() {
       );
       success.value = `Composition updated successfully! New version: ${result}`;
       console.log("Update successful:", result);
+      void analytics.track("composition_edited");
     } else {
       console.log("Create mode");
       result = await compositionStore.createComposition(
@@ -413,6 +417,7 @@ async function handleSubmit() {
       );
       success.value = `Composition created successfully! UID: ${result}`;
       console.log("Create successful:", result);
+      void analytics.track("composition_created");
     }
 
     responseDetails.value = `HTTP 201 Created\n\n${JSON.stringify({ uid: { value: result } }, null, 2)}`;
