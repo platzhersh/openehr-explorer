@@ -43,6 +43,7 @@ const specEntries = computed(() =>
   SPEC_LIFECYCLE_VALUES.map((key) => ({
     key,
     description: LIFECYCLE_DESCRIPTIONS[key],
+    toneClass: `tone-${semanticToneFor(key)}`,
   })),
 );
 
@@ -133,7 +134,9 @@ onBeforeUnmount(() => {
 });
 
 async function openSpec() {
-  await openUrl("https://specifications.openehr.org/releases/AM/latest/AOM2.html");
+  await openUrl(
+    "https://specifications.openehr.org/releases/AM/latest/AOM2.html#_aom_lifecycle_state_mappings",
+  );
 }
 
 const warningTooltip =
@@ -213,15 +216,17 @@ const warningTooltip =
             <tbody>
               <tr v-for="entry in specEntries" :key="entry.key">
                 <td>
-                  <code>{{ entry.key }}</code>
+                  <span class="badge lifecycle-badge" :class="entry.toneClass">
+                    {{ entry.key }}
+                  </span>
                 </td>
                 <td>{{ entry.description }}</td>
               </tr>
             </tbody>
           </table>
           <div class="popover-note">
-            Note: EHRBase does not enforce lifecycle — any OPT can be uploaded and used regardless
-            of its lifecycle value.
+            Note: lifecycle state is informational metadata. CDRs typically do not enforce it — an
+            OPT can be uploaded and used regardless of its lifecycle value.
           </div>
           <div class="popover-footer">
             <button type="button" class="learn-more-link" @click="openSpec">Learn more →</button>
@@ -414,14 +419,40 @@ const warningTooltip =
   border-bottom: none;
 }
 
-.lifecycle-popover .lifecycle-table code {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  background: rgba(100, 255, 218, 0.08);
-  color: #64ffda;
-  padding: 1px 5px;
+.lifecycle-popover .lifecycle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
   border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
   white-space: nowrap;
+}
+
+.lifecycle-popover .lifecycle-badge.tone-positive {
+  background: #28a745;
+  color: #fff;
+}
+
+.lifecycle-popover .lifecycle-badge.tone-accent {
+  background: rgba(100, 255, 218, 0.15);
+  color: #64ffda;
+  border: 1px solid rgba(100, 255, 218, 0.4);
+}
+
+.lifecycle-popover .lifecycle-badge.tone-neutral {
+  background: #6c757d;
+  color: #fff;
+}
+
+.lifecycle-popover .lifecycle-badge.tone-muted {
+  background: rgba(255, 193, 7, 0.15);
+  color: #e0a800;
+  border: 1px solid rgba(255, 193, 7, 0.35);
 }
 
 .lifecycle-popover .popover-note {
