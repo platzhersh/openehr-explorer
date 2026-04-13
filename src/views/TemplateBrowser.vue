@@ -161,6 +161,27 @@ function highlightJson(json: string): string {
     .replace(/: (null)/g, ': <span class="json-null">$1</span>');
 }
 
+// Pretty-print XML with indentation so long OPT documents wrap readably.
+// Mirrors the formatter used in RequestInspector.vue.
+function formatXml(xml: string): string {
+  let formatted = "";
+  let indent = 0;
+  const lines = xml.split(/>\s*</);
+
+  lines.forEach((line, index) => {
+    if (index > 0) line = "<" + line;
+    if (index < lines.length - 1) line = line + ">";
+
+    if (line.match(/^<\/\w/)) indent--;
+
+    formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
+
+    if (line.match(/^<\w[^>]*[^/]>$/)) indent++;
+  });
+
+  return formatted.trim();
+}
+
 function highlightXml(xml: string): string {
   return xml
     .replace(/&/g, "&amp;")
@@ -380,9 +401,13 @@ const highlightedWebTemplateWithSearch = computed(() => {
   return highlighted;
 });
 
+const formattedOptXml = computed(() => {
+  return templateStore.selectedOpt ? formatXml(templateStore.selectedOpt) : "";
+});
+
 const highlightedOptWithSearch = computed(() => {
-  if (!templateStore.selectedOpt) return "";
-  let highlighted = highlightXml(templateStore.selectedOpt);
+  if (!formattedOptXml.value) return "";
+  let highlighted = highlightXml(formattedOptXml.value);
   if (panelSearchQuery.value) {
     highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
   }
@@ -391,8 +416,7 @@ const highlightedOptWithSearch = computed(() => {
 
 const jsonXmlMatches = computed(() => {
   if (!panelSearchQuery.value) return 0;
-  const content =
-    activeTab.value === "json" ? webTemplateJson.value : templateStore.selectedOpt || "";
+  const content = activeTab.value === "json" ? webTemplateJson.value : formattedOptXml.value;
   const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
   const matches = content.match(regex);
   return matches ? matches.length : 0;
@@ -655,9 +679,7 @@ onUnmounted(() => {
             @previous="goToPreviousMatch"
           />
           <div class="xml-actions">
-            <button class="btn btn-sm" @click="copyToClipboard(templateStore.selectedOpt ?? '')">
-              Copy XML
-            </button>
+            <button class="btn btn-sm" @click="copyToClipboard(formattedOptXml)">Copy XML</button>
           </div>
           <pre class="xml-pre"><code v-html="highlightedOptWithSearch"></code></pre>
         </div>
