@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import LifecycleBadge from "./LifecycleBadge.vue";
 
 interface OptMetadata {
   originalAuthor: {
@@ -10,6 +11,7 @@ interface OptMetadata {
   };
   otherContributors: string[];
   lifecycleState?: string;
+  lifecycleStatePresent: boolean;
   details?: string;
   otherDetails: Record<string, string>;
 }
@@ -63,7 +65,9 @@ const metadata = computed<OptMetadata | null>(() => {
     });
 
     // Extract lifecycle state
-    const lifecycleState = description.querySelector("lifecycle_state")?.textContent?.trim();
+    const lifecycleStateElement = description.querySelector("lifecycle_state");
+    const lifecycleStatePresent = lifecycleStateElement !== null;
+    const lifecycleState = lifecycleStateElement?.textContent?.trim();
 
     // Extract details/purpose - look for <purpose> element within <details>
     let details: string | undefined;
@@ -94,6 +98,7 @@ const metadata = computed<OptMetadata | null>(() => {
       originalAuthor,
       otherContributors,
       lifecycleState,
+      lifecycleStatePresent,
       details,
       otherDetails,
     };
@@ -101,14 +106,6 @@ const metadata = computed<OptMetadata | null>(() => {
     console.error("Error parsing OPT metadata:", error);
     return null;
   }
-});
-
-const lifecycleBadgeClass = computed(() => {
-  const state = metadata.value?.lifecycleState?.toLowerCase();
-  if (state === "published") return "badge-published";
-  if (state === "draft") return "badge-draft";
-  if (state === "deprecated" || state === "obsolete") return "badge-deprecated";
-  return "badge-other";
 });
 
 const authorDisplay = computed(() => {
@@ -220,9 +217,9 @@ async function copyToClipboard(text: string) {
       <div v-if="metadataExpanded" class="metadata-content">
         <!-- Primary Metadata -->
         <div class="metadata-section">
-          <div v-if="metadata.lifecycleState" class="metadata-row">
+          <div v-if="metadata.lifecycleStatePresent" class="metadata-row">
             <span class="metadata-label">Lifecycle:</span>
-            <span class="badge" :class="lifecycleBadgeClass">{{ metadata.lifecycleState }}</span>
+            <LifecycleBadge :value="metadata.lifecycleState" />
           </div>
 
           <div v-if="authorDisplay" class="metadata-row">
@@ -399,34 +396,6 @@ async function copyToClipboard(text: string) {
 
 .author-link:hover {
   text-decoration: underline;
-}
-
-.badge {
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.badge-published {
-  background: #28a745;
-  color: #fff;
-}
-
-.badge-draft {
-  background: #ffc107;
-  color: #000;
-}
-
-.badge-deprecated {
-  background: #dc3545;
-  color: #fff;
-}
-
-.badge-other {
-  background: #6c757d;
-  color: #fff;
 }
 
 .description-container {
