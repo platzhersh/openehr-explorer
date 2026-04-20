@@ -278,20 +278,8 @@ fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
                     }
                 }
             }
-            Ok(Event::Text(e)) => {
-                if in_items {
-                    let text = e.unescape().unwrap_or_default().to_string();
-                    match current_tag.as_str() {
-                        "code_string" => current_code = text,
-                        "terminology_id" | "value" => {
-                            // Inside terminology_id/value or code items
-                            if current_tag == "value" && current_code.is_empty() {
-                                // Could be terminology_id value — skip
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+            Ok(Event::Text(e)) if in_items && current_tag == "code_string" => {
+                current_code = e.unescape().unwrap_or_default().to_string();
             }
             Ok(Event::End(e)) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
