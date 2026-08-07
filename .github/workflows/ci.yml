@@ -407,3 +407,90 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: latest.json
+
+  publish-homebrew-cask:
+    name: Publish Homebrew Cask
+    needs: [build-macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      # Updates the Cask formula in the platzhersh/homebrew-openehr-explorer
+      # tap on every version tag. Requires a HOMEBREW_TAP_TOKEN secret (a PAT
+      # with push access to the tap repo) — see OEH-4. Skips quietly if not
+      # configured, so this job never fails a release on a missing secret.
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::notice::HOMEBREW_TAP_TOKEN not configured — skipping Homebrew tap update. See OEH-4."
+            exit 0
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          DMG_NAME="openEHR.Explorer_${VERSION}_universal.dmg"
+
+          # Release assets already carry a sha256 digest (visible via the
+          # REST API), so we don't need to download the DMG to hash it.
+          DIGEST=$(gh api "/repos/${REPO}/releases/tags/${TAG_NAME}" --jq \
+            --arg name "$DMG_NAME" '.assets[] | select(.name == $name) | .digest')
+
+          if [ -z "$DIGEST" ]; then
+            echo "::error::Could not find digest for $DMG_NAME in release $TAG_NAME"
+            exit 1
+          fi
+
+          SHA256="${DIGEST#sha256:}"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/platzhersh/homebrew-openehr-explorer.git" tap
+
+          cat > tap/Casks/openehr-explorer.rb <<EOF
+          cask "openehr-explorer" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/${REPO}/releases/download/v#{version}/openEHR.Explorer_#{version}_universal.dmg"
+            name "openEHR Explorer"
+            desc "Browse, query, and inspect any openEHR CDR"
+            homepage "https://platzhersh.github.io/openehr-explorer/"
+
+            depends_on macos: ">= :catalina"
+
+            app "openEHR Explorer.app"
+
+            zap trash: [
+              "~/Library/Application Support/com.openehr-explorer",
+              "~/Library/Caches/com.openehr-explorer",
+              "~/Library/Preferences/com.openehr-explorer.plist",
+              "~/Library/Saved Application State/com.openehr-explorer.savedState",
+            ]
+
+            # TODO(OEH-7): remove this caveat once release builds are notarized.
+            caveats <<~EOS
+              openEHR Explorer is not yet notarized by Apple. On first launch, macOS
+              Gatekeeper will report the app as damaged. To fix this, run:
+
+                xattr -cr "/Applications/openEHR Explorer.app"
+
+              Then open the app normally. This is a one-time step per install.
+            EOS
+          end
+          EOF
+
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No changes to Cask formula, nothing to push."
+            exit 0
+          fi
+
+          git add Casks/openehr-explorer.rb
+          git commit -m "chore: update openehr-explorer to ${VERSION}"
+          git push
