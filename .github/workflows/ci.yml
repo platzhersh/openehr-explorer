@@ -494,3 +494,86 @@ jobs:
           git add Casks/openehr-explorer.rb
           git commit -m "chore: update openehr-explorer to ${VERSION}"
           git push
+
+  publish-scoop-bucket:
+    name: Publish Scoop bucket
+    needs: [build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      # Updates the manifest in the platzhersh/scoop-openehr-explorer bucket
+      # on every version tag. Requires a SCOOP_BUCKET_TOKEN secret (a PAT
+      # with push access to the bucket repo) — see OEH-5. Skips quietly if
+      # not configured, so this job never fails a release on a missing
+      # secret.
+      - name: Update Scoop bucket
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$SCOOP_BUCKET_TOKEN" ]; then
+            echo "::notice::SCOOP_BUCKET_TOKEN not configured — skipping Scoop bucket update. See OEH-5."
+            exit 0
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          EXE_NAME="openEHR.Explorer_${VERSION}_x64-setup.exe"
+
+          # Release assets already carry a sha256 digest (visible via the
+          # REST API), so we don't need to download the exe to hash it.
+          DIGEST=$(gh api "/repos/${REPO}/releases/tags/${TAG_NAME}" --jq \
+            --arg name "$EXE_NAME" '.assets[] | select(.name == $name) | .digest')
+
+          if [ -z "$DIGEST" ]; then
+            echo "::error::Could not find digest for $EXE_NAME in release $TAG_NAME"
+            exit 1
+          fi
+
+          SHA256="${DIGEST#sha256:}"
+
+          git clone "https://x-access-token:${SCOOP_BUCKET_TOKEN}@github.com/platzhersh/scoop-openehr-explorer.git" bucket-repo
+
+          cat > bucket-repo/bucket/openehr-explorer.json <<EOF
+          {
+              "version": "${VERSION}",
+              "description": "Browse, query, and inspect any openEHR CDR — no curl required.",
+              "homepage": "https://platzhersh.github.io/openehr-explorer/",
+              "license": "Apache-2.0",
+              "url": "https://github.com/${REPO}/releases/download/${TAG_NAME}/${EXE_NAME}",
+              "hash": "${SHA256}",
+              "installer": {
+                  "file": "${EXE_NAME}",
+                  "args": [
+                      "/S",
+                      "/D=\$dir"
+                  ]
+              },
+              "uninstaller": {
+                  "file": "uninstall.exe"
+              },
+              "checkver": {
+                  "github": "${REPO}"
+              },
+              "autoupdate": {
+                  "url": "https://github.com/${REPO}/releases/download/v\$version/openEHR.Explorer_\$version_x64-setup.exe"
+              },
+              "notes": "openEHR Explorer is not yet notarized/Authenticode-signed. Windows SmartScreen may warn on first launch — click 'More info' > 'Run anyway'."
+          }
+          EOF
+
+          cd bucket-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No changes to Scoop manifest, nothing to push."
+            exit 0
+          fi
+
+          git add bucket/openehr-explorer.json
+          git commit -m "chore: update openehr-explorer to ${VERSION}"
+          git push
