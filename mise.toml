@@ -1,0 +1,54 @@
+# Dev environment for openEHR Explorer — https://mise.jdx.dev
+#
+#   mise install       # install the toolchain below
+#   mise run setup     # install npm dependencies
+#   mise run dev       # start the Tauri dev server
+#
+# Note: mise does not install the platform-specific Tauri system dependencies
+# (WebKit, build tools). See https://tauri.app/start/prerequisites/
+
+[tools]
+# Single source of truth for toolchain versions — CI installs these via
+# jdx/mise-action in .github/workflows/ci.yml.
+node = "24"
+rust = { version = "stable", components = ["rustfmt", "clippy"] }
+
+[tasks.setup]
+description = "Install frontend dependencies"
+run = "npm install"
+
+[tasks.dev]
+description = "Run the app with hot reload"
+run = "npm run tauri dev"
+
+[tasks.build]
+description = "Build the production app"
+run = "npm run tauri build"
+
+[tasks.typecheck]
+description = "Type check Vue/TypeScript"
+run = "npx vue-tsc --noEmit"
+
+[tasks.lint]
+description = "Lint frontend (oxlint) and backend (clippy)"
+run = ["npm run lint", "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"]
+
+[tasks.fmt]
+description = "Format frontend (oxfmt) and backend (rustfmt)"
+run = ["npm run fmt", "cargo fmt --manifest-path src-tauri/Cargo.toml"]
+
+[tasks."fmt:check"]
+description = "Check formatting without writing"
+run = ["npm run fmt:check", "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check"]
+
+[tasks.test]
+description = "Run Rust tests"
+run = "cargo test --manifest-path src-tauri/Cargo.toml"
+
+[tasks."ehrbase:up"]
+description = "Start the local EHRBase server (see LOCAL_TESTING.md)"
+run = "docker-compose up -d"
+
+[tasks."ehrbase:down"]
+description = "Stop the local EHRBase server"
+run = "docker-compose down"
