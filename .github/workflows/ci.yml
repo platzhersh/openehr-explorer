@@ -437,10 +437,13 @@ jobs:
 
           # Release assets already carry a sha256 digest (visible via the
           # REST API), so we don't need to download the DMG to hash it.
-          DIGEST=$(gh api "/repos/${REPO}/releases/tags/${TAG_NAME}" --jq \
-            --arg name "$DMG_NAME" '.assets[] | select(.name == $name) | .digest')
+          # `gh api --jq` only takes a single jq expression — it doesn't
+          # proxy extra jq flags like --arg — so pipe through `jq` itself
+          # for the parameterized filter (same pattern as asset_url() above).
+          DIGEST=$(gh api "/repos/${REPO}/releases/tags/${TAG_NAME}" --jq '.assets' | \
+            jq -r --arg name "$DMG_NAME" '.[] | select(.name == $name) | .digest')
 
-          if [ -z "$DIGEST" ]; then
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "null" ]; then
             echo "::error::Could not find digest for $DMG_NAME in release $TAG_NAME"
             exit 1
           fi
