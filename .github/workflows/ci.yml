@@ -447,9 +447,14 @@ jobs:
 
           SHA256="${DIGEST#sha256:}"
 
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/platzhersh/homebrew-openehr-explorer.git" tap
+          # Update the file via the Contents API instead of `git clone` with
+          # a token embedded in the remote URL — avoids the credential
+          # persisting in a checked-out .git/config and showing up in any
+          # error output that might echo the remote URL.
+          TAP_REPO="platzhersh/homebrew-openehr-explorer"
+          TAP_FILE="Casks/openehr-explorer.rb"
 
-          cat > tap/Casks/openehr-explorer.rb <<EOF
+          CASK_CONTENT=$(cat <<EOF
           cask "openehr-explorer" do
             version "${VERSION}"
             sha256 "${SHA256}"
@@ -481,19 +486,20 @@ jobs:
             EOS
           end
           EOF
+          )
 
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          CURRENT_SHA=$(GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api "/repos/${TAP_REPO}/contents/${TAP_FILE}" --jq '.sha' 2>/dev/null || true)
 
-          if git diff --quiet; then
-            echo "No changes to Cask formula, nothing to push."
-            exit 0
-          fi
+          REQUEST_BODY=$(jq -n \
+            --arg message "chore: update openehr-explorer to ${VERSION}" \
+            --arg content "$(printf '%s' "$CASK_CONTENT" | base64 -w0)" \
+            --arg sha "$CURRENT_SHA" \
+            --arg branch "main" \
+            'if $sha == "" then {message: $message, content: $content, branch: $branch}
+             else {message: $message, content: $content, sha: $sha, branch: $branch} end')
 
-          git add Casks/openehr-explorer.rb
-          git commit -m "chore: update openehr-explorer to ${VERSION}"
-          git push
+          echo "$REQUEST_BODY" | GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api --method PUT \
+            "/repos/${TAP_REPO}/contents/${TAP_FILE}" --input -
 
   publish-scoop-bucket:
     name: Publish Scoop bucket
@@ -535,9 +541,14 @@ jobs:
 
           SHA256="${DIGEST#sha256:}"
 
-          git clone "https://x-access-token:${SCOOP_BUCKET_TOKEN}@github.com/platzhersh/scoop-openehr-explorer.git" bucket-repo
+          # Update the file via the Contents API instead of `git clone` with
+          # a token embedded in the remote URL — avoids the credential
+          # persisting in a checked-out .git/config and showing up in any
+          # error output that might echo the remote URL.
+          BUCKET_REPO="platzhersh/scoop-openehr-explorer"
+          BUCKET_FILE="bucket/openehr-explorer.json"
 
-          cat > bucket-repo/bucket/openehr-explorer.json <<EOF
+          MANIFEST_CONTENT=$(cat <<EOF
           {
               "version": "${VERSION}",
               "description": "Browse, query, and inspect any openEHR CDR — no curl required.",
@@ -564,16 +575,17 @@ jobs:
               "notes": "openEHR Explorer is not yet notarized/Authenticode-signed. Windows SmartScreen may warn on first launch — click 'More info' > 'Run anyway'."
           }
           EOF
+          )
 
-          cd bucket-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          CURRENT_SHA=$(GH_TOKEN="$SCOOP_BUCKET_TOKEN" gh api "/repos/${BUCKET_REPO}/contents/${BUCKET_FILE}" --jq '.sha' 2>/dev/null || true)
 
-          if git diff --quiet; then
-            echo "No changes to Scoop manifest, nothing to push."
-            exit 0
-          fi
+          REQUEST_BODY=$(jq -n \
+            --arg message "chore: update openehr-explorer to ${VERSION}" \
+            --arg content "$(printf '%s' "$MANIFEST_CONTENT" | base64 -w0)" \
+            --arg sha "$CURRENT_SHA" \
+            --arg branch "main" \
+            'if $sha == "" then {message: $message, content: $content, branch: $branch}
+             else {message: $message, content: $content, sha: $sha, branch: $branch} end')
 
-          git add bucket/openehr-explorer.json
-          git commit -m "chore: update openehr-explorer to ${VERSION}"
-          git push
+          echo "$REQUEST_BODY" | GH_TOKEN="$SCOOP_BUCKET_TOKEN" gh api --method PUT \
+            "/repos/${BUCKET_REPO}/contents/${BUCKET_FILE}" --input -
