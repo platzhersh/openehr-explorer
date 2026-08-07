@@ -1,0 +1,27 @@
+name: Publish to WinGet
+
+# Runs once a GitHub Release is published (not on the tag push itself, so it
+# fires after the build/upload jobs in ci.yml have already attached the
+# Windows installer to the release).
+#
+# NOTE: this can only update an *existing* winget-pkgs manifest — the first
+# submission for a brand-new package has to be authored and opened by hand.
+# See OEH-5.
+on:
+  release:
+    types: [released]
+
+jobs:
+  publish:
+    name: Update winget-pkgs manifest
+    runs-on: ubuntu-latest
+    # Requires a classic PAT with the `public_repo` scope, stored as
+    # WINGET_TOKEN (fine-grained PATs aren't supported by this action).
+    # No-ops if unset rather than failing the release.
+    if: ${{ secrets.WINGET_TOKEN != '' }}
+    steps:
+      - name: Publish winget package
+        uses: vedantmgoyal9/winget-releaser@main
+        with:
+          identifier: platzhersh.openEHRExplorer
+          token: ${{ secrets.WINGET_TOKEN }}
