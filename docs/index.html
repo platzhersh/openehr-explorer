@@ -390,6 +390,18 @@
       color: var(--primary);
     }
 
+    .quickstart-note {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .quickstart-note code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      color: var(--text-secondary);
+    }
+
     /* ── Ecosystem Banner ── */
     .ecosystem {
       background: var(--surface);
@@ -701,9 +713,9 @@
       <div class="quickstart-inner">
         <h3>macOS (Homebrew)</h3>
         <div class="code-block">
-          <span class="comment"># Coming soon &mdash; use direct download for now</span><br>
-          brew install --cask openehr-explorer
+          brew install --cask platzhersh/openehr-explorer/openehr-explorer
         </div>
+        <p class="quickstart-note">Not yet notarized by Apple &mdash; on first launch, run <code>xattr -cr "/Applications/openEHR Explorer.app"</code> if macOS reports the app as damaged.</p>
 
         <h3>Direct Download</h3>
         <div class="code-block">
