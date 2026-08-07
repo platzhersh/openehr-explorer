@@ -714,6 +714,11 @@ LIMIT 10</div>
         <h3>"Template not found" when creating a composition</h3>
         <p>Ensure the template has been uploaded to the CDR. Go to Template Browser, verify the template appears in the list, and try again.</p>
 
+        <h3>macOS: "openEHR Explorer is damaged and can't be opened" (Gatekeeper)</h3>
+        <p>Release builds aren't code-signed and notarized by Apple yet, so Gatekeeper quarantines the app on first launch and reports it as damaged &mdash; it isn't actually corrupted. Clear the quarantine attribute and open it normally:</p>
+        <div class="code-block">xattr -cr "/Applications/openEHR Explorer.app"</div>
+        <p>This is a one-time step per install. <code>brew install --cask</code> prints this same instruction automatically as a caveat; direct downloads don't get a prompt, so you may need to run it yourself.</p>
+
         <div class="warning">
           <div class="callout-title">Found a bug?</div>
           Please report it on <a href="https://github.com/platzhersh/openehr-explorer/issues">GitHub Issues</a>. Include the steps to reproduce, your OS version, and the CDR type you are connecting to.
