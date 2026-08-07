@@ -10,8 +10,12 @@ openEHR Explorer is a cross-platform desktop application for browsing, querying,
 
 Before running the app, ensure you have:
 - **Rust** (stable toolchain) — Install via [rustup.rs](https://rustup.rs/)
-- **Node.js** (v18+) — Install via [nodejs.org](https://nodejs.org/)
+- **Node.js** (v24+, the version CI uses — declared in `mise.toml`) — Install via [nodejs.org](https://nodejs.org/)
 - **Platform-specific Tauri dependencies** — See [Tauri Prerequisites](https://tauri.app/start/prerequisites/)
+
+**Optional: mise** — `mise.toml` pins the Rust and Node versions used by CI. `mise install` provisions
+them, `mise run setup` installs npm deps, and `mise tasks` lists wrappers for the commands below. It does
+not cover the platform-specific Tauri system dependencies.
 
 **Verify Rust installation:**
 ```bash
@@ -155,7 +159,8 @@ When making significant architectural changes, create an ADR. When planning new 
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/ci.yml`):
+GitHub Actions workflow (`.github/workflows/ci.yml`). Every job installs its toolchain with
+`jdx/mise-action`, so **Node and Rust versions are changed in `mise.toml`, not in the workflow**:
 - **frontend** job: Runs `npm run build` (type checks + Vite build)
 - **build-macos** job: Builds Tauri app, uploads DMG artifact, publishes to GitHub Releases on tags
 

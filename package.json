@@ -4,6 +4,9 @@
   "license": "Apache-2.0",
   "version": "0.4.1",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "homepage": "https://platzhersh.github.io/openehr-explorer/",
   "repository": {
     "type": "git",

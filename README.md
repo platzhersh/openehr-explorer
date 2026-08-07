@@ -18,8 +18,21 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 ## Prerequisites
 
 - [Rust](https://rustup.rs/) (stable)
-- [Node.js](https://nodejs.org/) (v18+)
+- [Node.js](https://nodejs.org/) (v24+, matching CI — see `mise.toml`)
 - Platform-specific dependencies for Tauri: see [Tauri Prerequisites](https://tauri.app/start/prerequisites/)
+
+### With mise (optional)
+
+[mise](https://mise.jdx.dev) installs the pinned Rust and Node toolchains from `mise.toml`:
+
+```bash
+mise install       # Rust (stable, with rustfmt + clippy) and Node 24
+mise run setup     # npm install
+mise run dev       # npm run tauri dev
+```
+
+`mise tasks` lists the rest (`build`, `lint`, `fmt`, `typecheck`, `test`, `ehrbase:up`/`ehrbase:down`).
+The Tauri system dependencies still have to be installed by hand.
 
 ## Development
 
