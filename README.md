@@ -1,4 +1,14 @@
-# openEHR Explorer
+<p align="center">
+  <img src="docs/assets/og-image.png" alt="openEHR Explorer — Browse, query, and inspect any openEHR CDR, no curl required." width="600">
+</p>
+
+<p align="center">
+  <a href="https://github.com/platzhersh/openehr-explorer/releases/latest"><img src="https://img.shields.io/github/v/release/platzhersh/openehr-explorer?color=blue" alt="Latest release"></a>
+  <a href="https://github.com/platzhersh/openehr-explorer/releases/latest"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platforms"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/platzhersh/openehr-explorer" alt="License"></a>
+  <a href="https://github.com/platzhersh/openehr-explorer/actions/workflows/ci.yml"><img src="https://github.com/platzhersh/openehr-explorer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://platzhersh.github.io/openehr-explorer/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation"></a>
+</p>
 
 A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, etc.).
 
@@ -15,7 +25,19 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 - **Request Inspector** — View all HTTP traffic with request/response details, copy as curl
 - **Keyboard Shortcuts** — Navigate with Cmd+1-4, toggle inspector with Cmd+Shift+I, execute queries with Cmd+Enter
 
+## Installation
+
+Download the latest build for macOS, Windows, or Linux from [GitHub Releases](https://github.com/platzhersh/openehr-explorer/releases/latest).
+
+On macOS, you can also install via Homebrew:
+
+```bash
+brew install --cask platzhersh/openehr-explorer/openehr-explorer
+```
+
 ## Prerequisites
+
+Only needed if you're building from source:
 
 - [Rust](https://rustup.rs/) (stable)
 - [Node.js](https://nodejs.org/) (v18+)
