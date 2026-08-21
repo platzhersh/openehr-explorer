@@ -406,7 +406,11 @@ brew install --cask openehr-explorer</div>
 winget install openehr-explorer</div>
 
         <h3>Linux</h3>
-        <p>Download the <code>.AppImage</code> from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Make it executable and run:</p>
+        <p>Two package formats are published on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
+        <p><strong>Debian/Ubuntu (.deb):</strong></p>
+        <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span>
+sudo apt install ./openehr-explorer_0.4.2_amd64.deb</div>
+        <p><strong>AppImage (any distro):</strong></p>
         <div class="code-block">chmod +x openehr-explorer_0.4.2_amd64.AppImage
 ./openehr-explorer_0.4.2_amd64.AppImage</div>
       </section>
