@@ -151,6 +151,42 @@
       font-weight: 600;
     }
     .sidebar-group-title:first-child { margin-top: 0; }
+
+    /* Sidebar search */
+    .sidebar-search {
+      padding: 0 24px 16px;
+    }
+    .sidebar-search-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+    }
+    .sidebar-search-input::placeholder { color: var(--text-muted); }
+    .sidebar-search-input:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
+    }
+    .sidebar-no-results {
+      display: none;
+      padding: 8px 24px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .sidebar-link.search-hidden,
+    .sidebar-group-title.search-hidden {
+      display: none;
+    }
+    .sidebar-link mark,
+    .docs-content mark {
+      background: rgba(100,255,218,0.35);
+      color: inherit;
+      border-radius: 2px;
+    }
     .sidebar-link {
       display: block;
       padding: 7px 24px;
@@ -349,6 +385,18 @@
 
   <div class="docs-layout">
     <aside class="sidebar" role="navigation" aria-label="Documentation navigation">
+      <div class="sidebar-search">
+        <input
+          type="search"
+          id="docs-search"
+          class="sidebar-search-input"
+          placeholder="Search docs… (Press /)"
+          aria-label="Search documentation"
+          autocomplete="off"
+        >
+      </div>
+      <p class="sidebar-no-results" id="docs-search-no-results">No matching topics</p>
+
       <div class="sidebar-group-title">Getting Started</div>
       <a href="#prerequisites" class="sidebar-link active">Prerequisites</a>
       <a href="#installation" class="sidebar-link">Installation</a>
@@ -525,6 +573,8 @@ subject:6f4b5848 hasCompositions:true</div>
           <li>Expand nodes to explore archetypes, data types, constraints, and cardinalities.</li>
           <li><strong>Upload OPT:</strong> Upload Operational Template XML files directly from the browser.</li>
           <li><strong>New Composition:</strong> Click "New Composition" on any template to create a composition using that template's form.</li>
+          <li><strong>Lifecycle indicator:</strong> Each template shows a badge for its governance/publication state (e.g. Published, Draft). Click the <strong>?</strong> icon next to the badge for an explanation of each lifecycle state.</li>
+          <li><strong>OPT XML view:</strong> The raw Operational Template XML is pretty-printed with indentation so large templates stay readable.</li>
         </ul>
       </section>
 
@@ -733,6 +783,25 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.4.2 — Signed Auto-Updates &amp; Homebrew</h3>
+        <ul>
+          <li><strong>Working Auto-Update:</strong> The updater now signs releases with a real Tauri signing key, so in-place updates actually verify and install (previous versions shipped the updater unsigned)</li>
+          <li><strong>Homebrew Cask:</strong> <code>brew install --cask platzhersh/openehr-explorer/openehr-explorer</code> is now published and auto-updated on every release</li>
+          <li><strong>SEO basics:</strong> Sitemap, Open Graph/Twitter metadata, and Google Search Console verification for the product website</li>
+        </ul>
+
+        <h3>v0.4.1 — Windows Icon Fix</h3>
+        <ul>
+          <li><strong>App icon:</strong> Replaced the single-size Windows <code>.ico</code> with a multi-resolution icon so the app looks correct in the Start menu, taskbar, and title bar at all sizes</li>
+        </ul>
+
+        <h3>v0.4.0 — Template Lifecycle &amp; OPT Readability</h3>
+        <ul>
+          <li><strong>Template Lifecycle Indicator:</strong> Templates now show a lifecycle badge (Published, Draft, etc.) with a contextual help popover explaining each state</li>
+          <li><strong>Pretty-Printed OPT XML:</strong> The raw Operational Template XML view is now indented for readability</li>
+          <li><strong>VirusTotal Scanning:</strong> Windows installers are automatically submitted to VirusTotal on tagged releases</li>
+        </ul>
+
         <h3>v0.3.0 — Auto-Update, Analytics &amp; Security Hardening</h3>
         <ul>
           <li><strong>Auto-Update:</strong> Built-in updater checks GitHub Releases on startup and installs signed updates in-place (toggleable in Settings)</li>
@@ -789,6 +858,138 @@ LIMIT 10</div>
         });
       }, { rootMargin: '-60px 0px -80% 0px', threshold: 0 });
       sections.forEach(function(section) { observer.observe(section); });
+    })();
+
+    // Docs search: filters the sidebar by section title + body text, and
+    // jumps to (and highlights matches within) the first matching section.
+    (function() {
+      var input = document.getElementById('docs-search');
+      var noResults = document.getElementById('docs-search-no-results');
+      var groupTitles = Array.prototype.slice.call(document.querySelectorAll('.sidebar-group-title'));
+      var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar-link'));
+      var sections = Array.prototype.slice.call(document.querySelectorAll('.docs-content section[id]'));
+
+      var index = links.map(function(link) {
+        var id = link.getAttribute('href').slice(1);
+        var section = document.getElementById(id);
+        return {
+          link: link,
+          text: (link.textContent + ' ' + (section ? section.textContent : '')).toLowerCase()
+        };
+      });
+
+      function clearHighlights() {
+        document.querySelectorAll('.docs-content mark').forEach(function(mark) {
+          var parent = mark.parentNode;
+          parent.replaceChild(document.createTextNode(mark.textContent), mark);
+          parent.normalize();
+        });
+      }
+
+      function highlightInSection(sectionEl, query) {
+        var walker = document.createTreeWalker(sectionEl, NodeFilter.SHOW_TEXT, {
+          acceptNode: function(node) {
+            if (!node.nodeValue.toLowerCase().includes(query)) return NodeFilter.FILTER_REJECT;
+            if (node.parentNode.closest('script, style')) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        });
+        var nodes = [];
+        var n;
+        while ((n = walker.nextNode())) nodes.push(n);
+        nodes.forEach(function(node) {
+          var text = node.nodeValue;
+          var lower = text.toLowerCase();
+          var frag = document.createDocumentFragment();
+          var last = 0;
+          var idx;
+          while ((idx = lower.indexOf(query, last)) !== -1) {
+            frag.appendChild(document.createTextNode(text.slice(last, idx)));
+            var mark = document.createElement('mark');
+            mark.textContent = text.slice(idx, idx + query.length);
+            frag.appendChild(mark);
+            last = idx + query.length;
+          }
+          frag.appendChild(document.createTextNode(text.slice(last)));
+          node.parentNode.replaceChild(frag, node);
+        });
+      }
+
+      function runSearch() {
+        var query = input.value.trim().toLowerCase();
+        clearHighlights();
+
+        if (!query) {
+          links.forEach(function(l) { l.classList.remove('search-hidden'); });
+          groupTitles.forEach(function(g) { g.classList.remove('search-hidden'); });
+          noResults.style.display = 'none';
+          return;
+        }
+
+        var anyMatch = false;
+        var firstMatchSectionId = null;
+
+        index.forEach(function(entry) {
+          var matches = entry.text.includes(query);
+          entry.link.classList.toggle('search-hidden', !matches);
+          if (matches) {
+            anyMatch = true;
+            if (!firstMatchSectionId) firstMatchSectionId = entry.link.getAttribute('href').slice(1);
+          }
+        });
+
+        groupTitles.forEach(function(group) {
+          var next = group.nextElementSibling;
+          var hasVisibleLink = false;
+          while (next && !next.classList.contains('sidebar-group-title')) {
+            if (next.classList.contains('sidebar-link') && !next.classList.contains('search-hidden')) {
+              hasVisibleLink = true;
+            }
+            next = next.nextElementSibling;
+          }
+          group.classList.toggle('search-hidden', !hasVisibleLink);
+        });
+
+        noResults.style.display = anyMatch ? 'none' : 'block';
+
+        // Highlight the query in every section's body text so scanning
+        // for the match is easy once the reader jumps to a section.
+        if (anyMatch) {
+          sections.forEach(function(section) {
+            if (section.textContent.toLowerCase().includes(query)) {
+              highlightInSection(section, query);
+            }
+          });
+        }
+      }
+
+      input.addEventListener('input', runSearch);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          var firstVisible = links.find(function(l) { return !l.classList.contains('search-hidden'); });
+          if (firstVisible) {
+            e.preventDefault();
+            window.location.hash = firstVisible.getAttribute('href');
+          }
+        }
+      });
+
+      // "/" focuses the search box from anywhere on the page, like most
+      // docs sites — unless the user is already typing somewhere.
+      document.addEventListener('keydown', function(e) {
+        if (e.key === '/' && document.activeElement !== input) {
+          var tag = (document.activeElement && document.activeElement.tagName) || '';
+          if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+            e.preventDefault();
+            input.focus();
+          }
+        }
+        if (e.key === 'Escape' && document.activeElement === input) {
+          input.value = '';
+          runSearch();
+          input.blur();
+        }
+      });
     })();
   </script>
 
