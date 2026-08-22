@@ -3,12 +3,14 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
+import { useUpdateStore } from "../stores/update";
 import { useAnalytics } from "../composables/useAnalytics";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
 
 const analytics = useAnalytics();
 
 const settingsStore = useSettingsStore();
+const updateStore = useUpdateStore();
 
 const form = ref<GlobalSettings>({
   version: 1,
@@ -60,6 +62,11 @@ async function openConfigDir() {
     await revealItemInDir(configDir.value);
   }
 }
+
+async function checkForUpdatesNow() {
+  void analytics.track("update_check_triggered", { source: "settings" });
+  await updateStore.checkForUpdates();
+}
 </script>
 
 <template>
@@ -100,6 +107,31 @@ async function openConfigDir() {
             When enabled, openEHR Explorer checks GitHub Releases on launch and shows a notification
             if a new version is available. No personal data is sent; only the current app version
             and platform are transmitted as part of the update request.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="checkForUpdatesNow"
+            :disabled="updateStore.status === 'checking'"
+          >
+            {{ updateStore.status === "checking" ? "Checking…" : "Check for Updates" }}
+          </button>
+          <p v-if="updateStore.status === 'up-to-date'" class="form-help update-status success">
+            You're up to date &mdash; this is the latest version.
+          </p>
+          <p
+            v-else-if="updateStore.status === 'available' && updateStore.update"
+            class="form-help update-status success"
+          >
+            Update available: v{{ updateStore.update.version }} (current: v{{
+              updateStore.update.currentVersion
+            }}). See the banner above to download it.
+          </p>
+          <p v-else-if="updateStore.status === 'error'" class="form-help update-status error">
+            Update check failed: {{ updateStore.error }}
           </p>
         </div>
       </div>
@@ -224,6 +256,12 @@ async function openConfigDir() {
 }
 .form-help a:hover {
   text-decoration: underline;
+}
+.update-status.success {
+  color: var(--color-success);
+}
+.update-status.error {
+  color: var(--color-error);
 }
 
 .form-actions {

@@ -77,7 +77,8 @@ export type AnalyticsEvent =
   // --- settings / engagement ---
   | "settings_saved"
   | "documentation_opened"
-  | "inspector_toggled";
+  | "inspector_toggled"
+  | "update_check_triggered";
 
 export function useAnalytics() {
   const settings = useSettingsStore();
