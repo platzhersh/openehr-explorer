@@ -83,7 +83,7 @@ cargo clippy             # Run Rust linter
 ## Architecture
 
 ### Frontend-Backend Communication
-The app uses **Tauri's invoke pattern** where Vue frontend calls Rust backend commands. All backend commands are registered in `src-tauri/src/lib.rs:9-31` via `tauri::generate_handler![]`.
+The app uses **Tauri's invoke pattern** where Vue frontend calls Rust backend commands. All backend commands are registered in `src-tauri/src/lib.rs` via `tauri::generate_handler![]`.
 
 **Frontend call pattern:**
 ```typescript
@@ -103,35 +103,47 @@ pub async fn command_name(param: Type) -> Result<ReturnType, String> {
 Frontend uses **Pinia stores** (Vue 3 composition API style) for client-side state:
 - `src/stores/server.ts` — Server profiles, active server, connection status
 - `src/stores/ehr.ts` — EHR listing and detail state
+- `src/stores/composition.ts` — Composition create/edit/delete state
 - `src/stores/template.ts` — Web templates and OPT XML
 - `src/stores/query.ts` — AQL query execution and saved queries
+- `src/stores/settings.ts` — App-wide settings (persisted via the Rust backend)
+- `src/stores/inspector.ts` — Request Inspector state (raw HTTP request/response log)
 
-Stores coordinate with Tauri commands to fetch/persist data. Server profiles are persisted by the Rust backend in `~/.config/openehr-explorer/profiles.json` (Linux/macOS).
+Stores coordinate with Tauri commands to fetch/persist data. Server profiles are persisted by the Rust backend in `~/.config/openehr-explorer/profiles.json` (Linux/macOS), with credentials stored via the OS keychain (see `src-tauri/src/credentials.rs` and ADR-0015).
 
 ### Rust Backend Structure
-- `src-tauri/src/commands/` — Contains all Tauri command modules:
-  - `server.rs` — Server profile CRUD, connection testing
-  - `ehr.rs` — EHR listing and detail fetching
-  - `composition.rs` — Composition retrieval (structured, FLAT, versions)
+- `src-tauri/src/commands/` — Tauri command modules, one per domain:
+  - `server.rs` — Server profile CRUD, connection testing, version detection
+  - `ehr.rs` — EHR listing, detail fetching, CRUD, search
+  - `composition.rs` — Composition retrieval (structured, FLAT, versions) and CRUD
   - `template.rs` — Template listing, Web Template fetch, OPT upload
   - `query.rs` — AQL execution, saved query management
+  - `terminology.rs` — Terminology code lookups (cached via `terminology::TerminologyCache`)
+- `src-tauri/src/credentials.rs` — Secure credential storage (OS keychain / encrypted-file fallback)
+- `src-tauri/src/inspector.rs` — Request Inspector instrumentation (see ADR-0011)
+- `src-tauri/src/settings.rs` — App settings persistence
 - All commands use `reqwest` for HTTP calls to openEHR REST APIs
 - Authentication (Basic/Bearer) is handled per-profile in `AuthMethod` enum
 
 ### Frontend Views
-- `src/views/EhrBrowser.vue` — Paginated EHR list + composition grouping
+- `src/views/EhrBrowser.vue` — Paginated EHR list + composition grouping, EHR create/delete
 - `src/views/CompositionViewer.vue` — Three-pane viewer (Pretty/JSON/FLAT) with path panel
+- `src/views/CompositionForm.vue` — Composition create/edit form (medblocks-ui powered)
 - `src/views/TemplateBrowser.vue` — Template list + Web Template tree inspector
 - `src/views/AqlRunner.vue` — Query editor, saved queries, tabular results, CSV export
 - `src/views/ServerManager.vue` — Server profile CRUD UI
+- `src/views/Settings.vue` — Global settings page
 
 ### Routing
-Vue Router defined in `src/main.ts:6-52`:
-- `/ehrs` — EHR browser
+Vue Router defined in `src/main.ts`:
+- `/ehrs` + `/ehrs/:ehrId` — EHR browser / detail
 - `/ehrs/:ehrId/compositions/:compositionUid` — Composition viewer
 - `/templates` + `/templates/:templateId` — Template browser
+- `/compose/:templateId` + `/compose/:templateId/:ehrId` — Create composition from template
+- `/edit/:ehrId/:compositionUid` — Edit existing composition
 - `/aql` — AQL runner
 - `/servers` — Server manager
+- `/settings` — Global settings
 
 ## Key Design Patterns
 
@@ -153,13 +165,15 @@ This project uses **PRDs** (`docs/prd/`) and **ADRs** (`docs/adr/`) for governan
 
 When making significant architectural changes, create an ADR. When planning new features, reference or create a PRD.
 
+## Commit & PR Conventions
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages and PR titles: `<type>(<optional scope>): <description>`, e.g. `feat(website): publish working Windows install command`, `fix: gh api --jq doesn't accept extra jq flags`, `docs(readme): add header banner and badges`, `ci: add Windows package manager auto-publish workflows`, `chore: bump version to 0.4.2`. Common types in this repo: `feat`, `fix`, `docs`, `chore`, `ci`, `refactor`.
+
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/ci.yml`):
-- **frontend** job: Runs `npm run build` (type checks + Vite build)
-- **build-macos** job: Builds Tauri app, uploads DMG artifact, publishes to GitHub Releases on tags
+GitHub Actions (`.github/workflows/ci.yml`) runs frontend and Rust checks plus a macOS build on every push/PR to `main`. Windows and Linux builds, GitHub Release publishing, the in-app updater manifest, and Homebrew/Scoop/WinGet package updates are all tag-triggered (`v*`).
 
-To trigger a release, push a git tag starting with `v` (e.g., `v0.2.0`).
+See **[RELEASING.md](RELEASING.md)** for the full release process and what each CI job does.
 
 ## openEHR API Context
 
@@ -168,61 +182,3 @@ When working with openEHR REST APIs:
 - **FLAT format** is a denormalized key-value representation of compositions (useful for SDK development)
 - **AQL** (Archetype Query Language) is used to query EHR data across compositions
 - **OPT** (Operational Template XML) vs **Web Template** (JSON): both describe templates, different formats
-
-## PRD-0003: Composition & EHR CRUD Implementation
-
-### Status: ✅ COMPLETE (100%)
-
-All features from PRD-0003 have been implemented and are ready to use!
-
-### Implemented Features
-
-**Backend (100% Complete):**
-- EHR CRUD: `create_ehr`, `update_ehr_status`, `delete_ehr` (`src-tauri/src/commands/ehr.rs:228-426`)
-- Composition CRUD: `create_composition`, `update_composition`, `delete_composition` (`src-tauri/src/commands/composition.rs:184-299`)
-- All commands registered and working with FLAT format (`application/openehr.wt.flat.schema+json`)
-
-**Stores (100% Complete):**
-- `src/stores/ehr.ts` - EHR CRUD functions with proper error handling
-- `src/stores/composition.ts` - Composition CRUD functions
-
-**UI Components (100% Complete):**
-- `src/components/EhrCreateDialog.vue` - Full EHR creation dialog with subject identity, flags, custom ID
-- `src/views/EhrBrowser.vue` - "+ New EHR" button + Delete EHR dialog (requires typing EHR ID to confirm)
-- `src/views/CompositionForm.vue` - Complete composition create/edit form with:
-  - EHR selector with "Create New EHR" option
-  - Context fields (composer, language, territory, time)
-  - medblocks-ui `<mb-form>` integration for template rendering
-  - FLAT preview panel (toggleable)
-  - Edit mode with pre-population from existing compositions
-  - Draft persistence (auto-save every 30s, localStorage with 24hr expiry)
-  - Request/Response detail panels
-  - Full error handling and success messages
-- `src/views/CompositionViewer.vue` - Enhanced with Edit and Delete buttons
-- `src/views/TemplateBrowser.vue` - "New Composition" button for each template
-
-**Routes Added:**
-- `/compose/:templateId` - Create composition from template
-- `/compose/:templateId/:ehrId` - Create composition for specific EHR
-- `/edit/:ehrId/:compositionUid` - Edit existing composition
-
-**Dependencies:**
-- `medblocks-ui` - Loaded via CDN in `index.html` (JSDelivr CDN: 0.1.1)
-- `@tauri-apps/plugin-dialog` (2.6.0)
-- `@tauri-apps/plugin-fs` (2.4.5)
-
-### Complete Workflows
-
-1. **Create EHR**: Click "+ New EHR" in EHR Browser → Fill form → Auto-navigates to new EHR
-2. **Delete EHR**: Open EHR detail → Click "Delete EHR" → Type EHR ID to confirm → Deleted
-3. **Create Composition**: Template Browser → "New Composition" → Select EHR → Fill form → Submit → View created composition
-4. **Edit Composition**: View composition → Click "Edit" → Modify form → Submit → New version created
-5. **Delete Composition**: View composition → Click "Delete" → Confirm → Returns to EHR detail
-
-### Documentation
-
-See `IMPLEMENTATION_SUMMARY.md` for:
-- Detailed breakdown of all implemented features
-- Testing instructions for local EHRBase
-- Architecture decisions and patterns
-- Complete file reference
