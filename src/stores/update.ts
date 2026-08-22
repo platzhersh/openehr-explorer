@@ -30,11 +30,31 @@ export const useUpdateStore = defineStore("update", () => {
   const downloadedBytes = ref(0);
   const totalBytes = ref(0);
 
+  /**
+   * `Update` extends Tauri's `Resource`, which holds a native-side handle
+   * that must be released explicitly via `.close()` — it isn't
+   * garbage-collected. Best-effort: there's nothing useful to do if the
+   * handle was already closed or the IPC call fails.
+   */
+  async function closeUpdateHandle(instance: Update | null) {
+    if (!instance) return;
+    try {
+      await instance.close();
+    } catch (err) {
+      console.warn("Failed to close stale Update resource:", err);
+    }
+  }
+
   async function checkForUpdates() {
     status.value = "checking";
     error.value = null;
     try {
       const result = await check();
+      // Every call constructs a fresh `Update` instance, so if one from a
+      // previous check is still stored, it's now stale — close it before
+      // replacing it (see `closeUpdateHandle`) so repeated manual checks
+      // (Settings button, native menu item) don't leak native resources.
+      const previous = update.value;
       if (result?.available) {
         update.value = result;
         status.value = "available";
@@ -43,6 +63,7 @@ export const useUpdateStore = defineStore("update", () => {
         update.value = null;
         status.value = "up-to-date";
       }
+      await closeUpdateHandle(previous);
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err);
       status.value = "error";
@@ -68,6 +89,10 @@ export const useUpdateStore = defineStore("update", () => {
       // up the new version. On Windows the NSIS installer takes over.
       await relaunch();
     } catch (err) {
+      // Deliberately not closing `update.value` here: the UI currently has
+      // no retry affordance while `error` is set (see UpdateNotification.vue),
+      // so the instance is unreachable until the next `checkForUpdates()`
+      // call, which closes it there instead (see `closeUpdateHandle`).
       error.value = err instanceof Error ? err.message : String(err);
       downloading.value = false;
     }

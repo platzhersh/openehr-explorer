@@ -42,6 +42,7 @@ class FakeUpdate extends FakeResource {
   available = true;
   version = "0.4.3";
   currentVersion = "0.4.2";
+  closed = false;
 
   async downloadAndInstall(
     onEvent?: (progress: { event: string; data: { contentLength?: number } }) => void,
@@ -51,6 +52,10 @@ class FakeUpdate extends FakeResource {
     // comment on `update` in update.ts.
     void this.rid;
     onEvent?.({ event: "Started", data: { contentLength: 100 } });
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
   }
 }
 
@@ -110,5 +115,28 @@ describe("useUpdateStore", () => {
     // try/catch would land here as `status: "error"` instead.
     expect(store.error).toBeNull();
     expect(relaunch).toHaveBeenCalledOnce();
+  });
+
+  it("regression: closes the previous Update resource before replacing it on a new check", async () => {
+    const first = new FakeUpdate(1);
+    const second = new FakeUpdate(2);
+
+    const store = useUpdateStore();
+
+    vi.mocked(check).mockResolvedValueOnce(first as unknown as Update);
+    await store.checkForUpdates();
+    expect(store.update).toBe(first);
+    expect(first.closed).toBe(false);
+
+    // A second manual check (Settings button / native menu item, now that
+    // both exist) replaces `update.value` — the stale `first` instance must
+    // be released via `Update.close()` (it extends Tauri's `Resource`,
+    // which holds a native handle) instead of just being dropped.
+    vi.mocked(check).mockResolvedValueOnce(second as unknown as Update);
+    await store.checkForUpdates();
+
+    expect(store.update).toBe(second);
+    expect(first.closed).toBe(true);
+    expect(second.closed).toBe(false);
   });
 });
