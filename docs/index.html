@@ -724,11 +724,12 @@
         </div>
         <p class="quickstart-note">macOS: not yet notarized by Apple &mdash; if Gatekeeper reports the app as damaged on first launch, see <a href="docs.html#troubleshooting">Troubleshooting</a>.</p>
 
-        <h3>Windows</h3>
+        <h3>Windows (Scoop)</h3>
         <div class="code-block">
-          <span class="comment"># Coming soon</span><br>
-          winget install openehr-explorer
+          scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer<br>
+          scoop install openehr-explorer
         </div>
+        <p class="quickstart-note">Not yet Authenticode-signed &mdash; Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
         <h3>Linux</h3>
         <div class="code-block">
