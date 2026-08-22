@@ -18,12 +18,20 @@ jobs:
     # Requires a classic PAT with the `public_repo` scope, stored as
     # WINGET_TOKEN (fine-grained PATs aren't supported by this action).
     # No-ops if unset rather than failing the release.
-    if: ${{ secrets.WINGET_TOKEN != '' }}
+    #
+    # `secrets` can't be referenced directly in an `if:` conditional (GitHub
+    # Actions rejects that expression at parse time), and the `env` context
+    # isn't available in a job-level `if:` either — only in a step's. So the
+    # secret is routed through a job-level env var and the no-op check lives
+    # on the step itself.
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
     steps:
       # Pinned to a commit SHA (not @main) since this action receives
       # WINGET_TOKEN — an unpinned mutable ref on a secret-bearing step is a
       # supply-chain risk. Current as of 2026-08-07; bump deliberately.
       - name: Publish winget package
+        if: ${{ env.WINGET_TOKEN != '' }}
         uses: vedantmgoyal9/winget-releaser@b3a5dae0047c6180023acba3f548c55fdf6b7193 # main
         with:
           identifier: platzhersh.openEHRExplorer
