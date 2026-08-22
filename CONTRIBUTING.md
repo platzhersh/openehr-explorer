@@ -84,6 +84,10 @@ See `CLAUDE.md` for a fuller architecture overview, including the frontend↔bac
 
 Please use [GitHub Issues](https://github.com/platzhersh/openehr-explorer/issues). For bugs, include your OS, app version, and steps to reproduce. For feature requests, a short description of the use case is more useful than a full spec — we can work out the design together.
 
+## Releasing
+
+Maintainers: see [RELEASING.md](RELEASING.md) for how the release pipeline works and how to cut a new version.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the project's [Apache License 2.0](./LICENSE).
