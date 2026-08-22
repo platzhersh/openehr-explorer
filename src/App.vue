@@ -2,9 +2,11 @@
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useServerStore } from "./stores/server";
 import { useInspectorStore } from "./stores/inspector";
 import { useSettingsStore } from "./stores/settings";
+import { useUpdateStore } from "./stores/update";
 import { useAnalytics } from "./composables/useAnalytics";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
@@ -22,7 +24,14 @@ const router = useRouter();
 const serverStore = useServerStore();
 const inspectorStore = useInspectorStore();
 const settingsStore = useSettingsStore();
+const updateStore = useUpdateStore();
 const analytics = useAnalytics();
+
+// Unlisten handle for the native "Check for Updates…" menu item (see
+// `install_update_check_menu_item` in the Rust backend), which emits this
+// event instead of calling the updater directly — the updater plugin only
+// has a JS API, so the Rust menu handler can't trigger it itself.
+let unlistenMenuCheckForUpdates: UnlistenFn | null = null;
 
 // Global keyboard shortcuts for navigation
 function handleKeydown(e: KeyboardEvent) {
@@ -112,6 +121,11 @@ onMounted(async () => {
   await settingsStore.loadSettings();
   document.addEventListener("keydown", handleKeydown);
 
+  unlistenMenuCheckForUpdates = await listen("check-for-updates-requested", () => {
+    void analytics.track("update_check_triggered", { source: "menu" });
+    void updateStore.checkForUpdates();
+  });
+
   if (!settingsStore.settings.analytics_consent_asked) {
     // First run (or upgrade from a version without the flag): show the
     // one-time consent dialog. Hold off on emitting app_launched until the
@@ -125,6 +139,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
+  unlistenMenuCheckForUpdates?.();
 });
 
 // Reset inspector when active server changes

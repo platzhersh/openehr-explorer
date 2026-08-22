@@ -1,17 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { check, type Update } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
+import { onMounted } from "vue";
 import { useSettingsStore } from "../stores/settings";
+import { useUpdateStore } from "../stores/update";
 
 const settingsStore = useSettingsStore();
-
-const update = ref<Update | null>(null);
-const dismissed = ref(false);
-const downloading = ref(false);
-const downloadedBytes = ref(0);
-const totalBytes = ref(0);
-const error = ref<string | null>(null);
+const updateStore = useUpdateStore();
 
 onMounted(async () => {
   // Respect the user's preference. Settings are loaded by App.vue on mount,
@@ -24,72 +17,40 @@ onMounted(async () => {
     return;
   }
 
-  try {
-    const result = await check();
-    if (result?.available) {
-      update.value = result;
-    }
-  } catch (err) {
-    // Silently ignore update check failures (offline, rate-limited, GitHub down,
-    // missing/placeholder pubkey in dev builds, etc.). The app must continue
-    // to work normally without the updater.
-    console.warn("Update check failed:", err);
-  }
+  // checkForUpdates() never throws — failures (offline, rate-limited, GitHub
+  // down, missing/placeholder pubkey in dev builds, etc.) land in
+  // updateStore.error instead, and the app continues to work normally
+  // without the updater. The startup banner just stays hidden in that case.
+  await updateStore.checkForUpdates();
 });
 
-async function downloadAndInstall() {
-  if (!update.value) return;
-  downloading.value = true;
-  error.value = null;
-  downloadedBytes.value = 0;
-  totalBytes.value = 0;
-
-  try {
-    await update.value.downloadAndInstall((event) => {
-      if (event.event === "Started") {
-        totalBytes.value = event.data.contentLength ?? 0;
-      } else if (event.event === "Progress") {
-        downloadedBytes.value += event.data.chunkLength;
-      }
-    });
-    // On macOS/Linux the current binary has been replaced; relaunch to pick
-    // up the new version. On Windows the NSIS installer takes over.
-    await relaunch();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err);
-    downloading.value = false;
-  }
-}
-
-function dismiss() {
-  dismissed.value = true;
-}
-
 const progressPercent = () => {
-  if (totalBytes.value === 0) return 0;
-  return Math.round((downloadedBytes.value / totalBytes.value) * 100);
+  if (updateStore.totalBytes === 0) return 0;
+  return Math.round((updateStore.downloadedBytes / updateStore.totalBytes) * 100);
 };
 </script>
 
 <template>
-  <div v-if="update && !dismissed" class="update-notification">
+  <div v-if="updateStore.update && !updateStore.dismissed" class="update-notification">
     <div class="update-info">
       <span class="update-icon">↻</span>
       <div class="update-text">
-        <strong>Update available: v{{ update.version }}</strong>
-        <span class="update-current"> (current: v{{ update.currentVersion }})</span>
+        <strong>Update available: v{{ updateStore.update.version }}</strong>
+        <span class="update-current"> (current: v{{ updateStore.update.currentVersion }})</span>
       </div>
     </div>
 
-    <div v-if="error" class="update-error" :title="error">Update failed: {{ error }}</div>
-    <div v-else-if="downloading" class="update-progress">
-      Downloading… {{ totalBytes > 0 ? `${progressPercent()}%` : "" }}
+    <div v-if="updateStore.error" class="update-error" :title="updateStore.error">
+      Update failed: {{ updateStore.error }}
+    </div>
+    <div v-else-if="updateStore.downloading" class="update-progress">
+      Downloading… {{ updateStore.totalBytes > 0 ? `${progressPercent()}%` : "" }}
     </div>
     <div v-else class="update-actions">
-      <button class="btn btn-sm btn-primary" @click="downloadAndInstall">
+      <button class="btn btn-sm btn-primary" @click="updateStore.downloadAndInstall">
         Download &amp; Install
       </button>
-      <button class="btn btn-sm" @click="dismiss">Later</button>
+      <button class="btn btn-sm" @click="updateStore.dismiss">Later</button>
     </div>
   </div>
 </template>

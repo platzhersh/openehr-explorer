@@ -4,7 +4,61 @@ pub mod inspector;
 pub mod settings;
 
 use commands::{composition, ehr, query, server, template, terminology};
+use tauri::{
+    menu::{Menu, MenuItem, MenuItemKind, HELP_SUBMENU_ID},
+    Emitter,
+};
 use tauri_plugin_aptabase::EventTracker;
+
+/// Menu id for the manually-triggered "Check for Updates…" item added to the
+/// native app menu (see `install_update_check_menu_item`). The frontend
+/// listens for the `check-for-updates-requested` event emitted when this
+/// item is clicked and runs the same update check as the Settings page
+/// button / startup check.
+const CHECK_FOR_UPDATES_MENU_ID: &str = "check_for_updates";
+
+/// Adds a "Check for Updates…" item to the native application menu, since
+/// Tauri's default menu (built by `Menu::default`) has no such item and the
+/// updater plugin only exposes a JS API — there is no built-in menu entry to
+/// trigger it. Clicking the item emits `check-for-updates-requested`, which
+/// the frontend's update store listens for and handles the same way as the
+/// Settings page button.
+///
+/// Platform placement:
+/// - **macOS:** inserted into the app submenu (the one titled after the app
+///   name), directly below "About", since that's where "Check for Updates…"
+///   conventionally lives in native macOS apps.
+/// - **Windows/Linux:** inserted into the "Help" submenu, above "About".
+fn install_update_check_menu_item(app: &tauri::App) -> tauri::Result<()> {
+    let handle = app.handle();
+    let menu = Menu::default(handle)?;
+
+    let check_for_updates = MenuItem::with_id(
+        handle,
+        CHECK_FOR_UPDATES_MENU_ID,
+        "Check for Updates…",
+        true,
+        None::<&str>,
+    )?;
+
+    #[cfg(target_os = "macos")]
+    {
+        // The app submenu is always the first item in Tauri's default macOS
+        // menu (see `Menu::default`); it holds About/Services/Hide/Quit.
+        if let Some(MenuItemKind::Submenu(app_submenu)) = menu.items()?.into_iter().next() {
+            app_submenu.insert(&check_for_updates, 1)?;
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(MenuItemKind::Submenu(help_submenu)) = menu.get(HELP_SUBMENU_ID) {
+            help_submenu.insert(&check_for_updates, 0)?;
+        }
+    }
+
+    app.set_menu(menu)?;
+    Ok(())
+}
 
 /// The official website URL for openEHR Explorer
 pub const WEBSITE_URL: &str = "https://platzhersh.github.io/openehr-explorer/";
@@ -40,6 +94,17 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_aptabase::Builder::new(APTABASE_APP_KEY).build())
         .manage(terminology::TerminologyCache::default())
+        .setup(|app| {
+            install_update_check_menu_item(app)?;
+
+            app.on_menu_event(|app_handle, event| {
+                if event.id() == CHECK_FOR_UPDATES_MENU_ID {
+                    let _ = app_handle.emit("check-for-updates-requested", ());
+                }
+            });
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // App
             get_app_version,
