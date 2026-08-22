@@ -460,8 +460,8 @@ scoop install openehr-explorer</div>
         <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span>
 sudo apt install ./openehr-explorer_0.4.2_amd64.deb</div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openehr-explorer_0.4.2_amd64.AppImage
-./openehr-explorer_0.4.2_amd64.AppImage</div>
+        <div class="code-block">chmod +x openehr-explorer_0.4.3_amd64.AppImage
+./openehr-explorer_0.4.3_amd64.AppImage</div>
       </section>
 
       <section id="first-connection">
@@ -782,6 +782,14 @@ LIMIT 10</div>
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.4.3 — Windows Install &amp; Server Form Refresh</h3>
+        <ul>
+          <li><strong>Windows Install via Scoop:</strong> <code>scoop install openehr-explorer</code> now works against the published Scoop bucket, auto-published on every release (winget support still planned)</li>
+          <li><strong>Server Form Modal:</strong> Add/Edit Server now opens in a modal dialog instead of an inline panel, for a cleaner server management workflow</li>
+          <li><strong>Linux Install Docs:</strong> Install instructions now cover the <code>.deb</code> package alongside the AppImage</li>
+          <li><strong>Troubleshooting:</strong> Documented the macOS Gatekeeper &ldquo;damaged&rdquo; workaround for unnotarized builds</li>
+        </ul>
 
         <h3>v0.4.2 — Signed Auto-Updates &amp; Homebrew</h3>
         <ul>
