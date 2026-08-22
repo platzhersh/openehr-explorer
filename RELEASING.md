@@ -7,14 +7,12 @@ There is no separate "click a button to release" step beyond that.
 ## TL;DR
 
 ```bash
-# 1. Bump the version (see below)
+# 1. Bump the version + changelog entry (two commits, see below)
 /bump-version 0.5.0
 
-# 2. Update the changelog (manual, see below)
+# 2. Open a PR, get it merged to main
 
-# 3. Open a PR, get it merged to main
-
-# 4. Tag the merge commit and push the tag
+# 3. Tag the merge commit and push the tag
 git checkout main && git pull
 git tag v0.5.0
 git push origin v0.5.0
@@ -27,11 +25,13 @@ automatically in CI.
 
 ## Step by step
 
-### 1. Bump the version
+### 1. Bump the version + write the changelog entry
 
 Use the `/bump-version <version>` slash command
-(`.claude/commands/bump-version.md`). It updates the version string in all
-of the files that need to stay in sync:
+(`.claude/commands/bump-version.md`). It does this in two separate commits:
+
+**Step 1 — version bump.** Updates the version string in all of the files
+that need to stay in sync:
 
 - `package.json`
 - `package-lock.json`
@@ -41,26 +41,23 @@ of the files that need to stay in sync:
 - `docs/index.html` (version badge)
 - `docs/docs.html` (Linux AppImage install snippet)
 
-It does **not** touch the changelog — that's step 2, on purpose, so version
-bumps and changelog writing stay separate commits.
+**Step 2 — changelog entry.** Adds a new `<h3>` entry under
+`<section id="changelog">` in `docs/docs.html`, following the existing
+format (version + one-line theme, then a bullet list of user-facing
+highlights), based on reviewing what actually changed since the previous
+tag — not a raw commit-message dump.
 
-### 2. Update the changelog
+These stay two commits on purpose: the version bump is mechanical and
+verifiable (`git diff --stat` against a known file count), while the
+changelog is a hand-written summary that needs judgment about what's
+user-facing and worth mentioning.
 
-Add a new `<h3>` entry under `<section id="changelog">` in `docs/docs.html`,
-following the existing format (version + one-line theme, then a bullet list
-of user-facing highlights). This is a manual, hand-written summary — it is
-not generated from commit history.
+### 2. Merge to `main`
 
-> Note: as of this writing the changelog section lags a few versions behind
-> the latest tag. Worth reconciling it as part of the next release so it
-> doesn't drift further.
-
-### 3. Merge to `main`
-
-Open a PR with the version bump + changelog update, get it reviewed, and
+Open a PR with the version bump + changelog commits, get it reviewed, and
 merge it. The tag in the next step should point at this merge commit.
 
-### 4. Tag and push
+### 3. Tag and push
 
 ```bash
 git checkout main && git pull
@@ -85,7 +82,7 @@ The GitHub Release itself is created automatically by `softprops/action-gh-relea
 the first time a build job uploads to that tag — you don't create it by hand,
 and it's published (not a draft) as soon as it exists.
 
-### 5. WinGet (automatic, separate workflow)
+### 4. WinGet (automatic, separate workflow)
 
 Once the GitHub Release transitions to `released` (i.e. it's published — which
 happens as soon as the jobs above create it), `.github/workflows/winget.yml`
@@ -97,7 +94,7 @@ with `public_repo` scope); it no-ops silently if unset.
 > The very first submission for a new package has to be authored and opened
 > by hand — see issue OEH-5.
 
-### 6. Verify
+### 5. Verify
 
 After the workflow run finishes:
 
