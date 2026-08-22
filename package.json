@@ -2,7 +2,7 @@
   "name": "openehr-explorer",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "type": "module",
   "homepage": "https://platzhersh.github.io/openehr-explorer/",
   "repository": {
