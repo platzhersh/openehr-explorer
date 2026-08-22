@@ -50,8 +50,8 @@ Added to `.github/workflows/ci.yml` as an additional step in the `build-windows`
     update_release_body: true
     request_rate: 4
     files: |
-      src-tauri/target/release/bundle/nsis/openEHR.Explorer_*.exe
-      src-tauri/target/release/bundle/msi/openEHR.Explorer_*.msi
+      src-tauri/target/release/bundle/nsis/*.exe
+      src-tauri/target/release/bundle/msi/*.msi
 ```
 
 The step runs after `Upload to GitHub Release` so the release already exists when the action attempts to append the scan links.
@@ -59,6 +59,16 @@ The step runs after `Upload to GitHub Release` so the release already exists whe
 `update_release_body: true` appends the VirusTotal analysis URL(s) directly to the GitHub Release notes, making them publicly visible to anyone reading the release page.
 
 `request_rate: 4` respects the free tier rate limit.
+
+The `files:` globs intentionally don't hardcode the product name: Tauri
+names the local bundle output after `productName` verbatim (currently
+`openEHR Explorer_<version>_...`, with a literal space), which is *not*
+the same as the sanitized name GitHub Releases gives the uploaded asset
+(`openEHR.Explorer_<version>_...`, spaces replaced with dots). A glob
+written against the release-asset naming convention silently matches
+zero local files — this shipped broken for that reason and went
+unnoticed because the step doesn't fail the build on no-match (see
+Negative/risks below).
 
 ### What gets submitted
 
