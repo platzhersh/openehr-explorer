@@ -35,6 +35,59 @@ const form = ref<ServerProfileInput>({
   auth_method: { type: "none" },
 });
 
+// Typed accessors for the discriminated auth_method/admin_auth_method unions,
+// so the template can v-model into the active variant's fields without `any` casts.
+const basicUsername = computed({
+  get: () => (form.value.auth_method.type === "basic" ? form.value.auth_method.username : ""),
+  set: (value: string) => {
+    if (form.value.auth_method.type === "basic") form.value.auth_method.username = value;
+  },
+});
+
+const basicPassword = computed({
+  get: () => (form.value.auth_method.type === "basic" ? form.value.auth_method.password : ""),
+  set: (value: string) => {
+    if (form.value.auth_method.type === "basic") form.value.auth_method.password = value;
+  },
+});
+
+const bearerToken = computed({
+  get: () => (form.value.auth_method.type === "bearer" ? form.value.auth_method.token : ""),
+  set: (value: string) => {
+    if (form.value.auth_method.type === "bearer") form.value.auth_method.token = value;
+  },
+});
+
+const adminBasicUsername = computed({
+  get: () =>
+    form.value.admin_auth_method?.type === "basic" ? form.value.admin_auth_method.username : "",
+  set: (value: string) => {
+    if (form.value.admin_auth_method?.type === "basic") {
+      form.value.admin_auth_method.username = value;
+    }
+  },
+});
+
+const adminBasicPassword = computed({
+  get: () =>
+    form.value.admin_auth_method?.type === "basic" ? form.value.admin_auth_method.password : "",
+  set: (value: string) => {
+    if (form.value.admin_auth_method?.type === "basic") {
+      form.value.admin_auth_method.password = value;
+    }
+  },
+});
+
+const adminBearerToken = computed({
+  get: () =>
+    form.value.admin_auth_method?.type === "bearer" ? form.value.admin_auth_method.token : "",
+  set: (value: string) => {
+    if (form.value.admin_auth_method?.type === "bearer") {
+      form.value.admin_auth_method.token = value;
+    }
+  },
+});
+
 watch(
   () => props.open,
   (isOpen) => {
@@ -138,7 +191,7 @@ function validateBaseUrl(url: string): boolean {
       parsedUrl.hostname === "::1" ||
       parsedUrl.hostname.startsWith("192.168.") ||
       parsedUrl.hostname.startsWith("10.") ||
-      parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./);
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(parsedUrl.hostname);
 
     if (!isLocalhost) {
       urlValidationWarning.value =
@@ -252,19 +305,20 @@ function handleClose() {
     <div class="dialog">
       <div class="dialog-header">
         <h2>{{ editingExistingId ? "Edit" : "Add" }} Server Profile</h2>
-        <button class="close-btn" @click="handleClose">×</button>
+        <button type="button" class="close-btn" aria-label="Close" @click="handleClose">×</button>
       </div>
 
       <div class="dialog-body">
         <form @submit.prevent="save">
           <div class="form-group">
-            <label>Name</label>
-            <input class="input" v-model="form.name" placeholder="My EHRBase" />
+            <label for="server-name">Name</label>
+            <input id="server-name" class="input" v-model="form.name" placeholder="My EHRBase" />
           </div>
 
           <div class="form-group">
-            <label>Base URL</label>
+            <label for="server-base-url">Base URL</label>
             <input
+              id="server-base-url"
               class="input"
               v-model="form.base_url"
               placeholder="http://localhost:8080/ehrbase"
@@ -283,8 +337,8 @@ function handleClose() {
           </div>
 
           <div class="form-group">
-            <label>Server Type</label>
-            <select class="input" v-model="form.server_type">
+            <label for="server-type">Server Type</label>
+            <select id="server-type" class="input" v-model="form.server_type">
               <option value="ehrbase">EHRBase</option>
               <option value="better_platform">Better Platform</option>
               <option value="generic">Generic openEHR REST</option>
@@ -292,8 +346,9 @@ function handleClose() {
           </div>
 
           <div class="form-group">
-            <label>Authentication</label>
+            <label for="server-auth-type">Authentication</label>
             <select
+              id="server-auth-type"
               class="input"
               :value="form.auth_method.type"
               @change="setAuthType(($event.target as HTMLSelectElement).value)"
@@ -306,15 +361,16 @@ function handleClose() {
 
           <template v-if="form.auth_method.type === 'basic'">
             <div class="form-group">
-              <label>Username</label>
-              <input class="input" v-model="(form.auth_method as any).username" />
+              <label for="server-username">Username</label>
+              <input id="server-username" class="input" v-model="basicUsername" />
             </div>
             <div class="form-group">
-              <label>Password</label>
+              <label for="server-password">Password</label>
               <input
+                id="server-password"
                 class="input"
                 type="password"
-                v-model="(form.auth_method as any).password"
+                v-model="basicPassword"
                 :placeholder="
                   existingProfileHasPassword()
                     ? 'Password saved securely (leave empty to keep)'
@@ -329,10 +385,11 @@ function handleClose() {
 
           <template v-if="form.auth_method.type === 'bearer'">
             <div class="form-group">
-              <label>Token</label>
+              <label for="server-token">Token</label>
               <input
+                id="server-token"
                 class="input"
-                v-model="(form.auth_method as any).token"
+                v-model="bearerToken"
                 :placeholder="
                   existingProfileHasToken() ? 'Token saved securely (leave empty to keep)' : ''
                 "
@@ -346,8 +403,9 @@ function handleClose() {
           <template v-if="form.server_type === 'ehrbase'">
             <hr class="form-divider" />
             <div class="form-group">
-              <label>Admin Credentials (for EHR deletion)</label>
+              <label for="server-admin-auth-type">Admin Credentials (for EHR deletion)</label>
               <select
+                id="server-admin-auth-type"
                 class="input"
                 :value="form.admin_auth_method ? form.admin_auth_method.type : 'none_admin'"
                 @change="setAdminAuthType(($event.target as HTMLSelectElement).value)"
@@ -360,15 +418,16 @@ function handleClose() {
 
             <template v-if="form.admin_auth_method?.type === 'basic'">
               <div class="form-group">
-                <label>Admin Username</label>
-                <input class="input" v-model="(form.admin_auth_method as any).username" />
+                <label for="server-admin-username">Admin Username</label>
+                <input id="server-admin-username" class="input" v-model="adminBasicUsername" />
               </div>
               <div class="form-group">
-                <label>Admin Password</label>
+                <label for="server-admin-password">Admin Password</label>
                 <input
+                  id="server-admin-password"
                   class="input"
                   type="password"
-                  v-model="(form.admin_auth_method as any).password"
+                  v-model="adminBasicPassword"
                   :placeholder="
                     existingProfileHasAdminPassword()
                       ? 'Password saved securely (leave empty to keep)'
@@ -383,10 +442,11 @@ function handleClose() {
 
             <template v-if="form.admin_auth_method?.type === 'bearer'">
               <div class="form-group">
-                <label>Admin Token</label>
+                <label for="server-admin-token">Admin Token</label>
                 <input
+                  id="server-admin-token"
                   class="input"
-                  v-model="(form.admin_auth_method as any).token"
+                  v-model="adminBearerToken"
                   :placeholder="
                     existingProfileHasAdminToken()
                       ? 'Token saved securely (leave empty to keep)'
@@ -402,8 +462,9 @@ function handleClose() {
 
           <hr class="form-divider" />
           <div class="form-group">
-            <label>Terminology Server URL (optional)</label>
+            <label for="server-terminology-url">Terminology Server URL (optional)</label>
             <input
+              id="server-terminology-url"
               class="input"
               v-model="form.terminology_url"
               :placeholder="
@@ -554,8 +615,8 @@ function handleClose() {
   border: 1px solid var(--color-error);
 }
 .validation-message.warning {
-  background: rgba(255, 193, 7, 0.1);
-  color: #f59e0b;
+  background: #7c4a03;
+  color: #fef3c7;
   border: 1px solid #fbbf24;
 }
 
