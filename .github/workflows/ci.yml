@@ -450,9 +450,14 @@ jobs:
 
           SHA256="${DIGEST#sha256:}"
 
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/platzhersh/homebrew-openehr-explorer.git" tap
+          # Update the file via the Contents API instead of `git clone` with
+          # a token embedded in the remote URL — avoids the credential
+          # persisting in a checked-out .git/config and showing up in any
+          # error output that might echo the remote URL.
+          TAP_REPO="platzhersh/homebrew-openehr-explorer"
+          TAP_FILE="Casks/openehr-explorer.rb"
 
-          cat > tap/Casks/openehr-explorer.rb <<EOF
+          CASK_CONTENT=$(cat <<EOF
           cask "openehr-explorer" do
             version "${VERSION}"
             sha256 "${SHA256}"
@@ -484,16 +489,109 @@ jobs:
             EOS
           end
           EOF
+          )
 
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          CURRENT_SHA=$(GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api "/repos/${TAP_REPO}/contents/${TAP_FILE}" --jq '.sha' 2>/dev/null || true)
 
-          if git diff --quiet; then
-            echo "No changes to Cask formula, nothing to push."
+          REQUEST_BODY=$(jq -n \
+            --arg message "chore: update openehr-explorer to ${VERSION}" \
+            --arg content "$(printf '%s' "$CASK_CONTENT" | base64 -w0)" \
+            --arg sha "$CURRENT_SHA" \
+            --arg branch "main" \
+            'if $sha == "" then {message: $message, content: $content, branch: $branch}
+             else {message: $message, content: $content, sha: $sha, branch: $branch} end')
+
+          echo "$REQUEST_BODY" | GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api --method PUT \
+            "/repos/${TAP_REPO}/contents/${TAP_FILE}" --input -
+
+  publish-scoop-bucket:
+    name: Publish Scoop bucket
+    needs: [build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      # Updates the manifest in the platzhersh/scoop-openehr-explorer bucket
+      # on every version tag. Requires a SCOOP_BUCKET_TOKEN secret (a PAT
+      # with push access to the bucket repo) — see OEH-5. Skips quietly if
+      # not configured, so this job never fails a release on a missing
+      # secret.
+      - name: Update Scoop bucket
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$SCOOP_BUCKET_TOKEN" ]; then
+            echo "::notice::SCOOP_BUCKET_TOKEN not configured — skipping Scoop bucket update. See OEH-5."
             exit 0
           fi
 
-          git add Casks/openehr-explorer.rb
-          git commit -m "chore: update openehr-explorer to ${VERSION}"
-          git push
+          VERSION="${TAG_NAME#v}"
+          EXE_NAME="openEHR.Explorer_${VERSION}_x64-setup.exe"
+
+          # Release assets already carry a sha256 digest (visible via the
+          # REST API), so we don't need to download the exe to hash it.
+          # `gh api --jq` only takes a single jq expression — it doesn't
+          # proxy extra jq flags like --arg — so pipe through `jq` itself
+          # for the parameterized filter (same pattern as asset_url() above).
+          DIGEST=$(gh api "/repos/${REPO}/releases/tags/${TAG_NAME}" --jq '.assets' | \
+            jq -r --arg name "$EXE_NAME" '.[] | select(.name == $name) | .digest')
+
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "null" ]; then
+            echo "::error::Could not find digest for $EXE_NAME in release $TAG_NAME"
+            exit 1
+          fi
+
+          SHA256="${DIGEST#sha256:}"
+
+          # Update the file via the Contents API instead of `git clone` with
+          # a token embedded in the remote URL — avoids the credential
+          # persisting in a checked-out .git/config and showing up in any
+          # error output that might echo the remote URL.
+          BUCKET_REPO="platzhersh/scoop-openehr-explorer"
+          BUCKET_FILE="bucket/openehr-explorer.json"
+
+          MANIFEST_CONTENT=$(cat <<EOF
+          {
+              "version": "${VERSION}",
+              "description": "Browse, query, and inspect any openEHR CDR — no curl required.",
+              "homepage": "https://platzhersh.github.io/openehr-explorer/",
+              "license": "Apache-2.0",
+              "url": "https://github.com/${REPO}/releases/download/${TAG_NAME}/${EXE_NAME}",
+              "hash": "${SHA256}",
+              "installer": {
+                  "file": "${EXE_NAME}",
+                  "args": [
+                      "/S",
+                      "/D=\$dir"
+                  ]
+              },
+              "uninstaller": {
+                  "file": "uninstall.exe"
+              },
+              "checkver": {
+                  "github": "${REPO}"
+              },
+              "autoupdate": {
+                  "url": "https://github.com/${REPO}/releases/download/v\$version/openEHR.Explorer_\$version_x64-setup.exe"
+              },
+              "notes": "openEHR Explorer is not yet notarized/Authenticode-signed. Windows SmartScreen may warn on first launch — click 'More info' > 'Run anyway'."
+          }
+          EOF
+          )
+
+          CURRENT_SHA=$(GH_TOKEN="$SCOOP_BUCKET_TOKEN" gh api "/repos/${BUCKET_REPO}/contents/${BUCKET_FILE}" --jq '.sha' 2>/dev/null || true)
+
+          REQUEST_BODY=$(jq -n \
+            --arg message "chore: update openehr-explorer to ${VERSION}" \
+            --arg content "$(printf '%s' "$MANIFEST_CONTENT" | base64 -w0)" \
+            --arg sha "$CURRENT_SHA" \
+            --arg branch "main" \
+            'if $sha == "" then {message: $message, content: $content, branch: $branch}
+             else {message: $message, content: $content, sha: $sha, branch: $branch} end')
+
+          echo "$REQUEST_BODY" | GH_TOKEN="$SCOOP_BUCKET_TOKEN" gh api --method PUT \
+            "/repos/${BUCKET_REPO}/contents/${BUCKET_FILE}" --input -
