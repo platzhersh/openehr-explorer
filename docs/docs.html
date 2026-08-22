@@ -396,14 +396,15 @@
         </div>
 
         <h3>macOS</h3>
-        <p>Download the <code>.dmg</code> file from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Open the DMG and drag openEHR Explorer to your Applications folder.</p>
-        <div class="code-block"><span class="code-comment"># Homebrew — coming soon</span>
-brew install --cask openehr-explorer</div>
+        <p>Download the <code>.dmg</code> file from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Open the DMG and drag openEHR Explorer to your Applications folder. Or install via Homebrew:</p>
+        <div class="code-block">brew install --cask platzhersh/openehr-explorer/openehr-explorer</div>
+        <p>Not yet notarized by Apple — see <a href="#troubleshooting">Troubleshooting</a> if macOS reports the app as damaged on first launch.</p>
 
         <h3>Windows</h3>
-        <p>Download the <code>.msi</code> installer from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> and run it. The app will be added to your Start menu.</p>
-        <div class="code-block"><span class="code-comment"># winget — coming soon</span>
-winget install openehr-explorer</div>
+        <p>Download the <code>.exe</code> installer from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> and run it. The app will be added to your Start menu. Or install via Scoop:</p>
+        <div class="code-block">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer
+scoop install openehr-explorer</div>
+        <p>Not yet Authenticode-signed — Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
         <h3>Linux</h3>
         <p>Two package formats are published on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
