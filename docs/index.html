@@ -592,10 +592,10 @@
       <h1>openEHR Explorer</h1>
       <p class="hero-tagline">Browse, query, and inspect any openEHR CDR &mdash; no curl required.</p>
       <div class="cta-group">
-        <a href="https://github.com/platzhersh/openehr-explorer/releases" class="btn btn-primary">Download for macOS</a>
+        <a href="https://github.com/platzhersh/openehr-explorer/releases" id="download-btn" class="btn btn-primary">Download for macOS</a>
         <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
       </div>
-      <p class="version-badge">v0.5.0 &middot; macOS &middot; Windows &middot; Linux</p>
+      <p class="version-badge">v0.5.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
     </section>
 
     <!-- ── UI Preview Strip ── -->
@@ -783,6 +783,34 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Detect the visitor's OS and adjust the primary download button to match.
+    (function () {
+      var downloadBtn = document.getElementById('download-btn');
+      if (!downloadBtn) return;
+
+      function detectOS() {
+        var uaData = navigator.userAgentData;
+        if (uaData && uaData.platform) {
+          var p = uaData.platform.toLowerCase();
+          if (p.indexOf('win') !== -1) return 'Windows';
+          if (p.indexOf('mac') !== -1) return 'macOS';
+          if (p.indexOf('linux') !== -1) return 'Linux';
+        }
+        var ua = (navigator.userAgent || '').toLowerCase();
+        if (ua.indexOf('win') !== -1) return 'Windows';
+        if (ua.indexOf('mac') !== -1) return 'macOS';
+        if (ua.indexOf('linux') !== -1 && ua.indexOf('android') === -1) return 'Linux';
+        return null; // mobile / unrecognized — keep the default label
+      }
+
+      var os = detectOS();
+      if (os) {
+        downloadBtn.textContent = 'Download for ' + os;
+      }
+    })();
+  </script>
 
 </body>
 </html>
