@@ -47,10 +47,10 @@ const progressPercent = () => {
       Downloading… {{ updateStore.totalBytes > 0 ? `${progressPercent()}%` : "" }}
     </div>
     <div v-else class="update-actions">
-      <button class="btn btn-sm btn-primary" @click="updateStore.downloadAndInstall">
+      <button type="button" class="btn btn-sm btn-primary" @click="updateStore.downloadAndInstall">
         Download &amp; Install
       </button>
-      <button class="btn btn-sm" @click="updateStore.dismiss">Later</button>
+      <button type="button" class="btn btn-sm" @click="updateStore.dismiss">Later</button>
     </div>
   </div>
 </template>

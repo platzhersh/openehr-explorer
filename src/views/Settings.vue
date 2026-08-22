@@ -112,6 +112,7 @@ async function checkForUpdatesNow() {
 
         <div class="form-group">
           <button
+            type="button"
             class="btn btn-sm"
             @click="checkForUpdatesNow"
             :disabled="updateStore.status === 'checking'"
