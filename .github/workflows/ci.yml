@@ -241,8 +241,8 @@ jobs:
           update_release_body: true
           request_rate: 4
           files: |
-            src-tauri/target/release/bundle/nsis/openEHR.Explorer_*.exe
-            src-tauri/target/release/bundle/msi/openEHR.Explorer_*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
 
   build-linux:
     name: Build Linux (Tauri)
