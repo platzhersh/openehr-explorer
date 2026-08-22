@@ -29,11 +29,30 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 
 Download the latest build for macOS, Windows, or Linux from [GitHub Releases](https://github.com/platzhersh/openehr-explorer/releases/latest).
 
-On macOS, you can also install via Homebrew:
+**macOS** — also installable via Homebrew:
 
 ```bash
 brew install --cask platzhersh/openehr-explorer/openehr-explorer
 ```
+
+**Windows** — also installable via Scoop:
+
+```bash
+scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer
+scoop install openehr-explorer
+```
+
+**Linux** — `.deb` (Debian/Ubuntu) or portable `.AppImage` (any distro):
+
+```bash
+# .deb
+sudo apt install ./openehr-explorer_<version>_amd64.deb
+
+# or .AppImage
+chmod +x openehr-explorer_<version>_amd64.AppImage && ./openehr-explorer_<version>_amd64.AppImage
+```
+
+See the [installation docs](https://platzhersh.github.io/openehr-explorer/docs.html#installation) for troubleshooting (unsigned builds, Gatekeeper/SmartScreen warnings).
 
 ## Prerequisites
 
@@ -151,8 +170,10 @@ There is no dedicated developer GUI for openEHR. Developers currently reach for 
 
 ## Documentation
 
-- [PRD-0001: Desktop CDR Browser](docs/prd/PRD-0001-openehr-explorer-desktop-cdr-browser.md)
-- [ADR-0001: PRD and ADR Documentation](docs/adr/ADR-0001-use-prd-and-adr-documentation.md)
+- [User docs & guides](https://platzhersh.github.io/openehr-explorer/docs.html)
+- [PRDs](docs/prd/) — product requirements for each feature
+- [ADRs](docs/adr/) — architecture decisions and rationale
+- [RELEASING.md](RELEASING.md) — release process
 
 ## License
 
