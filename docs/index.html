@@ -792,17 +792,25 @@
 
       function detectOS() {
         var uaData = navigator.userAgentData;
-        if (uaData && uaData.platform) {
-          var p = uaData.platform.toLowerCase();
-          if (p.indexOf('win') !== -1) return 'Windows';
-          if (p.indexOf('mac') !== -1) return 'macOS';
-          if (p.indexOf('linux') !== -1) return 'Linux';
+        if (uaData) {
+          if (uaData.mobile) return null; // phone/tablet — keep the default label
+          if (uaData.platform) {
+            var p = uaData.platform.toLowerCase();
+            if (p.includes('win')) return 'Windows';
+            if (p.includes('mac')) return 'macOS';
+            if (p.includes('linux')) return 'Linux';
+          }
         }
+
         var ua = (navigator.userAgent || '').toLowerCase();
-        if (ua.indexOf('win') !== -1) return 'Windows';
-        if (ua.indexOf('mac') !== -1) return 'macOS';
-        if (ua.indexOf('linux') !== -1 && ua.indexOf('android') === -1) return 'Linux';
-        return null; // mobile / unrecognized — keep the default label
+        if (/iphone|ipad|ipod|android/.test(ua)) return null;
+        // iPadOS in "desktop" Safari mode reports as a plain Macintosh UA but,
+        // unlike a real Mac, exposes multiple touch points.
+        if (ua.includes('macintosh') && navigator.maxTouchPoints > 1) return null;
+        if (ua.includes('win')) return 'Windows';
+        if (ua.includes('mac')) return 'macOS';
+        if (ua.includes('linux')) return 'Linux';
+        return null; // unrecognized — keep the default label
       }
 
       var os = detectOS();
