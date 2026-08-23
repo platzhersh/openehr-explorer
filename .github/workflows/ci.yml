@@ -215,9 +215,25 @@ jobs:
       # stays unsigned, same as today) if the SignPath secrets/vars aren't
       # configured yet, matching the graceful-degradation pattern the other
       # optional signing steps in this job already use.
+      #
+      # Step `if:` conditions can't reference `secrets.*` directly (GitHub
+      # Actions rejects it with "Unrecognized named-value: 'secrets'"), so
+      # the check happens once here in a `run:` block — same workaround the
+      # "Build Tauri app" step above already uses — and the result is
+      # exposed as a step output for later `if:` conditions to read.
+      - name: Check whether SignPath is configured
+        id: signpath-check
+        shell: bash
+        run: |
+          echo "configured=$([ -n "$SIGNPATH_API_TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "updater-configured=$([ -n "$SIGNPATH_API_TOKEN" ] && [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
       - name: Upload unsigned installer for SignPath
         id: upload-unsigned-installer
-        if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+        if: steps.signpath-check.outputs.configured == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: openehr-explorer-windows-unsigned
@@ -225,7 +241,7 @@ jobs:
           if-no-files-found: error
 
       - name: Submit installer for Authenticode signing (SignPath)
-        if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+        if: steps.signpath-check.outputs.configured == 'true'
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -237,7 +253,7 @@ jobs:
           output-artifact-directory: src-tauri/target/release/bundle/nsis-signed
 
       - name: Replace installer with the signed version
-        if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+        if: steps.signpath-check.outputs.configured == 'true'
         shell: bash
         run: |
           rm -f src-tauri/target/release/bundle/nsis/*.exe
@@ -248,7 +264,7 @@ jobs:
       # bytes, so that .sig no longer verifies against the file we're about
       # to ship — regenerate it against the now-signed installer.
       - name: Re-sign updater manifest for the Authenticode-signed installer
-        if: ${{ secrets.SIGNPATH_API_TOKEN != '' && secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        if: steps.signpath-check.outputs.updater-configured == 'true'
         shell: bash
         run: |
           for exe in src-tauri/target/release/bundle/nsis/*.exe; do
