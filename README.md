@@ -91,6 +91,11 @@ See the full, always-up-to-date **[Tool Comparison](https://platzhersh.github.io
 - [ADRs](docs/adr/) — architecture decisions and rationale
 - [RELEASING.md](RELEASING.md) — release process
 
+## Community
+
+- [Announcement on openEHR Discourse](https://discourse.openehr.org/t/openehr-explorer-a-cross-platform-desktop-cdr-browser-macos-windows-linux/17229) — introduction, background, and discussion
+- [openEHR Discourse](https://discourse.openehr.org/) — general openEHR community forum
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE) for details.
