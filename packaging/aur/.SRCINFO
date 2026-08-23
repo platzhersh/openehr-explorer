@@ -1,0 +1,17 @@
+pkgbase = open-ehr-explorer-bin
+	pkgdesc = A native desktop app for browsing, querying, and inspecting openEHR CDR instances
+	pkgver = 0.5.0
+	pkgrel = 1
+	url = https://platzhersh.github.io/openehr-explorer/
+	arch = x86_64
+	license = Apache-2.0
+	provides = open-ehr-explorer
+	conflicts = open-ehr-explorer
+	depends = webkit2gtk-4.1
+	depends = gtk3
+	options = !strip
+	options = !emptydirs
+	source = https://github.com/platzhersh/openehr-explorer/releases/download/v0.5.0/openEHR.Explorer_0.5.0_amd64.deb
+	sha256sums = b1d444bd6d669c0df007af25f5ca211284d51411aa32ed0f4b0c2f89ed8ff3b7
+
+pkgname = open-ehr-explorer-bin

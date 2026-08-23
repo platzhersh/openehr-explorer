@@ -1,0 +1,35 @@
+# Maintainer: platzhersh
+#
+# Pre-built binary package (installs the same .deb produced by the Tauri
+# release CI, extracted rather than rebuilt) — AUR convention requires the
+# -bin suffix for packages that ship pre-compiled binaries instead of
+# building from source. Building this app from source at package-build time
+# isn't practical for AUR: it needs network access (npm/cargo fetch) during
+# the build step, which AUR's clean-chroot build disallows.
+#
+# See OEH-12: https://github.com/platzhersh/openehr-explorer for source.
+
+pkgname=open-ehr-explorer-bin
+pkgver=0.5.0
+pkgrel=1
+pkgdesc="A native desktop app for browsing, querying, and inspecting openEHR CDR instances"
+arch=('x86_64')
+url="https://platzhersh.github.io/openehr-explorer/"
+license=('Apache-2.0')
+provides=('open-ehr-explorer')
+conflicts=('open-ehr-explorer')
+# Matches the real Depends: field in the .deb's control file
+# (libwebkit2gtk-4.1-0, libgtk-3-0) — verified against the v0.5.0 build.
+depends=('webkit2gtk-4.1' 'gtk3')
+options=('!strip' '!emptydirs')
+source=("https://github.com/platzhersh/openehr-explorer/releases/download/v${pkgver}/openEHR.Explorer_${pkgver}_amd64.deb")
+sha256sums=('b1d444bd6d669c0df007af25f5ca211284d51411aa32ed0f4b0c2f89ed8ff3b7')
+
+package() {
+  # .deb is an `ar` archive containing debian-binary, control.tar.*, and
+  # data.tar.* — unpack the outer ar first, then the inner data tarball
+  # (whose compression varies by dpkg version, hence the glob) straight
+  # into the package dir. Same file contents apt would install.
+  bsdtar -xf "openEHR.Explorer_${pkgver}_amd64.deb"
+  tar -xf data.tar.* -C "${pkgdir}"
+}
