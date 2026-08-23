@@ -157,14 +157,21 @@ async function recordScenes(page) {
   cues.at(-1).endMs = Date.now() - sceneStart;
 }
 
-function encode(rawWebm, tmpDir) {
+function encode(rawWebm, tmpDir, leadInSeconds) {
   const mp4Path = path.join(ASSETS_DIR, "demo.mp4");
   const gifPath = path.join(ASSETS_DIR, "demo.gif");
   const rawGif = path.join(tmpDir, "raw.gif");
 
+  // Playwright's recordVideo starts capturing at context creation — before
+  // page.goto() navigates — so the raw footage always opens on a blank
+  // about:blank frame or two. -ss (input seeking, before -i) trims exactly
+  // that lead-in, timed from the same page.goto()-to-loaded measurement
+  // the VTT cues are already zeroed against, so captions stay in sync.
+  const seekArgs = ["-ss", leadInSeconds.toFixed(3)];
+
   console.log("encoding mp4...");
   execFileSync(FFMPEG, [
-    "-y", "-i", rawWebm,
+    "-y", ...seekArgs, "-i", rawWebm,
     "-vf", "scale=1400:-2:flags=lanczos",
     "-c:v", "libx264", "-preset", "slow", "-crf", "20",
     "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an",
@@ -173,7 +180,7 @@ function encode(rawWebm, tmpDir) {
 
   console.log("encoding gif (palette pass)...");
   execFileSync(FFMPEG, [
-    "-y", "-i", rawWebm,
+    "-y", ...seekArgs, "-i", rawWebm,
     "-vf", "fps=12,scale=1000:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff:max_colors=200[p];[b][p]paletteuse=dither=none",
     rawGif,
   ], { stdio: "inherit" });
@@ -201,6 +208,10 @@ async function main() {
   fs.mkdirSync(videoDir);
 
   const browser = await chromium.launch();
+  // recordVideo starts capturing right here, at context creation — well
+  // before page.goto() below actually navigates — so this timestamp is
+  // the reference point for measuring (and later trimming) that lead-in.
+  const recordingStartedAt = Date.now();
   const context = await browser.newContext({
     viewport: VIEWPORT,
     deviceScaleFactor: 2, // supersampled capture for sharper downscaled text
@@ -219,7 +230,12 @@ async function main() {
   if (!webmFiles.length) throw new Error("no video was produced");
   const rawWebm = path.join(videoDir, webmFiles[0]);
 
-  encode(rawWebm, tmpDir);
+  // sceneStart (set by the first mark() call, inside recordScenes) is the
+  // same "recording is actually showing the app now" instant the VTT cues
+  // are zeroed against — trimming the raw footage to start there too keeps
+  // the encoded video and the captions in sync.
+  const leadInSeconds = Math.max(0, (sceneStart - recordingStartedAt) / 1000);
+  encode(rawWebm, tmpDir, leadInSeconds);
   writeVtt();
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
