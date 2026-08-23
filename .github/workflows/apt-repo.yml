@@ -6,7 +6,8 @@ name: Publish apt repo
 #
 # Downloads the new .deb into the apt repo's pool/, regenerates the repo
 # index (Packages/Packages.gz/Release/InRelease) from everything already in
-# the pool (so older versions stay installable), signs it, and pushes.
+# the pool (so older versions stay installable), signs it, and pushes each
+# changed file via the GitHub Contents API.
 #
 # See OEH-12.
 on:
@@ -32,7 +33,7 @@ jobs:
       - name: Update apt repository
         if: ${{ env.APT_REPO_TOKEN != '' && env.APT_SIGNING_PRIVATE_KEY != '' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ env.APT_REPO_TOKEN }}
           APT_SIGNING_KEY_PASSPHRASE: ${{ secrets.APT_SIGNING_KEY_PASSPHRASE }}
           TAG_NAME: ${{ github.event.release.tag_name }}
           REPO: ${{ github.repository }}
@@ -41,6 +42,7 @@ jobs:
 
           VERSION="${TAG_NAME#v}"
           DEB_NAME="openEHR.Explorer_${VERSION}_amd64.deb"
+          APT_REPO="platzhersh/apt-openehr-explorer"
 
           # Import the signing key and resolve its key ID for --local-user.
           echo "$APT_SIGNING_PRIVATE_KEY" | gpg --batch --import
@@ -50,13 +52,11 @@ jobs:
             exit 1
           fi
 
-          # Clone via an Authorization header instead of embedding the token
-          # in the remote URL — a URL-embedded credential persists in
-          # .git/config and risks exposure via echoed error output (see
-          # OEH-4's SonarCloud finding on the equivalent Homebrew/Scoop jobs).
-          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$APT_REPO_TOKEN" | base64 -w0)"
-          git -c http.https://github.com/.extraheader="$AUTH_HEADER" \
-            clone --depth 50 https://github.com/platzhersh/apt-openehr-explorer.git repo
+          # Anonymous, read-only clone — apt-openehr-explorer is public and
+          # nothing here pushes via git, so no credential is needed for this
+          # step at all. It's only used to see the full existing pool/ so the
+          # index below covers every previous .deb, not just the new one.
+          git clone --depth 50 "https://github.com/${APT_REPO}.git" repo
 
           POOL_DIR="repo/pool/main/o/open-ehr-explorer"
           mkdir -p "$POOL_DIR"
@@ -82,19 +82,52 @@ jobs:
           apt-ftparchive -c /tmp/apt-ftparchive.conf release dists/stable > dists/stable/Release
 
           rm -f dists/stable/Release.gpg dists/stable/InRelease
-          gpg --batch --pinentry-mode loopback --passphrase "$APT_SIGNING_KEY_PASSPHRASE" \
-            --local-user "$KEY_ID" --detach-sign --armor -o dists/stable/Release.gpg dists/stable/Release
-          gpg --batch --pinentry-mode loopback --passphrase "$APT_SIGNING_KEY_PASSPHRASE" \
-            --local-user "$KEY_ID" --clearsign -o dists/stable/InRelease dists/stable/Release
+          # --passphrase-fd (fed via a herestring on fd 3) instead of
+          # --passphrase keeps the passphrase out of the process argument
+          # list — anything passed as a literal CLI arg is visible to other
+          # processes on the same host via `ps`, which is what flagged the
+          # previous git-credential-in-URL pattern on the Homebrew/Scoop jobs
+          # (see OEH-4's SonarCloud finding) and applies here too.
+          gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
+            --local-user "$KEY_ID" --detach-sign --armor -o dists/stable/Release.gpg dists/stable/Release \
+            3<<< "$APT_SIGNING_KEY_PASSPHRASE"
+          gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
+            --local-user "$KEY_ID" --clearsign -o dists/stable/InRelease dists/stable/Release \
+            3<<< "$APT_SIGNING_KEY_PASSPHRASE"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
+          # Push every changed/added file through the GitHub Contents API
+          # rather than `git push` — same reasoning as the passphrase above:
+          # this keeps APT_REPO_TOKEN out of any command-line argument (gh
+          # reads it from the GH_TOKEN environment variable set above, not a
+          # flag), whereas a git remote URL or `-c http.extraheader` value is
+          # visible via `ps`. Mirrors the Contents-API approach already used
+          # by the Homebrew/Scoop jobs for the same reason.
+          publish_file() {
+            local path="$1"
+            local remote_sha local_sha
+            remote_sha=$(gh api "repos/${APT_REPO}/contents/${path}" --jq '.sha' 2>/dev/null || true)
+            local_sha=$(git hash-object "$path")
 
-          if git diff --cached --quiet; then
-            echo "No changes to the apt repo, nothing to push."
-            exit 0
-          fi
+            if [ "$remote_sha" = "$local_sha" ]; then
+              echo "No change to ${path}, skipping."
+              return
+            fi
 
-          git commit -m "chore: publish ${VERSION}"
-          git -c http.https://github.com/.extraheader="$AUTH_HEADER" push
+            local content
+            content=$(base64 -w0 "$path")
+            if [ -n "$remote_sha" ] && [ "$remote_sha" != "null" ]; then
+              gh api -X PUT "repos/${APT_REPO}/contents/${path}" \
+                -f message="chore: publish ${VERSION}" -f content="$content" -f sha="$remote_sha" > /dev/null
+            else
+              gh api -X PUT "repos/${APT_REPO}/contents/${path}" \
+                -f message="chore: publish ${VERSION}" -f content="$content" > /dev/null
+            fi
+            echo "Published ${path}"
+          }
+
+          publish_file "pool/main/o/open-ehr-explorer/${DEB_NAME}"
+          publish_file "dists/stable/main/binary-amd64/Packages"
+          publish_file "dists/stable/main/binary-amd64/Packages.gz"
+          publish_file "dists/stable/Release"
+          publish_file "dists/stable/Release.gpg"
+          publish_file "dists/stable/InRelease"
