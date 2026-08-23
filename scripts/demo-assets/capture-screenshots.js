@@ -13,6 +13,7 @@ import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { requireBinary } from "./resolve-binary.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -24,21 +25,9 @@ const APP_URL = urlArgIdx !== -1 ? process.argv[urlArgIdx + 1] : "http://localho
 
 const VIEWPORT = { width: 1440, height: 960 };
 
-// Sanitize PATH before shelling out to ffmpeg below — strip empty/relative
-// entries so a stray relative (or otherwise untrusted) directory earlier
-// in PATH can't shadow the real binary.
-process.env.PATH = (process.env.PATH || "")
-  .split(path.delimiter)
-  .filter((dir) => path.isAbsolute(dir))
-  .join(path.delimiter);
-
-try {
-  execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
-} catch {
-  console.error("error: 'ffmpeg' not found on PATH — install it (e.g. apt/brew install ffmpeg) and retry.");
-  console.error("(Playwright can only capture PNG directly; ffmpeg converts to the .webp files this script writes.)");
-  process.exit(1);
-}
+// (Playwright can only capture PNG directly; ffmpeg converts to the .webp
+// files this script writes.)
+const FFMPEG = requireBinary("ffmpeg", "e.g. apt/brew install ffmpeg");
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "openehr-explorer-screenshots-"));
 
@@ -81,7 +70,7 @@ async function saveElementScreenshot(page, selector, filename) {
   const pngPath = path.join(tmpDir, filename.replace(/\.webp$/, ".png"));
   await page.screenshot({ path: pngPath, clip });
   const outPath = path.join(OUT_DIR, filename);
-  execFileSync("ffmpeg", ["-y", "-i", pngPath, "-lossless", "0", "-quality", "90", outPath], { stdio: "ignore" });
+  execFileSync(FFMPEG, ["-y", "-i", pngPath, "-lossless", "0", "-quality", "90", outPath], { stdio: "ignore" });
   console.log("saved:", filename);
 }
 

@@ -18,6 +18,7 @@ import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { requireBinary } from "./resolve-binary.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -29,23 +30,8 @@ const APP_URL = urlArgIdx !== -1 ? process.argv[urlArgIdx + 1] : "http://localho
 
 const VIEWPORT = { width: 1600, height: 960 };
 
-// Sanitize PATH before shelling out to ffmpeg/gifsicle below — strip
-// empty/relative entries so a stray relative (or otherwise untrusted)
-// directory earlier in PATH can't shadow the real binary.
-process.env.PATH = (process.env.PATH || "")
-  .split(path.delimiter)
-  .filter((dir) => path.isAbsolute(dir))
-  .join(path.delimiter);
-
-const VERSION_FLAG = { ffmpeg: "-version", gifsicle: "--version" };
-for (const bin of ["ffmpeg", "gifsicle"]) {
-  try {
-    execFileSync(bin, [VERSION_FLAG[bin]], { stdio: "ignore" });
-  } catch {
-    console.error(`error: '${bin}' not found on PATH — install it (e.g. apt/brew install ${bin}) and retry.`);
-    process.exit(1);
-  }
-}
+const FFMPEG = requireBinary("ffmpeg", "e.g. apt/brew install ffmpeg");
+const GIFSICLE = requireBinary("gifsicle", "e.g. apt/brew install gifsicle");
 
 // Wall-clock cue log kept in lockstep with the recording, written out as a
 // WebVTT file afterwards. `mark()` records "this caption starts now".
@@ -177,7 +163,7 @@ function encode(rawWebm, tmpDir) {
   const rawGif = path.join(tmpDir, "raw.gif");
 
   console.log("encoding mp4...");
-  execFileSync("ffmpeg", [
+  execFileSync(FFMPEG, [
     "-y", "-i", rawWebm,
     "-vf", "scale=1400:-2:flags=lanczos",
     "-c:v", "libx264", "-preset", "slow", "-crf", "20",
@@ -186,14 +172,14 @@ function encode(rawWebm, tmpDir) {
   ], { stdio: "inherit" });
 
   console.log("encoding gif (palette pass)...");
-  execFileSync("ffmpeg", [
+  execFileSync(FFMPEG, [
     "-y", "-i", rawWebm,
     "-vf", "fps=12,scale=1000:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff:max_colors=200[p];[b][p]paletteuse=dither=none",
     rawGif,
   ], { stdio: "inherit" });
 
   console.log("optimizing gif with gifsicle...");
-  execFileSync("gifsicle", ["-O3", "--lossy=40", "-o", gifPath, rawGif], { stdio: "inherit" });
+  execFileSync(GIFSICLE, ["-O3", "--lossy=40", "-o", gifPath, rawGif], { stdio: "inherit" });
 
   console.log("mp4:", mp4Path, `(${(fs.statSync(mp4Path).size / 1024).toFixed(0)} KB)`);
   console.log("gif:", gifPath, `(${(fs.statSync(gifPath).size / 1024).toFixed(0)} KB)`);
