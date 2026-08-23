@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tool Comparison — openEHR Explorer</title>
-  <meta name="description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, and Better Studio for openEHR development.">
+  <meta name="description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, Better Studio, and ehr-ctrl for openEHR development.">
   <link rel="canonical" href="https://platzhersh.github.io/openehr-explorer/compare.html">
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -18,7 +18,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="openEHR Explorer">
   <meta property="og:title" content="Tool Comparison — openEHR Explorer">
-  <meta property="og:description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, and Better Studio for openEHR development.">
+  <meta property="og:description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, Better Studio, and ehr-ctrl for openEHR development.">
   <meta property="og:url" content="https://platzhersh.github.io/openehr-explorer/compare.html">
   <meta property="og:image" content="https://platzhersh.github.io/openehr-explorer/assets/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -27,7 +27,7 @@
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Tool Comparison — openEHR Explorer">
-  <meta name="twitter:description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, and Better Studio for openEHR development.">
+  <meta name="twitter:description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, Better Studio, and ehr-ctrl for openEHR development.">
   <meta name="twitter:image" content="https://platzhersh.github.io/openehr-explorer/assets/og-image.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -184,7 +184,7 @@
     /* ── Tool Column Headers ── */
     .tool-headers {
       display: grid;
-      grid-template-columns: 220px repeat(4, 1fr);
+      grid-template-columns: 200px repeat(5, 1fr);
       gap: 8px;
       margin-bottom: 8px;
     }
@@ -259,7 +259,7 @@
     /* ── Feature Rows ── */
     .feature-row {
       display: grid;
-      grid-template-columns: 220px repeat(4, 1fr);
+      grid-template-columns: 200px repeat(5, 1fr);
       gap: 8px;
       margin-bottom: 4px;
       align-items: stretch;
@@ -303,6 +303,7 @@
     .no { color: var(--error); font-size: 14px; opacity: 0.8; }
     .partial { color: var(--warning); font-size: 13px; }
     .planned { color: var(--planned); font-size: 12px; }
+    .unknown { color: var(--text-muted); font-size: 13px; opacity: 0.8; }
     .note { color: var(--text-secondary); font-size: 10px; font-family: var(--font-mono); }
     .note.primary { color: var(--primary-dim); }
 
@@ -314,7 +315,7 @@
     }
     .score-row {
       display: grid;
-      grid-template-columns: 220px repeat(4, 1fr);
+      grid-template-columns: 200px repeat(5, 1fr);
       gap: 8px;
     }
     .score-label {
@@ -415,7 +416,7 @@
       .tool-headers,
       .feature-row,
       .score-row {
-        grid-template-columns: 160px repeat(4, 1fr);
+        grid-template-columns: 150px repeat(5, 1fr);
       }
       .feat-label { font-size: 12px; padding: 8px 10px; }
       .cell { font-size: 10px; padding: 8px 4px; }
@@ -437,7 +438,7 @@
       .empty-header { display: none; }
 
       .feature-row {
-        grid-template-columns: 1fr 1fr 1fr 1fr;
+        grid-template-columns: repeat(5, 1fr);
         margin-bottom: 16px;
       }
       .feat-label {
@@ -534,6 +535,7 @@
       <div class="legend-item"><span class="partial">&#9681;</span> Partial / limited</div>
       <div class="legend-item"><span class="no">&#10007;</span> Not supported</div>
       <div class="legend-item"><span class="planned">&#8224;</span> Planned (Phase 2)</div>
+      <div class="legend-item"><span class="unknown">?</span> Not yet evaluated</div>
     </div>
 
     <!-- ── Column Headers ── -->
@@ -559,6 +561,11 @@
         <div class="tool-name">Better Studio</div>
         <div class="tool-type">Web app (proprietary)<br>Better Platform only</div>
       </div>
+
+      <div class="tool-card">
+        <div class="tool-name">ehr-ctrl</div>
+        <div class="tool-type">Desktop app (Windows)<br>Free, newly discovered</div>
+      </div>
     </div>
 
     <!-- ─── SETUP & ACCESS ─── -->
@@ -570,14 +577,16 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span><br><span class="note">Docker Compose</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">SaaS / hosted</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Installs in &lt; 2 min</div>
-      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">dmg / exe / deb</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">dmg/exe/deb/AppImage, brew/scoop</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span><br><span class="note">docker compose up</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Account required</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -586,6 +595,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -594,14 +604,16 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Env vars / manual</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">Supports Better Platform</div>
-      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">Phase 2</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">Partial, CRUD in beta</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br><span class="note">Native</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -610,6 +622,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <!-- ─── EHR BROWSING ─── -->
@@ -621,6 +634,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -629,6 +643,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -637,6 +652,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -645,6 +661,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -653,6 +670,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -661,6 +679,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual only</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -669,6 +688,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -677,6 +697,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <!-- ─── TEMPLATE TOOLING ─── -->
@@ -688,6 +709,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -696,6 +718,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -704,6 +727,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -712,6 +736,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -720,6 +745,16 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">OPT XML pretty-printed view</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Indented, syntax-highlighted</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br><span class="note">Native response formatting</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <!-- ─── AQL ─── -->
@@ -731,6 +766,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Raw body only</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -739,6 +775,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span><br><span class="note">Raw JSON</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -747,6 +784,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br><span class="note">Collections</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -755,6 +793,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -763,6 +802,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <!-- ─── DEVELOPER DX ─── -->
@@ -774,6 +814,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br><span class="note">Native feature</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -782,6 +823,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -790,6 +832,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br><span class="note">Apache 2.0</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Freemium</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Proprietary</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -798,6 +841,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="feature-row">
@@ -806,27 +850,98 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Secure credential storage (OS keychain)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Keychain + encrypted-file fallback</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Vault variables, not OS keychain</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Signed auto-update (in-place)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Checks GitHub Releases</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span><br><span class="note">Manual docker pull</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br><span class="note">Self-updates</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br><span class="note">Hosted, always latest</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
+    </div>
+
+    <!-- ─── ADVANCED RESOURCES ─── -->
+    <div class="cat-title">Advanced Resources &amp; Dashboard</div>
+
+    <div class="feature-row">
+      <div class="feat-label">EHR_STATUS view &amp; update</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">Modifiable/queryable flags editable</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Explicit handling</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">DIRECTORY (folder hierarchy) operations &sup3;</div>
+      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">CONTRIBUTION tracking / audit trail &sup3;</div>
+      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">STORED_QUERY execution &sup3;</div>
+      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Ad-hoc AQL only</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Landing dashboard (live EHR/composition/template counts)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
     </div>
 
     <!-- ─── SCORES ─── -->
     <div class="score-section">
       <div class="score-row">
-        <div class="score-label">Phase 1 score</div>
+        <div class="score-label">Feature score</div>
         <div class="score-cell ours" data-tool="Explorer">
-          <span class="score-num primary">20</span>
-          <span class="score-denom">of 23</span>
+          <span class="score-num primary">29.5</span>
+          <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="openEHRTool">
-          <span class="score-num">9.5</span>
-          <span class="score-denom">of 23</span>
+          <span class="score-num">12.5</span>
+          <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="Postman">
-          <span class="score-num">9</span>
-          <span class="score-denom">of 23</span>
+          <span class="score-num">15.5</span>
+          <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="Better Studio">
-          <span class="score-num">11.5</span>
-          <span class="score-denom">of 23</span>
+          <span class="score-num">15</span>
+          <span class="score-denom">of 37</span>
+        </div>
+        <div class="score-cell" data-tool="ehr-ctrl">
+          <span class="score-num" style="color: var(--text-muted); font-size: 18px;">N/A</span>
+          <span class="score-denom">insufficient data</span>
         </div>
       </div>
     </div>
@@ -858,8 +973,9 @@
     <div class="footnotes">
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
-      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only</p>
-      <p>Last updated April 2026.</p>
+      <p>&sup3; openEHR Explorer does not yet have dedicated UI for the DIRECTORY, CONTRIBUTION, or STORED_QUERY resources &mdash; the underlying data is reachable via AQL and the Request Inspector, but there's no dedicated browsing/editing surface for them yet. Tracked as known gaps.</p>
+      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client, added to this comparison based on public information &mdash; most rows are marked "not yet evaluated" pending hands-on testing, so its overall score is withheld rather than computed from mostly-unknown data.</p>
+      <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.5.0.</p>
     </div>
 
   </main>
