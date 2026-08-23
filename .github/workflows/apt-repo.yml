@@ -60,7 +60,13 @@ jobs:
 
           POOL_DIR="repo/pool/main/o/open-ehr-explorer"
           mkdir -p "$POOL_DIR"
-          curl -fsSL -o "${POOL_DIR}/${DEB_NAME}" \
+          # --proto '=https' pins curl to HTTPS even across the redirect -L
+          # follows (GitHub release asset downloads redirect through S3) —
+          # without it, a malicious or misconfigured redirect could send this
+          # download over plain HTTP. Flagged by SonarCloud (rule on
+          # unenforced HTTPS through redirects) as the actual MAJOR
+          # vulnerability failing this PR's Quality Gate.
+          curl --proto '=https' -fsSL -o "${POOL_DIR}/${DEB_NAME}" \
             "https://github.com/${REPO}/releases/download/${TAG_NAME}/${DEB_NAME}"
 
           cd repo
