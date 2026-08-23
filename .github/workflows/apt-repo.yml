@@ -6,8 +6,8 @@ name: Publish apt repo
 #
 # Downloads the new .deb into the apt repo's pool/, regenerates the repo
 # index (Packages/Packages.gz/Release/InRelease) from everything already in
-# the pool (so older versions stay installable), signs it, and pushes each
-# changed file via the GitHub Contents API.
+# the pool (so older versions stay installable), signs it, and publishes the
+# whole snapshot as one atomic commit via the GitHub Git Data API.
 #
 # See OEH-12.
 on:
@@ -43,6 +43,8 @@ jobs:
           VERSION="${TAG_NAME#v}"
           DEB_NAME="openEHR.Explorer_${VERSION}_amd64.deb"
           APT_REPO="platzhersh/apt-openehr-explorer"
+          POOL_PATH="pool/main/o/open-ehr-explorer/${DEB_NAME}"
+          BRANCH="main"
 
           # Import the signing key and resolve its key ID for --local-user.
           echo "$APT_SIGNING_PRIVATE_KEY" | gpg --batch --import
@@ -52,99 +54,131 @@ jobs:
             exit 1
           fi
 
-          # Anonymous, read-only clone — apt-openehr-explorer is public and
-          # nothing here pushes via git, so no credential is needed for this
-          # step at all. It's only used to see the full existing pool/ so the
-          # index below covers every previous .deb, not just the new one.
-          git clone --depth 50 "https://github.com/${APT_REPO}.git" repo
-
-          POOL_DIR="repo/pool/main/o/open-ehr-explorer"
-          mkdir -p "$POOL_DIR"
-          # --proto '=https' pins curl to HTTPS even across the redirect -L
-          # follows (GitHub release asset downloads redirect through S3) —
-          # without it, a malicious or misconfigured redirect could send this
-          # download over plain HTTP. Flagged by SonarCloud (rule on
-          # unenforced HTTPS through redirects) as the actual MAJOR
-          # vulnerability failing this PR's Quality Gate.
-          curl --proto '=https' -fsSL -o "${POOL_DIR}/${DEB_NAME}" \
+          # Download once — independent of the apt repo's own state, so a
+          # retry below (after a concurrent-update conflict) doesn't need to
+          # re-fetch it. --proto '=https' pins curl to HTTPS even across the
+          # redirect -L follows (GitHub release asset downloads redirect
+          # through S3) — without it, a redirect could send this download
+          # over plain HTTP.
+          curl --proto '=https' -fsSL -o "/tmp/${DEB_NAME}" \
             "https://github.com/${REPO}/releases/download/${TAG_NAME}/${DEB_NAME}"
 
-          cd repo
-          mkdir -p dists/stable/main/binary-amd64
+          # Rebuilds pool/ + the signed index from a fresh clone of the apt
+          # repo's current state. Callable more than once: if publishing
+          # below loses a race to a concurrent run, we rebuild from
+          # whatever that run just published (including its new .deb)
+          # before retrying, rather than retrying with stale data.
+          build_snapshot() {
+            rm -rf repo
+            git clone --depth 50 "https://github.com/${APT_REPO}.git" repo
+            cd repo
 
-          # Rebuild the index from every .deb in the pool (not just the new
-          # one), so older versions stay resolvable via apt.
-          apt-ftparchive packages pool > dists/stable/main/binary-amd64/Packages
-          gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+            mkdir -p "$(dirname "$POOL_PATH")" dists/stable/main/binary-amd64
+            cp "/tmp/${DEB_NAME}" "$POOL_PATH"
 
-          cat > /tmp/apt-ftparchive.conf <<EOF
-          APT::FTPArchive::Release::Origin "openEHR Explorer";
-          APT::FTPArchive::Release::Label "openEHR Explorer";
-          APT::FTPArchive::Release::Suite "stable";
-          APT::FTPArchive::Release::Codename "stable";
-          APT::FTPArchive::Release::Architectures "amd64";
-          APT::FTPArchive::Release::Components "main";
+            # Rebuild the index from every .deb in the pool (not just the
+            # new one), so older versions stay resolvable via apt.
+            apt-ftparchive packages pool > dists/stable/main/binary-amd64/Packages
+            gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+
+            cat > /tmp/apt-ftparchive.conf <<EOF
+            APT::FTPArchive::Release::Origin "openEHR Explorer";
+            APT::FTPArchive::Release::Label "openEHR Explorer";
+            APT::FTPArchive::Release::Suite "stable";
+            APT::FTPArchive::Release::Codename "stable";
+            APT::FTPArchive::Release::Architectures "amd64";
+            APT::FTPArchive::Release::Components "main";
           EOF
-          apt-ftparchive -c /tmp/apt-ftparchive.conf release dists/stable > dists/stable/Release
+            apt-ftparchive -c /tmp/apt-ftparchive.conf release dists/stable > dists/stable/Release
 
-          rm -f dists/stable/Release.gpg dists/stable/InRelease
-          # --passphrase-fd (fed via a herestring on fd 3) instead of
-          # --passphrase keeps the passphrase out of the process argument
-          # list — anything passed as a literal CLI arg is visible to other
-          # processes on the same host via `ps`, which is what flagged the
-          # previous git-credential-in-URL pattern on the Homebrew/Scoop jobs
-          # (see OEH-4's SonarCloud finding) and applies here too.
-          gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
-            --local-user "$KEY_ID" --detach-sign --armor -o dists/stable/Release.gpg dists/stable/Release \
-            3<<< "$APT_SIGNING_KEY_PASSPHRASE"
-          gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
-            --local-user "$KEY_ID" --clearsign -o dists/stable/InRelease dists/stable/Release \
-            3<<< "$APT_SIGNING_KEY_PASSPHRASE"
+            rm -f dists/stable/Release.gpg dists/stable/InRelease
+            # --passphrase-fd (fed via a herestring on fd 3) instead of
+            # --passphrase keeps the passphrase out of the process argument
+            # list — anything passed as a literal CLI arg is visible to
+            # other processes on the same host via `ps`, which is what
+            # flagged the previous git-credential-in-URL pattern on the
+            # Homebrew/Scoop jobs (see OEH-4's SonarCloud finding) and
+            # applies here too.
+            gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
+              --local-user "$KEY_ID" --detach-sign --armor -o dists/stable/Release.gpg dists/stable/Release \
+              3<<< "$APT_SIGNING_KEY_PASSPHRASE"
+            gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
+              --local-user "$KEY_ID" --clearsign -o dists/stable/InRelease dists/stable/Release \
+              3<<< "$APT_SIGNING_KEY_PASSPHRASE"
 
-          # Push every changed/added file through the GitHub Contents API
-          # rather than `git push` — same reasoning as the passphrase above:
-          # this keeps APT_REPO_TOKEN out of any command-line argument (gh
-          # reads it from the GH_TOKEN environment variable set above, not a
-          # flag), whereas a git remote URL or `-c http.extraheader` value is
-          # visible via `ps`. Mirrors the Contents-API approach already used
-          # by the Homebrew/Scoop jobs for the same reason.
-          #
-          # The request body is built with `jq --rawfile` (reads the
-          # base64'd content straight off disk) and piped into `gh api
-          # --input -` on stdin, rather than `-f content=...` — the .deb
-          # here is tens of MB, and base64'ing that into a `-f`/`--arg`
-          # command-line argument would blow past the shell's ARG_MAX
-          # (~2MB) long before it got anywhere near GitHub's actual
-          # 100MB Contents API limit. The Homebrew/Scoop jobs get away
-          # with `-f content=...` only because their payload is a few KB
-          # of text.
-          publish_file() {
-            local path="$1"
-            local remote_sha local_sha
-            remote_sha=$(gh api "repos/${APT_REPO}/contents/${path}" --jq '.sha' 2>/dev/null || true)
-            local_sha=$(git hash-object "$path")
-
-            if [ "$remote_sha" = "$local_sha" ]; then
-              echo "No change to ${path}, skipping."
-              return
-            fi
-
-            base64 -w0 "$path" > /tmp/publish-content.b64
-
-            jq -n --rawfile content /tmp/publish-content.b64 \
-              --arg message "chore: publish ${VERSION}" \
-              --arg sha "$remote_sha" \
-              '{message: $message, content: $content}
-               + (if ($sha | length) > 0 and $sha != "null" then {sha: $sha} else {} end)' \
-              | gh api --method PUT "repos/${APT_REPO}/contents/${path}" --input - > /dev/null
-
-            rm -f /tmp/publish-content.b64
-            echo "Published ${path}"
+            cd ..
           }
 
-          publish_file "pool/main/o/open-ehr-explorer/${DEB_NAME}"
-          publish_file "dists/stable/main/binary-amd64/Packages"
-          publish_file "dists/stable/main/binary-amd64/Packages.gz"
-          publish_file "dists/stable/Release"
-          publish_file "dists/stable/Release.gpg"
-          publish_file "dists/stable/InRelease"
+          # Publishes pool/ + dists/ as a single atomic commit via the Git
+          # Data API (blob-per-file, one tree, one commit, one fast-forward
+          # ref update) instead of N independent Contents-API PUTs. With
+          # per-file PUTs, two releases publishing close together could each
+          # read a stale index SHA and each successfully overwrite the
+          # other's newer index — the second .deb would land in pool/ but
+          # never appear in Packages, making it uninstallable via apt until
+          # the *next* release happened to fix it by accident. A single
+          # commit built from one tree can't half-apply, and updating the
+          # ref with force:false makes GitHub reject the update outright
+          # (rather than silently accept it) if another commit landed on
+          # main since we cloned — so we detect the race and retry against
+          # the now-current state instead of clobbering it.
+          publish_snapshot() {
+            local attempt=1
+            local max_attempts=5
+
+            while [ "$attempt" -le "$max_attempts" ]; do
+              cd repo
+              local base_sha base_tree_sha
+              base_sha=$(gh api "repos/${APT_REPO}/git/ref/heads/${BRANCH}" --jq '.object.sha')
+              base_tree_sha=$(gh api "repos/${APT_REPO}/git/commits/${base_sha}" --jq '.tree.sha')
+
+              local files=(
+                "$POOL_PATH"
+                "dists/stable/main/binary-amd64/Packages"
+                "dists/stable/main/binary-amd64/Packages.gz"
+                "dists/stable/Release"
+                "dists/stable/Release.gpg"
+                "dists/stable/InRelease"
+              )
+
+              local tree_entries="[]"
+              for f in "${files[@]}"; do
+                base64 -w0 "$f" > /tmp/blob-content.b64
+                local blob_sha
+                blob_sha=$(jq -n --rawfile content /tmp/blob-content.b64 '{content: $content, encoding: "base64"}' \
+                  | gh api --method POST "repos/${APT_REPO}/git/blobs" --input - --jq '.sha')
+                rm -f /tmp/blob-content.b64
+                tree_entries=$(jq --arg path "$f" --arg sha "$blob_sha" \
+                  '. + [{path: $path, mode: "100644", type: "blob", sha: $sha}]' <<< "$tree_entries")
+              done
+
+              local new_tree_sha
+              new_tree_sha=$(jq -n --arg base_tree "$base_tree_sha" --argjson tree "$tree_entries" \
+                '{base_tree: $base_tree, tree: $tree}' \
+                | gh api --method POST "repos/${APT_REPO}/git/trees" --input - --jq '.sha')
+
+              local new_commit_sha
+              new_commit_sha=$(jq -n --arg message "chore: publish ${VERSION}" --arg tree "$new_tree_sha" --arg parent "$base_sha" \
+                '{message: $message, tree: $tree, parents: [$parent]}' \
+                | gh api --method POST "repos/${APT_REPO}/git/commits" --input - --jq '.sha')
+
+              cd ..
+
+              if jq -n --arg sha "$new_commit_sha" '{sha: $sha, force: false}' \
+                | gh api --method PATCH "repos/${APT_REPO}/git/refs/heads/${BRANCH}" --input - > /dev/null 2>/tmp/ref-update.log; then
+                echo "Published apt repo snapshot as ${new_commit_sha}"
+                return 0
+              fi
+
+              echo "::warning::Ref update was not a fast-forward (concurrent publish?) on attempt ${attempt}/${max_attempts} — rebuilding from current state and retrying."
+              cat /tmp/ref-update.log
+              attempt=$((attempt + 1))
+              build_snapshot
+            done
+
+            echo "::error::Failed to publish apt repo snapshot after ${max_attempts} attempts due to repeated concurrent updates."
+            exit 1
+          }
+
+          build_snapshot
+          publish_snapshot
