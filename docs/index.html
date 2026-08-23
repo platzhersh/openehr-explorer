@@ -799,9 +799,11 @@
 
       function isMobileUA(ua) {
         if (/iphone|ipad|ipod|android/.test(ua)) return true;
-        // iPadOS in "desktop" Safari mode reports as a plain Macintosh UA but,
-        // unlike a real Mac, exposes multiple touch points.
-        return ua.includes('macintosh') && navigator.maxTouchPoints > 1;
+        if (navigator.maxTouchPoints <= 1) return false;
+        // iPadOS's "desktop" Safari and Chrome's Android "desktop site" mode
+        // both report as a plain desktop UA (Macintosh / X11 Linux) but,
+        // unlike a real PC, expose multiple touch points.
+        return ua.includes('macintosh') || ua.includes('linux');
       }
 
       function detectFromUserAgentData(uaData) {
@@ -809,14 +811,10 @@
         return platformFromString((uaData.platform || '').toLowerCase());
       }
 
-      function detectFromUserAgent(ua) {
-        if (isMobileUA(ua)) return null;
-        return platformFromString(ua);
-      }
-
       function detectOS() {
         var ua = (navigator.userAgent || '').toLowerCase();
-        return detectFromUserAgentData(navigator.userAgentData) || detectFromUserAgent(ua);
+        if (isMobileUA(ua)) return null; // phone/tablet — keep the default label
+        return detectFromUserAgentData(navigator.userAgentData) || platformFromString(ua);
       }
 
       var os = detectOS();
