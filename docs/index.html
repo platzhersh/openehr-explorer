@@ -790,27 +790,33 @@
       var downloadBtn = document.getElementById('download-btn');
       if (!downloadBtn) return;
 
-      function detectOS() {
-        var uaData = navigator.userAgentData;
-        if (uaData) {
-          if (uaData.mobile) return null; // phone/tablet — keep the default label
-          if (uaData.platform) {
-            var p = uaData.platform.toLowerCase();
-            if (p.includes('win')) return 'Windows';
-            if (p.includes('mac')) return 'macOS';
-            if (p.includes('linux')) return 'Linux';
-          }
-        }
+      function platformFromString(value) {
+        if (value.includes('win')) return 'Windows';
+        if (value.includes('mac')) return 'macOS';
+        if (value.includes('linux')) return 'Linux';
+        return null;
+      }
 
-        var ua = (navigator.userAgent || '').toLowerCase();
-        if (/iphone|ipad|ipod|android/.test(ua)) return null;
+      function isMobileUA(ua) {
+        if (/iphone|ipad|ipod|android/.test(ua)) return true;
         // iPadOS in "desktop" Safari mode reports as a plain Macintosh UA but,
         // unlike a real Mac, exposes multiple touch points.
-        if (ua.includes('macintosh') && navigator.maxTouchPoints > 1) return null;
-        if (ua.includes('win')) return 'Windows';
-        if (ua.includes('mac')) return 'macOS';
-        if (ua.includes('linux')) return 'Linux';
-        return null; // unrecognized — keep the default label
+        return ua.includes('macintosh') && navigator.maxTouchPoints > 1;
+      }
+
+      function detectFromUserAgentData(uaData) {
+        if (!uaData || uaData.mobile) return null; // phone/tablet — keep the default label
+        return platformFromString((uaData.platform || '').toLowerCase());
+      }
+
+      function detectFromUserAgent(ua) {
+        if (isMobileUA(ua)) return null;
+        return platformFromString(ua);
+      }
+
+      function detectOS() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        return detectFromUserAgentData(navigator.userAgentData) || detectFromUserAgent(ua);
       }
 
       var os = detectOS();
