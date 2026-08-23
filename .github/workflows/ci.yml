@@ -268,7 +268,7 @@ jobs:
         shell: bash
         run: |
           for exe in src-tauri/target/release/bundle/nsis/*.exe; do
-            npm run tauri signer sign -- -k "$TAURI_SIGNING_PRIVATE_KEY" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$exe"
+            npm run tauri signer sign -- "$exe"
           done
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
