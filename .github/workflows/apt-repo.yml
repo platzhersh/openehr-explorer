@@ -1,8 +1,12 @@
 name: Publish apt repo
 
-# Runs once a GitHub Release is published (not on the tag push itself, so it
-# fires after the build/upload jobs in ci.yml have already attached the .deb
-# to the release). Same trigger as winget.yml.
+# Runs once a GitHub Release is published. The release is created and
+# published by the *first* of build-macos/build-windows/build-linux in
+# ci.yml to finish — those three jobs have no `needs:` between them, so
+# "released" can fire before build-linux has uploaded the .deb this
+# workflow needs. We poll for the asset below instead of assuming it's
+# already there. Also supports workflow_dispatch so a failed/skipped run
+# can be replayed by hand for a given tag without cutting a new release.
 #
 # Downloads the new .deb into the apt repo's pool/, regenerates the repo
 # index (Packages/Packages.gz/Release/InRelease) from everything already in
@@ -13,6 +17,12 @@ name: Publish apt repo
 on:
   release:
     types: [released]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to (re)publish to the apt repo, e.g. v0.5.1"
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -35,7 +45,7 @@ jobs:
         env:
           GH_TOKEN: ${{ env.APT_REPO_TOKEN }}
           APT_SIGNING_KEY_PASSPHRASE: ${{ secrets.APT_SIGNING_KEY_PASSPHRASE }}
-          TAG_NAME: ${{ github.event.release.tag_name }}
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -45,6 +55,7 @@ jobs:
           APT_REPO="platzhersh/apt-openehr-explorer"
           POOL_PATH="pool/main/o/open-ehr-explorer/${DEB_NAME}"
           BRANCH="main"
+          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG_NAME}/${DEB_NAME}"
 
           # Import the signing key and resolve its key ID for --local-user.
           echo "$APT_SIGNING_PRIVATE_KEY" | gpg --batch --import
@@ -54,14 +65,24 @@ jobs:
             exit 1
           fi
 
-          # Download once — independent of the apt repo's own state, so a
-          # retry below (after a concurrent-update conflict) doesn't need to
-          # re-fetch it. --proto '=https' pins curl to HTTPS even across the
-          # redirect -L follows (GitHub release asset downloads redirect
-          # through S3) — without it, a redirect could send this download
-          # over plain HTTP.
-          curl --proto '=https' -fsSL -o "/tmp/${DEB_NAME}" \
-            "https://github.com/${REPO}/releases/download/${TAG_NAME}/${DEB_NAME}"
+          # Poll for the asset instead of assuming it's already attached —
+          # see the workflow-level comment above for why a fresh "released"
+          # event doesn't guarantee build-linux's .deb has landed yet.
+          # --proto '=https' pins curl to HTTPS even across the redirect -L
+          # follows (GitHub release asset downloads redirect through S3) —
+          # without it, a redirect could send this download over plain HTTP.
+          max_attempts=20
+          attempt=1
+          until curl --proto '=https' -fsSL -o "/tmp/${DEB_NAME}" "$DOWNLOAD_URL" 2>/tmp/curl-download.log; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::${DEB_NAME} never appeared on release ${TAG_NAME} after ${max_attempts} attempts — check whether build-linux succeeded and uploaded it."
+              cat /tmp/curl-download.log
+              exit 1
+            fi
+            echo "::warning::${DEB_NAME} not yet attached to release ${TAG_NAME} (attempt ${attempt}/${max_attempts}); build-linux may still be running. Retrying in 30s."
+            attempt=$((attempt + 1))
+            sleep 30
+          done
 
           # Rebuilds pool/ + the signed index from a fresh clone of the apt
           # repo's current state. Callable more than once: if publishing
