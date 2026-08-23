@@ -29,6 +29,14 @@ const APP_URL = urlArgIdx !== -1 ? process.argv[urlArgIdx + 1] : "http://localho
 
 const VIEWPORT = { width: 1600, height: 960 };
 
+// Sanitize PATH before shelling out to ffmpeg/gifsicle below — strip
+// empty/relative entries so a stray relative (or otherwise untrusted)
+// directory earlier in PATH can't shadow the real binary.
+process.env.PATH = (process.env.PATH || "")
+  .split(path.delimiter)
+  .filter((dir) => path.isAbsolute(dir))
+  .join(path.delimiter);
+
 const VERSION_FLAG = { ffmpeg: "-version", gifsicle: "--version" };
 for (const bin of ["ffmpeg", "gifsicle"]) {
   try {
@@ -45,7 +53,7 @@ const cues = [];
 let sceneStart = null;
 function mark(text) {
   const t = Date.now();
-  if (sceneStart !== null) cues[cues.length - 1].endMs = t - sceneStart;
+  if (sceneStart !== null) cues.at(-1).endMs = t - sceneStart;
   if (sceneStart === null) sceneStart = t;
   cues.push({ startMs: t - sceneStart, endMs: null, text });
 }
@@ -160,7 +168,7 @@ async function recordScenes(page) {
   await page.click('button:has-text("Run (Ctrl+Enter)")');
   await page.waitForTimeout(2600);
 
-  cues[cues.length - 1].endMs = Date.now() - sceneStart;
+  cues.at(-1).endMs = Date.now() - sceneStart;
 }
 
 function encode(rawWebm, tmpDir) {
@@ -195,9 +203,7 @@ function writeVtt() {
   const vttPath = path.join(ASSETS_DIR, "demo.vtt");
   const lines = ["WEBVTT", ""];
   for (const cue of cues) {
-    lines.push(`${vttTimestamp(cue.startMs)} --> ${vttTimestamp(cue.endMs)}`);
-    lines.push(cue.text);
-    lines.push("");
+    lines.push(`${vttTimestamp(cue.startMs)} --> ${vttTimestamp(cue.endMs)}`, cue.text, "");
   }
   fs.writeFileSync(vttPath, lines.join("\n"));
   console.log("vtt:", vttPath);
@@ -234,7 +240,9 @@ async function main() {
   console.log("\nDone. Review docs/assets/demo.mp4 and demo.gif before committing.");
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}

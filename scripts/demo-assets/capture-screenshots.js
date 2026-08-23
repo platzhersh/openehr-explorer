@@ -24,6 +24,14 @@ const APP_URL = urlArgIdx !== -1 ? process.argv[urlArgIdx + 1] : "http://localho
 
 const VIEWPORT = { width: 1440, height: 960 };
 
+// Sanitize PATH before shelling out to ffmpeg below — strip empty/relative
+// entries so a stray relative (or otherwise untrusted) directory earlier
+// in PATH can't shadow the real binary.
+process.env.PATH = (process.env.PATH || "")
+  .split(path.delimiter)
+  .filter((dir) => path.isAbsolute(dir))
+  .join(path.delimiter);
+
 try {
   execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
 } catch {
@@ -118,19 +126,20 @@ async function main() {
   // not <a> links — a client-side router.push. A full page.goto() here
   // would reload the SPA and lose the in-memory server/mock state set up
   // above, so click through the UI instead.
+  const COMPOSITION_VIEWER = ".composition-viewer";
   await page.click('.composition-item:has-text("Vital Signs")', { timeout: 5000 });
-  await page.waitForSelector(".composition-viewer", { timeout: 5000 });
+  await page.waitForSelector(COMPOSITION_VIEWER, { timeout: 5000 });
   await page.waitForSelector(".tab-bar .tab:has-text(\"FLAT\"):not([disabled])", { timeout: 5000 });
   await page.waitForTimeout(500);
-  await saveElementScreenshot(page, ".composition-viewer", "02-composition-pretty.webp");
+  await saveElementScreenshot(page, COMPOSITION_VIEWER, "02-composition-pretty.webp");
 
   await page.click('.tab-bar .tab:has-text("FLAT")');
   await page.waitForTimeout(300);
-  await saveElementScreenshot(page, ".composition-viewer", "03-composition-flat.webp");
+  await saveElementScreenshot(page, COMPOSITION_VIEWER, "03-composition-flat.webp");
 
   await page.click('.tab-bar .tab:has-text("JSON")');
   await page.waitForTimeout(300);
-  await saveElementScreenshot(page, ".composition-viewer", "03b-composition-json.webp");
+  await saveElementScreenshot(page, COMPOSITION_VIEWER, "03b-composition-json.webp");
 
   // ---- 04-templates.webp: Template Browser, OPT Tree for Vital Signs ----
   await page.click('a.nav-item:has-text("Templates")');
@@ -175,7 +184,9 @@ async function main() {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}
