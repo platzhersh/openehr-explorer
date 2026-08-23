@@ -242,6 +242,13 @@
     };
   }
 
+  // Just an opaque bookkeeping id for "plugin:event|listen" below — no
+  // randomness needed (or wanted; a plain counter also keeps recordings
+  // reproducible), so a counter instead of Math.random() avoids flagging
+  // Sonar's PRNG-safety rule for something that was never a security
+  // concern in the first place.
+  let nextEventListenerId = 1;
+
   // command name -> function(args) -> value | Promise<value>. Throw a
   // string to reject the invoke() call the way the real backend does
   // (Tauri surfaces `Err(String)` as the rejection reason).
@@ -266,7 +273,7 @@
       return undefined;
     },
     "plugin:event|listen": function () {
-      return Math.floor(Math.random() * 1e6);
+      return nextEventListenerId++;
     },
     "plugin:event|unlisten": function () {
       return undefined;
@@ -387,7 +394,7 @@
       const id = nextCallbackId++;
       callbacks[id] = function (result) {
         if (once) delete callbacks[id];
-        return callback && callback(result);
+        return callback?.(result);
       };
       return id;
     },
