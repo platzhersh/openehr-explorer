@@ -337,10 +337,144 @@
       border-bottom: 1px solid var(--border);
     }
 
+    .lightbox-trigger {
+      display: block;
+      width: 100%;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: zoom-in;
+      font: inherit;
+    }
+
+    .lightbox-trigger:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+
     .gallery-card figcaption {
       padding: 12px 16px;
       font-size: 0.85rem;
       color: var(--text-secondary);
+    }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      margin: 0;
+      padding: 24px;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      border: none;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .lightbox[open] {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox::backdrop {
+      background: rgba(10, 12, 20, 0.92);
+    }
+
+    .lightbox-figure {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      max-width: min(1400px, 92vw);
+      max-height: 92vh;
+    }
+
+    .lightbox-img {
+      display: block;
+      max-width: 100%;
+      max-height: 78vh;
+      width: auto;
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 60px rgba(0, 0, 0, 0.6);
+    }
+
+    .lightbox-caption {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      text-align: center;
+      max-width: 800px;
+    }
+
+    .lightbox-counter {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+    }
+
+    .lightbox-close,
+    .lightbox-nav {
+      position: fixed;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .lightbox-close:hover,
+    .lightbox-nav:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .lightbox-close {
+      top: 20px;
+      right: 20px;
+    }
+
+    .lightbox-nav {
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .lightbox-prev {
+      left: 20px;
+    }
+
+    .lightbox-next {
+      right: 20px;
+    }
+
+    @media (max-width: 640px) {
+      .lightbox-nav {
+        width: 36px;
+        height: 36px;
+      }
+
+      .lightbox-prev {
+        left: 8px;
+      }
+
+      .lightbox-next {
+        right: 8px;
+      }
+
+      .lightbox-close {
+        top: 8px;
+        right: 8px;
+      }
     }
 
     /* ── Feature Cards ── */
@@ -640,7 +774,7 @@
         <a href="https://github.com/platzhersh/openehr-explorer/releases" id="download-btn" class="btn btn-primary">Download</a>
         <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
       </div>
-      <p class="version-badge">v0.5.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
+      <p class="version-badge">v0.5.2 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
     </section>
 
     <!-- ── UI Preview Strip ── -->
@@ -651,30 +785,36 @@
           loop
           muted
           playsinline
-          poster="assets/screenshots/02-composition-pretty.webp"
-          aria-label="Screen recording of openEHR Explorer: browsing EHRs, opening a composition, and switching between the Pretty, JSON, and FLAT views"
+          poster="assets/screenshots/07-aql-autocomplete.webp"
+          aria-label="Screen recording of openEHR Explorer: adding a server profile and testing the connection, browsing EHRs, inspecting a Web Template, and writing an AQL query with template-aware autocomplete"
         >
           <source src="assets/demo.mp4" type="video/mp4">
           <track kind="captions" src="assets/demo.vtt" srclang="en" label="English" default>
         </video>
       </div>
-      <p class="preview-caption">Template-aware composition viewer &middot; FLAT path panel &middot; AQL runner</p>
+      <p class="preview-caption">Connect a server &middot; browse EHRs &middot; inspect templates &middot; AQL with autocomplete</p>
     </section>
 
     <!-- ── Screenshot Gallery ── -->
     <section class="gallery">
       <h2 class="section-heading">See it in action</h2>
-      <div class="gallery-grid">
+      <div class="gallery-grid" id="gallery-grid">
         <figure class="gallery-card">
-          <img src="assets/screenshots/01-ehr-browser.webp" alt="EHR Browser showing a paginated list of EHRs on the left and a selected EHR's details plus grouped compositions on the right" loading="lazy" width="1440" height="860">
+          <button type="button" class="lightbox-trigger" aria-haspopup="dialog" data-full="assets/screenshots/01-ehr-browser.webp" data-caption="Browse EHRs and drill into their compositions, grouped by template.">
+            <img src="assets/screenshots/01-ehr-browser.webp" alt="EHR Browser showing a paginated list of EHRs on the left and a selected EHR's details plus grouped compositions on the right" loading="lazy" width="1440" height="860">
+          </button>
           <figcaption>Browse EHRs and drill into their compositions, grouped by template.</figcaption>
         </figure>
         <figure class="gallery-card">
-          <img src="assets/screenshots/04-templates.webp" alt="Template Browser showing the list of templates on a server and an interactive OPT tree for the selected template" loading="lazy" width="1440" height="610">
+          <button type="button" class="lightbox-trigger" aria-haspopup="dialog" data-full="assets/screenshots/04-templates.webp" data-caption="Inspect Web Templates as a readable tree, with FLAT paths and raw OPT XML alongside.">
+            <img src="assets/screenshots/04-templates.webp" alt="Template Browser showing the list of templates on a server and an interactive OPT tree for the selected template" loading="lazy" width="1440" height="610">
+          </button>
           <figcaption>Inspect Web Templates as a readable tree, with FLAT paths and raw OPT XML alongside.</figcaption>
         </figure>
         <figure class="gallery-card">
-          <img src="assets/screenshots/06-aql-runner.webp" alt="AQL Runner showing a query editor with a SELECT query and a tabular result set below it" loading="lazy" width="1440" height="645">
+          <button type="button" class="lightbox-trigger" aria-haspopup="dialog" data-full="assets/screenshots/06-aql-runner.webp" data-caption="Write and run AQL queries with syntax highlighting, saved queries, and CSV export.">
+            <img src="assets/screenshots/06-aql-runner.webp" alt="AQL Runner showing a query editor with a SELECT query and a tabular result set below it" loading="lazy" width="1440" height="645">
+          </button>
           <figcaption>Write and run AQL queries with syntax highlighting, saved queries, and CSV export.</figcaption>
         </figure>
       </div>
@@ -756,6 +896,24 @@
     </section>
 
   </main>
+
+  <!-- ── Screenshot Lightbox ── -->
+  <dialog class="lightbox" id="lightbox" aria-label="Screenshot preview">
+    <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+    </button>
+    <button type="button" class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Previous screenshot">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <figure class="lightbox-figure">
+      <img class="lightbox-img" id="lightbox-img" src="" alt="">
+      <figcaption class="lightbox-caption" id="lightbox-caption"></figcaption>
+      <div class="lightbox-counter" id="lightbox-counter"></div>
+    </figure>
+    <button type="button" class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Next screenshot">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </dialog>
 
   <!-- ── Footer ── -->
   <footer class="site-footer">
@@ -840,6 +998,107 @@
         video.pause();
       }
     })();
+
+    // Fullscreen screenshot gallery: click (or Enter/Space, via native
+    // <button> semantics) a gallery trigger to open it in a lightbox with
+    // prev/next navigation. Split into small named functions — each does
+    // one thing — rather than one large handler.
+    const LightboxGallery = (function () {
+      // Escape is deliberately absent here — a native <dialog> opened via
+      // showModal() already closes itself on Escape, firing the "close"
+      // event our own cleanup listens for below.
+      const KEY_ACTIONS = {
+        ArrowRight: function (state) { showSlide(state, state.currentIndex + 1); },
+        ArrowLeft: function (state) { showSlide(state, state.currentIndex - 1); },
+      };
+
+      function showSlide(state, index) {
+        state.currentIndex = (index + state.triggers.length) % state.triggers.length;
+        const trigger = state.triggers[state.currentIndex];
+        state.img.src = trigger.dataset.full;
+        state.img.alt = trigger.querySelector('img').getAttribute('alt') || '';
+        state.caption.textContent = trigger.dataset.caption || '';
+        state.counter.textContent = (state.currentIndex + 1) + ' / ' + state.triggers.length;
+      }
+
+      function openLightbox(state, index) {
+        state.lastFocused = document.activeElement;
+        showSlide(state, index);
+        document.body.style.overflow = 'hidden';
+        state.root.showModal();
+        state.closeBtn.focus();
+      }
+
+      // Runs on every dialog close, whichever way it happened — a click on
+      // the close button, the backdrop, or the browser's own Escape
+      // handling — since all of them end up firing the dialog's "close"
+      // event.
+      function handleDialogClose(state) {
+        document.body.style.overflow = '';
+        restoreFocus(state.lastFocused);
+      }
+
+      function restoreFocus(element) {
+        if (element && typeof element.focus === 'function') {
+          element.focus();
+        }
+      }
+
+      function handleKeydown(state, e) {
+        const action = KEY_ACTIONS[e.key];
+        if (action) action(state);
+      }
+
+      function handleBackdropClick(state, e) {
+        if (e.target === state.root) state.root.close();
+      }
+
+      function wireTriggers(state) {
+        state.triggers.forEach(function (trigger, index) {
+          trigger.addEventListener('click', function () {
+            openLightbox(state, index);
+          });
+        });
+      }
+
+      function wireControls(state) {
+        state.closeBtn.addEventListener('click', function () { state.root.close(); });
+        state.prevBtn.addEventListener('click', function () { showSlide(state, state.currentIndex - 1); });
+        state.nextBtn.addEventListener('click', function () { showSlide(state, state.currentIndex + 1); });
+        state.root.addEventListener('click', function (e) { handleBackdropClick(state, e); });
+        state.root.addEventListener('keydown', function (e) { handleKeydown(state, e); });
+        state.root.addEventListener('close', function () { handleDialogClose(state); });
+      }
+
+      function init(gridId) {
+        const grid = document.getElementById(gridId);
+        const root = document.getElementById('lightbox');
+        if (!grid || !root) return;
+
+        const triggers = Array.prototype.slice.call(grid.querySelectorAll('button[data-full]'));
+        if (!triggers.length) return;
+
+        const state = {
+          root: root,
+          triggers: triggers,
+          img: document.getElementById('lightbox-img'),
+          caption: document.getElementById('lightbox-caption'),
+          counter: document.getElementById('lightbox-counter'),
+          closeBtn: document.getElementById('lightbox-close'),
+          prevBtn: document.getElementById('lightbox-prev'),
+          nextBtn: document.getElementById('lightbox-next'),
+          currentIndex: 0,
+          lastFocused: null,
+        };
+
+        wireTriggers(state);
+        wireControls(state);
+      }
+
+      return { init: init };
+    })();
+
+    LightboxGallery.init('gallery-grid');
   </script>
 
 </body>

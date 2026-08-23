@@ -1,19 +1,13 @@
 WEBVTT
 
-00:00:00.000 --> 00:00:02.500
-Connecting to a local EHRBase server
+00:00:00.000 --> 00:00:09.928
+Add a server profile and test the connection
 
-00:00:02.500 --> 00:00:05.000
-Browsing EHRs and opening one's details
+00:00:09.928 --> 00:00:13.707
+Browse EHRs and drill into their compositions
 
-00:00:05.000 --> 00:00:07.500
-Opening a composition and expanding its template-aware tree
+00:00:13.707 --> 00:00:17.857
+Inspect Web Templates as a readable tree
 
-00:00:07.500 --> 00:00:09.500
-Viewing the same composition in FLAT format
-
-00:00:09.500 --> 00:00:11.500
-Viewing the same composition as raw canonical JSON
-
-00:00:11.500 --> 00:00:16.000
-Running an AQL query and viewing the tabular results
+00:00:17.857 --> 00:00:36.443
+Write AQL queries with template-aware autocomplete

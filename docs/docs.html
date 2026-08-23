@@ -799,6 +799,18 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.5.2 — AQL Editor Highlighting Fix</h3>
+        <ul>
+          <li><strong>AQL Syntax Highlighting:</strong> Fixed a regression from the previous release where standard SQL keywords (<code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, and others) stopped being highlighted in the AQL editor while openEHR-specific keywords were added</li>
+        </ul>
+
+        <h3>v0.5.1 — Linux APT Repo &amp; AQL Editor Highlighting</h3>
+        <ul>
+          <li><strong>APT Repository:</strong> Debian/Ubuntu users can now install and update via a signed <code>apt</code> repository, published automatically on every release alongside the existing <code>.deb</code> download</li>
+          <li><strong>AQL Syntax Highlighting:</strong> The AQL editor now highlights openEHR-specific keywords (<code>CONTAINS</code>, <code>EHR</code>, <code>COMPOSITION</code>, <code>MATCHES</code>, <code>EXISTS</code>, and more) the same way it already highlighted standard SQL keywords</li>
+          <li><strong>Landing Page Refresh:</strong> Real product screenshots and a demo clip replace the old hero mockup, with a fullscreen lightbox for browsing the screenshot gallery and OS-aware download button text</li>
+        </ul>
+
         <h3>v0.5.0 — Manual Update Checks</h3>
         <ul>
           <li><strong>Check for Updates:</strong> Added a &ldquo;Check for Updates&hellip;&rdquo; item to the native app menu (macOS app menu, Windows/Linux Help menu) that triggers the same check as the Settings page button</li>
