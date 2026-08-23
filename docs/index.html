@@ -592,10 +592,10 @@
       <h1>openEHR Explorer</h1>
       <p class="hero-tagline">Browse, query, and inspect any openEHR CDR &mdash; no curl required.</p>
       <div class="cta-group">
-        <a href="https://github.com/platzhersh/openehr-explorer/releases" class="btn btn-primary">Download for macOS</a>
+        <a href="https://github.com/platzhersh/openehr-explorer/releases" id="download-btn" class="btn btn-primary">Download</a>
         <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
       </div>
-      <p class="version-badge">v0.5.0 &middot; macOS &middot; Windows &middot; Linux</p>
+      <p class="version-badge">v0.5.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
     </section>
 
     <!-- ── UI Preview Strip ── -->
@@ -783,6 +783,46 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Detect the visitor's OS and adjust the primary download button to match.
+    (function () {
+      var downloadBtn = document.getElementById('download-btn');
+      if (!downloadBtn) return;
+
+      function platformFromString(value) {
+        if (value.includes('win')) return 'Windows';
+        if (value.includes('mac')) return 'macOS';
+        if (value.includes('linux')) return 'Linux';
+        return null;
+      }
+
+      function isMobileUA(ua) {
+        if (/iphone|ipad|ipod|android/.test(ua)) return true;
+        if (navigator.maxTouchPoints <= 1) return false;
+        // iPadOS's "desktop" Safari and Chrome's Android "desktop site" mode
+        // both report as a plain desktop UA (Macintosh / X11 Linux) but,
+        // unlike a real PC, expose multiple touch points.
+        return ua.includes('macintosh') || ua.includes('linux');
+      }
+
+      function detectFromUserAgentData(uaData) {
+        if (!uaData || uaData.mobile) return null; // phone/tablet — keep the default label
+        return platformFromString((uaData.platform || '').toLowerCase());
+      }
+
+      function detectOS() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        if (isMobileUA(ua)) return null; // phone/tablet — keep the default label
+        return detectFromUserAgentData(navigator.userAgentData) || platformFromString(ua);
+      }
+
+      var os = detectOS();
+      if (os) {
+        downloadBtn.textContent = 'Download for ' + os;
+      }
+    })();
+  </script>
 
 </body>
 </html>
