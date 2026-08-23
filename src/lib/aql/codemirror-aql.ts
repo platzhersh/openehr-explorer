@@ -1,16 +1,4 @@
-import { sql } from "@codemirror/lang-sql";
-
-/**
- * AQL language support for CodeMirror.
- * AQL is SQL-like with openEHR-specific keywords and path syntax.
- */
-export function aql() {
-  // Start with SQL language as base since AQL is SQL-like
-  const sqlLang = sql();
-
-  // We'll use SQL highlighting as the base and customize via theme
-  return sqlLang;
-}
+import { sql, SQLDialect, StandardSQL } from "@codemirror/lang-sql";
 
 /**
  * AQL-specific keywords (in addition to SQL keywords)
@@ -30,3 +18,25 @@ export const AQL_KEYWORDS = [
   "ELEMENT",
   "SECTION",
 ];
+
+/**
+ * Standard SQL dialect extended with openEHR/AQL-specific keywords, so the
+ * tokenizer highlights them the same way it highlights standard SQL
+ * keywords (SELECT, FROM, WHERE, ...) rather than rendering them as plain
+ * identifiers. Keywords are tagged the same as standard SQL keywords, so
+ * the existing highlight style picks them up without further changes.
+ */
+const aqlDialect = SQLDialect.define({
+  ...StandardSQL.spec,
+  keywords: `${StandardSQL.spec.keywords ?? ""} ${AQL_KEYWORDS.join(" ").toLowerCase()}`,
+});
+
+/**
+ * AQL language support for CodeMirror.
+ * AQL is SQL-like with openEHR-specific keywords and path syntax.
+ */
+export function aql() {
+  // Use the standard SQL dialect as base (AQL is SQL-like), extended with
+  // AQL-specific keywords so they're tokenized/highlighted as keywords too.
+  return sql({ dialect: aqlDialect });
+}
