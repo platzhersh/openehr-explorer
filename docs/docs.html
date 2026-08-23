@@ -464,8 +464,8 @@ scoop install openehr-explorer</div>
         <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span>
 sudo apt install ./openehr-explorer_0.4.2_amd64.deb</div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openehr-explorer_0.5.0_amd64.AppImage
-./openehr-explorer_0.5.0_amd64.AppImage</div>
+        <div class="code-block">chmod +x openehr-explorer_0.5.1_amd64.AppImage
+./openehr-explorer_0.5.1_amd64.AppImage</div>
       </section>
 
       <section id="first-connection">
@@ -786,6 +786,13 @@ LIMIT 10</div>
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.5.1 — Linux APT Repo &amp; AQL Editor Highlighting</h3>
+        <ul>
+          <li><strong>APT Repository:</strong> Debian/Ubuntu users can now install and update via a signed <code>apt</code> repository, published automatically on every release alongside the existing <code>.deb</code> download</li>
+          <li><strong>AQL Syntax Highlighting:</strong> The AQL editor now highlights openEHR-specific keywords (<code>CONTAINS</code>, <code>EHR</code>, <code>COMPOSITION</code>, <code>MATCHES</code>, <code>EXISTS</code>, and more) the same way it already highlighted standard SQL keywords</li>
+          <li><strong>Landing Page Refresh:</strong> Real product screenshots and a demo clip replace the old hero mockup, with a fullscreen lightbox for browsing the screenshot gallery and OS-aware download button text</li>
+        </ul>
 
         <h3>v0.5.0 — Manual Update Checks</h3>
         <ul>
