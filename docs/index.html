@@ -360,18 +360,28 @@
 
     /* ── Lightbox ── */
     .lightbox {
-      display: none;
       position: fixed;
       inset: 0;
       z-index: 1000;
-      background: rgba(10, 12, 20, 0.92);
-      align-items: center;
-      justify-content: center;
+      margin: 0;
       padding: 24px;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      border: none;
+      background: transparent;
+      color: var(--text);
     }
 
-    .lightbox.is-open {
+    .lightbox[open] {
       display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox::backdrop {
+      background: rgba(10, 12, 20, 0.92);
     }
 
     .lightbox-figure {
@@ -890,7 +900,7 @@
   </main>
 
   <!-- ── Screenshot Lightbox ── -->
-  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot preview">
+  <dialog class="lightbox" id="lightbox" aria-label="Screenshot preview">
     <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
     </button>
@@ -905,7 +915,7 @@
     <button type="button" class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Next screenshot">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
-  </div>
+  </dialog>
 
   <!-- ── Footer ── -->
   <footer class="site-footer">
@@ -996,8 +1006,10 @@
     // prev/next navigation. Split into small named functions — each does
     // one thing — rather than one large handler.
     const LightboxGallery = (function () {
+      // Escape is deliberately absent here — a native <dialog> opened via
+      // showModal() already closes itself on Escape, firing the "close"
+      // event our own cleanup listens for below.
       const KEY_ACTIONS = {
-        Escape: function (state) { closeLightbox(state); },
         ArrowRight: function (state) { showSlide(state, state.currentIndex + 1); },
         ArrowLeft: function (state) { showSlide(state, state.currentIndex - 1); },
       };
@@ -1005,25 +1017,26 @@
       function showSlide(state, index) {
         state.currentIndex = (index + state.triggers.length) % state.triggers.length;
         const trigger = state.triggers[state.currentIndex];
-        state.img.src = trigger.getAttribute('data-full');
+        state.img.src = trigger.dataset.full;
         state.img.alt = trigger.querySelector('img').getAttribute('alt') || '';
-        state.caption.textContent = trigger.getAttribute('data-caption') || '';
+        state.caption.textContent = trigger.dataset.caption || '';
         state.counter.textContent = (state.currentIndex + 1) + ' / ' + state.triggers.length;
       }
 
       function openLightbox(state, index) {
         state.lastFocused = document.activeElement;
         showSlide(state, index);
-        state.root.classList.add('is-open');
         document.body.style.overflow = 'hidden';
+        state.root.showModal();
         state.closeBtn.focus();
-        document.addEventListener('keydown', state.onKeydown);
       }
 
-      function closeLightbox(state) {
-        state.root.classList.remove('is-open');
+      // Runs on every dialog close, whichever way it happened — a click on
+      // the close button, the backdrop, or the browser's own Escape
+      // handling — since all of them end up firing the dialog's "close"
+      // event.
+      function handleDialogClose(state) {
         document.body.style.overflow = '';
-        document.removeEventListener('keydown', state.onKeydown);
         restoreFocus(state.lastFocused);
       }
 
@@ -1039,7 +1052,7 @@
       }
 
       function handleBackdropClick(state, e) {
-        if (e.target === state.root) closeLightbox(state);
+        if (e.target === state.root) state.root.close();
       }
 
       function wireTriggers(state) {
@@ -1051,10 +1064,12 @@
       }
 
       function wireControls(state) {
-        state.closeBtn.addEventListener('click', function () { closeLightbox(state); });
+        state.closeBtn.addEventListener('click', function () { state.root.close(); });
         state.prevBtn.addEventListener('click', function () { showSlide(state, state.currentIndex - 1); });
         state.nextBtn.addEventListener('click', function () { showSlide(state, state.currentIndex + 1); });
         state.root.addEventListener('click', function (e) { handleBackdropClick(state, e); });
+        state.root.addEventListener('keydown', function (e) { handleKeydown(state, e); });
+        state.root.addEventListener('close', function () { handleDialogClose(state); });
       }
 
       function init(gridId) {
@@ -1077,7 +1092,6 @@
           currentIndex: 0,
           lastFocused: null,
         };
-        state.onKeydown = function (e) { handleKeydown(state, e); };
 
         wireTriggers(state);
         wireControls(state);
