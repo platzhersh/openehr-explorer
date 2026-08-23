@@ -28,7 +28,7 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Screen recording of openEHR Explorer: browsing EHRs, opening a composition, and switching between the Pretty, JSON, and FLAT views" width="800">
+  <img src="docs/assets/demo.gif" alt="Screen recording of openEHR Explorer: adding a server profile and testing the connection, browsing EHRs, inspecting a Web Template, and writing an AQL query with template-aware autocomplete" width="800">
 </p>
 
 <table>
