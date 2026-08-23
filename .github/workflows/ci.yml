@@ -242,7 +242,11 @@ jobs:
 
       - name: Submit installer for Authenticode signing (SignPath)
         if: steps.signpath-check.outputs.configured == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
+        # Pinned to the v2 tag's commit, not the mutable tag itself — this is
+        # a third-party action newly introduced by this workflow, and a
+        # retagged v2 would otherwise run arbitrary code with this job's
+        # permissions (contents: write) and the SignPath API token.
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
