@@ -70,8 +70,25 @@ jobs:
           # before retrying, rather than retrying with stale data.
           build_snapshot() {
             rm -rf repo
-            git clone --depth 50 "https://github.com/${APT_REPO}.git" repo
+            git clone --depth 50 --branch "$BRANCH" "https://github.com/${APT_REPO}.git" repo
             cd repo
+
+            # Pin the commit base to exactly what we cloned — not a fresh
+            # remote query at publish time. If we re-queried the remote ref
+            # inside publish_snapshot() instead, a concurrent publish could
+            # land in the gap between this clone and that query: our new
+            # commit's base_tree would then be the *newer* remote tree
+            # (which already has the concurrent .deb in pool/), while our
+            # Packages/Release/signatures were built from this *older*
+            # local clone that doesn't know about it — the fast-forward
+            # check would still pass (our parent genuinely is the current
+            # HEAD), so it would publish successfully with an inconsistent
+            # index: the concurrent .deb physically present in pool/ but
+            # missing from Packages. Pinning to the clone means any remote
+            # movement after this point is guaranteed to make our recorded
+            # parent stale, so force:false below reliably rejects it.
+            SNAPSHOT_BASE_SHA=$(git rev-parse HEAD)
+            SNAPSHOT_BASE_TREE_SHA=$(git rev-parse "HEAD^{tree}")
 
             mkdir -p "$(dirname "$POOL_PATH")" dists/stable/main/binary-amd64
             cp "/tmp/${DEB_NAME}" "$POOL_PATH"
@@ -129,8 +146,8 @@ jobs:
             while [ "$attempt" -le "$max_attempts" ]; do
               cd repo
               local base_sha base_tree_sha
-              base_sha=$(gh api "repos/${APT_REPO}/git/ref/heads/${BRANCH}" --jq '.object.sha')
-              base_tree_sha=$(gh api "repos/${APT_REPO}/git/commits/${base_sha}" --jq '.tree.sha')
+              base_sha="$SNAPSHOT_BASE_SHA"
+              base_tree_sha="$SNAPSHOT_BASE_TREE_SHA"
 
               local files=(
                 "$POOL_PATH"
