@@ -740,15 +740,13 @@
         </div>
         <p class="quickstart-note">Not yet Authenticode-signed &mdash; Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
-        <h3>Linux</h3>
+        <h3>Linux (apt)</h3>
         <div class="code-block">
-          <span class="comment"># .deb (Debian/Ubuntu)</span><br>
-          sudo apt install ./openehr-explorer_0.4.2_amd64.deb<br>
-          <br>
-          <span class="comment"># or .AppImage (any distro)</span><br>
-          chmod +x openehr-explorer_0.4.2_amd64.AppImage &amp;&amp; ./openehr-explorer_0.4.2_amd64.AppImage
+          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg<br>
+          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br>
+          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
         </div>
-        <p class="quickstart-note">See <a href="docs.html#installation">Installation</a> for details.</p>
+        <p class="quickstart-note">Debian/Ubuntu (amd64) &mdash; future releases arrive via <code>apt upgrade</code>. Prefer a one-off install or another distro? Grab the <code>.deb</code>/<code>.AppImage</code> directly &mdash; see <a href="docs.html#installation">Installation</a>.</p>
       </div>
     </section>
 

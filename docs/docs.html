@@ -459,13 +459,25 @@ scoop install openehr-explorer</div>
         <p>Not yet Authenticode-signed — Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
         <h3>Linux</h3>
-        <p>Two package formats are published on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
-        <p><strong>Debian/Ubuntu (.deb):</strong></p>
-        <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span>
-sudo apt install ./openehr-explorer_0.4.2_amd64.deb</div>
+        <p><strong>apt (Debian/Ubuntu, recommended):</strong> a self-hosted apt repository is published at <a href="https://github.com/platzhersh/apt-openehr-explorer">platzhersh/apt-openehr-explorer</a> and updated automatically on every release, so once added, updates arrive via the normal <code>apt upgrade</code> flow.</p>
+        <div class="code-block">
+          <span class="code-comment"># 1. Add the signing key</span><br>
+          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg<br>
+          <br>
+          <span class="code-comment"># 2. Add the repository</span><br>
+          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br>
+          <br>
+          <span class="code-comment"># 3. Install</span><br>
+          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
+        </div>
+        <p>Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
+        <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
+        <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span><br>
+sudo apt install ./openEHR.Explorer_0.5.2_amd64.deb</div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openehr-explorer_0.5.0_amd64.AppImage
-./openehr-explorer_0.5.0_amd64.AppImage</div>
+        <div class="code-block">chmod +x openEHR.Explorer_0.5.2_amd64.AppImage<br>
+./openEHR.Explorer_0.5.2_amd64.AppImage</div>
+        <p>An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.</p>
       </section>
 
       <section id="first-connection">
