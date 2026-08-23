@@ -988,6 +988,7 @@
       var prevBtn = document.getElementById('lightbox-prev');
       var nextBtn = document.getElementById('lightbox-next');
 
+      var CLICK = 'click';
       var currentIndex = 0;
       var lastFocused = null;
 
@@ -1000,7 +1001,7 @@
         lightboxCounter.textContent = (currentIndex + 1) + ' / ' + images.length;
       }
 
-      function open(index) {
+      function openLightbox(index) {
         lastFocused = document.activeElement;
         show(index);
         lightbox.classList.add('is-open');
@@ -1009,7 +1010,7 @@
         document.addEventListener('keydown', onKeydown);
       }
 
-      function close() {
+      function closeLightbox() {
         lightbox.classList.remove('is-open');
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onKeydown);
@@ -1020,7 +1021,7 @@
 
       function onKeydown(e) {
         if (e.key === 'Escape') {
-          close();
+          closeLightbox();
         } else if (e.key === 'ArrowRight') {
           show(currentIndex + 1);
         } else if (e.key === 'ArrowLeft') {
@@ -1029,24 +1030,24 @@
       }
 
       images.forEach(function (img, index) {
-        img.addEventListener('click', function () {
-          open(index);
+        img.addEventListener(CLICK, function () {
+          openLightbox(index);
         });
         img.addEventListener('keydown', function (e) {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            open(index);
+            openLightbox(index);
           }
         });
       });
 
-      closeBtn.addEventListener('click', close);
-      prevBtn.addEventListener('click', function () { show(currentIndex - 1); });
-      nextBtn.addEventListener('click', function () { show(currentIndex + 1); });
+      closeBtn.addEventListener(CLICK, closeLightbox);
+      prevBtn.addEventListener(CLICK, function () { show(currentIndex - 1); });
+      nextBtn.addEventListener(CLICK, function () { show(currentIndex + 1); });
 
       // Click on the backdrop (outside the figure/buttons) closes the lightbox.
-      lightbox.addEventListener('click', function (e) {
-        if (e.target === lightbox) close();
+      lightbox.addEventListener(CLICK, function (e) {
+        if (e.target === lightbox) closeLightbox();
       });
     })();
   </script>
