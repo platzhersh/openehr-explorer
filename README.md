@@ -25,6 +25,23 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 - **Request Inspector** — View all HTTP traffic with request/response details, copy as curl
 - **Keyboard Shortcuts** — Navigate with Cmd+1-4, toggle inspector with Cmd+Shift+I, execute queries with Cmd+Enter
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="Screen recording of openEHR Explorer: browsing EHRs, opening a composition, and switching between the Pretty, JSON, and FLAT views" width="800">
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/assets/screenshots/01-ehr-browser.webp" alt="EHR Browser with a list of EHRs and a selected EHR's compositions"></td>
+    <td><img src="docs/assets/screenshots/04-templates.webp" alt="Template Browser with an interactive OPT tree"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screenshots/02-composition-pretty.webp" alt="Composition Viewer's template-aware Pretty tab"></td>
+    <td><img src="docs/assets/screenshots/06-aql-runner.webp" alt="AQL Runner with a query and tabular results"></td>
+  </tr>
+</table>
+
 ## Installation
 
 Download the latest build for macOS, Windows, or Linux from [GitHub Releases](https://github.com/platzhersh/openehr-explorer/releases/latest).
