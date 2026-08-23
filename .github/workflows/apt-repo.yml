@@ -102,6 +102,16 @@ jobs:
           # flag), whereas a git remote URL or `-c http.extraheader` value is
           # visible via `ps`. Mirrors the Contents-API approach already used
           # by the Homebrew/Scoop jobs for the same reason.
+          #
+          # The request body is built with `jq --rawfile` (reads the
+          # base64'd content straight off disk) and piped into `gh api
+          # --input -` on stdin, rather than `-f content=...` — the .deb
+          # here is tens of MB, and base64'ing that into a `-f`/`--arg`
+          # command-line argument would blow past the shell's ARG_MAX
+          # (~2MB) long before it got anywhere near GitHub's actual
+          # 100MB Contents API limit. The Homebrew/Scoop jobs get away
+          # with `-f content=...` only because their payload is a few KB
+          # of text.
           publish_file() {
             local path="$1"
             local remote_sha local_sha
@@ -113,15 +123,16 @@ jobs:
               return
             fi
 
-            local content
-            content=$(base64 -w0 "$path")
-            if [ -n "$remote_sha" ] && [ "$remote_sha" != "null" ]; then
-              gh api -X PUT "repos/${APT_REPO}/contents/${path}" \
-                -f message="chore: publish ${VERSION}" -f content="$content" -f sha="$remote_sha" > /dev/null
-            else
-              gh api -X PUT "repos/${APT_REPO}/contents/${path}" \
-                -f message="chore: publish ${VERSION}" -f content="$content" > /dev/null
-            fi
+            base64 -w0 "$path" > /tmp/publish-content.b64
+
+            jq -n --rawfile content /tmp/publish-content.b64 \
+              --arg message "chore: publish ${VERSION}" \
+              --arg sha "$remote_sha" \
+              '{message: $message, content: $content}
+               + (if ($sha | length) > 0 and $sha != "null" then {sha: $sha} else {} end)' \
+              | gh api --method PUT "repos/${APT_REPO}/contents/${path}" --input - > /dev/null
+
+            rm -f /tmp/publish-content.b64
             echo "Published ${path}"
           }
 
