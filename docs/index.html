@@ -995,8 +995,8 @@
     // <button> semantics) a gallery trigger to open it in a lightbox with
     // prev/next navigation. Split into small named functions — each does
     // one thing — rather than one large handler.
-    var LightboxGallery = (function () {
-      var KEY_ACTIONS = {
+    const LightboxGallery = (function () {
+      const KEY_ACTIONS = {
         Escape: function (state) { closeLightbox(state); },
         ArrowRight: function (state) { showSlide(state, state.currentIndex + 1); },
         ArrowLeft: function (state) { showSlide(state, state.currentIndex - 1); },
@@ -1004,7 +1004,7 @@
 
       function showSlide(state, index) {
         state.currentIndex = (index + state.triggers.length) % state.triggers.length;
-        var trigger = state.triggers[state.currentIndex];
+        const trigger = state.triggers[state.currentIndex];
         state.img.src = trigger.getAttribute('data-full');
         state.img.alt = trigger.querySelector('img').getAttribute('alt') || '';
         state.caption.textContent = trigger.getAttribute('data-caption') || '';
@@ -1034,7 +1034,7 @@
       }
 
       function handleKeydown(state, e) {
-        var action = KEY_ACTIONS[e.key];
+        const action = KEY_ACTIONS[e.key];
         if (action) action(state);
       }
 
@@ -1058,14 +1058,14 @@
       }
 
       function init(gridId) {
-        var grid = document.getElementById(gridId);
-        var root = document.getElementById('lightbox');
+        const grid = document.getElementById(gridId);
+        const root = document.getElementById('lightbox');
         if (!grid || !root) return;
 
-        var triggers = Array.prototype.slice.call(grid.querySelectorAll('button[data-full]'));
+        const triggers = Array.prototype.slice.call(grid.querySelectorAll('button[data-full]'));
         if (!triggers.length) return;
 
-        var state = {
+        const state = {
           root: root,
           triggers: triggers,
           img: document.getElementById('lightbox-img'),
