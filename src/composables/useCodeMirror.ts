@@ -2,6 +2,7 @@ import { ref, onMounted, onBeforeUnmount, watch, type Ref } from "vue";
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { completionKeymap } from "@codemirror/autocomplete";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
 import { aql } from "../lib/aql/codemirror-aql";
 import { aqlAutocomplete, type AqlCompletionConfig } from "../lib/aql/codemirror-autocomplete";
@@ -88,7 +89,10 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
       bracketMatching(),
       EditorView.lineWrapping,
       darkTheme,
-      keymap.of([...defaultKeymap, ...historyKeymap]),
+      // completionKeymap must come first so Enter/Escape/Arrow keys accept or
+      // navigate an open suggestion popup before falling through to the
+      // default editing bindings (e.g. Enter inserting a newline).
+      keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && options.onChange) {
           options.onChange(update.state.doc.toString());
