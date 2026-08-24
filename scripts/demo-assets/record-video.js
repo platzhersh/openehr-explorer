@@ -68,6 +68,10 @@ async function recordScenes(page) {
 
   await page.type("#server-name", "Local EHRBase", { delay: 45 });
   await page.waitForTimeout(200);
+  // The Base URL field is pre-filled with this same default value, so clear
+  // it first — otherwise page.type() inserts at the cursor and the field
+  // ends up showing the URL twice.
+  await page.fill("#server-base-url", "");
   await page.type("#server-base-url", "http://localhost:8080/ehrbase", { delay: 30 });
   await page.waitForTimeout(300);
 
