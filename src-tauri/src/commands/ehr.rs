@@ -480,6 +480,18 @@ pub async fn delete_ehr(
                 admin_auth.clone(),
             )
         }
+        // FerroEHR's admin API is nested under the openEHR REST API base
+        // path, unlike EHRbase's sibling `/rest/admin/...` mount.
+        ServerType::FerroEhr => {
+            let admin_auth = profile
+                .admin_auth_method
+                .as_ref()
+                .unwrap_or(&profile.auth_method);
+            (
+                format!("{}/rest/openehr/v1/admin/ehr/{}", base, ehr_id),
+                admin_auth.clone(),
+            )
+        }
         _ => (
             format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id),
             profile.auth_method.clone(),

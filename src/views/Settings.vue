@@ -151,7 +151,7 @@ async function checkForUpdatesNow() {
             privacy-first, GDPR-compliant analytics service). We collect: app version, OS and
             architecture, which features are used (e.g. <em>aql_executed</em>,
             <em>composition_viewed</em>), and the CDR platform type
-            (<em>ehrbase</em>/<em>better_platform</em>/<em>generic</em>).
+            (<em>ehrbase</em>/<em>better_platform</em>/<em>ferro_ehr</em>/<em>generic</em>).
           </p>
           <p class="form-help">
             We <strong>never</strong> collect server URLs, credentials, patient data, EHR IDs,
