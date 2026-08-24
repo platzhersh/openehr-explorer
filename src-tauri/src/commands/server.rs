@@ -630,11 +630,15 @@ pub async fn get_server_version(
             parse_version_json(&resp.body)
         }
         ServerType::FerroEhr => {
+            // FerroEHR's status endpoint is unauthenticated (mounted outside
+            // its auth layer) — sending credentials here would make version
+            // detection fail for a reachable server whose stored credentials
+            // happen to be invalid or expired.
             let url = format!("{}/rest/status", base);
             let resp = send_instrumented(
                 &app,
                 &client,
-                build_request(&client, reqwest::Method::GET, &url, &profile.auth_method),
+                build_request(&client, reqwest::Method::GET, &url, &AuthMethod::None),
             )
             .await?;
 
