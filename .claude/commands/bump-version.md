@@ -34,15 +34,47 @@ Rules:
 
 ## Step 2: Changelog entry
 
-Add a new changelog entry for `$1` in `docs/docs.html`:
+Add a new changelog entry for `$1` in **both** `docs/docs.html` and the
+root `CHANGELOG.md` — they must always describe the same release in the
+same words; drifting apart defeats the point of having both.
 
 1. Find the previous tag: `git describe --tags --abbrev=0` (before the tag for `$1` is created).
 2. Review what changed since that tag: `git log <previous-tag>..HEAD --oneline`. Read the underlying commits/PRs as needed to understand user-facing impact — don't just paraphrase commit subjects.
 3. Add a new `<h3>v$1 — <short theme>` block as the **first** entry under `<section id="changelog">` in `docs/docs.html` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
-4. Commit separately with this message:
+4. Mirror the exact same theme and bullets as a new `## [$1] - <YYYY-MM-DD>` section at the **top** of `CHANGELOG.md` (below the intro, above the previous top entry) — same bullet text, just HTML→Markdown (`<strong>Label:</strong>` → `**Label:**`, `<code>` → backticks, entities like `&amp;`/`&ldquo;` → plain characters). Use today's date; it becomes the tag date once step 3 of RELEASING.md is done.
+5. Commit both files together with this message:
 
   ```
   docs: add v$1 changelog entry
   ```
 
 - Do NOT push or open a PR unless the user explicitly asks.
+
+## Step 3: Product tour / What's New check
+
+While you have the full list of user-facing changes in front of you from
+Step 2, decide whether any of them are substantial enough to surface inside
+the app itself (see PRD-0018):
+
+- **New "What's New" entry** (`src/lib/whats-new.ts`): if this release ships
+  something a returning user would want a heads-up about, add a
+  `WhatsNewEntry` for `$1` with 1-3 `highlights` — reuse the same wording as
+  the changelog bullets, trimmed to a sentence. Skip this for pure bugfix
+  releases; the What's New modal is for announcing things, not apologizing
+  for regressions.
+- **New or updated feature tour** (`src/lib/tours.ts`): if this release adds
+  a new screen, or a major new capability on an existing screen that isn't
+  obvious from the UI alone, either add a new `Tour` (with matching
+  `data-tour` attributes on the new elements) or add a step to an existing
+  one. This is a safety net, not the primary path — ideally the feature's
+  own PR already did this, the same way OEH-29 wired up tours for the five
+  existing screens.
+
+If you add a `WhatsNewEntry`, commit it separately (it's app source, not
+documentation):
+
+  ```
+  feat: add v$1 "What's New" entry
+  ```
+
+If nothing here applies, say so and move on — don't force an entry.

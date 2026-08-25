@@ -7,7 +7,7 @@ There is no separate "click a button to release" step beyond that.
 ## TL;DR
 
 ```bash
-# 1. Bump the version + changelog entry (two commits, see below)
+# 1. Bump the version + changelog entry + tour/What's New check (2-3 commits, see below)
 /bump-version 0.5.0
 
 # 2. Open a PR, get it merged to main
@@ -28,7 +28,8 @@ automatically in CI.
 ### 1. Bump the version + write the changelog entry
 
 Use the `/bump-version <version>` slash command
-(`.claude/commands/bump-version.md`). It does this in two separate commits:
+(`.claude/commands/bump-version.md`). It does this in two or three separate
+commits:
 
 **Step 1 — version bump.** Updates the version string in all of the files
 that need to stay in sync:
@@ -42,20 +43,31 @@ that need to stay in sync:
 - `docs/docs.html` (Linux AppImage install snippet)
 
 **Step 2 — changelog entry.** Adds a new `<h3>` entry under
-`<section id="changelog">` in `docs/docs.html`, following the existing
-format (version + one-line theme, then a bullet list of user-facing
-highlights), based on reviewing what actually changed since the previous
-tag — not a raw commit-message dump.
+`<section id="changelog">` in `docs/docs.html`, **and** the matching `##
+[version]` entry at the top of the root [`CHANGELOG.md`](CHANGELOG.md) —
+same theme, same bullets, kept in sync in the same commit — following the
+existing format (version + one-line theme, then a bullet list of
+user-facing highlights), based on reviewing what actually changed since the
+previous tag — not a raw commit-message dump.
 
-These stay two commits on purpose: the version bump is mechanical and
-verifiable (`git diff --stat` against a known file count), while the
-changelog is a hand-written summary that needs judgment about what's
-user-facing and worth mentioning.
+**Step 3 — product tour / What's New check.** While reviewing what changed
+for Step 2, also decide whether anything is worth surfacing in-app via the
+route-aware feature tour / "What's New" system (see PRD-0018,
+`src/lib/tours.ts`, `src/lib/whats-new.ts`). Only produces a commit if
+something actually gets added — most releases won't need one, especially
+pure-bugfix releases.
+
+These stay separate commits on purpose: the version bump is mechanical and
+verifiable (`git diff --stat` against a known file count), the changelog is
+a hand-written summary that needs judgment about what's user-facing and
+worth mentioning, and a What's New/tour addition is app source, not
+documentation.
 
 ### 2. Merge to `main`
 
-Open a PR with the version bump + changelog commits, get it reviewed, and
-merge it. The tag in the next step should point at this merge commit.
+Open a PR with the version bump + changelog (+ tour/What's New, if any)
+commits, get it reviewed, and merge it. The tag in the next step should
+point at this merge commit.
 
 ### 3. Tag and push
 

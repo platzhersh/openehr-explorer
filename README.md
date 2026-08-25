@@ -105,6 +105,7 @@ See the full, always-up-to-date **[Tool Comparison](https://platzhersh.github.io
 
 - [User docs & guides](https://platzhersh.github.io/openehr-explorer/docs.html)
 - [Tool comparison](https://platzhersh.github.io/openehr-explorer/compare.html)
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each release
 - [PRDs](docs/prd/) — product requirements for each feature
 - [ADRs](docs/adr/) — architecture decisions and rationale
 - [RELEASING.md](RELEASING.md) — release process

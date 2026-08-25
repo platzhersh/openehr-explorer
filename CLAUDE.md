@@ -165,6 +165,10 @@ This project uses **PRDs** (`docs/prd/`) and **ADRs** (`docs/adr/`) for governan
 
 When making significant architectural changes, create an ADR. When planning new features, reference or create a PRD.
 
+**Changelog:** User-facing changes are recorded in two places that must stay in sync — the root [`CHANGELOG.md`](CHANGELOG.md) and the `#changelog` section of `docs/docs.html` (the in-app "Documentation" page). Both are updated together as part of a version bump; see [RELEASING.md](RELEASING.md) and `.claude/commands/bump-version.md`. Don't add changelog entries in a feature PR — they're written in bulk at release time, reviewing everything that changed since the previous tag.
+
+**Feature tours & "What's New":** openEHR Explorer has a route-aware feature tour and version-gated "What's New" system (PRD-0018: `src/lib/tours.ts`, `src/lib/whats-new.ts`, `src/stores/tour.ts`, `src/stores/whatsNew.ts`). When building a feature that adds a new screen or a non-obvious major capability, consider wiring up a tour (`data-tour` attributes + a `Tour` entry) in the same PR — see how `EhrBrowser.vue`, `AqlRunner.vue`, etc. do it. This is also checked as Step 3 of `/bump-version` as a release-time safety net, but doing it in the feature PR itself is preferred.
+
 ## Commit & PR Conventions
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages and PR titles: `<type>(<optional scope>): <description>`, e.g. `feat(website): publish working Windows install command`, `fix: gh api --jq doesn't accept extra jq flags`, `docs(readme): add header banner and badges`, `ci: add Windows package manager auto-publish workflows`, `chore: bump version to 0.4.2`. Common types in this repo: `feat`, `fix`, `docs`, `chore`, `ci`, `refactor`.
