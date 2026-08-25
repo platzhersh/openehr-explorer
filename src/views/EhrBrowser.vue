@@ -24,7 +24,9 @@ const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
-const activeTab = ref<"detail" | "json">("detail");
+const activeTab = ref<"detail" | "json" | "contributions">("detail");
+const contributionLookupUid = ref("");
+const contributionLookupError = ref<string | null>(null);
 const showHelpPopover = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
@@ -363,6 +365,24 @@ async function copyEhrJson() {
     await navigator.clipboard.writeText(ehrJson.value);
   }
 }
+
+// CONTRIBUTION lookup (OEH-28). openEHR has no "list contributions for an
+// EHR" endpoint — only GET-by-UID — so this is a manual lookup form. The
+// composition Versions tab is the other, more common entry point: it
+// resolves a version's contribution UID for you and jumps straight here.
+function lookupContribution() {
+  contributionLookupError.value = null;
+  const uid = contributionLookupUid.value.trim();
+  if (!uid) {
+    contributionLookupError.value = "Enter a contribution UID.";
+    return;
+  }
+  if (!ehrId.value) return;
+  router.push({
+    name: "contribution",
+    params: { ehrId: ehrId.value, contributionUid: uid },
+  });
+}
 </script>
 
 <template>
@@ -587,6 +607,13 @@ async function copyEhrJson() {
               >
                 JSON
               </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'contributions' }"
+                @click="activeTab = 'contributions'"
+              >
+                Contributions
+              </button>
             </div>
             <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">
               Copy JSON
@@ -634,6 +661,31 @@ async function copyEhrJson() {
         <!-- JSON View -->
         <div v-if="activeTab === 'json'" class="json-view">
           <pre class="json-pre">{{ ehrJson }}</pre>
+        </div>
+
+        <!-- Contributions View (OEH-28) -->
+        <div v-if="activeTab === 'contributions'" class="contributions-view">
+          <p class="contributions-hint">
+            openEHR doesn't provide a way to list all contributions for an EHR — only to fetch one
+            by UID. Enter a known contribution UID below, or open a composition's
+            <strong>Versions</strong> tab and click <strong>View Contribution</strong> to jump
+            straight to the commit that created a specific version.
+          </p>
+          <div class="contribution-lookup">
+            <input
+              class="input"
+              v-model="contributionLookupUid"
+              placeholder="Contribution UID"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              @keydown.enter="lookupContribution"
+            />
+            <button class="btn btn-sm btn-primary" @click="lookupContribution">View</button>
+          </div>
+          <div v-if="contributionLookupError" class="search-validation-error">
+            {{ contributionLookupError }}
+          </div>
         </div>
 
         <h3 class="section-title" v-if="activeTab === 'detail'">
@@ -1077,6 +1129,24 @@ async function copyEhrJson() {
   font-weight: 600;
   margin-bottom: 12px;
   color: var(--color-text-secondary);
+}
+
+.contributions-view {
+  margin-bottom: 24px;
+}
+.contributions-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+.contribution-lookup {
+  display: flex;
+  gap: 8px;
+}
+.contribution-lookup .input {
+  flex: 1;
+  font-family: var(--font-mono);
 }
 
 .template-group {

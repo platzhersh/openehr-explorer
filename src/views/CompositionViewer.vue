@@ -23,11 +23,34 @@ const flatComposition = ref<Record<string, unknown> | null>(null);
 const webTemplate = ref<Record<string, unknown> | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
-const activeTab = ref<"pretty" | "json" | "flat">("pretty");
+const activeTab = ref<"pretty" | "json" | "flat" | "versions">("pretty");
 const showFlatPaths = ref(false);
 const highlightedPath = ref<string | null>(null);
 const showDeleteDialog = ref(false);
 const deleting = ref(false);
+
+// Version history / CONTRIBUTION linkage (OEH-28)
+interface CommitAudit {
+  change_type: string | null;
+  committer_name: string | null;
+  time_committed: string | null;
+  description: string | null;
+}
+interface CompositionVersion {
+  version_id: string;
+  preceding_version_uid: string | null;
+  lifecycle_state: string | null;
+  commit_audit: CommitAudit | null;
+  time_committed: string | null;
+}
+const versions = ref<CompositionVersion[]>([]);
+const versionsLoading = ref(false);
+const versionsError = ref<string | null>(null);
+const contributionLookupError = ref<string | null>(null);
+
+// The versioned_object_uid is the part of a version UID before the first
+// "::" (e.g. `abc123::system.example.com::1` -> `abc123`).
+const versionedObjectUid = computed(() => compositionUid.value.split("::")[0]);
 
 // Search state
 const showPanelSearch = ref(false);
@@ -113,7 +136,57 @@ watch(activeTab, (tab) => {
 
 watch(compositionUid, () => {
   closePanelSearch();
+  // Version history is scoped to the composition being viewed — drop any
+  // stale data from the previous one so switching compositions doesn't
+  // briefly show the wrong history.
+  versions.value = [];
+  versionsError.value = null;
+  contributionLookupError.value = null;
 });
+
+// Lazily fetch version history the first time the Versions tab is opened.
+watch(activeTab, async (tab) => {
+  if (tab !== "versions" || !serverStore.activeServerId || versions.value.length > 0) return;
+  versionsLoading.value = true;
+  versionsError.value = null;
+  try {
+    versions.value = await invoke<CompositionVersion[]>("get_composition_versions", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionedObjectUid: versionedObjectUid.value,
+    });
+  } catch (e) {
+    versionsError.value = String(e);
+  } finally {
+    versionsLoading.value = false;
+  }
+});
+
+// Resolve the CONTRIBUTION a given version was committed as part of, then
+// navigate to the Contribution viewer (OEH-28).
+async function viewContribution(versionId: string) {
+  if (!serverStore.activeServerId) return;
+  contributionLookupError.value = null;
+  try {
+    const contributionUid = await invoke<string | null>("get_composition_version_contribution", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionedObjectUid: versionedObjectUid.value,
+      versionUid: versionId,
+    });
+    if (!contributionUid) {
+      contributionLookupError.value =
+        "This server did not report a contribution reference for this version.";
+      return;
+    }
+    router.push({
+      name: "contribution",
+      params: { ehrId: ehrId.value, contributionUid },
+    });
+  } catch (e) {
+    contributionLookupError.value = String(e);
+  }
+}
 
 // Helper functions
 function escapeRegex(str: string): string {
@@ -294,6 +367,13 @@ onUnmounted(() => {
           >
             FLAT
           </button>
+          <button
+            class="tab"
+            :class="{ active: activeTab === 'versions' }"
+            @click="activeTab = 'versions'"
+          >
+            Versions
+          </button>
         </div>
         <button class="btn btn-sm" @click="showFlatPaths = !showFlatPaths">
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
@@ -358,6 +438,40 @@ onUnmounted(() => {
             @previous="goToPreviousMatch"
           />
           <pre class="json-pre"><code v-html="highlightedJson"></code></pre>
+        </div>
+
+        <!-- Versions View (OEH-28) -->
+        <div v-if="activeTab === 'versions'" class="versions-view">
+          <div v-if="versionsLoading" class="loading">Loading version history...</div>
+          <div v-else-if="versionsError" class="error-msg">{{ versionsError }}</div>
+          <div v-else-if="versions.length === 0" class="empty-versions">
+            No version history available for this composition.
+          </div>
+          <template v-else>
+            <div v-if="contributionLookupError" class="contribution-lookup-error">
+              {{ contributionLookupError }}
+            </div>
+            <div v-for="v in versions" :key="v.version_id" class="version-row">
+              <div class="version-row-main">
+                <div class="version-row-id mono">{{ v.version_id }}</div>
+                <div class="version-row-meta">
+                  <span v-if="v.commit_audit?.change_type" class="badge">{{
+                    v.commit_audit.change_type
+                  }}</span>
+                  <span v-if="v.commit_audit?.committer_name">{{
+                    v.commit_audit.committer_name
+                  }}</span>
+                  <span v-if="v.time_committed">{{ v.time_committed }}</span>
+                </div>
+                <div v-if="v.commit_audit?.description" class="version-row-description">
+                  {{ v.commit_audit.description }}
+                </div>
+              </div>
+              <button class="btn btn-sm" @click="viewContribution(v.version_id)">
+                View Contribution
+              </button>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -468,6 +582,65 @@ onUnmounted(() => {
   color: var(--color-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.versions-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.empty-versions {
+  padding: 16px 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.contribution-lookup-error {
+  padding: 8px 12px;
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-error);
+  font-size: 12px;
+}
+.version-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.version-row-main {
+  min-width: 0;
+  flex: 1;
+}
+.version-row-id {
+  font-size: 12px;
+  word-break: break-all;
+}
+.version-row-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.version-row-description {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: var(--color-primary-dim);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .dialog-overlay {
