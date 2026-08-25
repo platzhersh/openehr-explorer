@@ -30,7 +30,6 @@ pub struct AqlColumn {
 pub struct StoredQuerySummary {
     pub qualified_query_name: String,
     pub version: Option<String>,
-    #[serde(rename = "type")]
     pub query_type: Option<String>,
     pub saved_time: Option<String>,
 }
@@ -39,7 +38,6 @@ pub struct StoredQuerySummary {
 pub struct StoredQueryDefinition {
     pub qualified_query_name: String,
     pub version: Option<String>,
-    #[serde(rename = "type")]
     pub query_type: Option<String>,
     pub q: Option<String>,
     pub saved_time: Option<String>,

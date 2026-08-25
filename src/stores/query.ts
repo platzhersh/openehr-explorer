@@ -50,6 +50,13 @@ export const useQueryStore = defineStore("query", () => {
   const storedQueriesLoading = ref(false);
   const storedQueriesError = ref<string | null>(null);
   const selectedStoredQuery = ref<StoredQueryDefinition | null>(null);
+  const selectedStoredQueryLoading = ref(false);
+  const selectedStoredQueryError = ref<string | null>(null);
+
+  // Revision counters guard against a slow request (e.g. for a server the
+  // user has since switched away from) overwriting state from a newer one.
+  let storedQueriesRevision = 0;
+  let definitionRevision = 0;
 
   async function executeAql(serverId: string, query: string) {
     loading.value = true;
@@ -79,19 +86,21 @@ export const useQueryStore = defineStore("query", () => {
   }
 
   async function loadStoredQueries(serverId: string) {
+    const revision = ++storedQueriesRevision;
     storedQueriesLoading.value = true;
     storedQueriesError.value = null;
     try {
-      storedQueries.value = await invoke<StoredQuerySummary[]>("list_stored_queries", {
-        serverId,
-      });
+      const result = await invoke<StoredQuerySummary[]>("list_stored_queries", { serverId });
+      if (revision !== storedQueriesRevision) return; // superseded by a newer request
+      storedQueries.value = result;
     } catch (e) {
+      if (revision !== storedQueriesRevision) return;
       // Not every CDR implements STORED_QUERY — surface the error without
       // blocking the rest of the query runner.
       storedQueriesError.value = String(e);
       storedQueries.value = [];
     } finally {
-      storedQueriesLoading.value = false;
+      if (revision === storedQueriesRevision) storedQueriesLoading.value = false;
     }
   }
 
@@ -100,16 +109,33 @@ export const useQueryStore = defineStore("query", () => {
     qualifiedQueryName: string,
     version?: string | null,
   ) {
-    selectedStoredQuery.value = await invoke<StoredQueryDefinition>("get_stored_query_definition", {
-      serverId,
-      qualifiedQueryName,
-      version: version ?? null,
-    });
-    return selectedStoredQuery.value;
+    const revision = ++definitionRevision;
+    selectedStoredQuery.value = null;
+    selectedStoredQueryError.value = null;
+    selectedStoredQueryLoading.value = true;
+    try {
+      const definition = await invoke<StoredQueryDefinition>("get_stored_query_definition", {
+        serverId,
+        qualifiedQueryName,
+        version: version ?? null,
+      });
+      if (revision !== definitionRevision) return null; // superseded — discard
+      selectedStoredQuery.value = definition;
+      return definition;
+    } catch (e) {
+      if (revision !== definitionRevision) return null;
+      selectedStoredQueryError.value = String(e);
+      return null;
+    } finally {
+      if (revision === definitionRevision) selectedStoredQueryLoading.value = false;
+    }
   }
 
   function clearSelectedStoredQuery() {
+    definitionRevision++; // invalidate any definition request still in flight
     selectedStoredQuery.value = null;
+    selectedStoredQueryError.value = null;
+    selectedStoredQueryLoading.value = false;
   }
 
   async function executeStoredQuery(
@@ -148,6 +174,8 @@ export const useQueryStore = defineStore("query", () => {
     storedQueriesLoading,
     storedQueriesError,
     selectedStoredQuery,
+    selectedStoredQueryLoading,
+    selectedStoredQueryError,
     loadStoredQueries,
     loadStoredQueryDefinition,
     clearSelectedStoredQuery,

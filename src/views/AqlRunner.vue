@@ -316,37 +316,55 @@ const editorStyle = computed(() => ({
       <!-- Main area -->
       <div class="main-area">
         <!-- Stored query detail / execute panel -->
-        <div v-if="queryStore.selectedStoredQuery" class="stored-query-panel">
-          <div class="stored-query-header">
-            <h3>
-              {{ queryStore.selectedStoredQuery.qualified_query_name }}
-              <span v-if="queryStore.selectedStoredQuery.version" class="stored-version">
-                v{{ queryStore.selectedStoredQuery.version }}
-              </span>
-            </h3>
+        <div
+          v-if="
+            queryStore.selectedStoredQuery ||
+            queryStore.selectedStoredQueryLoading ||
+            queryStore.selectedStoredQueryError
+          "
+          class="stored-query-panel"
+        >
+          <div v-if="queryStore.selectedStoredQueryLoading" class="stored-query-status">
+            Loading definition…
+          </div>
+          <div v-else-if="queryStore.selectedStoredQueryError" class="stored-query-header">
+            <span class="error-msg">{{ queryStore.selectedStoredQueryError }}</span>
             <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
               Close
             </button>
           </div>
-          <pre class="stored-query-aql">{{
-            queryStore.selectedStoredQuery.q || "(no AQL text returned by server)"
-          }}</pre>
-          <div v-if="storedQueryParamNames.length" class="stored-query-params">
-            <div v-for="p in storedQueryParamNames" :key="p" class="stored-query-param">
-              <label :for="`stored-param-${p}`">${{ p }}</label>
-              <input
-                :id="`stored-param-${p}`"
-                class="input"
-                v-model="selectedStoredParams[p]"
-                :placeholder="`Value for $${p}`"
-              />
+          <template v-else-if="queryStore.selectedStoredQuery">
+            <div class="stored-query-header">
+              <h3>
+                {{ queryStore.selectedStoredQuery.qualified_query_name }}
+                <span v-if="queryStore.selectedStoredQuery.version" class="stored-version">
+                  v{{ queryStore.selectedStoredQuery.version }}
+                </span>
+              </h3>
+              <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
+                Close
+              </button>
             </div>
-          </div>
-          <div class="stored-query-actions">
-            <button type="button" class="btn btn-sm btn-primary" @click="runStoredQuery">
-              Execute
-            </button>
-          </div>
+            <pre class="stored-query-aql">{{
+              queryStore.selectedStoredQuery.q || "(no AQL text returned by server)"
+            }}</pre>
+            <div v-if="storedQueryParamNames.length" class="stored-query-params">
+              <div v-for="p in storedQueryParamNames" :key="p" class="stored-query-param">
+                <label :for="`stored-param-${p}`">${{ p }}</label>
+                <input
+                  :id="`stored-param-${p}`"
+                  class="input"
+                  v-model="selectedStoredParams[p]"
+                  :placeholder="`Value for $${p}`"
+                />
+              </div>
+            </div>
+            <div class="stored-query-actions">
+              <button type="button" class="btn btn-sm btn-primary" @click="runStoredQuery">
+                Execute
+              </button>
+            </div>
+          </template>
         </div>
 
         <!-- Editor -->
@@ -536,6 +554,10 @@ const editorStyle = computed(() => ({
   padding: 12px 24px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+.stored-query-status {
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 .stored-query-header {
   display: flex;
