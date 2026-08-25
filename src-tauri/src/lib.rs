@@ -143,6 +143,10 @@ pub fn run() {
             query::list_saved_queries,
             query::save_query,
             query::delete_saved_query,
+            // STORED_QUERY
+            query::list_stored_queries,
+            query::get_stored_query_definition,
+            query::execute_stored_query,
             // Settings
             settings::get_config_dir,
             settings::get_settings,
