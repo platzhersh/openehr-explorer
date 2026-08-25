@@ -84,24 +84,20 @@ function onItemClick(objectRef: ObjectRef) {
         :depth="depth + 1"
         @open-item="(objectRef) => emit('open-item', objectRef)"
       />
-      <template v-for="(item, i) in items" :key="item.id?.value ?? i">
-        <button
-          v-if="isCompositionRef(item)"
-          type="button"
-          class="dir-item clickable"
-          title="Open composition"
-          @click.stop="onItemClick(item)"
-        >
-          <span class="item-icon">📄</span>
-          <span class="item-type">{{ item.type ?? "OBJECT_REF" }}</span>
-          <span class="item-id mono">{{ itemLabel(item) }}</span>
-        </button>
-        <div v-else class="dir-item">
-          <span class="item-icon">📄</span>
-          <span class="item-type">{{ item.type ?? "OBJECT_REF" }}</span>
-          <span class="item-id mono">{{ itemLabel(item) }}</span>
-        </div>
-      </template>
+      <component
+        :is="isCompositionRef(item) ? 'button' : 'div'"
+        v-for="(item, i) in items"
+        :key="item.id?.value ?? i"
+        v-bind="isCompositionRef(item) ? { type: 'button' } : {}"
+        class="dir-item"
+        :class="{ clickable: isCompositionRef(item) }"
+        :title="isCompositionRef(item) ? 'Open composition' : undefined"
+        @click.stop="onItemClick(item)"
+      >
+        <span class="item-icon">📄</span>
+        <span class="item-type">{{ item.type ?? "OBJECT_REF" }}</span>
+        <span class="item-id mono">{{ itemLabel(item) }}</span>
+      </component>
       <div v-if="childCount === 0" class="dir-empty">Empty folder</div>
     </div>
   </div>

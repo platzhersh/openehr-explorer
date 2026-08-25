@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request, ServerType};
+use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
 use crate::inspector::{send_instrumented, InstrumentedResponse};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -548,42 +548,28 @@ fn build_directory_url(
 }
 
 /// Formats a non-2xx response as the `Err(String)` surfaced to the frontend.
-/// Both DIRECTORY commands hit this identically, so it's factored out here
-/// rather than repeating the `format!("Server returned HTTP {}: {}", ...)`
-/// literal at each call site.
 fn http_error(resp: &InstrumentedResponse) -> String {
     format!("Server returned HTTP {}: {}", resp.status, resp.body)
 }
 
-/// Fetches the latest (or, if `version_at_time` is given, the version in
-/// effect at that instant) DIRECTORY folder hierarchy for an EHR.
+/// Shared GET + response handling for both DIRECTORY commands below (they
+/// differ only in how `url` is built) — sends the request, treats a 404 as
+/// "no directory" (`Ok(None)`, since that's an expected, common state rather
+/// than a failure), and parses the body into JSON on any other success.
 ///
 /// The DIRECTORY's FOLDER/OBJECT_REF nesting is arbitrary-depth and
 /// data-driven, so — like `composition::get_composition` — the response is
 /// passed through as raw JSON rather than modeled with a Rust struct.
-///
-/// A server that has no directory set for this EHR (or doesn't support the
-/// resource) responds with 404 — that's an expected, common state (not every
-/// EHR has a folder structure), so it's surfaced as `Ok(None)` rather than an
-/// `Err`, keeping "no directory" distinguishable from an actual failure.
-#[tauri::command]
-pub async fn get_directory(
-    app: tauri::AppHandle,
-    server_id: String,
-    ehr_id: String,
-    version_at_time: Option<String>,
+async fn fetch_directory(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    auth: &AuthMethod,
 ) -> Result<Option<Value>, String> {
-    let profile = get_profile_by_id(&server_id)?;
-    let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-
-    let url = build_directory_url(base, &ehr_id, None, version_at_time.as_deref());
-
     let resp = send_instrumented(
-        &app,
-        &client,
-        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/json"),
+        app,
+        client,
+        make_request(client, reqwest::Method::GET, url, auth).header("Accept", "application/json"),
     )
     .await?;
 
@@ -600,6 +586,23 @@ pub async fn get_directory(
         .map_err(|e| format!("Failed to parse directory: {}", e))
 }
 
+/// Fetches the latest (or, if `version_at_time` is given, the version in
+/// effect at that instant) DIRECTORY folder hierarchy for an EHR.
+#[tauri::command]
+pub async fn get_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_at_time: Option<String>,
+) -> Result<Option<Value>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = build_directory_url(base, &ehr_id, None, version_at_time.as_deref());
+    fetch_directory(&app, &client, &url, &profile.auth_method).await
+}
+
 /// Fetches a specific historical version of the DIRECTORY, identified by its
 /// version UID (as returned in the `ETag`/`Location` of a prior DIRECTORY
 /// write, or from `get_directory`'s response `uid`).
@@ -609,27 +612,13 @@ pub async fn get_directory_version(
     server_id: String,
     ehr_id: String,
     version_uid: String,
-) -> Result<Value, String> {
+) -> Result<Option<Value>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
     let url = build_directory_url(base, &ehr_id, Some(&version_uid), None);
-
-    let resp = send_instrumented(
-        &app,
-        &client,
-        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/json"),
-    )
-    .await?;
-
-    if !resp.is_success {
-        return Err(http_error(&resp));
-    }
-
-    serde_json::from_str(&resp.body)
-        .map_err(|e| format!("Failed to parse directory version: {}", e))
+    fetch_directory(&app, &client, &url, &profile.auth_method).await
 }
 
 // --- AQL-backed EHR search (PRD-0013) ---
