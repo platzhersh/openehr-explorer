@@ -6,6 +6,12 @@ use std::path::PathBuf;
 use super::server::{create_client, get_profile_by_id, make_request};
 use crate::inspector::send_instrumented;
 
+// Every request in this module speaks JSON, in both directions — shared
+// constants instead of repeating the header name/value literals everywhere.
+const HEADER_ACCEPT: &str = "Accept";
+const HEADER_CONTENT_TYPE: &str = "Content-Type";
+const MIME_JSON: &str = "application/json";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AqlResult {
     pub columns: Vec<AqlColumn>,
@@ -104,8 +110,8 @@ pub async fn execute_aql(
         &app,
         &client,
         make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
+            .header(HEADER_CONTENT_TYPE, MIME_JSON)
+            .header(HEADER_ACCEPT, MIME_JSON)
             .json(&serde_json::json!({ "q": query })),
     )
     .await?;
@@ -215,7 +221,7 @@ pub async fn list_stored_queries(
         &app,
         &client,
         make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/json"),
+            .header(HEADER_ACCEPT, MIME_JSON),
     )
     .await?;
 
@@ -279,7 +285,7 @@ pub async fn get_stored_query_definition(
         &app,
         &client,
         make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/json"),
+            .header(HEADER_ACCEPT, MIME_JSON),
     )
     .await?;
 
@@ -340,8 +346,8 @@ pub async fn execute_stored_query(
         &app,
         &client,
         make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
+            .header(HEADER_CONTENT_TYPE, MIME_JSON)
+            .header(HEADER_ACCEPT, MIME_JSON)
             .json(&serde_json::json!({
                 "query_parameters": parameters.unwrap_or_default(),
             })),

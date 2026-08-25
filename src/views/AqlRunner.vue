@@ -67,7 +67,7 @@ const selectedStoredParams = ref<Record<string, string>>({});
 const storedQueryParamNames = computed(() => {
   const q = queryStore.selectedStoredQuery?.q ?? "";
   const names = new Set<string>();
-  const re = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  const re = /\$([a-zA-Z_]\w*)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(q))) names.add(m[1]);
   return Array.from(names);
@@ -324,7 +324,9 @@ const editorStyle = computed(() => ({
                 v{{ queryStore.selectedStoredQuery.version }}
               </span>
             </h3>
-            <button class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">Close</button>
+            <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
+              Close
+            </button>
           </div>
           <pre class="stored-query-aql">{{
             queryStore.selectedStoredQuery.q || "(no AQL text returned by server)"
@@ -341,7 +343,9 @@ const editorStyle = computed(() => ({
             </div>
           </div>
           <div class="stored-query-actions">
-            <button class="btn btn-sm btn-primary" @click="runStoredQuery">Execute</button>
+            <button type="button" class="btn btn-sm btn-primary" @click="runStoredQuery">
+              Execute
+            </button>
           </div>
         </div>
 
@@ -549,7 +553,7 @@ const editorStyle = computed(() => ({
   font-family: var(--font-mono);
   font-size: 12px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
   max-height: 160px;
   overflow-y: auto;
   background: var(--color-bg);
