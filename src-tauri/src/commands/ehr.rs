@@ -563,15 +563,16 @@ fn http_error(resp: &InstrumentedResponse) -> String {
 /// passed through as raw JSON rather than modeled with a Rust struct.
 ///
 /// A server that has no directory set for this EHR (or doesn't support the
-/// resource) responds with 404, which surfaces here as an `Err` — the
-/// frontend treats that as "no directory" rather than a hard failure.
+/// resource) responds with 404 — that's an expected, common state (not every
+/// EHR has a folder structure), so it's surfaced as `Ok(None)` rather than an
+/// `Err`, keeping "no directory" distinguishable from an actual failure.
 #[tauri::command]
 pub async fn get_directory(
     app: tauri::AppHandle,
     server_id: String,
     ehr_id: String,
     version_at_time: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Option<Value>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
@@ -586,11 +587,17 @@ pub async fn get_directory(
     )
     .await?;
 
+    if resp.status == 404 {
+        return Ok(None);
+    }
+
     if !resp.is_success {
         return Err(http_error(&resp));
     }
 
-    serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse directory: {}", e))
+    serde_json::from_str(&resp.body)
+        .map(Some)
+        .map_err(|e| format!("Failed to parse directory: {}", e))
 }
 
 /// Fetches a specific historical version of the DIRECTORY, identified by its

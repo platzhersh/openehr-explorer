@@ -69,12 +69,12 @@ function onItemClick(objectRef: ObjectRef) {
 
 <template>
   <div class="dir-node">
-    <div class="dir-row" @click="toggle">
+    <button type="button" class="dir-row" @click="toggle">
       <span class="toggle">{{ expanded ? "▼" : "▶" }}</span>
       <span class="folder-icon">📁</span>
       <span class="folder-label">{{ label }}</span>
       <span class="folder-meta">{{ childCount }}</span>
-    </div>
+    </button>
 
     <div v-if="expanded" class="dir-children">
       <DirectoryTree
@@ -84,18 +84,24 @@ function onItemClick(objectRef: ObjectRef) {
         :depth="depth + 1"
         @open-item="(objectRef) => emit('open-item', objectRef)"
       />
-      <div
-        v-for="(item, i) in items"
-        :key="item.id?.value ?? i"
-        class="dir-item"
-        :class="{ clickable: isCompositionRef(item) }"
-        :title="isCompositionRef(item) ? 'Open composition' : undefined"
-        @click.stop="onItemClick(item)"
-      >
-        <span class="item-icon">📄</span>
-        <span class="item-type">{{ item.type ?? "OBJECT_REF" }}</span>
-        <span class="item-id mono">{{ itemLabel(item) }}</span>
-      </div>
+      <template v-for="(item, i) in items" :key="item.id?.value ?? i">
+        <button
+          v-if="isCompositionRef(item)"
+          type="button"
+          class="dir-item clickable"
+          title="Open composition"
+          @click.stop="onItemClick(item)"
+        >
+          <span class="item-icon">📄</span>
+          <span class="item-type">{{ item.type ?? "OBJECT_REF" }}</span>
+          <span class="item-id mono">{{ itemLabel(item) }}</span>
+        </button>
+        <div v-else class="dir-item">
+          <span class="item-icon">📄</span>
+          <span class="item-type">{{ item.type ?? "OBJECT_REF" }}</span>
+          <span class="item-id mono">{{ itemLabel(item) }}</span>
+        </div>
+      </template>
       <div v-if="childCount === 0" class="dir-empty">Empty folder</div>
     </div>
   </div>
@@ -110,8 +116,14 @@ function onItemClick(objectRef: ObjectRef) {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 4px 6px;
+  border: none;
   border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 .dir-row:hover {
@@ -149,7 +161,12 @@ function onItemClick(objectRef: ObjectRef) {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 3px 6px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
   color: var(--color-text-secondary);
 }
 .dir-item.clickable {

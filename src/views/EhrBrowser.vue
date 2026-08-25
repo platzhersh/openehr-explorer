@@ -261,12 +261,15 @@ function openComposition(comp: CompositionSummary) {
 
 function selectDirectoryTab() {
   activeTab.value = "directory";
+  // No `!ehrStore.directoryError` guard here — a prior failure (transient
+  // network/server error) shouldn't permanently block re-fetching on every
+  // later tab reselect, only while a fetch is already in flight or has
+  // already succeeded (including a legitimate empty result).
   if (
     ehrId.value &&
     serverStore.activeServerId &&
     !ehrStore.directory &&
-    !ehrStore.directoryLoading &&
-    !ehrStore.directoryError
+    !ehrStore.directoryLoading
   ) {
     ehrStore.fetchDirectory(serverStore.activeServerId, ehrId.value);
   }
@@ -672,8 +675,7 @@ async function copyEhrJson() {
             <span class="spinner"></span> Loading directory...
           </div>
           <div v-else-if="ehrStore.directoryError" class="empty-state">
-            <h3>No directory available</h3>
-            <p>This EHR may not have a DIRECTORY folder set, or the request failed.</p>
+            <h3>Failed to load directory</h3>
             <p class="error-detail">{{ ehrStore.directoryError }}</p>
           </div>
           <DirectoryTree
@@ -683,7 +685,8 @@ async function copyEhrJson() {
             @open-item="openCompositionRef"
           />
           <div v-else class="empty-state">
-            <p>No directory data.</p>
+            <h3>No directory set</h3>
+            <p>This EHR doesn't have a DIRECTORY folder structure.</p>
           </div>
         </div>
 

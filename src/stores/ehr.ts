@@ -210,27 +210,36 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearDirectory() (called whenever the selected EHR changes —
+  // see EhrBrowser.vue) so a slow response for a since-abandoned EHR/server
+  // can't land after a newer request and overwrite what's on screen.
+  let directoryRequestId = 0;
+
   async function fetchDirectory(serverId: string, ehrId: string, versionAtTime?: string) {
+    const requestId = ++directoryRequestId;
     directoryLoading.value = true;
     directoryError.value = null;
     try {
-      directory.value = await invoke<Record<string, unknown>>("get_directory", {
+      // A 404 (no DIRECTORY set for this EHR — common, not an error) comes
+      // back from the backend as `null`, not a thrown rejection.
+      const result = await invoke<Record<string, unknown> | null>("get_directory", {
         serverId,
         ehrId,
         versionAtTime: versionAtTime ?? null,
       });
+      if (requestId !== directoryRequestId) return; // superseded by a newer request
+      directory.value = result;
     } catch (e) {
-      // A 404 (no DIRECTORY set for this EHR) is expected and common — the
-      // view treats this the same as any other fetch failure by showing the
-      // error message, rather than crashing or silently hiding the tab.
+      if (requestId !== directoryRequestId) return;
       directory.value = null;
       directoryError.value = String(e);
     } finally {
-      directoryLoading.value = false;
+      if (requestId === directoryRequestId) directoryLoading.value = false;
     }
   }
 
   function clearDirectory() {
+    directoryRequestId++; // invalidate any in-flight fetchDirectory call
     directory.value = null;
     directoryError.value = null;
     directoryLoading.value = false;
