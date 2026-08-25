@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::server::{create_client, get_profile_by_id, make_request, ServerType};
-use crate::inspector::send_instrumented;
+use crate::inspector::{send_instrumented, InstrumentedResponse};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EhrSummary {
@@ -547,6 +547,14 @@ fn build_directory_url(
     }
 }
 
+/// Formats a non-2xx response as the `Err(String)` surfaced to the frontend.
+/// Both DIRECTORY commands hit this identically, so it's factored out here
+/// rather than repeating the `format!("Server returned HTTP {}: {}", ...)`
+/// literal at each call site.
+fn http_error(resp: &InstrumentedResponse) -> String {
+    format!("Server returned HTTP {}: {}", resp.status, resp.body)
+}
+
 /// Fetches the latest (or, if `version_at_time` is given, the version in
 /// effect at that instant) DIRECTORY folder hierarchy for an EHR.
 ///
@@ -579,10 +587,7 @@ pub async fn get_directory(
     .await?;
 
     if !resp.is_success {
-        return Err(format!(
-            "Server returned HTTP {}: {}",
-            resp.status, resp.body
-        ));
+        return Err(http_error(&resp));
     }
 
     serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse directory: {}", e))
@@ -613,10 +618,7 @@ pub async fn get_directory_version(
     .await?;
 
     if !resp.is_success {
-        return Err(format!(
-            "Server returned HTTP {}: {}",
-            resp.status, resp.body
-        ));
+        return Err(http_error(&resp));
     }
 
     serde_json::from_str(&resp.body)
