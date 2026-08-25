@@ -77,39 +77,29 @@ pub async fn get_contribution(
     Ok(parse_contribution(&body))
 }
 
+/// Reads `obj[outer_key][inner_key]` as a string, e.g. the openEHR
+/// `{"value": "..."}` wrapper pattern used throughout RM JSON
+/// (`inner_key = "value"`) or a plain nested field like `committer.name`
+/// (`inner_key = "name"`).
+fn nested_str(obj: &Value, outer_key: &str, inner_key: &str) -> Option<String> {
+    obj.get(outer_key)?
+        .get(inner_key)?
+        .as_str()
+        .map(String::from)
+}
+
 fn parse_contribution(body: &Value) -> ContributionDetail {
-    let contribution_uid = body
-        .get("uid")
-        .and_then(|u| u.get("value"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let contribution_uid = nested_str(body, "uid", "value").unwrap_or_default();
 
     let audit = body.get("audit").map(|audit| ContributionAudit {
         system_id: audit
             .get("system_id")
             .and_then(|v| v.as_str())
             .map(String::from),
-        committer_name: audit
-            .get("committer")
-            .and_then(|c| c.get("name"))
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        time_committed: audit
-            .get("time_committed")
-            .and_then(|t| t.get("value"))
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        change_type: audit
-            .get("change_type")
-            .and_then(|c| c.get("value"))
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        description: audit
-            .get("description")
-            .and_then(|d| d.get("value"))
-            .and_then(|v| v.as_str())
-            .map(String::from),
+        committer_name: nested_str(audit, "committer", "name"),
+        time_committed: nested_str(audit, "time_committed", "value"),
+        change_type: nested_str(audit, "change_type", "value"),
+        description: nested_str(audit, "description", "value"),
     });
 
     let versions = body
@@ -118,12 +108,7 @@ fn parse_contribution(body: &Value) -> ContributionDetail {
         .map(|arr| {
             arr.iter()
                 .map(|v| ContributionVersionRef {
-                    id: v
-                        .get("id")
-                        .and_then(|i| i.get("value"))
-                        .and_then(|s| s.as_str())
-                        .unwrap_or("")
-                        .to_string(),
+                    id: nested_str(v, "id", "value").unwrap_or_default(),
                     version_type: v.get("type").and_then(|t| t.as_str()).map(String::from),
                 })
                 .collect()

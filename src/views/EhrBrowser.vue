@@ -608,6 +608,7 @@ function lookupContribution() {
                 JSON
               </button>
               <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'contributions' }"
                 @click="activeTab = 'contributions'"
@@ -672,7 +673,9 @@ function lookupContribution() {
             straight to the commit that created a specific version.
           </p>
           <div class="contribution-lookup">
+            <label for="contribution-lookup-uid" class="visually-hidden">Contribution UID</label>
             <input
+              id="contribution-lookup-uid"
               class="input"
               v-model="contributionLookupUid"
               placeholder="Contribution UID"
@@ -681,7 +684,9 @@ function lookupContribution() {
               spellcheck="false"
               @keydown.enter="lookupContribution"
             />
-            <button class="btn btn-sm btn-primary" @click="lookupContribution">View</button>
+            <button type="button" class="btn btn-sm btn-primary" @click="lookupContribution">
+              View
+            </button>
           </div>
           <div v-if="contributionLookupError" class="search-validation-error">
             {{ contributionLookupError }}
@@ -1147,6 +1152,21 @@ function lookupContribution() {
 .contribution-lookup .input {
   flex: 1;
   font-family: var(--font-mono);
+}
+
+/* Visually hidden but still reachable by screen readers — pairs the
+   contribution-UID input with an accessible label without duplicating the
+   visible "Contribution UID" placeholder text on screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .template-group {

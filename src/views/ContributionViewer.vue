@@ -39,6 +39,12 @@ async function copyToClipboard(text: string) {
   await navigator.clipboard.writeText(text);
 }
 
+function copyContributionUid() {
+  const detail = contributionStore.detail;
+  if (!detail) return;
+  void copyToClipboard(detail.contribution_uid);
+}
+
 function openVersion(versionId: string) {
   router.push({
     name: "composition",
@@ -50,7 +56,7 @@ function openVersion(versionId: string) {
 <template>
   <div class="contribution-viewer">
     <div class="viewer-header">
-      <button class="btn btn-sm" @click="goBack">Back</button>
+      <button type="button" class="btn btn-sm" @click="goBack">Back</button>
       <h2>Contribution</h2>
     </div>
 
@@ -63,12 +69,7 @@ function openVersion(versionId: string) {
         <span class="detail-label">Contribution UID</span>
         <span class="detail-value mono">
           {{ contributionStore.detail.contribution_uid }}
-          <button
-            class="copy-btn"
-            @click="copyToClipboard(contributionStore.detail!.contribution_uid)"
-          >
-            Copy
-          </button>
+          <button type="button" class="copy-btn" @click="copyContributionUid">Copy</button>
         </span>
       </div>
 
@@ -110,9 +111,10 @@ function openVersion(versionId: string) {
             <span class="version-id mono">{{ v.id }}</span>
           </div>
           <div class="version-actions">
-            <button class="copy-btn" @click="copyToClipboard(v.id)">Copy</button>
+            <button type="button" class="copy-btn" @click="copyToClipboard(v.id)">Copy</button>
             <button
               v-if="v.version_type === 'COMPOSITION'"
+              type="button"
               class="btn btn-sm"
               @click="openVersion(v.id)"
             >

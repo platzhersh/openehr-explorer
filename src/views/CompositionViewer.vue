@@ -368,6 +368,7 @@ onUnmounted(() => {
             FLAT
           </button>
           <button
+            type="button"
             class="tab"
             :class="{ active: activeTab === 'versions' }"
             @click="activeTab = 'versions'"
@@ -467,7 +468,7 @@ onUnmounted(() => {
                   {{ v.commit_audit.description }}
                 </div>
               </div>
-              <button class="btn btn-sm" @click="viewContribution(v.version_id)">
+              <button type="button" class="btn btn-sm" @click="viewContribution(v.version_id)">
                 View Contribution
               </button>
             </div>
