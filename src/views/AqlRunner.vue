@@ -238,6 +238,7 @@ const editorStyle = computed(() => ({
             <h2>AQL Query</h2>
             <div class="editor-actions">
               <button
+                type="button"
                 class="tour-trigger-btn"
                 title="Take a tour of the AQL Runner"
                 @click="tourStore.start('aql')"
@@ -245,6 +246,7 @@ const editorStyle = computed(() => ({
                 🧭
               </button>
               <button
+                type="button"
                 class="btn btn-sm"
                 data-tour="aql-format"
                 @click="formatQuery"
@@ -253,7 +255,12 @@ const editorStyle = computed(() => ({
                 Format
               </button>
               <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
-              <button class="btn btn-sm btn-primary" data-tour="aql-run" @click="runQuery">
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                data-tour="aql-run"
+                @click="runQuery"
+              >
                 Run (Ctrl+Enter)
               </button>
             </div>

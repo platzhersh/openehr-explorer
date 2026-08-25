@@ -99,13 +99,14 @@ function credentialBackendLabel(backend: string): string {
       <h2>Server Profiles</h2>
       <div class="header-actions">
         <button
+          type="button"
           class="tour-trigger-btn"
           title="Take a tour of the Server Manager"
           @click="tourStore.start('servers')"
         >
           🧭
         </button>
-        <button class="btn btn-primary" data-tour="server-add" @click="newProfile">
+        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
           + Add Server
         </button>
       </div>

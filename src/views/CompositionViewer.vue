@@ -278,6 +278,7 @@ onUnmounted(() => {
       <h2>Composition</h2>
       <div class="header-actions">
         <button
+          type="button"
           class="tour-trigger-btn"
           title="Take a tour of the Composition Viewer"
           @click="tourStore.start('composition')"
@@ -305,13 +306,16 @@ onUnmounted(() => {
           </button>
         </div>
         <button
+          type="button"
           class="btn btn-sm"
           data-tour="composition-paths"
           @click="showFlatPaths = !showFlatPaths"
         >
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
         </button>
-        <button class="btn btn-sm" data-tour="composition-copy" @click="copyJson">Copy JSON</button>
+        <button type="button" class="btn btn-sm" data-tour="composition-copy" @click="copyJson">
+          Copy JSON
+        </button>
         <button class="btn btn-sm" @click="handleEdit">Edit</button>
         <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
       </div>

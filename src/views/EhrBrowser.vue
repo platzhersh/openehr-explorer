@@ -377,6 +377,7 @@ async function copyEhrJson() {
         <h2 v-else>EHRs</h2>
         <div class="header-actions">
           <button
+            type="button"
             class="tour-trigger-btn"
             title="Take a tour of the EHR Browser"
             @click="tourStore.start('ehrs')"
@@ -384,6 +385,7 @@ async function copyEhrJson() {
             🧭
           </button>
           <button
+            type="button"
             class="btn btn-sm btn-primary"
             data-tour="ehr-create"
             @click="showCreateDialog = true"

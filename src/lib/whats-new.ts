@@ -46,7 +46,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
 
 /** Parses "major.minor.patch" into a comparable tuple. Non-numeric or malformed input sorts as 0.0.0. */
 function parseVersion(version: string): [number, number, number] {
-  const parts = version.split(".").map((p) => parseInt(p, 10));
+  const parts = version.split(".").map((p) => Number.parseInt(p, 10));
   return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
 }
 

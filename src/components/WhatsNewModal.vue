@@ -30,7 +30,7 @@ function takeTour(tourId: string, routePath?: string) {
 
 <template>
   <div class="dialog-overlay">
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
+    <dialog open class="dialog" aria-modal="true" aria-labelledby="whats-new-title">
       <div class="dialog-header">
         <h2 id="whats-new-title">What's New</h2>
       </div>
@@ -59,7 +59,7 @@ function takeTour(tourId: string, routePath?: string) {
       <div class="dialog-footer">
         <button type="button" class="btn btn-primary" @click="close">Got it</button>
       </div>
-    </div>
+    </dialog>
   </div>
 </template>
 
@@ -75,6 +75,12 @@ function takeTour(tourId: string, routePath?: string) {
 }
 
 .dialog {
+  /* Reset the <dialog> element's UA defaults — position: absolute would
+     otherwise pull it out of .dialog-overlay's flex-centering, and margin:
+     auto/color/border defaults would fight the ones below. */
+  position: static;
+  margin: 0;
+  color: inherit;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);

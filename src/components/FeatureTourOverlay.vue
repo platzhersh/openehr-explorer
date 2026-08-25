@@ -141,10 +141,10 @@ onUnmounted(() => {
   <div v-if="tourStore.activeTour && tourStore.activeStep && targetRect" class="tour-overlay">
     <div class="tour-backdrop"></div>
     <div class="tour-highlight" :style="highlightStyle"></div>
-    <div
+    <dialog
+      open
       class="tour-tooltip"
       :style="tooltipStyle"
-      role="dialog"
       aria-modal="true"
       aria-label="Feature tour"
     >
@@ -174,7 +174,7 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   </div>
 </template>
 
@@ -205,6 +205,13 @@ onUnmounted(() => {
 }
 
 .tour-tooltip {
+  /* Reset the <dialog> element's UA defaults (margin: auto, max-width,
+     color-scheme-based background/border) so it renders identically to
+     the plain positioned div it replaces. */
+  margin: 0;
+  max-width: none;
+  max-height: none;
+  color: inherit;
   position: fixed;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
