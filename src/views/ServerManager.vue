@@ -111,13 +111,6 @@ function credentialBackendLabel(backend: string): string {
             <div class="profile-name">{{ profile.name }}</div>
             <div class="profile-url">{{ profile.base_url }}</div>
             <div class="profile-meta">
-              <span
-                v-if="profile.is_default"
-                class="badge default-badge"
-                title="Preselected on app start"
-              >
-                ★ Default
-              </span>
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
               <span
@@ -246,12 +239,6 @@ function credentialBackendLabel(backend: string): string {
   background: var(--color-primary-dim);
   color: var(--color-primary);
   font-weight: 600;
-}
-.default-badge {
-  background: #7c5c03;
-  color: #fef3c7;
-  font-weight: 600;
-  border: 1px solid #eab308;
 }
 .btn-active-toggle {
   border-color: #eab308;
