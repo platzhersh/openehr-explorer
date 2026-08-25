@@ -4,11 +4,13 @@ import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import AqlEditor from "../components/AqlEditor.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -208,7 +210,7 @@ const editorStyle = computed(() => ({
   <div class="aql-runner">
     <div class="runner-layout">
       <!-- Left: Saved queries -->
-      <div class="saved-panel">
+      <div class="saved-panel" data-tour="aql-saved-queries">
         <div class="panel-header">
           <h3>Saved Queries</h3>
         </div>
@@ -235,11 +237,25 @@ const editorStyle = computed(() => ({
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button class="btn btn-sm" @click="formatQuery" title="Format query (Shift+Alt+F)">
+              <button
+                class="tour-trigger-btn"
+                title="Take a tour of the AQL Runner"
+                @click="tourStore.start('aql')"
+              >
+                🧭
+              </button>
+              <button
+                class="btn btn-sm"
+                data-tour="aql-format"
+                @click="formatQuery"
+                title="Format query (Shift+Alt+F)"
+              >
                 Format
               </button>
               <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
-              <button class="btn btn-sm btn-primary" @click="runQuery">Run (Ctrl+Enter)</button>
+              <button class="btn btn-sm btn-primary" data-tour="aql-run" @click="runQuery">
+                Run (Ctrl+Enter)
+              </button>
             </div>
           </div>
 
@@ -255,7 +271,7 @@ const editorStyle = computed(() => ({
           </div>
 
           <!-- Context Template selector (Layer 3) -->
-          <div class="context-template-bar">
+          <div class="context-template-bar" data-tour="aql-context-template">
             <label class="context-template-label">Context Template</label>
             <div class="context-template-select-wrapper">
               <select

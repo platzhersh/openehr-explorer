@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
@@ -14,6 +15,7 @@ const router = useRouter();
 const serverStore = useServerStore();
 const compositionStore = useCompositionStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const ehrId = computed(() => route.params.ehrId as string);
 const compositionUid = computed(() => route.params.compositionUid as string);
@@ -275,7 +277,14 @@ onUnmounted(() => {
       <button class="btn btn-sm" @click="goBack">Back</button>
       <h2>Composition</h2>
       <div class="header-actions">
-        <div class="tab-bar">
+        <button
+          class="tour-trigger-btn"
+          title="Take a tour of the Composition Viewer"
+          @click="tourStore.start('composition')"
+        >
+          🧭
+        </button>
+        <div class="tab-bar" data-tour="composition-tabs">
           <button
             class="tab"
             :class="{ active: activeTab === 'pretty' }"
@@ -295,10 +304,14 @@ onUnmounted(() => {
             FLAT
           </button>
         </div>
-        <button class="btn btn-sm" @click="showFlatPaths = !showFlatPaths">
+        <button
+          class="btn btn-sm"
+          data-tour="composition-paths"
+          @click="showFlatPaths = !showFlatPaths"
+        >
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
         </button>
-        <button class="btn btn-sm" @click="copyJson">Copy JSON</button>
+        <button class="btn btn-sm" data-tour="composition-copy" @click="copyJson">Copy JSON</button>
         <button class="btn btn-sm" @click="handleEdit">Edit</button>
         <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
       </div>

@@ -8,6 +8,12 @@ export interface GlobalSettings {
   check_updates_on_startup: boolean;
   analytics_enabled: boolean;
   analytics_consent_asked: boolean;
+  /** Master toggle for auto-starting feature tours and the What's New modal. */
+  tours_enabled: boolean;
+  /** IDs of feature tours the user has completed or skipped — see `src/lib/tours.ts`. */
+  completed_tours: string[];
+  /** App version the What's New modal was last shown/acknowledged for. */
+  last_seen_version: string | null;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -17,6 +23,9 @@ export const useSettingsStore = defineStore("settings", () => {
     check_updates_on_startup: true,
     analytics_enabled: false,
     analytics_consent_asked: false,
+    tours_enabled: true,
+    completed_tours: [],
+    last_seen_version: null,
   });
   const loaded = ref(false);
 

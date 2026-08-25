@@ -11,6 +11,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
   terminology: string;
@@ -23,6 +24,7 @@ const router = useRouter();
 const serverStore = useServerStore();
 const templateStore = useTemplateStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const searchQuery = ref("");
 const panelSearchQuery = ref("");
@@ -474,10 +476,22 @@ onUnmounted(() => {
     <div class="panel-left">
       <div class="panel-header">
         <h2>Templates</h2>
+        <button
+          class="tour-trigger-btn"
+          title="Take a tour of the Template Browser"
+          @click="tourStore.start('templates')"
+        >
+          🧭
+        </button>
       </div>
 
       <div class="search-bar">
-        <input class="input search-input" v-model="searchQuery" placeholder="Filter templates..." />
+        <input
+          class="input search-input"
+          data-tour="template-filter"
+          v-model="searchQuery"
+          placeholder="Filter templates..."
+        />
       </div>
 
       <div v-if="templateStore.loading && !selectedTemplateId" class="loading">Loading...</div>
@@ -512,6 +526,7 @@ onUnmounted(() => {
         <!-- Upload zone -->
         <div
           class="upload-zone"
+          data-tour="template-upload"
           :class="{ 'drag-over': uploadDragOver }"
           @dragover.prevent="uploadDragOver = true"
           @dragleave="uploadDragOver = false"
