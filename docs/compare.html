@@ -884,8 +884,8 @@
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">DIRECTORY (folder hierarchy) operations &sup3;</div>
-      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="feat-label">DIRECTORY (folder hierarchy) operations</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">Browse tree (read-only)</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
@@ -924,7 +924,7 @@
       <div class="score-row">
         <div class="score-label">Feature score</div>
         <div class="score-cell ours" data-tool="Explorer">
-          <span class="score-num primary">29.5</span>
+          <span class="score-num primary">30</span>
           <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="openEHRTool">
@@ -973,9 +973,9 @@
     <div class="footnotes">
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
-      <p>&sup3; openEHR Explorer does not yet have dedicated UI for the DIRECTORY, CONTRIBUTION, or STORED_QUERY resources &mdash; the underlying data is reachable via AQL and the Request Inspector, but there's no dedicated browsing/editing surface for them yet. Tracked as known gaps.</p>
+      <p>&sup3; openEHR Explorer does not yet have dedicated UI for the CONTRIBUTION or STORED_QUERY resources &mdash; the underlying data is reachable via AQL and the Request Inspector, but there's no dedicated browsing/editing surface for them yet. Tracked as known gaps. DIRECTORY now has a read-only browsing tree in the EHR detail panel; create/update/delete are still done via the Request Inspector.</p>
       <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client, added to this comparison based on public information &mdash; most rows are marked "not yet evaluated" pending hands-on testing, so its overall score is withheld rather than computed from mostly-unknown data.</p>
-      <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.5.0.</p>
+      <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.6.0.</p>
     </div>
 
   </main>

@@ -72,6 +72,13 @@ export const useEhrStore = defineStore("ehr", () => {
   const error = ref<string | null>(null);
   const selectedEhr = ref<EhrDetail | null>(null);
 
+  // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
+  // and data-driven, so it's kept as raw JSON rather than a typed interface,
+  // matching how `composition.ts` handles the composition body.
+  const directory = ref<Record<string, unknown> | null>(null);
+  const directoryLoading = ref(false);
+  const directoryError = ref<string | null>(null);
+
   // Search state (PRD-0013)
   const searchResults = ref<EhrSearchResult[]>([]);
   const searchActive = ref(false);
@@ -203,6 +210,32 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  async function fetchDirectory(serverId: string, ehrId: string, versionAtTime?: string) {
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("get_directory", {
+        serverId,
+        ehrId,
+        versionAtTime: versionAtTime ?? null,
+      });
+    } catch (e) {
+      // A 404 (no DIRECTORY set for this EHR) is expected and common — the
+      // view treats this the same as any other fetch failure by showing the
+      // error message, rather than crashing or silently hiding the tab.
+      directory.value = null;
+      directoryError.value = String(e);
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  function clearDirectory() {
+    directory.value = null;
+    directoryError.value = null;
+    directoryLoading.value = false;
+  }
+
   function clearSearch() {
     searchResults.value = [];
     searchActive.value = false;
@@ -218,6 +251,9 @@ export const useEhrStore = defineStore("ehr", () => {
     loading,
     error,
     selectedEhr,
+    directory,
+    directoryLoading,
+    directoryError,
     searchResults,
     searchActive,
     searchLoading,
@@ -225,6 +261,8 @@ export const useEhrStore = defineStore("ehr", () => {
     searchLimitReached,
     fetchEhrs,
     fetchEhrDetail,
+    fetchDirectory,
+    clearDirectory,
     searchEhrs,
     clearSearch,
     createEhr,

@@ -5,6 +5,7 @@ import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
 import { useAnalytics } from "../composables/useAnalytics";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import DirectoryTree from "../components/DirectoryTree.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -24,7 +25,7 @@ const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
-const activeTab = ref<"detail" | "json">("detail");
+const activeTab = ref<"detail" | "directory" | "json">("detail");
 const showHelpPopover = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
@@ -47,16 +48,16 @@ watch(
 
 watch(ehrId, (id) => {
   if (id && serverStore.activeServerId) {
-    // If we have search results and the selected EHR is in them, pre-populate from search data
-    if (ehrStore.searchActive) {
-      const searchResult = ehrStore.searchResults.find((r) => r.ehr_id === id);
-      if (searchResult) {
-        // Still fetch full detail for compositions, but we have metadata already
-        ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
-        return;
-      }
-    }
+    // If we have search results and the selected EHR is in them, pre-populate from search data.
+    // Either way we still fetch full detail for compositions.
     ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
+  }
+
+  // The DIRECTORY tab's data is EHR-scoped — reset it whenever the selected
+  // EHR changes, and re-fetch for the new EHR if that tab is currently open.
+  ehrStore.clearDirectory();
+  if (activeTab.value === "directory" && id && serverStore.activeServerId) {
+    ehrStore.fetchDirectory(serverStore.activeServerId, id);
   }
 });
 
@@ -254,6 +255,28 @@ function openComposition(comp: CompositionSummary) {
     router.push({
       name: "composition",
       params: { ehrId: ehrId.value, compositionUid: comp.uid },
+    });
+  }
+}
+
+function selectDirectoryTab() {
+  activeTab.value = "directory";
+  if (
+    ehrId.value &&
+    serverStore.activeServerId &&
+    !ehrStore.directory &&
+    !ehrStore.directoryLoading &&
+    !ehrStore.directoryError
+  ) {
+    ehrStore.fetchDirectory(serverStore.activeServerId, ehrId.value);
+  }
+}
+
+function openCompositionRef(objectRef: { id?: { value?: string } }) {
+  if (ehrId.value && objectRef.id?.value) {
+    router.push({
+      name: "composition",
+      params: { ehrId: ehrId.value, compositionUid: objectRef.id.value },
     });
   }
 }
@@ -582,6 +605,13 @@ async function copyEhrJson() {
               </button>
               <button
                 class="tab"
+                :class="{ active: activeTab === 'directory' }"
+                @click="selectDirectoryTab"
+              >
+                Directory
+              </button>
+              <button
+                class="tab"
                 :class="{ active: activeTab === 'json' }"
                 @click="activeTab = 'json'"
               >
@@ -634,6 +664,27 @@ async function copyEhrJson() {
         <!-- JSON View -->
         <div v-if="activeTab === 'json'" class="json-view">
           <pre class="json-pre">{{ ehrJson }}</pre>
+        </div>
+
+        <!-- Directory View (OEH-27) -->
+        <div v-if="activeTab === 'directory'" class="directory-view">
+          <div v-if="ehrStore.directoryLoading" class="loading">
+            <span class="spinner"></span> Loading directory...
+          </div>
+          <div v-else-if="ehrStore.directoryError" class="empty-state">
+            <h3>No directory available</h3>
+            <p>This EHR may not have a DIRECTORY folder set, or the request failed.</p>
+            <p class="error-detail">{{ ehrStore.directoryError }}</p>
+          </div>
+          <DirectoryTree
+            v-else-if="ehrStore.directory"
+            :folder="ehrStore.directory"
+            :depth="0"
+            @open-item="openCompositionRef"
+          />
+          <div v-else class="empty-state">
+            <p>No directory data.</p>
+          </div>
         </div>
 
         <h3 class="section-title" v-if="activeTab === 'detail'">
@@ -796,7 +847,8 @@ async function copyEhrJson() {
   color: #fff;
 }
 
-.json-view {
+.json-view,
+.directory-view {
   margin-top: 16px;
   overflow: auto;
 }
