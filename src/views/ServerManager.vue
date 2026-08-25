@@ -161,6 +161,7 @@ function credentialBackendLabel(backend: string): string {
               {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
             </button>
             <button
+              type="button"
               class="btn btn-sm"
               :class="{ 'btn-active-toggle': profile.is_default }"
               title="Preselect this server on app start"

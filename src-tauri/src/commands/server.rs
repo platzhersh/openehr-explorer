@@ -451,6 +451,21 @@ fn build_request(
     }
 }
 
+/// Resolve secrets for each stored profile and convert to the IPC-safe public
+/// representation. Shared by every command that returns the profile list.
+fn to_public_profiles(
+    mgr: &CredentialManager,
+    profiles: &[StoredProfile],
+    config_dir: &std::path::Path,
+) -> Result<Vec<ServerProfilePublic>, String> {
+    let mut public = Vec::with_capacity(profiles.len());
+    for sp in profiles {
+        let resolved = load_resolved_profile(mgr, sp, config_dir)?;
+        public.push(to_public_profile(&resolved, mgr.backend()));
+    }
+    Ok(public)
+}
+
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
@@ -460,12 +475,7 @@ pub async fn list_server_profiles() -> Result<Vec<ServerProfilePublic>, String> 
     let config_dir = get_config_dir();
     let mgr = cred_manager();
     let stored = load_stored_profiles();
-    let mut public = Vec::with_capacity(stored.len());
-    for sp in &stored {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+    to_public_profiles(mgr, &stored, &config_dir)
 }
 
 #[tauri::command]
@@ -513,13 +523,7 @@ pub async fn save_server_profile(
     }
     save_stored_profiles(&profiles)?;
 
-    // Return public list
-    let mut public = Vec::with_capacity(profiles.len());
-    for sp in &profiles {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+    to_public_profiles(mgr, &profiles, &config_dir)
 }
 
 #[tauri::command]
@@ -534,13 +538,7 @@ pub async fn delete_server_profile(id: String) -> Result<Vec<ServerProfilePublic
     profiles.retain(|p| p.id != id);
     save_stored_profiles(&profiles)?;
 
-    // Return public list
-    let mut public = Vec::with_capacity(profiles.len());
-    for sp in &profiles {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+    to_public_profiles(mgr, &profiles, &config_dir)
 }
 
 #[tauri::command]
@@ -561,13 +559,7 @@ pub async fn set_default_server_profile(id: String) -> Result<Vec<ServerProfileP
     }
     save_stored_profiles(&profiles)?;
 
-    // Return public list
-    let mut public = Vec::with_capacity(profiles.len());
-    for sp in &profiles {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+    to_public_profiles(mgr, &profiles, &config_dir)
 }
 
 #[tauri::command]
