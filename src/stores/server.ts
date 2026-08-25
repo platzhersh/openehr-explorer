@@ -7,7 +7,7 @@ export interface ServerProfile {
   id: string;
   name: string;
   base_url: string;
-  server_type: "ehrbase" | "better_platform" | "generic";
+  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
   auth_method:
     | { type: "none" }
     | { type: "basic"; username: string; has_password: boolean }
@@ -27,7 +27,7 @@ export interface ServerProfileInput {
   id: string;
   name: string;
   base_url: string;
-  server_type: "ehrbase" | "better_platform" | "generic";
+  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
   auth_method:
     | { type: "none" }
     | { type: "basic"; username: string; password: string }

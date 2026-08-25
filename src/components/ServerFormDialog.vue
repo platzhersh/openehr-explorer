@@ -341,6 +341,7 @@ function handleClose() {
             <select id="server-type" class="input" v-model="form.server_type">
               <option value="ehrbase">EHRBase</option>
               <option value="better_platform">Better Platform</option>
+              <option value="ferro_ehr">FerroEHR</option>
               <option value="generic">Generic openEHR REST</option>
             </select>
           </div>
@@ -400,7 +401,7 @@ function handleClose() {
             </div>
           </template>
 
-          <template v-if="form.server_type === 'ehrbase'">
+          <template v-if="form.server_type === 'ehrbase' || form.server_type === 'ferro_ehr'">
             <hr class="form-divider" />
             <div class="form-group">
               <label for="server-admin-auth-type">Admin Credentials (for EHR deletion)</label>

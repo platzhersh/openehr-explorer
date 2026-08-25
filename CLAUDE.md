@@ -149,7 +149,7 @@ Vue Router defined in `src/main.ts`:
 
 ### Server Profile System
 Each server profile (`ServerProfile`) includes:
-- `server_type`: `"ehrbase" | "better_platform" | "generic"` — determines API path conventions
+- `server_type`: `"ehrbase" | "better_platform" | "ferro_ehr" | "generic"` — determines API path conventions
 - `auth_method`: `{ type: "none" | "basic" | "bearer", ... }` — discriminated union for auth
 
 When adding new API integrations, use the `server_type` to branch URL construction logic (see `src-tauri/src/commands/ehr.rs` for examples).

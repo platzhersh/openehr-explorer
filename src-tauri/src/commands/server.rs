@@ -64,6 +64,7 @@ pub struct ServerProfileInput {
 pub enum ServerType {
     Ehrbase,
     BetterPlatform,
+    FerroEhr,
     Generic,
 }
 
@@ -666,6 +667,24 @@ pub async fn get_server_version(
             }
             parse_version_json(&resp.body)
         }
+        ServerType::FerroEhr => {
+            // FerroEHR's status endpoint is unauthenticated (mounted outside
+            // its auth layer) — sending credentials here would make version
+            // detection fail for a reachable server whose stored credentials
+            // happen to be invalid or expired.
+            let url = format!("{}/rest/status", base);
+            let resp = send_instrumented(
+                &app,
+                &client,
+                build_request(&client, reqwest::Method::GET, &url, &AuthMethod::None),
+            )
+            .await?;
+
+            if !resp.is_success {
+                return Err(format!("Server returned HTTP {}", resp.status));
+            }
+            parse_ferroehr_status_json(&resp.body)
+        }
         ServerType::Generic => {
             Err("Version detection is not available for generic openEHR servers".to_string())
         }
@@ -736,6 +755,40 @@ fn parse_version_json(body: &str) -> Result<ServerVersionInfo, String> {
     }
 
     Ok(info)
+}
+
+/// Parses FerroEHR's `GET /rest/status` body: `{status, server_version,
+/// openehr_rest_api_version, timestamp}`.
+fn parse_ferroehr_status_json(body: &str) -> Result<ServerVersionInfo, String> {
+    let json: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+
+    let mut info = ServerVersionInfo::default();
+
+    if let Some(obj) = json.as_object() {
+        if let Some(v) = obj.get("server_version").and_then(|v| v.as_str()) {
+            info.server_version = Some(v.to_string());
+        }
+    }
+
+    Ok(info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_ferroehr_status_json() {
+        let body = r#"{"status":"UP","server_version":"0.4.0","openehr_rest_api_version":"1.1.0","timestamp":"2026-08-24T12:00:00Z"}"#;
+        let info = parse_ferroehr_status_json(body).unwrap();
+        assert_eq!(info.server_version.as_deref(), Some("0.4.0"));
+        assert_eq!(info.ehrbase_version, None);
+    }
+
+    #[test]
+    fn parse_ferroehr_status_json_rejects_invalid_json() {
+        assert!(parse_ferroehr_status_json("not json").is_err());
+    }
 }
 
 // ---------------------------------------------------------------------------
