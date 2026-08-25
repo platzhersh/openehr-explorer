@@ -799,6 +799,13 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
+        <ul>
+          <li><strong>FerroEHR Support:</strong> Added <code>FerroEHR</code> as a recognized server type, including automatic version detection against its unauthenticated status endpoint</li>
+          <li><strong>Default Server Profile:</strong> Server profiles can now be marked as the default, so it's preselected automatically on app start instead of requiring a manual switch every time</li>
+          <li><strong>AQL Autocomplete Fix:</strong> Pressing Enter or Escape to accept or dismiss an AQL autocomplete suggestion now works correctly instead of inserting a newline or falling through to the editor</li>
+        </ul>
+
         <h3>v0.5.2 — AQL Editor Highlighting Fix</h3>
         <ul>
           <li><strong>AQL Syntax Highlighting:</strong> Fixed a regression from the previous release where standard SQL keywords (<code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, and others) stopped being highlighted in the AQL editor while openEHR-specific keywords were added</li>
