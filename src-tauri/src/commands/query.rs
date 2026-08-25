@@ -171,6 +171,33 @@ fn extract_query_name(item: &Value, fallback: &str) -> String {
         .to_string()
 }
 
+/// The `version` / `type` / `saved_time` fields are shared by both the
+/// stored-query list and detail responses — extracted once here so the
+/// field names aren't repeated at every call site.
+struct StoredQueryFields {
+    version: Option<String>,
+    query_type: Option<String>,
+    saved_time: Option<String>,
+}
+
+fn extract_stored_query_fields(item: &Value) -> StoredQueryFields {
+    StoredQueryFields {
+        version: item
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        query_type: item.get("type").and_then(|v| v.as_str()).map(String::from),
+        saved_time: item
+            .get("saved_time")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
+}
+
+fn server_http_error(status: u16, body: &str) -> String {
+    format!("Server returned HTTP {}: {}", status, body)
+}
+
 /// List the STORED_QUERY definitions registered on the connected CDR
 /// (`GET /definition/query`). Distinct from `list_saved_queries`, which are
 /// queries persisted locally per server profile.
@@ -193,10 +220,7 @@ pub async fn list_stored_queries(
     .await?;
 
     if !resp.is_success {
-        return Err(format!(
-            "Server returned HTTP {}: {}",
-            resp.status, resp.body
-        ));
+        return Err(server_http_error(resp.status, &resp.body));
     }
 
     let body: Value = serde_json::from_str(&resp.body)
@@ -214,17 +238,14 @@ pub async fn list_stored_queries(
 
     let queries = items
         .iter()
-        .map(|item| StoredQuerySummary {
-            qualified_query_name: extract_query_name(item, "?"),
-            version: item
-                .get("version")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            query_type: item.get("type").and_then(|v| v.as_str()).map(String::from),
-            saved_time: item
-                .get("saved_time")
-                .and_then(|v| v.as_str())
-                .map(String::from),
+        .map(|item| {
+            let fields = extract_stored_query_fields(item);
+            StoredQuerySummary {
+                qualified_query_name: extract_query_name(item, "?"),
+                version: fields.version,
+                query_type: fields.query_type,
+                saved_time: fields.saved_time,
+            }
         })
         .collect();
 
@@ -263,10 +284,7 @@ pub async fn get_stored_query_definition(
     .await?;
 
     if !resp.is_success {
-        return Err(format!(
-            "Server returned HTTP {}: {}",
-            resp.status, resp.body
-        ));
+        return Err(server_http_error(resp.status, &resp.body));
     }
 
     let body: Value = serde_json::from_str(&resp.body)
@@ -279,19 +297,14 @@ pub async fn get_stored_query_definition(
         other => other.clone(),
     };
 
+    let fields = extract_stored_query_fields(&item);
+
     Ok(StoredQueryDefinition {
         qualified_query_name: extract_query_name(&item, &qualified_query_name),
-        version: item
-            .get("version")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .or(version),
-        query_type: item.get("type").and_then(|v| v.as_str()).map(String::from),
+        version: fields.version.or(version),
+        query_type: fields.query_type,
         q: item.get("q").and_then(|v| v.as_str()).map(String::from),
-        saved_time: item
-            .get("saved_time")
-            .and_then(|v| v.as_str())
-            .map(String::from),
+        saved_time: fields.saved_time,
     })
 }
 
