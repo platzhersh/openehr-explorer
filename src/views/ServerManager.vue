@@ -248,10 +248,10 @@ function credentialBackendLabel(backend: string): string {
   font-weight: 600;
 }
 .default-badge {
-  background: rgba(234, 179, 8, 0.15);
-  color: #eab308;
+  background: #7c5c03;
+  color: #fef3c7;
   font-weight: 600;
-  border: 1px solid rgba(234, 179, 8, 0.35);
+  border: 1px solid #eab308;
 }
 .btn-active-toggle {
   border-color: #eab308;
