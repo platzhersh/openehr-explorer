@@ -19,6 +19,7 @@ export interface ServerProfile {
     | null;
   terminology_url?: string | null;
   credential_backend: string;
+  is_default: boolean;
 }
 
 /** Input profile sent to the backend during save — includes credential values. */
@@ -62,7 +63,8 @@ export const useServerStore = defineStore("server", () => {
   async function loadProfiles() {
     profiles.value = await invoke<ServerProfile[]>("list_server_profiles");
     if (profiles.value.length > 0 && !activeServerId.value) {
-      activeServerId.value = profiles.value[0].id;
+      const defaultProfile = profiles.value.find((p) => p.is_default);
+      activeServerId.value = defaultProfile?.id ?? profiles.value[0].id;
     }
   }
 
@@ -113,6 +115,10 @@ export const useServerStore = defineStore("server", () => {
     activeServerId.value = id;
   }
 
+  async function setDefaultProfile(id: string) {
+    profiles.value = await invoke<ServerProfile[]>("set_default_server_profile", { id });
+  }
+
   async function fetchServerVersion(profileId: string): Promise<ServerVersionInfo | null> {
     try {
       const version = await invoke<ServerVersionInfo>("get_server_version", { profileId });
@@ -136,6 +142,7 @@ export const useServerStore = defineStore("server", () => {
     testConnection,
     testUnsavedConnection,
     setActiveServer,
+    setDefaultProfile,
     fetchServerVersion,
   };
 });

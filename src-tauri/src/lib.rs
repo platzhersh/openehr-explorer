@@ -112,6 +112,7 @@ pub fn run() {
             server::list_server_profiles,
             server::save_server_profile,
             server::delete_server_profile,
+            server::set_default_server_profile,
             server::test_server_connection,
             server::test_unsaved_connection,
             server::get_server_version,

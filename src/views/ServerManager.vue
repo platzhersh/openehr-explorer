@@ -41,6 +41,10 @@ async function remove(id: string) {
   void analytics.track("server_profile_deleted");
 }
 
+async function toggleDefault(profile: ServerProfile) {
+  await serverStore.setDefaultProfile(profile.id);
+}
+
 async function testProfileConnection(profile: ServerProfile) {
   cardTestLoading.value[profile.id] = true;
   delete cardTestResult.value[profile.id];
@@ -107,6 +111,13 @@ function credentialBackendLabel(backend: string): string {
             <div class="profile-name">{{ profile.name }}</div>
             <div class="profile-url">{{ profile.base_url }}</div>
             <div class="profile-meta">
+              <span
+                v-if="profile.is_default"
+                class="badge default-badge"
+                title="Preselected on app start"
+              >
+                ★ Default
+              </span>
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
               <span
@@ -148,6 +159,14 @@ function credentialBackendLabel(backend: string): string {
             </button>
             <button class="btn btn-sm" @click="serverStore.setActiveServer(profile.id)">
               {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
+            </button>
+            <button
+              class="btn btn-sm"
+              :class="{ 'btn-active-toggle': profile.is_default }"
+              title="Preselect this server on app start"
+              @click="toggleDefault(profile)"
+            >
+              {{ profile.is_default ? "★ Default" : "Set as Default" }}
             </button>
             <button class="btn btn-sm" @click="editProfile(profile)">Edit</button>
             <button class="btn btn-sm btn-danger" @click="remove(profile.id)">Delete</button>
@@ -226,6 +245,20 @@ function credentialBackendLabel(backend: string): string {
   background: var(--color-primary-dim);
   color: var(--color-primary);
   font-weight: 600;
+}
+.default-badge {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  font-weight: 600;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+.btn-active-toggle {
+  border-color: #eab308;
+  color: #eab308;
+}
+.btn-active-toggle:hover {
+  background: #eab308;
+  color: var(--color-bg);
 }
 .warning-badge {
   background: rgba(255, 193, 7, 0.15);
