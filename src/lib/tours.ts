@@ -161,14 +161,9 @@ export const TOURS: Tour[] = [
     label: "Contribution Viewer",
     steps: [
       {
-        target: '[data-tour="contribution-summary"]',
+        target: '[data-tour="contribution-header"]',
         title: "See exactly what changed",
-        body: "Every write to the EHR — creating or updating a composition — is wrapped in a CONTRIBUTION with a full audit trail: who changed it, when, and why.",
-      },
-      {
-        target: '[data-tour="contribution-versions"]',
-        title: "Jump to a version",
-        body: "Open any COMPOSITION version referenced by this contribution to see it in the Composition Viewer.",
+        body: "Every write to the EHR — creating or updating a composition — is wrapped in a CONTRIBUTION with a full audit trail: who changed it, when, and why. Open any version listed below directly in the Composition Viewer.",
       },
     ],
   },

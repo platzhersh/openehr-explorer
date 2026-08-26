@@ -57,12 +57,14 @@ A tour is a named, ordered list of steps; each step highlights one DOM element (
 | `templates` | `templates`, `template-detail` | Filter templates, upload an OPT |
 | `aql` | `aql` | Context template autocomplete, Run, Format, Saved Queries, Stored Queries |
 | `servers` | `servers` | Add a server profile |
-| `contribution` | `contribution` | Audit trail summary, jump to a referenced version |
+| `contribution` | `contribution` | Audit trail + versions overview (single step — see below) |
 
 A tour auto-starts the first time a user navigates to one of its routes, provided:
 - The `tours_enabled` setting is on (default: on).
 - The tour's ID is not already in the persisted `completed_tours` list.
 - No other tour, the analytics consent dialog, or the What's New modal is currently showing.
+
+The `contribution` tour is deliberately a single step targeting the always-rendered view header rather than the audit/version rows themselves — those only exist in the DOM once `ContributionViewer.vue`'s async fetch resolves, and every other tour in the app is careful to target chrome that renders immediately (see "Why `data-tour` attributes..." below) so a slow load can't skip every step and silently mark the tour completed before the user has seen anything.
 
 ### 1a. Global (non-route-scoped) Tours
 **Priority: P2 (added post-launch)**

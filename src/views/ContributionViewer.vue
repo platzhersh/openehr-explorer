@@ -65,7 +65,7 @@ function openVersion(versionId: string) {
   <div class="contribution-viewer">
     <div class="viewer-header">
       <button type="button" class="btn btn-sm" @click="goBack">Back</button>
-      <h2>Contribution</h2>
+      <h2 data-tour="contribution-header">Contribution</h2>
       <button
         type="button"
         class="tour-trigger-btn"
@@ -81,7 +81,7 @@ function openVersion(versionId: string) {
       Failed to load contribution: {{ contributionStore.error }}
     </div>
     <div v-else-if="contributionStore.detail" class="viewer-content">
-      <div class="detail-row" data-tour="contribution-summary">
+      <div class="detail-row">
         <span class="detail-label">Contribution UID</span>
         <span class="detail-value mono">
           {{ contributionStore.detail.contribution_uid }}
@@ -115,9 +115,7 @@ function openVersion(versionId: string) {
       </template>
       <div v-else class="empty-audit">No audit details returned by the server.</div>
 
-      <h3 class="section-title" data-tour="contribution-versions">
-        Versions ({{ contributionStore.detail.versions.length }})
-      </h3>
+      <h3 class="section-title">Versions ({{ contributionStore.detail.versions.length }})</h3>
 
       <div v-if="contributionStore.detail.versions.length === 0" class="empty-state">
         <p>This contribution has no version references.</p>
