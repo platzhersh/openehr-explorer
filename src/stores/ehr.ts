@@ -72,6 +72,19 @@ export const useEhrStore = defineStore("ehr", () => {
   const error = ref<string | null>(null);
   const selectedEhr = ref<EhrDetail | null>(null);
 
+  // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
+  // and data-driven, so it's kept as raw JSON rather than a typed interface,
+  // matching how `composition.ts` handles the composition body.
+  const directory = ref<Record<string, unknown> | null>(null);
+  const directoryLoading = ref(false);
+  const directoryError = ref<string | null>(null);
+  // True once a fetch has *succeeded* (populated or legitimately empty) for
+  // the current EHR/server — distinct from `!!directory`, since "no
+  // directory set" is itself a successful, stable result that shouldn't
+  // trigger a re-fetch on every later tab reselect. Left false after a
+  // failure so the next reselect retries instead of silently no-op'ing.
+  const directoryLoaded = ref(false);
+
   // Search state (PRD-0013)
   const searchResults = ref<EhrSearchResult[]>([]);
   const searchActive = ref(false);
@@ -203,6 +216,44 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearDirectory() (called whenever the selected EHR changes —
+  // see EhrBrowser.vue) so a slow response for a since-abandoned EHR/server
+  // can't land after a newer request and overwrite what's on screen.
+  let directoryRequestId = 0;
+
+  async function fetchDirectory(serverId: string, ehrId: string, versionAtTime?: string) {
+    const requestId = ++directoryRequestId;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      // A 404 (no DIRECTORY set for this EHR — common, not an error) comes
+      // back from the backend as `null`, not a thrown rejection.
+      const result = await invoke<Record<string, unknown> | null>("get_directory", {
+        serverId,
+        ehrId,
+        versionAtTime: versionAtTime ?? null,
+      });
+      if (requestId !== directoryRequestId) return; // superseded by a newer request
+      directory.value = result;
+      directoryLoaded.value = true;
+    } catch (e) {
+      if (requestId !== directoryRequestId) return;
+      directory.value = null;
+      directoryError.value = String(e);
+      // directoryLoaded stays false — a later tab reselect should retry.
+    } finally {
+      if (requestId === directoryRequestId) directoryLoading.value = false;
+    }
+  }
+
+  function clearDirectory() {
+    directoryRequestId++; // invalidate any in-flight fetchDirectory call
+    directory.value = null;
+    directoryError.value = null;
+    directoryLoading.value = false;
+    directoryLoaded.value = false;
+  }
+
   function clearSearch() {
     searchResults.value = [];
     searchActive.value = false;
@@ -218,6 +269,10 @@ export const useEhrStore = defineStore("ehr", () => {
     loading,
     error,
     selectedEhr,
+    directory,
+    directoryLoading,
+    directoryError,
+    directoryLoaded,
     searchResults,
     searchActive,
     searchLoading,
@@ -225,6 +280,8 @@ export const useEhrStore = defineStore("ehr", () => {
     searchLimitReached,
     fetchEhrs,
     fetchEhrDetail,
+    fetchDirectory,
+    clearDirectory,
     searchEhrs,
     clearSearch,
     createEhr,
