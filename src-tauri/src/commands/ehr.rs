@@ -254,30 +254,26 @@ pub struct CreateEhrResponse {
     pub time_created: Option<String>,
 }
 
-#[tauri::command]
-pub async fn create_ehr(
-    app: tauri::AppHandle,
-    server_id: String,
-    request: CreateEhrRequest,
-) -> Result<CreateEhrResponse, String> {
-    let profile = get_profile_by_id(&server_id)?;
-    let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-
-    // Build EHR request body
-    let mut ehr_body = serde_json::json!({});
-
-    if let Some(ehr_id) = &request.ehr_id {
-        ehr_body["ehr_id"] = serde_json::json!({
-            "_type": "HIER_OBJECT_ID",
-            "value": ehr_id
-        });
-    }
-
-    // Build EHR status
+/// Builds the EHR_STATUS JSON object for an EHR creation request.
+///
+/// `archetype_details` is technically mandatory on any LOCATABLE that is an
+/// archetype root (per the RM's Archetyped_valid invariant): EHR_STATUS sets
+/// `archetype_node_id`, so it's a root and needs `archetype_details` with a
+/// matching `archetype_id`. EHRBase fills this in server-side if it's
+/// missing, but stricter CDRs (e.g. FerroEHR) reject the request with a 422
+/// if it's absent, so we always supply it here.
+fn build_ehr_status_json(request: &CreateEhrRequest) -> serde_json::Value {
     let mut ehr_status = serde_json::json!({
         "_type": "EHR_STATUS",
         "archetype_node_id": "openEHR-EHR-EHR_STATUS.generic.v1",
+        "archetype_details": {
+            "_type": "ARCHETYPED",
+            "archetype_id": {
+                "_type": "ARCHETYPE_ID",
+                "value": "openEHR-EHR-EHR_STATUS.generic.v1"
+            },
+            "rm_version": "1.0.4"
+        },
         "name": {
             "_type": "DV_TEXT",
             "value": "EHR Status"
@@ -291,7 +287,7 @@ pub async fn create_ehr(
 
     // Override subject if external identity is provided
     if let (Some(subject_id), Some(subject_namespace)) =
-        (request.subject_id, request.subject_namespace)
+        (&request.subject_id, &request.subject_namespace)
     {
         ehr_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
@@ -308,11 +304,31 @@ pub async fn create_ehr(
         });
     }
 
+    ehr_status
+}
+
+#[tauri::command]
+pub async fn create_ehr(
+    app: tauri::AppHandle,
+    server_id: String,
+    request: CreateEhrRequest,
+) -> Result<CreateEhrResponse, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let ehr_status = build_ehr_status_json(&request);
+
     // For EHR creation, EHRBase expects the EHR_STATUS object directly, not wrapped
-    let request_body = if request.ehr_id.is_some() {
-        // If custom EHR ID is provided, we need to wrap it
-        ehr_body["ehr_status"] = ehr_status.clone();
-        ehr_body
+    let request_body = if let Some(ehr_id) = &request.ehr_id {
+        // If custom EHR ID is provided, we need to wrap it alongside ehr_status
+        serde_json::json!({
+            "ehr_id": {
+                "_type": "HIER_OBJECT_ID",
+                "value": ehr_id
+            },
+            "ehr_status": ehr_status
+        })
     } else {
         // Otherwise, send EHR_STATUS directly as the root object
         ehr_status
@@ -1072,5 +1088,58 @@ mod tests {
         assert!(aql.contains("s/is_queryable AS queryable"));
         assert!(aql.contains("e/system_id/value AS system_id"));
         assert!(aql.contains("FROM EHR e CONTAINS EHR_STATUS s"));
+    }
+
+    fn empty_create_ehr_request() -> CreateEhrRequest {
+        CreateEhrRequest {
+            subject_namespace: None,
+            subject_id: None,
+            is_queryable: None,
+            is_modifiable: None,
+            ehr_id: None,
+        }
+    }
+
+    #[test]
+    fn test_ehr_status_includes_archetype_details() {
+        // Stricter CDRs (e.g. FerroEHR) reject an EHR_STATUS root without
+        // archetype_details, so it must always be present.
+        let status = build_ehr_status_json(&empty_create_ehr_request());
+        assert_eq!(
+            status["archetype_details"]["archetype_id"]["value"],
+            "openEHR-EHR-EHR_STATUS.generic.v1"
+        );
+        assert_eq!(status["archetype_details"]["_type"], "ARCHETYPED");
+        assert!(status["archetype_details"]["rm_version"].is_string());
+    }
+
+    #[test]
+    fn test_ehr_status_defaults_queryable_and_modifiable_true() {
+        let status = build_ehr_status_json(&empty_create_ehr_request());
+        assert_eq!(status["is_queryable"], true);
+        assert_eq!(status["is_modifiable"], true);
+        assert_eq!(status["subject"]["_type"], "PARTY_SELF");
+        assert!(status["subject"].get("external_ref").is_none());
+    }
+
+    #[test]
+    fn test_ehr_status_respects_explicit_flags() {
+        let mut req = empty_create_ehr_request();
+        req.is_queryable = Some(false);
+        req.is_modifiable = Some(false);
+        let status = build_ehr_status_json(&req);
+        assert_eq!(status["is_queryable"], false);
+        assert_eq!(status["is_modifiable"], false);
+    }
+
+    #[test]
+    fn test_ehr_status_with_subject_identity() {
+        let mut req = empty_create_ehr_request();
+        req.subject_id = Some("Testtest".to_string());
+        req.subject_namespace = Some("ch.ahv".to_string());
+        let status = build_ehr_status_json(&req);
+        let external_ref = &status["subject"]["external_ref"];
+        assert_eq!(external_ref["id"]["value"], "Testtest");
+        assert_eq!(external_ref["id"]["scheme"], "ch.ahv");
     }
 }
