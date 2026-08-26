@@ -408,8 +408,10 @@ async function copyEhrJson() {
         </h2>
         <h2 v-else>EHRs</h2>
         <div class="header-actions">
-          <button class="btn btn-sm btn-primary" @click="showCreateDialog = true">+ New EHR</button>
-          <button class="btn btn-sm" @click="refresh">Refresh</button>
+          <button type="button" class="btn btn-sm btn-primary" @click="showCreateDialog = true">
+            + New EHR
+          </button>
+          <button type="button" class="btn btn-sm" @click="refresh">Refresh</button>
         </div>
       </div>
 
@@ -427,10 +429,17 @@ async function copyEhrJson() {
             @focus="showHistory = searchHistory.length > 0 && !searchQuery"
             @blur="hideHistoryDelayed"
           />
-          <button v-if="searchQuery" class="clear-btn" @click="clearSearch" title="Clear search">
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="clear-btn"
+            @click="clearSearch"
+            title="Clear search"
+          >
             &times;
           </button>
           <button
+            type="button"
             class="help-btn"
             @click="showHelpPopover = !showHelpPopover"
             title="Search syntax help"
@@ -453,7 +462,9 @@ async function copyEhrJson() {
         <div v-if="showHelpPopover" class="help-popover">
           <div class="help-popover-header">
             <strong>Search Syntax</strong>
-            <button class="close-btn" @click="showHelpPopover = false">&times;</button>
+            <button type="button" class="close-btn" @click="showHelpPopover = false">
+              &times;
+            </button>
           </div>
           <table class="help-table">
             <tbody>
@@ -545,6 +556,7 @@ async function copyEhrJson() {
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
               <button
+                type="button"
                 class="copy-btn"
                 @click.stop="copyToClipboard(ehr.ehr_id)"
                 title="Copy full ID"
@@ -576,6 +588,7 @@ async function copyEhrJson() {
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
               <button
+                type="button"
                 class="copy-btn"
                 @click.stop="copyToClipboard(ehr.ehr_id)"
                 title="Copy full ID"
@@ -591,11 +604,11 @@ async function copyEhrJson() {
         </div>
 
         <div class="pagination">
-          <button class="btn btn-sm" :disabled="currentPage === 0" @click="prevPage">
+          <button type="button" class="btn btn-sm" :disabled="currentPage === 0" @click="prevPage">
             Previous
           </button>
           <span class="page-info">Page {{ currentPage + 1 }}</span>
-          <button class="btn btn-sm" @click="nextPage">Next</button>
+          <button type="button" class="btn btn-sm" @click="nextPage">Next</button>
         </div>
       </div>
     </div>
@@ -632,10 +645,17 @@ async function copyEhrJson() {
                 JSON
               </button>
             </div>
-            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">
+            <button
+              type="button"
+              class="btn btn-sm"
+              v-if="activeTab === 'json'"
+              @click="copyEhrJson"
+            >
               Copy JSON
             </button>
-            <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
+            <button type="button" class="btn btn-sm btn-danger" @click="openDeleteDialog">
+              Delete EHR
+            </button>
           </div>
         </div>
 
@@ -644,7 +664,11 @@ async function copyEhrJson() {
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
               {{ ehrStore.selectedEhr.ehr_id }}
-              <button class="copy-btn" @click="copyToClipboard(ehrStore.selectedEhr!.ehr_id)">
+              <button
+                type="button"
+                class="copy-btn"
+                @click="copyToClipboard(ehrStore.selectedEhr!.ehr_id)"
+              >
                 Copy
               </button>
             </span>
@@ -776,10 +800,16 @@ async function copyEhrJson() {
           </div>
         </div>
         <div class="dialog-actions">
-          <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showDeleteDialog = false"
+            :disabled="deleting"
+          >
             Cancel
           </button>
           <button
+            type="button"
             class="btn btn-sm btn-danger"
             @click="handleDeleteEhr"
             :disabled="!canDelete || deleting"
