@@ -11,6 +11,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import CompassIcon from "../components/CompassIcon.vue";
+import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
   terminology: string;
@@ -23,8 +25,13 @@ const router = useRouter();
 const serverStore = useServerStore();
 const templateStore = useTemplateStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
-const searchQuery = ref("");
+// Named distinctly from the `searchQuery` prop on the nested
+// WtTreeNodeFiltered component below (and the same-named param on
+// highlightSearchInContent) — sharing the identifier across scopes in one
+// SFC was tripping static analysis into flagging this as a prop mutation.
+const templateFilterQuery = ref("");
 const panelSearchQuery = ref("");
 const showPanelSearch = ref(false);
 const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
@@ -86,9 +93,14 @@ function selectTemplate(id: string) {
   void analytics.track("template_inspected");
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "templates" });
+  tourStore.start("templates");
+}
+
 const filteredTemplates = computed(() => {
-  if (!searchQuery.value) return templateStore.templates;
-  const q = searchQuery.value.toLowerCase();
+  if (!templateFilterQuery.value) return templateStore.templates;
+  const q = templateFilterQuery.value.toLowerCase();
   return templateStore.templates.filter((t) => t.template_id.toLowerCase().includes(q));
 });
 
@@ -474,10 +486,25 @@ onUnmounted(() => {
     <div class="panel-left">
       <div class="panel-header">
         <h2>Templates</h2>
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Template Browser"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
       </div>
 
       <div class="search-bar">
-        <input class="input search-input" v-model="searchQuery" placeholder="Filter templates..." />
+        <label for="template-filter-input" class="sr-only">Filter templates</label>
+        <input
+          id="template-filter-input"
+          class="input search-input"
+          data-tour="template-filter"
+          v-model="templateFilterQuery"
+          placeholder="Filter templates..."
+        />
       </div>
 
       <div v-if="templateStore.loading && !selectedTemplateId" class="loading">Loading...</div>
@@ -512,6 +539,7 @@ onUnmounted(() => {
         <!-- Upload zone -->
         <div
           class="upload-zone"
+          data-tour="template-upload"
           :class="{ 'drag-over': uploadDragOver }"
           @dragover.prevent="uploadDragOver = true"
           @dragleave="uploadDragOver = false"
@@ -957,6 +985,21 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 .template-browser {
   display: flex;
   height: 100%;
+}
+
+/* Visually hidden but still readable by screen readers — used to give the
+   template filter input an accessible label without a visible one, since
+   the input's placeholder already conveys the same text visually. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .panel-left {

@@ -4,19 +4,27 @@ import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const ehrStore = useEhrStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 onMounted(() => {
   // Track that the user opened the EHR browser. No IDs, URLs, or counts — just
   // a coarse feature-adoption ping so we know the view is actually being used.
   void analytics.track("ehr_browsed");
 });
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "ehrs" });
+  tourStore.start("ehrs");
+}
 const searchQuery = ref("");
 const currentPage = ref(0);
 const showCreateDialog = ref(false);
@@ -374,7 +382,22 @@ async function copyEhrJson() {
         </h2>
         <h2 v-else>EHRs</h2>
         <div class="header-actions">
-          <button class="btn btn-sm btn-primary" @click="showCreateDialog = true">+ New EHR</button>
+          <button
+            type="button"
+            class="tour-trigger-btn"
+            title="Take a tour of the EHR Browser"
+            @click="replayTour"
+          >
+            <CompassIcon />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            data-tour="ehr-create"
+            @click="showCreateDialog = true"
+          >
+            + New EHR
+          </button>
           <button class="btn btn-sm" @click="refresh">Refresh</button>
         </div>
       </div>
@@ -383,6 +406,7 @@ async function copyEhrJson() {
         <div class="search-input-wrapper">
           <input
             class="input search-input"
+            data-tour="ehr-search"
             v-model="searchQuery"
             placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:true"
             autocapitalize="off"
@@ -398,6 +422,7 @@ async function copyEhrJson() {
           </button>
           <button
             class="help-btn"
+            data-tour="ehr-search-help"
             @click="showHelpPopover = !showHelpPopover"
             title="Search syntax help"
           >
