@@ -138,7 +138,14 @@ export const useServerStore = defineStore("server", () => {
   // response marks its server "connected", any 4xx marks it "error", without
   // requiring every command to separately report connection health.
   function updateConnectionFromRequest(url: string, status: number) {
-    const stripTrailingSlash = (s: string) => s.replace(/\/+$/, "");
+    // Avoid a `+`-quantified regex here (flagged by static analysis as
+    // superlinear-backtracking-prone) — a simple loop strips the same
+    // trailing slashes in linear time.
+    const stripTrailingSlash = (s: string) => {
+      let end = s.length;
+      while (end > 0 && s[end - 1] === "/") end--;
+      return s.slice(0, end);
+    };
 
     // Match against the longest base_url prefix so two profiles that share a
     // host (but differ by path) resolve to the more specific one.
