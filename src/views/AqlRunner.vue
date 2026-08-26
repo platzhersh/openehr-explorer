@@ -271,7 +271,14 @@ const editorStyle = computed(() => ({
             @click="loadQuery(sq)"
           >
             <div class="saved-name">{{ sq.name }}</div>
-            <button class="copy-btn" @click.stop="deleteSavedQuery(sq.id)" title="Delete">X</button>
+            <button
+              type="button"
+              class="copy-btn"
+              @click.stop="deleteSavedQuery(sq.id)"
+              title="Delete"
+            >
+              X
+            </button>
           </div>
           <div v-if="queryStore.savedQueries.length === 0" class="empty-state">
             <p>No saved queries yet.</p>
@@ -372,11 +379,20 @@ const editorStyle = computed(() => ({
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button class="btn btn-sm" @click="formatQuery" title="Format query (Shift+Alt+F)">
+              <button
+                type="button"
+                class="btn btn-sm"
+                @click="formatQuery"
+                title="Format query (Shift+Alt+F)"
+              >
                 Format
               </button>
-              <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
-              <button class="btn btn-sm btn-primary" @click="runQuery">Run (Ctrl+Enter)</button>
+              <button type="button" class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">
+                Save
+              </button>
+              <button type="button" class="btn btn-sm btn-primary" @click="runQuery">
+                Run (Ctrl+Enter)
+              </button>
             </div>
           </div>
 
@@ -387,8 +403,10 @@ const editorStyle = computed(() => ({
               placeholder="Query name..."
               @keydown.enter="saveCurrentQuery"
             />
-            <button class="btn btn-sm btn-primary" @click="saveCurrentQuery">Save</button>
-            <button class="btn btn-sm" @click="showSaveDialog = false">Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" @click="saveCurrentQuery">
+              Save
+            </button>
+            <button type="button" class="btn btn-sm" @click="showSaveDialog = false">Cancel</button>
           </div>
 
           <!-- Context Template selector (Layer 3) -->
@@ -411,6 +429,7 @@ const editorStyle = computed(() => ({
               </select>
               <button
                 v-if="contextTemplateId"
+                type="button"
                 class="context-template-clear"
                 @click="clearContextTemplate"
                 title="Clear template context"
@@ -446,7 +465,7 @@ const editorStyle = computed(() => ({
                 {{ queryStore.result.total_count }} rows in
                 {{ queryStore.result.execution_time_ms }}ms
               </span>
-              <button class="btn btn-sm" @click="exportCsv">Export CSV</button>
+              <button type="button" class="btn btn-sm" @click="exportCsv">Export CSV</button>
             </div>
 
             <div class="results-table-wrapper">
