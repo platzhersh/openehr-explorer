@@ -2,7 +2,7 @@
 
 All notable user-facing changes to openEHR Explorer are documented here.
 
-The format is loosely based on [Keep a Changelog](https://keepachangelog.com/),
+The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 but entries aren't split into `Added`/`Changed`/`Fixed` sections — each
 release gets one themed heading and a flat bullet list of highlights,
 matching the format already used on the
