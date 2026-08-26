@@ -130,6 +130,11 @@ function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "composition" });
+  tourStore.start("composition");
+}
+
 async function copyJson() {
   const json =
     activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
@@ -281,7 +286,7 @@ onUnmounted(() => {
           type="button"
           class="tour-trigger-btn"
           title="Take a tour of the Composition Viewer"
-          @click="tourStore.start('composition')"
+          @click="replayTour"
         >
           🧭
         </button>

@@ -133,7 +133,12 @@ function checkWhatsNewAndTours() {
   if (appVersion.value) {
     whatsNewStore.checkForUpdate(appVersion.value);
   }
-  if (!whatsNewStore.visible) {
+  if (whatsNewStore.visible) {
+    void analytics.track("whats_new_shown", {
+      version: whatsNewStore.entries[0]?.version ?? "unknown",
+      source: "auto",
+    });
+  } else {
     tourStore.maybeAutoStart(route.name as string | undefined);
   }
 }

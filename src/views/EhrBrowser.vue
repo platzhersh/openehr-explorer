@@ -19,6 +19,11 @@ onMounted(() => {
   // a coarse feature-adoption ping so we know the view is actually being used.
   void analytics.track("ehr_browsed");
 });
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "ehrs" });
+  tourStore.start("ehrs");
+}
 const searchQuery = ref("");
 const currentPage = ref(0);
 const showCreateDialog = ref(false);
@@ -380,7 +385,7 @@ async function copyEhrJson() {
             type="button"
             class="tour-trigger-btn"
             title="Take a tour of the EHR Browser"
-            @click="tourStore.start('ehrs')"
+            @click="replayTour"
           >
             🧭
           </button>

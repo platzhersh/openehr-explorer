@@ -13,8 +13,10 @@
  */
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useTourStore } from "../stores/tour";
+import { useAnalytics } from "../composables/useAnalytics";
 
 const tourStore = useTourStore();
+const analytics = useAnalytics();
 
 const targetRect = ref<DOMRect | null>(null);
 const highlightStyle = ref<Record<string, string>>({});
@@ -95,14 +97,35 @@ function handleReposition() {
   if (el) updateRect(el);
 }
 
+// Wrap the store's skip/next actions rather than binding to them directly —
+// these are the only two points a user genuinely ends a tour (as opposed to
+// the store's internal skipStep(), which fires when a step's target never
+// appears in the DOM and isn't a user choice worth counting).
+function requestSkip() {
+  if (tourStore.activeTourId) {
+    void analytics.track("tour_skipped", {
+      tour_id: tourStore.activeTourId,
+      step_index: tourStore.stepIndex,
+    });
+  }
+  void tourStore.skipTour();
+}
+
+function requestNext() {
+  if (tourStore.isLastStep && tourStore.activeTourId) {
+    void analytics.track("tour_completed", { tour_id: tourStore.activeTourId });
+  }
+  void tourStore.next();
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (!tourStore.activeTour) return;
   if (e.key === "Escape") {
     e.preventDefault();
-    void tourStore.skipTour();
+    requestSkip();
   } else if (e.key === "ArrowRight" || e.key === "Enter") {
     e.preventDefault();
-    void tourStore.next();
+    requestNext();
   } else if (e.key === "ArrowLeft") {
     e.preventDefault();
     tourStore.prev();
@@ -152,14 +175,14 @@ onUnmounted(() => {
         <span class="tour-step-count">
           Step {{ tourStore.stepIndex + 1 }} of {{ tourStore.activeTour.steps.length }}
         </span>
-        <button class="tour-close" type="button" @click="tourStore.skipTour" title="Skip tour">
+        <button class="tour-close" type="button" @click="requestSkip" title="Skip tour">
           &times;
         </button>
       </div>
       <h4 class="tour-title">{{ tourStore.activeStep.title }}</h4>
       <p class="tour-body">{{ tourStore.activeStep.body }}</p>
       <div class="tour-actions">
-        <button class="tour-skip-link" type="button" @click="tourStore.skipTour">Skip tour</button>
+        <button class="tour-skip-link" type="button" @click="requestSkip">Skip tour</button>
         <div class="tour-nav">
           <button
             v-if="!tourStore.isFirstStep"
@@ -169,7 +192,7 @@ onUnmounted(() => {
           >
             Back
           </button>
-          <button class="btn btn-sm btn-primary" type="button" @click="tourStore.next">
+          <button class="btn btn-sm btn-primary" type="button" @click="requestNext">
             {{ tourStore.isLastStep ? "Done" : "Next" }}
           </button>
         </div>

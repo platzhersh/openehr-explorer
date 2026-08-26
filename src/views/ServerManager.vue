@@ -28,6 +28,11 @@ function newProfile() {
   dialogOpen.value = true;
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "servers" });
+  tourStore.start("servers");
+}
+
 function editProfile(profile: ServerProfile) {
   dialogProfile.value = profile;
   dialogOpen.value = true;
@@ -102,7 +107,7 @@ function credentialBackendLabel(backend: string): string {
           type="button"
           class="tour-trigger-btn"
           title="Take a tour of the Server Manager"
-          @click="tourStore.start('servers')"
+          @click="replayTour"
         >
           🧭
         </button>

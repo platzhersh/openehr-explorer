@@ -83,6 +83,15 @@ async function replayAllTours() {
   // clicked "Save" on yet.
   form.value.completed_tours = [...settingsStore.settings.completed_tours];
   toursResetMessage.value = "Tours will be shown again as you visit each screen.";
+  void analytics.track("tours_reset");
+}
+
+function viewWhatsNew() {
+  whatsNewStore.showLatest();
+  void analytics.track("whats_new_shown", {
+    version: whatsNewStore.entries[0]?.version ?? "unknown",
+    source: "manual",
+  });
 }
 </script>
 
@@ -171,9 +180,7 @@ async function replayAllTours() {
 
         <div class="form-group tour-actions-group">
           <button type="button" class="btn btn-sm" @click="replayAllTours">Replay All Tours</button>
-          <button type="button" class="btn btn-sm" @click="whatsNewStore.showLatest">
-            View What's New
-          </button>
+          <button type="button" class="btn btn-sm" @click="viewWhatsNew">View What's New</button>
         </div>
         <p v-if="toursResetMessage" class="form-help update-status success">
           {{ toursResetMessage }}

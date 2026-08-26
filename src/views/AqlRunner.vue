@@ -112,6 +112,11 @@ async function runQuery() {
   void analytics.track("aql_executed");
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "aql" });
+  tourStore.start("aql");
+}
+
 function formatQuery() {
   editorRef.value?.format();
 }
@@ -241,7 +246,7 @@ const editorStyle = computed(() => ({
                 type="button"
                 class="tour-trigger-btn"
                 title="Take a tour of the AQL Runner"
-                @click="tourStore.start('aql')"
+                @click="replayTour"
               >
                 🧭
               </button>

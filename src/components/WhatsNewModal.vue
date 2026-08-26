@@ -8,6 +8,7 @@
 import { useRouter } from "vue-router";
 import { useWhatsNewStore } from "../stores/whatsNew";
 import { useTourStore } from "../stores/tour";
+import { useAnalytics } from "../composables/useAnalytics";
 
 const props = defineProps<{
   currentVersion: string;
@@ -16,12 +17,14 @@ const props = defineProps<{
 const whatsNewStore = useWhatsNewStore();
 const tourStore = useTourStore();
 const router = useRouter();
+const analytics = useAnalytics();
 
 function close() {
   void whatsNewStore.dismiss(props.currentVersion);
 }
 
 function takeTour(tourId: string, routePath?: string) {
+  void analytics.track("whats_new_tour_link_clicked", { tour_id: tourId });
   close();
   if (routePath) router.push(routePath);
   tourStore.start(tourId);

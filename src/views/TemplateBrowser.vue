@@ -92,6 +92,11 @@ function selectTemplate(id: string) {
   void analytics.track("template_inspected");
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "templates" });
+  tourStore.start("templates");
+}
+
 const filteredTemplates = computed(() => {
   if (!templateFilterQuery.value) return templateStore.templates;
   const q = templateFilterQuery.value.toLowerCase();
@@ -484,7 +489,7 @@ onUnmounted(() => {
           type="button"
           class="tour-trigger-btn"
           title="Take a tour of the Template Browser"
-          @click="tourStore.start('templates')"
+          @click="replayTour"
         >
           🧭
         </button>
