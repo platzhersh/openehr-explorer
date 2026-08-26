@@ -3,7 +3,7 @@ pub mod credentials;
 pub mod inspector;
 pub mod settings;
 
-use commands::{composition, ehr, query, server, template, terminology};
+use commands::{composition, contribution, ehr, query, server, template, terminology};
 use tauri::{
     menu::{Menu, MenuItem, MenuItemKind, HELP_SUBMENU_ID},
     Emitter,
@@ -130,9 +130,12 @@ pub fn run() {
             composition::get_composition,
             composition::get_composition_flat,
             composition::get_composition_versions,
+            composition::get_composition_version_contribution,
             composition::create_composition,
             composition::update_composition,
             composition::delete_composition,
+            // Contribution
+            contribution::get_contribution,
             // Template
             template::list_templates,
             template::get_web_template,

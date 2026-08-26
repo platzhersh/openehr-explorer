@@ -65,6 +65,8 @@ export type AnalyticsEvent =
   | "composition_created"
   | "composition_edited"
   | "composition_deleted"
+  // --- contribution ---
+  | "contribution_viewed"
   // --- AQL ---
   | "aql_executed"
   | "aql_query_saved"

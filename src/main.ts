@@ -29,6 +29,12 @@ const router = createRouter({
       props: true,
     },
     {
+      path: "/ehrs/:ehrId/contributions/:contributionUid",
+      name: "contribution",
+      component: () => import("./views/ContributionViewer.vue"),
+      props: true,
+    },
+    {
       path: "/templates",
       name: "templates",
       component: () => import("./views/TemplateBrowser.vue"),
