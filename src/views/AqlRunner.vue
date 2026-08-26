@@ -293,7 +293,7 @@ const editorStyle = computed(() => ({
           </div>
         </div>
 
-        <div class="panel-header">
+        <div class="panel-header" data-tour="aql-stored-queries">
           <h3>Stored Queries <span class="panel-header-qualifier">(server)</span></h3>
         </div>
         <div class="saved-list">

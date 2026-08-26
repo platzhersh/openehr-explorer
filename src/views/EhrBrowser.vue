@@ -674,6 +674,7 @@ function lookupContribution() {
               <button
                 type="button"
                 class="tab"
+                data-tour="ehr-directory-tab"
                 :class="{ active: activeTab === 'directory' }"
                 @click="selectDirectoryTab"
               >

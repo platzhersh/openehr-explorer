@@ -4,12 +4,20 @@ import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useContributionStore } from "../stores/contribution";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const contributionStore = useContributionStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "contribution" });
+  tourStore.start("contribution");
+}
 
 const ehrId = computed(() => route.params.ehrId as string);
 const contributionUid = computed(() => route.params.contributionUid as string);
@@ -58,6 +66,14 @@ function openVersion(versionId: string) {
     <div class="viewer-header">
       <button type="button" class="btn btn-sm" @click="goBack">Back</button>
       <h2>Contribution</h2>
+      <button
+        type="button"
+        class="tour-trigger-btn"
+        title="Take a tour of the Contribution Viewer"
+        @click="replayTour"
+      >
+        <CompassIcon />
+      </button>
     </div>
 
     <div v-if="contributionStore.loading" class="loading">Loading contribution...</div>
@@ -65,7 +81,7 @@ function openVersion(versionId: string) {
       Failed to load contribution: {{ contributionStore.error }}
     </div>
     <div v-else-if="contributionStore.detail" class="viewer-content">
-      <div class="detail-row">
+      <div class="detail-row" data-tour="contribution-summary">
         <span class="detail-label">Contribution UID</span>
         <span class="detail-value mono">
           {{ contributionStore.detail.contribution_uid }}
@@ -99,7 +115,9 @@ function openVersion(versionId: string) {
       </template>
       <div v-else class="empty-audit">No audit details returned by the server.</div>
 
-      <h3 class="section-title">Versions ({{ contributionStore.detail.versions.length }})</h3>
+      <h3 class="section-title" data-tour="contribution-versions">
+        Versions ({{ contributionStore.detail.versions.length }})
+      </h3>
 
       <div v-if="contributionStore.detail.versions.length === 0" class="empty-state">
         <p>This contribution has no version references.</p>
@@ -149,6 +167,9 @@ function openVersion(versionId: string) {
 .viewer-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+.viewer-header .tour-trigger-btn {
+  margin-left: auto;
 }
 
 .viewer-content {

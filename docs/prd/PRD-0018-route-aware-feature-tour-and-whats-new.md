@@ -52,16 +52,22 @@ A tour is a named, ordered list of steps; each step highlights one DOM element (
 
 | Tour ID | Routes | Steps |
 | --- | --- | --- |
-| `ehrs` | `ehrs`, `ehr-detail` | Search & filter syntax, search-help popover, create EHR |
+| `ehrs` | `ehrs`, `ehr-detail` | Search & filter syntax, search-help popover, create EHR, browse the DIRECTORY |
 | `composition` | `composition` | Pretty/JSON/FLAT tabs, Show Paths, Copy JSON |
 | `templates` | `templates`, `template-detail` | Filter templates, upload an OPT |
-| `aql` | `aql` | Context template autocomplete, Run, Format, Saved Queries |
+| `aql` | `aql` | Context template autocomplete, Run, Format, Saved Queries, Stored Queries |
 | `servers` | `servers` | Add a server profile |
+| `contribution` | `contribution` | Audit trail summary, jump to a referenced version |
 
 A tour auto-starts the first time a user navigates to one of its routes, provided:
 - The `tours_enabled` setting is on (default: on).
 - The tour's ID is not already in the persisted `completed_tours` list.
 - No other tour, the analytics consent dialog, or the What's New modal is currently showing.
+
+### 1a. Global (non-route-scoped) Tours
+**Priority: P2 (added post-launch)**
+
+Not every tour subject maps to one route. The **Request Inspector** (`inspector` tour) is a drawer mounted once, globally, in `App.vue` and visible on every screen — there's no single navigation event that means "the user is now looking at it". A `Tour` may set `global: true` and an empty `routeNames` array to opt out of route-based auto-start entirely; it's offered only via its own manual "Take a tour" trigger (the compass icon in the Request Inspector's header bar). This avoids racing the route-aware auto-start — the inspector's first HTTP entry can land at the exact moment another route's tour is already auto-starting, and a lower-priority global auto-start would either interrupt it or silently lose the race and never offer itself again.
 
 Finishing (clicking "Done" on the last step) or skipping (Escape, the × button, or "Skip tour") both mark the tour completed — a skip is not distinguished from a completion, since either way the user has seen enough to make an informed choice not to continue.
 
@@ -122,7 +128,8 @@ Tour step targets use a dedicated `data-tour="…"` attribute rather than reusin
 - No remote/CDN-fetched changelog — `WHATS_NEW` ships with the app binary and is updated alongside the code that introduces each feature.
 
 ## Acceptance Criteria
-- [x] Visiting `/ehrs`, `/templates`, `/aql`, `/servers`, or a composition for the first time auto-starts that route's tour.
+- [x] Visiting `/ehrs`, `/templates`, `/aql`, `/servers`, a composition, or a contribution for the first time auto-starts that route's tour.
+- [x] A `global: true` tour (the Request Inspector) never auto-starts on navigation and is reachable only via its own manual trigger.
 - [x] Completing or skipping a tour persists to `completed_tours` and it never auto-starts again.
 - [x] The compass-icon button in each view's header always restarts that view's tour, regardless of completion state.
 - [x] A step whose target is missing from the DOM is skipped rather than freezing the tour.
