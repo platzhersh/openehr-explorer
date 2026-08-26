@@ -41,10 +41,10 @@ same words; drifting apart defeats the point of having both.
 1. Find the previous tag: `git describe --tags --abbrev=0` (before the tag for `$1` is created).
 2. Review what changed since that tag: `git log <previous-tag>..HEAD --oneline`. Read the underlying commits/PRs as needed to understand user-facing impact — don't just paraphrase commit subjects.
 3. Add a new `<h3>v$1 — <short theme>` block as the **first** entry under `<section id="changelog">` in `docs/docs.html` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
-4. Mirror the exact same theme and bullets as a new `## [$1] - <YYYY-MM-DD>` section at the **top** of `CHANGELOG.md` (below the intro, above the previous top entry) — same bullet text, just HTML→Markdown (`<strong>Label:</strong>` → `**Label:**`, `<code>` → backticks, entities like `&amp;`/`&ldquo;` → plain characters). Use today's date; it becomes the tag date once step 3 of RELEASING.md is done.
+4. Mirror the exact same theme and bullets as a new `## [$1] - <YYYY-MM-DD>` section at the **top** of `CHANGELOG.md` (below the intro, above the previous top entry) — same bullet text, just HTML→Markdown (`<strong>Label:</strong>` → `**Label:**`, `<code>` → backticks, entities like `&amp;`/`&ldquo;` → plain characters). Use the date the `v$1` tag will actually be created (per RELEASING.md step 3) — usually today, but if you know the merge/tag is happening on a different day, use that date instead. If the tag already exists by the time you're writing this, use `git log -1 --format=%ad --date=short v$1` and match it exactly.
 5. Commit both files together with this message:
 
-  ```
+  ```text
   docs: add v$1 changelog entry
   ```
 
@@ -70,11 +70,16 @@ the app itself (see PRD-0018):
   own PR already did this, the same way OEH-29 wired up tours for the five
   existing screens.
 
-If you add a `WhatsNewEntry`, commit it separately (it's app source, not
-documentation):
+Either of these is app source, not documentation — commit each one
+separately from Step 2's changelog commit (and from each other, if you add
+both):
 
-  ```
+  ```text
   feat: add v$1 "What's New" entry
+  ```
+
+  ```text
+  feat: add tour for <screen>
   ```
 
 If nothing here applies, say so and move on — don't force an entry.
