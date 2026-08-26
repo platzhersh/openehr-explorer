@@ -146,6 +146,7 @@ function checkWhatsNewAndTours() {
 onMounted(async () => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
+  serverStore.startTrackingRequests();
   // Settings must be loaded before the first analytics call so the consent
   // flag is accurate — otherwise the composable would gate on a stale default.
   await settingsStore.loadSettings();
@@ -177,6 +178,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
   unlistenMenuCheckForUpdates?.();
+  serverStore.stopTrackingRequests();
 });
 
 // Reset inspector when active server changes
