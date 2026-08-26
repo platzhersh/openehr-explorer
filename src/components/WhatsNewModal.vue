@@ -32,7 +32,8 @@ async function takeTour(tourId: string, routePath?: string) {
     // (already on that route) is fine; the tour should still start.
     const failure = await router.push(routePath);
     if (
-      isNavigationFailure(failure, NavigationFailureType.aborted | NavigationFailureType.cancelled)
+      isNavigationFailure(failure, NavigationFailureType.aborted) ||
+      isNavigationFailure(failure, NavigationFailureType.cancelled)
     ) {
       return;
     }

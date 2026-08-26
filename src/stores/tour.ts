@@ -76,13 +76,10 @@ export const useTourStore = defineStore("tour", () => {
     }
   }
 
-  async function skipTour() {
-    try {
-      if (activeTourId.value) await markCompleted(activeTourId.value);
-    } finally {
-      close();
-    }
-  }
+  // Skipping and finishing a tour behave identically (see PRD-0018): either
+  // way the user has seen enough, so both mark the tour completed. Kept as
+  // a separate exported name from `finish` for call-site clarity.
+  const skipTour = finish;
 
   function close() {
     activeTourId.value = null;
