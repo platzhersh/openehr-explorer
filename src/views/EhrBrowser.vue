@@ -600,6 +600,7 @@ async function copyEhrJson() {
           <div class="header-actions">
             <div class="tab-bar">
               <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'detail' }"
                 @click="activeTab = 'detail'"
@@ -607,6 +608,7 @@ async function copyEhrJson() {
                 Detail
               </button>
               <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'directory' }"
                 @click="selectDirectoryTab"
@@ -614,6 +616,7 @@ async function copyEhrJson() {
                 Directory
               </button>
               <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'json' }"
                 @click="activeTab = 'json'"
