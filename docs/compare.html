@@ -985,8 +985,8 @@
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">CONTRIBUTION tracking / audit trail &sup3;</div>
-      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="feat-label">CONTRIBUTION tracking / audit trail</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">View by UID + linked from version history &mdash; no list endpoint in the openEHR API</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
@@ -1016,7 +1016,7 @@
       <div class="score-row">
         <div class="score-label">Feature score</div>
         <div class="score-cell ours" data-tool="Explorer">
-          <span class="score-num primary">31</span>
+          <span class="score-num primary">31.5</span>
           <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="openEHRTool">
@@ -1065,7 +1065,7 @@
     <div class="footnotes">
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
-      <p>&sup3; openEHR Explorer does not yet have dedicated UI for the CONTRIBUTION resource &mdash; the underlying data is reachable via AQL and the Request Inspector, but there's no dedicated browsing/editing surface for it yet. Tracked as a known gap. DIRECTORY now has a read-only browsing tree in the EHR detail panel; creating, updating, or deleting a DIRECTORY isn't supported by the app yet (the Request Inspector only shows HTTP traffic &mdash; it doesn't send requests), so that still requires an external REST client.</p>
+      <p>&sup3; DIRECTORY and CONTRIBUTION support are both partial. DIRECTORY has a read-only browsing tree in the EHR detail panel; creating, updating, or deleting a DIRECTORY isn't supported by the app yet (the Request Inspector only shows HTTP traffic &mdash; it doesn't send requests), so that still requires an external REST client. CONTRIBUTION can be viewed by UID &mdash; entered directly, or reached from a composition's Versions tab &mdash; but the openEHR REST API has no endpoint to list all contributions for an EHR, so there's no browsable list.</p>
       <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client &mdash; scored from its public marketing site (home + features pages) only, not hands-on testing. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable, multi-server profiles, AQL path autocomplete) are unconfirmed absences rather than verified ones; scores will be revisited once we get hands-on access to the app.</p>
       <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.6.0.</p>
     </div>

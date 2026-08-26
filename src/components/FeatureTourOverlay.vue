@@ -28,6 +28,10 @@ let retriesLeft = 0;
 const HIGHLIGHT_PADDING = 6;
 const TOOLTIP_WIDTH = 320;
 const TOOLTIP_MARGIN = 14;
+// Approx rendered height of the tooltip card (header + title + body + actions).
+// Used to decide whether there's enough room to stack it above/below the
+// target at all — not an exact measurement, just a "is this hopeless" check.
+const TOOLTIP_MIN_VERTICAL_SPACE = 180;
 
 function clearRetry() {
   if (retryTimer) {
@@ -76,17 +80,34 @@ function computeStyles() {
   };
 
   const spaceBelow = window.innerHeight - rect.bottom;
-  const placeBelow = spaceBelow > 180 || spaceBelow > rect.top;
+  const spaceAbove = rect.top;
+  const spaceRight = window.innerWidth - rect.right;
+  const spaceLeft = rect.left;
 
-  const style: Record<string, string> = {
-    left: `${Math.max(TOOLTIP_MARGIN, Math.min(rect.left, window.innerWidth - TOOLTIP_WIDTH - TOOLTIP_MARGIN))}px`,
-    width: `${TOOLTIP_WIDTH}px`,
-  };
-  if (placeBelow) {
-    style.top = `${rect.bottom + TOOLTIP_MARGIN}px`;
+  const style: Record<string, string> = { width: `${TOOLTIP_WIDTH}px` };
+
+  if (Math.max(spaceAbove, spaceBelow) >= TOOLTIP_MIN_VERTICAL_SPACE) {
+    // Normal case: stack the tooltip above or below the target, whichever
+    // side has more room.
+    style.left = `${Math.max(TOOLTIP_MARGIN, Math.min(rect.left, window.innerWidth - TOOLTIP_WIDTH - TOOLTIP_MARGIN))}px`;
+    if (spaceBelow > TOOLTIP_MIN_VERTICAL_SPACE || spaceBelow > spaceAbove) {
+      style.top = `${rect.bottom + TOOLTIP_MARGIN}px`;
+    } else {
+      style.bottom = `${window.innerHeight - rect.top + TOOLTIP_MARGIN}px`;
+    }
   } else {
-    style.bottom = `${window.innerHeight - rect.top + TOOLTIP_MARGIN}px`;
+    // The target spans most of the viewport height (e.g. a full-height
+    // sidebar panel), so there's too little room above or below to stack
+    // the tooltip without clipping it off-screen — place it beside the
+    // target instead.
+    if (spaceRight >= TOOLTIP_WIDTH + TOOLTIP_MARGIN * 2 || spaceRight > spaceLeft) {
+      style.left = `${rect.right + TOOLTIP_MARGIN}px`;
+    } else {
+      style.left = `${Math.max(TOOLTIP_MARGIN, rect.left - TOOLTIP_WIDTH - TOOLTIP_MARGIN)}px`;
+    }
+    style.top = `${TOOLTIP_MARGIN}px`;
   }
+
   tooltipStyle.value = style;
 }
 
