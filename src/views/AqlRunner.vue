@@ -37,30 +37,35 @@ const allTemplatePaths = ref<AqlPathEntry[]>([]);
 // Reference to AqlEditor component
 const editorRef = ref<InstanceType<typeof AqlEditor> | null>(null);
 
+// Load (or reload) all server-scoped query data for a given server, and drop
+// any stored-query selection/error left over from a previous server — this
+// must run both on initial mount and whenever the active connection changes,
+// otherwise a stale 404 (or other) error banner from a prior server/profile
+// survives a remount even though the stored-queries list itself refreshes.
+function loadForServer(serverId: string) {
+  // Load saved queries (local file read)
+  queryStore.loadSavedQueries(serverId).catch(console.error);
+
+  // Load stored queries (server-side STORED_QUERY definitions)
+  queryStore.loadStoredQueries(serverId);
+
+  // Load templates (network request for dropdown)
+  templateStore.fetchTemplates(serverId).catch(console.error);
+
+  queryStore.clearSelectedStoredQuery();
+}
+
 // Load data after component is mounted to avoid blocking render
 onMounted(() => {
   if (!serverStore.activeServerId) return;
-
-  // Load saved queries (local file read)
-  queryStore.loadSavedQueries(serverStore.activeServerId).catch(console.error);
-
-  // Load stored queries (server-side STORED_QUERY definitions)
-  queryStore.loadStoredQueries(serverStore.activeServerId);
-
-  // Load templates (network request for dropdown)
-  templateStore.fetchTemplates(serverStore.activeServerId).catch(console.error);
+  loadForServer(serverStore.activeServerId);
 });
 
 // Reload when server changes
 watch(
   () => serverStore.activeServerId,
   (serverId) => {
-    if (serverId) {
-      queryStore.loadSavedQueries(serverId).catch(console.error);
-      queryStore.loadStoredQueries(serverId);
-      templateStore.fetchTemplates(serverId).catch(console.error);
-      queryStore.clearSelectedStoredQuery();
-    }
+    if (serverId) loadForServer(serverId);
   },
 );
 
