@@ -6,6 +6,7 @@ import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "..
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -387,7 +388,7 @@ async function copyEhrJson() {
             title="Take a tour of the EHR Browser"
             @click="replayTour"
           >
-            🧭
+            <CompassIcon />
           </button>
           <button
             type="button"

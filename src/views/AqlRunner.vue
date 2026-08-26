@@ -6,6 +6,7 @@ import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import AqlEditor from "../components/AqlEditor.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
@@ -248,7 +249,7 @@ const editorStyle = computed(() => ({
                 title="Take a tour of the AQL Runner"
                 @click="replayTour"
               >
-                🧭
+                <CompassIcon />
               </button>
               <button
                 type="button"

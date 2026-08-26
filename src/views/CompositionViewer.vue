@@ -9,6 +9,7 @@ import { useTourStore } from "../stores/tour";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -288,7 +289,7 @@ onUnmounted(() => {
           title="Take a tour of the Composition Viewer"
           @click="replayTour"
         >
-          🧭
+          <CompassIcon />
         </button>
         <div class="tab-bar" data-tour="composition-tabs">
           <button

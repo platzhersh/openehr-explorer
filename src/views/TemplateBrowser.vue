@@ -11,6 +11,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -491,7 +492,7 @@ onUnmounted(() => {
           title="Take a tour of the Template Browser"
           @click="replayTour"
         >
-          🧭
+          <CompassIcon />
         </button>
       </div>
 

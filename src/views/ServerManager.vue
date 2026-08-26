@@ -4,6 +4,7 @@ import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
@@ -109,7 +110,7 @@ function credentialBackendLabel(backend: string): string {
           title="Take a tour of the Server Manager"
           @click="replayTour"
         >
-          🧭
+          <CompassIcon />
         </button>
         <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
           + Add Server
