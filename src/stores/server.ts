@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /** Public profile returned from the backend — secrets are NOT included. */
 export interface ServerProfile {
@@ -130,6 +131,61 @@ export const useServerStore = defineStore("server", () => {
     }
   }
 
+  // Every backend HTTP call goes through `send_instrumented`, which emits a
+  // `cdr-inspector-entry` event (url + status) regardless of which command
+  // triggered it — see src-tauri/src/inspector.rs. We piggyback on that same
+  // event to keep the sidebar connection indicator live: any successful
+  // response marks its server "connected", any 4xx marks it "error", without
+  // requiring every command to separately report connection health.
+  function updateConnectionFromRequest(url: string, status: number) {
+    // Avoid a `+`-quantified regex here (flagged by static analysis as
+    // superlinear-backtracking-prone) — a simple loop strips the same
+    // trailing slashes in linear time.
+    const stripTrailingSlash = (s: string) => {
+      let end = s.length;
+      while (end > 0 && s[end - 1] === "/") end--;
+      return s.slice(0, end);
+    };
+
+    // Match against the longest base_url prefix so two profiles that share a
+    // host (but differ by path) resolve to the more specific one.
+    let matched: ServerProfile | null = null;
+    let matchedBaseLength = -1;
+    for (const profile of profiles.value) {
+      const base = stripTrailingSlash(profile.base_url);
+      if (base && url.startsWith(base) && base.length > matchedBaseLength) {
+        matched = profile;
+        matchedBaseLength = base.length;
+      }
+    }
+    if (!matched) return;
+
+    if (status >= 400 && status < 500) {
+      connectionStatus.value[matched.id] = "error";
+    } else if (status < 400) {
+      connectionStatus.value[matched.id] = "connected";
+    }
+  }
+
+  let unlistenRequests: UnlistenFn | null = null;
+
+  async function startTrackingRequests() {
+    if (unlistenRequests) return;
+    unlistenRequests = await listen<{ url: string; status: number }>(
+      "cdr-inspector-entry",
+      (event) => {
+        updateConnectionFromRequest(event.payload.url, event.payload.status);
+      },
+    );
+  }
+
+  function stopTrackingRequests() {
+    if (unlistenRequests) {
+      unlistenRequests();
+      unlistenRequests = null;
+    }
+  }
+
   return {
     profiles,
     activeServerId,
@@ -144,5 +200,7 @@ export const useServerStore = defineStore("server", () => {
     setActiveServer,
     setDefaultProfile,
     fetchServerVersion,
+    startTrackingRequests,
+    stopTrackingRequests,
   };
 });
