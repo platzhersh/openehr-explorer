@@ -2,10 +2,13 @@
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const cardTestLoading = ref<Record<string, boolean>>({});
 const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
@@ -24,6 +27,11 @@ onMounted(async () => {
 function newProfile() {
   dialogProfile.value = null;
   dialogOpen.value = true;
+}
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "servers" });
+  tourStore.start("servers");
 }
 
 function editProfile(profile: ServerProfile) {
@@ -95,7 +103,19 @@ function credentialBackendLabel(backend: string): string {
   <div class="server-manager">
     <div class="view-header">
       <h2>Server Profiles</h2>
-      <button class="btn btn-primary" @click="newProfile">+ Add Server</button>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Server Manager"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
+        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
+          + Add Server
+        </button>
+      </div>
     </div>
 
     <div class="content-area">
@@ -189,6 +209,11 @@ function credentialBackendLabel(backend: string): string {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+}
+.view-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .view-header h2 {
   font-size: 20px;
