@@ -10,12 +10,15 @@ import {
 } from "../stores/inspector";
 import type { RequestLogEntry } from "../stores/inspector";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import JsonTreeNode from "./JsonTreeNode.vue";
+import CompassIcon from "./CompassIcon.vue";
 
 type DrawerState = "collapsed" | "half" | "expanded";
 
 const store = useInspectorStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const drawerState = ref<DrawerState>(
   (localStorage.getItem("inspector-drawer-state") as DrawerState) || "collapsed",
@@ -68,6 +71,16 @@ function toggleDrawer() {
   if (drawerState.value === "collapsed") drawerState.value = "half";
   else if (drawerState.value === "half") drawerState.value = "expanded";
   else drawerState.value = "collapsed";
+}
+
+// The inspector tour (see `src/lib/tours.ts`) is manual-only, not route-aware
+// — the panel is global, not tied to one screen. Its later steps target
+// content that only renders while the drawer is open, so make sure it's
+// expanded before handing off to the tour overlay.
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "inspector" });
+  if (drawerState.value === "collapsed") drawerState.value = "half";
+  tourStore.start("inspector");
 }
 
 function cycleUp() {
@@ -247,7 +260,7 @@ function doClear() {
 <template>
   <div class="inspector-drawer" :style="{ height: drawerHeight }">
     <!-- Header bar -->
-    <div class="inspector-header" @click="toggleDrawer">
+    <div class="inspector-header" data-tour="inspector-header" @click="toggleDrawer">
       <div class="header-left">
         <span class="drawer-icon">{{ drawerState === "collapsed" ? "\u25B2" : "\u25BC" }}</span>
         <span class="header-title">Request Inspector</span>
@@ -257,6 +270,14 @@ function doClear() {
         <span v-if="store.hasErrors && drawerState === 'collapsed'" class="error-dot" />
       </div>
       <div class="header-actions" @click.stop>
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Request Inspector"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
         <button v-if="store.entries.length > 0" class="btn btn-sm" @click="confirmClear">
           Clear
         </button>
@@ -273,7 +294,7 @@ function doClear() {
     <!-- Content (visible when not collapsed) -->
     <div v-if="drawerState !== 'collapsed'" class="inspector-content">
       <!-- Left: Log List -->
-      <div class="log-pane">
+      <div class="log-pane" data-tour="inspector-log-list">
         <div class="log-filters">
           <input
             v-model="store.filterText"
@@ -310,7 +331,7 @@ function doClear() {
       <div class="detail-pane">
         <template v-if="selected">
           <!-- Tabs: Request / Response -->
-          <div class="detail-tabs">
+          <div class="detail-tabs" data-tour="inspector-detail-tabs">
             <button
               :class="['tab-btn', { active: detailTab === 'request' }]"
               @click="detailTab = 'request'"

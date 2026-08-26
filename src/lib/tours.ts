@@ -26,8 +26,19 @@ export interface TourStep {
 
 export interface Tour {
   id: string;
-  /** Route names (from `src/main.ts`) that this tour applies to. */
+  /** Route names (from `src/main.ts`) that this tour applies to. Empty for a `global` tour. */
   routeNames: string[];
+  /**
+   * True for a tour whose subject isn't a single route — e.g. the Request
+   * Inspector, a drawer mounted globally in `App.vue` and visible on every
+   * screen. A global tour has no entry in `TOUR_ID_BY_ROUTE` and never
+   * auto-starts via `App.vue`'s route watcher; it's offered only through its
+   * own manual "Take a tour" trigger (see `RequestInspector.vue`). Route-aware
+   * auto-start would otherwise race whichever route's tour is already
+   * showing right as the first request lands, silently dropping the intro
+   * for anyone who happened to lose that race.
+   */
+  global?: boolean;
   /** Short label shown on the manual "Take a tour" trigger and in Settings. */
   label: string;
   steps: TourStep[];
@@ -53,6 +64,11 @@ export const TOURS: Tour[] = [
         target: '[data-tour="ehr-create"]',
         title: "Create an EHR",
         body: "Spin up a brand-new EHR record on the active server without leaving this screen.",
+      },
+      {
+        target: '[data-tour="ehr-directory-tab"]',
+        title: "Browse the DIRECTORY",
+        body: "Switch to the Directory tab to explore the EHR_STATUS DIRECTORY — a versioned folder hierarchy linking compositions into a navigable structure, where the server has one set.",
       },
     ],
   },
@@ -120,6 +136,11 @@ export const TOURS: Tour[] = [
         title: "Save queries for later",
         body: "Save the current query by name, then reload it from this panel any time.",
       },
+      {
+        target: '[data-tour="aql-stored-queries"]',
+        title: "Execute stored queries",
+        body: "Server-defined STORED_QUERY definitions show up here — pick one to see its AQL, fill in its parameters, and run it without leaving the editor.",
+      },
     ],
   },
   {
@@ -131,6 +152,41 @@ export const TOURS: Tour[] = [
         target: '[data-tour="server-add"]',
         title: "Connect a CDR",
         body: "Add a server profile for EHRBase, Better Platform, FerroEHR, or any generic openEHR REST server.",
+      },
+    ],
+  },
+  {
+    id: "contribution",
+    routeNames: ["contribution"],
+    label: "Contribution Viewer",
+    steps: [
+      {
+        target: '[data-tour="contribution-header"]',
+        title: "See exactly what changed",
+        body: "Every write to the EHR — creating or updating a composition — is wrapped in a CONTRIBUTION with a full audit trail: who changed it, when, and why. Open any version listed below directly in the Composition Viewer.",
+      },
+    ],
+  },
+  {
+    id: "inspector",
+    routeNames: [],
+    global: true,
+    label: "Request Inspector",
+    steps: [
+      {
+        target: '[data-tour="inspector-header"]',
+        title: "Every request, right here",
+        body: "The Request Inspector logs every HTTP call the app makes to the connected CDR — including the AQL queries you run. It's always available at the bottom of the window; toggle it with Ctrl/Cmd+Shift+I.",
+      },
+      {
+        target: '[data-tour="inspector-log-list"]',
+        title: "Pick any request",
+        body: "Select an entry to inspect its full request and response — headers, body, status, and timing.",
+      },
+      {
+        target: '[data-tour="inspector-detail-tabs"]',
+        title: "Request vs. Response",
+        body: "Switch tabs to see exactly what was sent versus what came back. Use Copy as curl on the Request tab to replay it outside the app.",
       },
     ],
   },

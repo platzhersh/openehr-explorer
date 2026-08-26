@@ -4,12 +4,20 @@ import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useContributionStore } from "../stores/contribution";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const contributionStore = useContributionStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "contribution" });
+  tourStore.start("contribution");
+}
 
 const ehrId = computed(() => route.params.ehrId as string);
 const contributionUid = computed(() => route.params.contributionUid as string);
@@ -57,7 +65,15 @@ function openVersion(versionId: string) {
   <div class="contribution-viewer">
     <div class="viewer-header">
       <button type="button" class="btn btn-sm" @click="goBack">Back</button>
-      <h2>Contribution</h2>
+      <h2 data-tour="contribution-header">Contribution</h2>
+      <button
+        type="button"
+        class="tour-trigger-btn"
+        title="Take a tour of the Contribution Viewer"
+        @click="replayTour"
+      >
+        <CompassIcon />
+      </button>
     </div>
 
     <div v-if="contributionStore.loading" class="loading">Loading contribution...</div>
@@ -149,6 +165,9 @@ function openVersion(versionId: string) {
 .viewer-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+.viewer-header .tour-trigger-btn {
+  margin-left: auto;
 }
 
 .viewer-content {

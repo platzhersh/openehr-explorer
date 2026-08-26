@@ -7,10 +7,19 @@ describe("tours", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("every tour has at least one step and one route name", () => {
+  it("every tour has at least one step", () => {
     for (const tour of TOURS) {
       expect(tour.steps.length).toBeGreaterThan(0);
-      expect(tour.routeNames.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("every non-global tour has at least one route name; global tours have none", () => {
+    for (const tour of TOURS) {
+      if (tour.global) {
+        expect(tour.routeNames.length).toBe(0);
+      } else {
+        expect(tour.routeNames.length).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -46,5 +55,12 @@ describe("tours", () => {
     expect(getTourForRoute("settings")).toBeUndefined();
     expect(getTourForRoute(undefined)).toBeUndefined();
     expect(getTourForRoute(null)).toBeUndefined();
+  });
+
+  it("a global tour is resolvable by id but not offered via any route", () => {
+    const inspector = getTourById("inspector");
+    expect(inspector?.global).toBe(true);
+    expect(inspector?.routeNames).toEqual([]);
+    expect(getTourForRoute("inspector")).toBeUndefined();
   });
 });
