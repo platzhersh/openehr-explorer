@@ -11,7 +11,7 @@
   <a href="https://platzhersh.github.io/openehr-explorer/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation"></a>
 </p>
 
-A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, etc.).
+A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, etc.) — a Postman alternative built specifically for openEHR.
 
 Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 
