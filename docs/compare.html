@@ -678,7 +678,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span><br><span class="note">docker compose up</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Account required</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br><span class="note">Registration-gated download</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Direct download, no registration</span></div>
     </div>
 
     <div class="feature-row">
@@ -924,7 +924,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br><span class="note">Apache 2.0</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Freemium</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Proprietary</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br><span class="note">Closed-source, registration-gated</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br><span class="note">Closed-source &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -981,7 +981,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br><span class="note">Not seen in hands-on test &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -990,7 +990,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br><span class="note">Not seen in hands-on test &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -999,7 +999,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Confirmed in-app, per-version granularity</span></div>
     </div>
 
     <div class="feature-row">
@@ -1032,7 +1032,7 @@
           <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="ehr-ctrl">
-          <span class="score-num">22</span>
+          <span class="score-num">20.5</span>
           <span class="score-denom">of 37</span>
         </div>
       </div>
@@ -1066,7 +1066,8 @@
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
       <p>&sup3; DIRECTORY and CONTRIBUTION support are both partial. DIRECTORY has a read-only browsing tree in the EHR detail panel; creating, updating, or deleting a DIRECTORY isn't supported by the app yet (the Request Inspector only shows HTTP traffic &mdash; it doesn't send requests), so that still requires an external REST client. CONTRIBUTION can be viewed by UID &mdash; entered directly, or reached from a composition's Versions tab &mdash; but the openEHR REST API has no endpoint to list all contributions for an EHR, so there's no browsable list.</p>
-      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client &mdash; scored from its public marketing site (home + features pages) only, not hands-on testing. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable, multi-server profiles, AQL path autocomplete) are unconfirmed absences rather than verified ones; scores will be revisited once we get hands-on access to the app.</p>
+      <p>&sup4; Hands-on verified (Aug 26, 2026 install/test pass) against the ehr-ctrl app itself, superseding the marketing-site-only assumptions below for these rows: STORED_QUERY and EHR_STATUS are confirmed in-app; DIRECTORY and CONTRIBUTION were not visible in the sidebar sections reached during testing (the sidebar could scroll further than was captured, so this is "not confirmed present" rather than "confirmed absent" &mdash; scored as unevaluated pending a closer look). Distribution is no longer registration-gated: direct download links were added to ehr-ctrl.info/downloads on Aug 20, 2026; the app remains closed-source (no public repository found).</p>
+      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client (ClaroTech, v1.3.1) &mdash; most rows scored from its public marketing site (home + features pages) only, not hands-on testing; see &sup4; for the rows that have since been hands-on verified. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable, multi-server profiles, AQL path autocomplete) remain unconfirmed absences rather than verified ones.</p>
       <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.6.0.</p>
     </div>
 
