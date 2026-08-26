@@ -6,6 +6,7 @@ import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "..
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import DirectoryTree from "../components/DirectoryTree.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
@@ -32,7 +33,7 @@ const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
-const activeTab = ref<"detail" | "json" | "contributions">("detail");
+const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
 const showHelpPopover = ref(false);
@@ -51,22 +52,30 @@ watch(
       ehrStore.fetchEhrs(id, 0);
       currentPage.value = 0;
     }
+
+    // The route's :ehrId doesn't change on a server switch, so without this
+    // the DIRECTORY tab would keep showing data fetched from the
+    // now-abandoned server for whatever EHR ID happens to still be selected.
+    ehrStore.clearDirectory();
+    if (activeTab.value === "directory" && ehrId.value && id) {
+      ehrStore.fetchDirectory(id, ehrId.value);
+    }
   },
   { immediate: true },
 );
 
 watch(ehrId, (id) => {
   if (id && serverStore.activeServerId) {
-    // If we have search results and the selected EHR is in them, pre-populate from search data
-    if (ehrStore.searchActive) {
-      const searchResult = ehrStore.searchResults.find((r) => r.ehr_id === id);
-      if (searchResult) {
-        // Still fetch full detail for compositions, but we have metadata already
-        ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
-        return;
-      }
-    }
+    // If we have search results and the selected EHR is in them, pre-populate from search data.
+    // Either way we still fetch full detail for compositions.
     ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
+  }
+
+  // The DIRECTORY tab's data is EHR-scoped — reset it whenever the selected
+  // EHR changes, and re-fetch for the new EHR if that tab is currently open.
+  ehrStore.clearDirectory();
+  if (activeTab.value === "directory" && id && serverStore.activeServerId) {
+    ehrStore.fetchDirectory(serverStore.activeServerId, id);
   }
 });
 
@@ -268,6 +277,31 @@ function openComposition(comp: CompositionSummary) {
   }
 }
 
+function selectDirectoryTab() {
+  activeTab.value = "directory";
+  // `directoryLoaded` (not `!!directory`) is what guards re-fetching: a
+  // legitimate empty result ("no directory set") is a successful, stable
+  // outcome that shouldn't be re-requested on every reselect, but a prior
+  // failure leaves `directoryLoaded` false so the next reselect retries.
+  if (
+    ehrId.value &&
+    serverStore.activeServerId &&
+    !ehrStore.directoryLoaded &&
+    !ehrStore.directoryLoading
+  ) {
+    ehrStore.fetchDirectory(serverStore.activeServerId, ehrId.value);
+  }
+}
+
+function openCompositionRef(objectRef: { id?: { value?: string } }) {
+  if (ehrId.value && objectRef.id?.value) {
+    router.push({
+      name: "composition",
+      params: { ehrId: ehrId.value, compositionUid: objectRef.id.value },
+    });
+  }
+}
+
 function prevPage() {
   if (currentPage.value > 0 && serverStore.activeServerId) {
     currentPage.value--;
@@ -418,7 +452,7 @@ function lookupContribution() {
           >
             + New EHR
           </button>
-          <button class="btn btn-sm" @click="refresh">Refresh</button>
+          <button type="button" class="btn btn-sm" @click="refresh">Refresh</button>
         </div>
       </div>
 
@@ -437,10 +471,17 @@ function lookupContribution() {
             @focus="showHistory = searchHistory.length > 0 && !searchQuery"
             @blur="hideHistoryDelayed"
           />
-          <button v-if="searchQuery" class="clear-btn" @click="clearSearch" title="Clear search">
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="clear-btn"
+            @click="clearSearch"
+            title="Clear search"
+          >
             &times;
           </button>
           <button
+            type="button"
             class="help-btn"
             data-tour="ehr-search-help"
             @click="showHelpPopover = !showHelpPopover"
@@ -464,7 +505,9 @@ function lookupContribution() {
         <div v-if="showHelpPopover" class="help-popover">
           <div class="help-popover-header">
             <strong>Search Syntax</strong>
-            <button class="close-btn" @click="showHelpPopover = false">&times;</button>
+            <button type="button" class="close-btn" @click="showHelpPopover = false">
+              &times;
+            </button>
           </div>
           <table class="help-table">
             <tbody>
@@ -556,6 +599,7 @@ function lookupContribution() {
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
               <button
+                type="button"
                 class="copy-btn"
                 @click.stop="copyToClipboard(ehr.ehr_id)"
                 title="Copy full ID"
@@ -587,6 +631,7 @@ function lookupContribution() {
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
               <button
+                type="button"
                 class="copy-btn"
                 @click.stop="copyToClipboard(ehr.ehr_id)"
                 title="Copy full ID"
@@ -602,11 +647,11 @@ function lookupContribution() {
         </div>
 
         <div class="pagination">
-          <button class="btn btn-sm" :disabled="currentPage === 0" @click="prevPage">
+          <button type="button" class="btn btn-sm" :disabled="currentPage === 0" @click="prevPage">
             Previous
           </button>
           <span class="page-info">Page {{ currentPage + 1 }}</span>
-          <button class="btn btn-sm" @click="nextPage">Next</button>
+          <button type="button" class="btn btn-sm" @click="nextPage">Next</button>
         </div>
       </div>
     </div>
@@ -619,6 +664,7 @@ function lookupContribution() {
           <div class="header-actions">
             <div class="tab-bar">
               <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'detail' }"
                 @click="activeTab = 'detail'"
@@ -626,6 +672,15 @@ function lookupContribution() {
                 Detail
               </button>
               <button
+                type="button"
+                class="tab"
+                :class="{ active: activeTab === 'directory' }"
+                @click="selectDirectoryTab"
+              >
+                Directory
+              </button>
+              <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'json' }"
                 @click="activeTab = 'json'"
@@ -641,10 +696,17 @@ function lookupContribution() {
                 Contributions
               </button>
             </div>
-            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">
+            <button
+              type="button"
+              class="btn btn-sm"
+              v-if="activeTab === 'json'"
+              @click="copyEhrJson"
+            >
               Copy JSON
             </button>
-            <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
+            <button type="button" class="btn btn-sm btn-danger" @click="openDeleteDialog">
+              Delete EHR
+            </button>
           </div>
         </div>
 
@@ -653,7 +715,11 @@ function lookupContribution() {
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
               {{ ehrStore.selectedEhr.ehr_id }}
-              <button class="copy-btn" @click="copyToClipboard(ehrStore.selectedEhr!.ehr_id)">
+              <button
+                type="button"
+                class="copy-btn"
+                @click="copyToClipboard(ehrStore.selectedEhr!.ehr_id)"
+              >
                 Copy
               </button>
             </span>
@@ -687,6 +753,27 @@ function lookupContribution() {
         <!-- JSON View -->
         <div v-if="activeTab === 'json'" class="json-view">
           <pre class="json-pre">{{ ehrJson }}</pre>
+        </div>
+
+        <!-- Directory View (OEH-27) -->
+        <div v-if="activeTab === 'directory'" class="directory-view">
+          <div v-if="ehrStore.directoryLoading" class="loading">
+            <span class="spinner"></span> Loading directory...
+          </div>
+          <div v-else-if="ehrStore.directoryError" class="empty-state">
+            <h3>Failed to load directory</h3>
+            <p class="error-detail">{{ ehrStore.directoryError }}</p>
+          </div>
+          <DirectoryTree
+            v-else-if="ehrStore.directory"
+            :folder="ehrStore.directory"
+            :depth="0"
+            @open-item="openCompositionRef"
+          />
+          <div v-else class="empty-state">
+            <h3>No directory set</h3>
+            <p>This EHR doesn't have a DIRECTORY folder structure.</p>
+          </div>
         </div>
 
         <!-- Contributions View (OEH-28) -->
@@ -793,10 +880,16 @@ function lookupContribution() {
           </div>
         </div>
         <div class="dialog-actions">
-          <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showDeleteDialog = false"
+            :disabled="deleting"
+          >
             Cancel
           </button>
           <button
+            type="button"
             class="btn btn-sm btn-danger"
             @click="handleDeleteEhr"
             :disabled="!canDelete || deleting"
@@ -878,7 +971,8 @@ function lookupContribution() {
   color: #fff;
 }
 
-.json-view {
+.json-view,
+.directory-view {
   margin-top: 16px;
   overflow: auto;
 }

@@ -124,6 +124,8 @@ pub fn run() {
             ehr::update_ehr_status,
             ehr::delete_ehr,
             ehr::search_ehrs,
+            ehr::get_directory,
+            ehr::get_directory_version,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,
@@ -146,6 +148,10 @@ pub fn run() {
             query::list_saved_queries,
             query::save_query,
             query::delete_saved_query,
+            // STORED_QUERY
+            query::list_stored_queries,
+            query::get_stored_query_definition,
+            query::execute_stored_query,
             // Settings
             settings::get_config_dir,
             settings::get_settings,

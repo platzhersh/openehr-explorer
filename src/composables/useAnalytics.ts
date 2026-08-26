@@ -73,6 +73,8 @@ export type AnalyticsEvent =
   | "aql_query_loaded"
   | "aql_query_deleted"
   | "aql_results_exported"
+  | "aql_stored_query_viewed"
+  | "aql_stored_query_executed"
   // --- template ---
   | "template_inspected"
   | "template_uploaded"

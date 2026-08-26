@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request, ServerType};
-use crate::inspector::send_instrumented;
+use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
+use crate::inspector::{send_instrumented, InstrumentedResponse};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EhrSummary {
@@ -514,6 +514,113 @@ pub async fn delete_ehr(
     Ok(format!("EHR {} deleted successfully", ehr_id))
 }
 
+// --- DIRECTORY (OEH-27) ---
+
+/// Builds the URL for the openEHR `DIRECTORY` resource.
+///
+/// - `version_uid: None` → the latest version: `GET /ehr/{ehr_id}/directory`
+///   (optionally combined with a `version_at_time` query param).
+/// - `version_uid: Some(uid)` → a specific historical version:
+///   `GET /ehr/{ehr_id}/directory/{version_uid}`.
+fn build_directory_url(
+    base: &str,
+    ehr_id: &str,
+    version_uid: Option<&str>,
+    version_at_time: Option<&str>,
+) -> String {
+    let path = match version_uid {
+        Some(uid) => format!("{}/rest/openehr/v1/ehr/{}/directory/{}", base, ehr_id, uid),
+        None => format!("{}/rest/openehr/v1/ehr/{}/directory", base, ehr_id),
+    };
+
+    match version_at_time {
+        Some(time) => match reqwest::Url::parse(&path) {
+            Ok(mut url) => {
+                url.query_pairs_mut().append_pair("version_at_time", time);
+                url.to_string()
+            }
+            // Malformed base URL — fall back to the un-parameterized path;
+            // the request will fail downstream with a clearer connection error.
+            Err(_) => path,
+        },
+        None => path,
+    }
+}
+
+/// Formats a non-2xx response as the `Err(String)` surfaced to the frontend.
+fn http_error(resp: &InstrumentedResponse) -> String {
+    format!("Server returned HTTP {}: {}", resp.status, resp.body)
+}
+
+/// Shared GET + response handling for both DIRECTORY commands below (they
+/// differ only in how `url` is built) — sends the request, treats a 404 as
+/// "no directory" (`Ok(None)`, since that's an expected, common state rather
+/// than a failure), and parses the body into JSON on any other success.
+///
+/// The DIRECTORY's FOLDER/OBJECT_REF nesting is arbitrary-depth and
+/// data-driven, so — like `composition::get_composition` — the response is
+/// passed through as raw JSON rather than modeled with a Rust struct.
+async fn fetch_directory(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    auth: &AuthMethod,
+) -> Result<Option<Value>, String> {
+    let resp = send_instrumented(
+        app,
+        client,
+        make_request(client, reqwest::Method::GET, url, auth).header("Accept", "application/json"),
+    )
+    .await?;
+
+    if resp.status == 404 {
+        return Ok(None);
+    }
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    serde_json::from_str(&resp.body)
+        .map(Some)
+        .map_err(|e| format!("Failed to parse directory: {}", e))
+}
+
+/// Fetches the latest (or, if `version_at_time` is given, the version in
+/// effect at that instant) DIRECTORY folder hierarchy for an EHR.
+#[tauri::command]
+pub async fn get_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_at_time: Option<String>,
+) -> Result<Option<Value>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = build_directory_url(base, &ehr_id, None, version_at_time.as_deref());
+    fetch_directory(&app, &client, &url, &profile.auth_method).await
+}
+
+/// Fetches a specific historical version of the DIRECTORY, identified by its
+/// version UID (as returned in the `ETag`/`Location` of a prior DIRECTORY
+/// write, or from `get_directory`'s response `uid`).
+#[tauri::command]
+pub async fn get_directory_version(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_uid: String,
+) -> Result<Option<Value>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = build_directory_url(base, &ehr_id, Some(&version_uid), None);
+    fetch_directory(&app, &client, &url, &profile.auth_method).await
+}
+
 // --- AQL-backed EHR search (PRD-0013) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -913,6 +1020,43 @@ mod tests {
         // Date filters are not supported, so we get that error instead of validation error
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_build_directory_url_latest() {
+        let url = build_directory_url("https://cdr.example.com", "ehr-123", None, None);
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory"
+        );
+    }
+
+    #[test]
+    fn test_build_directory_url_specific_version() {
+        let url = build_directory_url(
+            "https://cdr.example.com",
+            "ehr-123",
+            Some("uid::system::1"),
+            None,
+        );
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory/uid::system::1"
+        );
+    }
+
+    #[test]
+    fn test_build_directory_url_at_time() {
+        let url = build_directory_url(
+            "https://cdr.example.com",
+            "ehr-123",
+            None,
+            Some("2026-08-25T12:00:00Z"),
+        );
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory?version_at_time=2026-08-25T12%3A00%3A00Z"
+        );
     }
 
     #[test]
