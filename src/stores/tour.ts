@@ -66,13 +66,22 @@ export const useTourStore = defineStore("tour", () => {
   }
 
   async function finish() {
-    if (activeTourId.value) await markCompleted(activeTourId.value);
-    close();
+    try {
+      if (activeTourId.value) await markCompleted(activeTourId.value);
+    } finally {
+      // Always close, even if persisting completion failed — otherwise a
+      // save error (e.g. disk write failure) leaves the overlay stuck open
+      // with its dismiss controls just retrying the same failing save.
+      close();
+    }
   }
 
   async function skipTour() {
-    if (activeTourId.value) await markCompleted(activeTourId.value);
-    close();
+    try {
+      if (activeTourId.value) await markCompleted(activeTourId.value);
+    } finally {
+      close();
+    }
   }
 
   function close() {

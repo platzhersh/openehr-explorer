@@ -118,7 +118,7 @@ Tour step targets use a dedicated `data-tour="…"` attribute rather than reusin
 
 ## Non-Goals
 - No tours for the composition create/edit form (`CompositionForm.vue`) or the Global Settings page itself in this iteration — candidates for a future pass once the pattern proves out.
-- No telemetry on tour engagement (start/skip/finish rates) in this iteration — could be added later as opt-in analytics events if useful.
+- ~~No telemetry on tour engagement in this iteration~~ — added: `tour_completed`, `tour_skipped`, `tour_replayed`, `whats_new_shown`, `whats_new_tour_link_clicked`, `tours_reset` (all consent-gated per ADR-0018, see `src/composables/useAnalytics.ts`).
 - No remote/CDN-fetched changelog — `WHATS_NEW` ships with the app binary and is updated alongside the code that introduces each feature.
 
 ## Acceptance Criteria

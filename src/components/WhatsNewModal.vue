@@ -5,7 +5,7 @@
  *
  * Styling mirrors `AnalyticsConsentDialog.vue` for visual consistency.
  */
-import { useRouter } from "vue-router";
+import { isNavigationFailure, NavigationFailureType, useRouter } from "vue-router";
 import { useWhatsNewStore } from "../stores/whatsNew";
 import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
@@ -23,10 +23,20 @@ function close() {
   void whatsNewStore.dismiss(props.currentVersion);
 }
 
-function takeTour(tourId: string, routePath?: string) {
+async function takeTour(tourId: string, routePath?: string) {
   void analytics.track("whats_new_tour_link_clicked", { tour_id: tourId });
   close();
-  if (routePath) router.push(routePath);
+  if (routePath) {
+    // router.push() resolves (doesn't reject) with a NavigationFailure on
+    // failure — only bail on a genuine abort/cancel. A "duplicated" result
+    // (already on that route) is fine; the tour should still start.
+    const failure = await router.push(routePath);
+    if (
+      isNavigationFailure(failure, NavigationFailureType.aborted | NavigationFailureType.cancelled)
+    ) {
+      return;
+    }
+  }
   tourStore.start(tourId);
 }
 </script>
