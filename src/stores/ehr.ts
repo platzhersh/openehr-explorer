@@ -78,6 +78,12 @@ export const useEhrStore = defineStore("ehr", () => {
   const directory = ref<Record<string, unknown> | null>(null);
   const directoryLoading = ref(false);
   const directoryError = ref<string | null>(null);
+  // True once a fetch has *succeeded* (populated or legitimately empty) for
+  // the current EHR/server — distinct from `!!directory`, since "no
+  // directory set" is itself a successful, stable result that shouldn't
+  // trigger a re-fetch on every later tab reselect. Left false after a
+  // failure so the next reselect retries instead of silently no-op'ing.
+  const directoryLoaded = ref(false);
 
   // Search state (PRD-0013)
   const searchResults = ref<EhrSearchResult[]>([]);
@@ -229,10 +235,12 @@ export const useEhrStore = defineStore("ehr", () => {
       });
       if (requestId !== directoryRequestId) return; // superseded by a newer request
       directory.value = result;
+      directoryLoaded.value = true;
     } catch (e) {
       if (requestId !== directoryRequestId) return;
       directory.value = null;
       directoryError.value = String(e);
+      // directoryLoaded stays false — a later tab reselect should retry.
     } finally {
       if (requestId === directoryRequestId) directoryLoading.value = false;
     }
@@ -243,6 +251,7 @@ export const useEhrStore = defineStore("ehr", () => {
     directory.value = null;
     directoryError.value = null;
     directoryLoading.value = false;
+    directoryLoaded.value = false;
   }
 
   function clearSearch() {
@@ -263,6 +272,7 @@ export const useEhrStore = defineStore("ehr", () => {
     directory,
     directoryLoading,
     directoryError,
+    directoryLoaded,
     searchResults,
     searchActive,
     searchLoading,

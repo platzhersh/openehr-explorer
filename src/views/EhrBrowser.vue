@@ -42,6 +42,14 @@ watch(
       ehrStore.fetchEhrs(id, 0);
       currentPage.value = 0;
     }
+
+    // The route's :ehrId doesn't change on a server switch, so without this
+    // the DIRECTORY tab would keep showing data fetched from the
+    // now-abandoned server for whatever EHR ID happens to still be selected.
+    ehrStore.clearDirectory();
+    if (activeTab.value === "directory" && ehrId.value && id) {
+      ehrStore.fetchDirectory(id, ehrId.value);
+    }
   },
   { immediate: true },
 );
@@ -261,14 +269,14 @@ function openComposition(comp: CompositionSummary) {
 
 function selectDirectoryTab() {
   activeTab.value = "directory";
-  // No `!ehrStore.directoryError` guard here — a prior failure (transient
-  // network/server error) shouldn't permanently block re-fetching on every
-  // later tab reselect, only while a fetch is already in flight or has
-  // already succeeded (including a legitimate empty result).
+  // `directoryLoaded` (not `!!directory`) is what guards re-fetching: a
+  // legitimate empty result ("no directory set") is a successful, stable
+  // outcome that shouldn't be re-requested on every reselect, but a prior
+  // failure leaves `directoryLoaded` false so the next reselect retries.
   if (
     ehrId.value &&
     serverStore.activeServerId &&
-    !ehrStore.directory &&
+    !ehrStore.directoryLoaded &&
     !ehrStore.directoryLoading
   ) {
     ehrStore.fetchDirectory(serverStore.activeServerId, ehrId.value);
