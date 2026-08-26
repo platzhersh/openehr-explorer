@@ -33,7 +33,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       {
         title: "Feature tours",
         description:
-          "Every major screen now has a short, skippable walkthrough of its key features. Look for the compass icon (🧭) in a view's header to replay one any time.",
+          "Every major screen now has a short, skippable walkthrough of its key features. Look for the compass icon in a view's header to replay one any time.",
       },
       {
         title: "What's New",

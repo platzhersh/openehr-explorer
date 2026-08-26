@@ -11,7 +11,7 @@ Depends on: none (new subsystem, touches every top-level view)
 
 Add a granular, per-screen product tour and a lightweight "What's New" panel so first-time users and returning users after an update can discover features without reading external docs.
 
-Each major view (EHR Browser, Composition Viewer, Template Browser, AQL Runner, Server Manager) gets its own short, skippable walkthrough that auto-starts the first time a user visits that route, and can be replayed at any time via a compass icon (🧭) in the view's header. Separately, a "What's New" modal summarizes what changed after an app update, shown once per version bump, reopenable from Settings.
+Each major view (EHR Browser, Composition Viewer, Template Browser, AQL Runner, Server Manager) gets its own short, skippable walkthrough that auto-starts the first time a user visits that route, and can be replayed at any time via a compass icon in the view's header. Separately, a "What's New" modal summarizes what changed after an app update, shown once per version bump, reopenable from Settings.
 
 ## Problem Statement
 
@@ -70,7 +70,7 @@ A step whose target element never appears in the DOM (e.g. an empty state, a col
 ### 2. Manual Tour Trigger
 **Priority: P0 (Must Have)**
 
-Each of the five tour-enabled views has a small circular compass icon (🧭) button in its header, titled "Take a tour of the ___". Clicking it always starts that view's tour immediately, ignoring the completed/skipped state — a deliberate replay should always work.
+Each of the five tour-enabled views has a small circular compass icon button in its header, titled "Take a tour of the ___". Clicking it always starts that view's tour immediately, ignoring the completed/skipped state — a deliberate replay should always work.
 
 ### 3. "What's New" Modal
 **Priority: P0 (Must Have)**
@@ -124,7 +124,7 @@ Tour step targets use a dedicated `data-tour="…"` attribute rather than reusin
 ## Acceptance Criteria
 - [x] Visiting `/ehrs`, `/templates`, `/aql`, `/servers`, or a composition for the first time auto-starts that route's tour.
 - [x] Completing or skipping a tour persists to `completed_tours` and it never auto-starts again.
-- [x] The 🧭 button in each view's header always restarts that view's tour, regardless of completion state.
+- [x] The compass-icon button in each view's header always restarts that view's tour, regardless of completion state.
 - [x] A step whose target is missing from the DOM is skipped rather than freezing the tour.
 - [x] `tours_enabled = false` disables both auto-start tours and the automatic What's New modal; manual triggers still work.
 - [x] A fresh install shows no What's New modal but records a baseline version.

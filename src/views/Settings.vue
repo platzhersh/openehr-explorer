@@ -174,7 +174,8 @@ function viewWhatsNew() {
           <p class="form-help">
             When enabled, each screen's tour is offered the first time you visit it, and a summary
             appears after an update that changed something worth knowing about. You can always
-            replay a tour manually via the 🧭 icon in a screen's header, regardless of this setting.
+            replay a tour manually via the compass icon in a screen's header, regardless of this
+            setting.
           </p>
         </div>
 
