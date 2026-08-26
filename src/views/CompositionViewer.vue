@@ -5,15 +5,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const compositionStore = useCompositionStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const ehrId = computed(() => route.params.ehrId as string);
 const compositionUid = computed(() => route.params.compositionUid as string);
@@ -201,6 +204,11 @@ function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "composition" });
+  tourStore.start("composition");
+}
+
 async function copyJson() {
   const json =
     activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
@@ -348,7 +356,15 @@ onUnmounted(() => {
       <button class="btn btn-sm" @click="goBack">Back</button>
       <h2>Composition</h2>
       <div class="header-actions">
-        <div class="tab-bar">
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Composition Viewer"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
+        <div class="tab-bar" data-tour="composition-tabs">
           <button
             class="tab"
             :class="{ active: activeTab === 'pretty' }"
@@ -376,10 +392,17 @@ onUnmounted(() => {
             Versions
           </button>
         </div>
-        <button class="btn btn-sm" @click="showFlatPaths = !showFlatPaths">
+        <button
+          type="button"
+          class="btn btn-sm"
+          data-tour="composition-paths"
+          @click="showFlatPaths = !showFlatPaths"
+        >
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
         </button>
-        <button class="btn btn-sm" @click="copyJson">Copy JSON</button>
+        <button type="button" class="btn btn-sm" data-tour="composition-copy" @click="copyJson">
+          Copy JSON
+        </button>
         <button class="btn btn-sm" @click="handleEdit">Edit</button>
         <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
       </div>

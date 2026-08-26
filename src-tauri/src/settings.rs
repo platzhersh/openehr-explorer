@@ -26,6 +26,28 @@ pub struct GlobalSettings {
     /// an `Option<bool>`.
     #[serde(default)]
     pub analytics_consent_asked: bool,
+    /// Master toggle for the route-aware feature tour and "What's New"
+    /// system (see PRD-0018). When `false`, tours never auto-start and the
+    /// What's New modal never appears on version upgrades — the user can
+    /// still trigger either manually. Defaults to `true`.
+    #[serde(default = "default_tours_enabled")]
+    pub tours_enabled: bool,
+    /// IDs of feature tours the user has completed or explicitly skipped.
+    /// A tour whose ID appears here never auto-starts again, though it can
+    /// still be replayed manually from Settings.
+    #[serde(default)]
+    pub completed_tours: Vec<String>,
+    /// App version the user last saw the "What's New" summary for. `None`
+    /// means either a fresh install or an upgrade from a version predating
+    /// this field — both are treated as "nothing to announce yet" so we
+    /// don't dump the full changelog on a brand-new user; the frontend just
+    /// records the current version as the baseline.
+    #[serde(default)]
+    pub last_seen_version: Option<String>,
+}
+
+fn default_tours_enabled() -> bool {
+    true
 }
 
 fn default_version() -> u32 {
@@ -44,6 +66,9 @@ impl Default for GlobalSettings {
             check_updates_on_startup: true,
             analytics_enabled: false,
             analytics_consent_asked: false,
+            tours_enabled: true,
+            completed_tours: Vec::new(),
+            last_seen_version: None,
         }
     }
 }
