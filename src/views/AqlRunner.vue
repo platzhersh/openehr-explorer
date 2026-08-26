@@ -261,7 +261,7 @@ const editorStyle = computed(() => ({
       <!-- Left: Saved queries -->
       <div class="saved-panel">
         <div class="panel-header">
-          <h3>Saved Queries</h3>
+          <h3>Saved Queries <span class="panel-header-qualifier">(local)</span></h3>
         </div>
         <div class="saved-list">
           <div
@@ -279,7 +279,7 @@ const editorStyle = computed(() => ({
         </div>
 
         <div class="panel-header">
-          <h3>Stored Queries</h3>
+          <h3>Stored Queries <span class="panel-header-qualifier">(server)</span></h3>
         </div>
         <div class="saved-list">
           <div v-if="queryStore.storedQueriesLoading" class="empty-state">
@@ -513,6 +513,11 @@ const editorStyle = computed(() => ({
 .panel-header h3 {
   font-size: 13px;
   font-weight: 600;
+}
+.panel-header-qualifier {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 .saved-list {
