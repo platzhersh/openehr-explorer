@@ -124,6 +124,7 @@ function compositionLabel(uid: string): string {
           type="text"
           class="item-id-input mono"
           placeholder="Composition UID"
+          aria-label="Composition UID"
           :title="compositionLabel(item.id)"
           @input="handleRenameItem(item.key, $event)"
         />
@@ -139,7 +140,11 @@ function compositionLabel(uid: string): string {
 
       <div class="dir-edit-actions">
         <button type="button" class="btn btn-sm" @click="handleAddSubfolder">+ Subfolder</button>
-        <select v-model="selectedCompositionUid" class="composition-picker">
+        <select
+          v-model="selectedCompositionUid"
+          class="composition-picker"
+          aria-label="Add composition to folder"
+        >
           <option value="">Add composition…</option>
           <option v-for="c in availableCompositions" :key="c.uid" :value="c.uid">
             {{ c.label }}
