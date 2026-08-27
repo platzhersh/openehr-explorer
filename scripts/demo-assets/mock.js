@@ -60,6 +60,35 @@
     },
   };
 
+  // DIRECTORY (EHR_STATUS FOLDER hierarchy) for the primary EHR — a root
+  // folder with a couple of subfolders, each pointing back at one of the
+  // compositions above via an OBJECT_REF, so DirectoryTree.vue has real
+  // nested structure to render instead of an empty state.
+  const DIRECTORY_BY_EHR = {
+    [PRIMARY_EHR_ID]: {
+      name: { value: "Patient Record" },
+      uid: { value: `dir0001-0000-4a1b-9c3f-000000000000::${SYSTEM_ID}::1` },
+      items: [],
+      folders: [
+        {
+          name: { value: "Vitals" },
+          items: [
+            { id: { value: VITAL_SIGNS_COMPOSITION_UID }, namespace: SYSTEM_ID, type: "COMPOSITION" },
+          ],
+          folders: [],
+        },
+        {
+          name: { value: "Problems & Medications" },
+          items: [
+            { id: { value: `c1a2b3c4-0002-4a1b-9c3f-000000000002::${SYSTEM_ID}::1` }, namespace: SYSTEM_ID, type: "COMPOSITION" },
+            { id: { value: `c1a2b3c4-0003-4a1b-9c3f-000000000003::${SYSTEM_ID}::1` }, namespace: SYSTEM_ID, type: "COMPOSITION" },
+          ],
+          folders: [],
+        },
+      ],
+    },
+  };
+
   const TEMPLATES = [
     { template_id: VITAL_SIGNS_TEMPLATE_ID, concept: VITAL_SIGNS_NAME, archetype_id: "openEHR-EHR-COMPOSITION.encounter.v1", created_timestamp: ARCHETYPE_CREATED },
     { template_id: "IDCR - Problem List.v1", concept: "Problem List", archetype_id: "openEHR-EHR-COMPOSITION.problem_list.v1", created_timestamp: ARCHETYPE_CREATED },
@@ -345,6 +374,11 @@
       const detail = EHR_DETAILS[args.ehrId];
       if (!detail) throw new Error("EHR not found");
       return detail;
+    },
+    get_directory: function (args) {
+      // Real backend returns `null` (not a rejection) when the EHR has no
+      // DIRECTORY set — see the comment on useEhrStore().fetchDirectory().
+      return DIRECTORY_BY_EHR[args.ehrId] || null;
     },
 
     // -- compositions --
