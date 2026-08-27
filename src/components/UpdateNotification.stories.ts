@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { onUnmounted } from "vue";
 import { createPinia, setActivePinia } from "pinia";
+import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import type { Update } from "@tauri-apps/plugin-updater";
 import UpdateNotification from "./UpdateNotification.vue";
 import { useSettingsStore } from "../stores/settings";
@@ -23,6 +25,19 @@ function withStores(state: StoryUpdateState) {
     components: { UpdateNotification },
     setup() {
       setActivePinia(createPinia());
+
+      // Storybook runs outside a Tauri runtime, but the rendered banner is
+      // still clickable: "Download & Install" ends in a relaunch() call and
+      // "What's new →" calls openUrl(), both of which invoke real Tauri IPC
+      // commands. Intercept those with Tauri's own mock-IPC helper (the same
+      // one it recommends for tests) instead of letting them hit a missing
+      // backend and reject.
+      mockIPC((cmd) => {
+        if (cmd === "plugin:process|restart" || cmd === "plugin:opener|open_url") {
+          return null;
+        }
+      });
+      onUnmounted(() => clearMocks());
 
       const settingsStore = useSettingsStore();
       settingsStore.loaded = true;
