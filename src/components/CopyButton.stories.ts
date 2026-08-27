@@ -10,7 +10,7 @@ const meta: Meta<typeof CopyButton> = {
     docs: {
       description: {
         component:
-          "Reusable icon-only copy-to-clipboard button (see OEH-37). Originally built inline in JsonViewer.vue, extracted so every 'Copy' button in the app shares the same icon + checkmark pattern — now used by JsonTreeNode, FlatPathPanel, OptMetadata, JsonViewer, and XmlViewer.",
+          "Reusable icon-only copy-to-clipboard button (see OEH-37). Originally built inline in JsonViewer.vue, extracted so every 'Copy' button in the app shares the same icon + checkmark pattern — now used by JsonTreeNode, FlatPathPanel, OptMetadata, JsonViewer, and XmlViewer. Hover shows a tooltip with the copy label; clicking swaps it to a 'Copied!' tooltip and checkmark that revert after a couple seconds.",
       },
     },
   },
