@@ -67,6 +67,14 @@ type Story = StoryObj<typeof UpdateNotification>;
 
 export const Available: Story = {
   render: withStores({ version: "1.4.0", currentVersion: "1.3.2" }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "**Later** doesn't decline the update — it just calls `updateStore.dismiss()`, which hides the banner for the rest of the session. That flag isn't persisted, so the banner comes back the next time an update check finds this (or a newer) version: on app restart, or from a manual 'Check for Updates' in Settings, since `checkForUpdates()` resets `dismissed` to `false` whenever it finds an available update. **Download & Install** starts the real download via the Tauri updater.",
+      },
+    },
+  },
 };
 
 export const Downloading: Story = {
