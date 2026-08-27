@@ -4,9 +4,11 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useWhatsNewStore } from "../stores/whatsNew";
 
 const route = useRoute();
 const analytics = useAnalytics();
+const whatsNewStore = useWhatsNewStore();
 const appVersion = ref<string>("");
 
 const navItems = [
@@ -23,6 +25,14 @@ function isActive(path: string): boolean {
 async function openDocumentation() {
   await openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
   void analytics.track("documentation_opened");
+}
+
+function openWhatsNew() {
+  whatsNewStore.showLatest();
+  void analytics.track("whats_new_shown", {
+    version: whatsNewStore.entries[0]?.version ?? "unknown",
+    source: "sidebar",
+  });
 }
 
 onMounted(async () => {
@@ -49,7 +59,17 @@ onMounted(async () => {
       </router-link>
     </div>
     <div class="nav-bottom">
-      <div v-if="appVersion" class="version-display">v{{ appVersion }}</div>
+      <a
+        v-if="appVersion"
+        @click="openWhatsNew"
+        class="version-display"
+        role="button"
+        tabindex="0"
+        title="View What's New"
+        @keydown.enter="openWhatsNew"
+      >
+        v{{ appVersion }}
+      </a>
       <div class="nav-divider"></div>
       <a
         @click="openDocumentation"
@@ -200,12 +220,22 @@ onMounted(async () => {
 }
 
 .version-display {
+  display: block;
   padding: 8px 12px;
   text-align: left;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--color-text-muted);
   letter-spacing: 0.3px;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all 0.15s;
+}
+.version-display:hover,
+.version-display:focus-visible {
+  color: var(--color-primary);
+  background: var(--color-surface);
 }
 
 .nav-divider {
