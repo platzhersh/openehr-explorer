@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::Semaphore;
 
 use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
 use crate::inspector::{send_instrumented, InstrumentedResponse};
@@ -650,6 +653,13 @@ pub struct EhrSearchCriteria {
     pub created_on: Option<String>,     // YYYY-MM-DD
     pub created_before: Option<String>, // YYYY-MM-DD
     pub created_after: Option<String>,  // YYYY-MM-DD
+    /// Whether the EHR has a DIRECTORY (FOLDER structure) set. Unlike the
+    /// other criteria, this can't be expressed as an AQL predicate — the
+    /// DIRECTORY is only reachable via its own REST resource — so it's
+    /// applied as a post-filter in `search_ehrs` after the AQL results come
+    /// back (see `filter_by_directory_presence`). Both `true` and `false`
+    /// are supported, since the post-filter just checks presence either way.
+    pub has_directory: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -782,8 +792,10 @@ FROM EHR e CONTAINS EHR_STATUS s"
         );
     }
 
-    // Check if any criteria was provided (either predicates or has_compositions:true)
-    if predicates.is_empty() && !has_compositions_filter {
+    // Check if any criteria was provided (either predicates, has_compositions:true,
+    // or has_directory — the latter never adds a predicate since it's applied as a
+    // post-filter in `search_ehrs`, but it's still a real criterion the user asked for).
+    if predicates.is_empty() && !has_compositions_filter && criteria.has_directory.is_none() {
         return Err("At least one search criterion must be provided".to_string());
     }
 
@@ -795,6 +807,59 @@ FROM EHR e CONTAINS EHR_STATUS s"
         let where_clause = predicates.join(" AND ");
         Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
     }
+}
+
+/// Filters `results` down to only the EHRs whose DIRECTORY presence matches
+/// `want` (`true` keeps EHRs that have one, `false` keeps EHRs that don't).
+///
+/// AQL has no path for this — the DIRECTORY is only reachable via its own
+/// `GET /ehr/{id}/directory` resource, not a queryable attribute — so this
+/// issues one directory fetch per candidate EHR instead, bounded to a modest
+/// concurrency so a 200-row result set doesn't fire 200 requests at once.
+/// Original ordering is preserved even though the requests complete out of
+/// order, so results don't visibly reshuffle between identical searches.
+async fn filter_by_directory_presence(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    base: &str,
+    auth: &AuthMethod,
+    results: Vec<EhrSearchResult>,
+    want: bool,
+) -> Vec<EhrSearchResult> {
+    const CONCURRENCY: usize = 8;
+    let semaphore = Arc::new(Semaphore::new(CONCURRENCY));
+    let mut set = tokio::task::JoinSet::new();
+
+    for (index, result) in results.into_iter().enumerate() {
+        let semaphore = semaphore.clone();
+        let app = app.clone();
+        let client = client.clone();
+        let auth = auth.clone();
+        let url = build_directory_url(base, &result.ehr_id, None, None);
+        set.spawn(async move {
+            // Permit is held for the duration of the request; dropped (and the
+            // slot freed) when this task completes.
+            let _permit = semaphore.acquire_owned().await;
+            let has_directory = fetch_directory(&app, &client, &url, &auth)
+                .await
+                .unwrap_or(None)
+                .is_some();
+            (index, result, has_directory)
+        });
+    }
+
+    let mut kept: Vec<(usize, EhrSearchResult)> = Vec::new();
+    while let Some(joined) = set.join_next().await {
+        if let Ok((index, result, has_directory)) = joined {
+            if has_directory == want {
+                kept.push((index, result));
+            }
+        }
+        // A panicked task is dropped rather than surfaced — the corresponding
+        // EHR is simply left out of the (already best-effort) filtered list.
+    }
+    kept.sort_by_key(|(index, _)| *index);
+    kept.into_iter().map(|(_, result)| result).collect()
 }
 
 #[tauri::command]
@@ -851,8 +916,27 @@ pub async fn search_ehrs(
         })
         .collect();
 
+    // `limit_reached` reflects the raw AQL result set (capped at 200 rows by
+    // the query's own LIMIT) — computed before the directory post-filter so
+    // "showing first 200, refine your search" still means what it says even
+    // when has_directory then narrows the displayed count further.
+    let limit_reached = results.len() >= 200;
+
+    let results = if let Some(want_directory) = criteria.has_directory {
+        filter_by_directory_presence(
+            &app,
+            &client,
+            base,
+            &profile.auth_method,
+            results,
+            want_directory,
+        )
+        .await
+    } else {
+        results
+    };
+
     let total = results.len();
-    let limit_reached = total >= 200;
 
     Ok(EhrSearchResponse {
         results,
@@ -876,6 +960,7 @@ mod tests {
             created_on: None,
             created_before: None,
             created_after: None,
+            has_directory: None,
         }
     }
 
@@ -1006,6 +1091,49 @@ mod tests {
         let result = build_ehr_search_aql(&c);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not currently supported"));
+    }
+
+    #[test]
+    fn test_has_directory_true_alone_is_a_valid_criterion() {
+        // has_directory can't become an AQL predicate (it's applied as a
+        // post-filter in search_ehrs), but it must still count as "a
+        // criterion was provided" so the query isn't rejected.
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("FROM EHR e CONTAINS EHR_STATUS s"));
+        assert!(!aql.contains("WHERE"));
+        assert!(aql.contains("LIMIT 200"));
+    }
+
+    #[test]
+    fn test_has_directory_false_alone_is_also_valid() {
+        // Unlike has_compositions:false, has_directory:false is supported —
+        // the post-filter checks presence either way — so it shouldn't error.
+        let mut c = empty_criteria();
+        c.has_directory = Some(false);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(!aql.contains("WHERE"));
+    }
+
+    #[test]
+    fn test_has_directory_combines_with_other_predicates() {
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+        // has_directory itself never appears as a predicate.
+        assert!(!aql.to_lowercase().contains("directory"));
+    }
+
+    #[test]
+    fn test_has_directory_combines_with_has_compositions() {
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        c.has_compositions = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("FROM EHR e CONTAINS COMPOSITION c"));
     }
 
     #[test]

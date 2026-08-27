@@ -45,6 +45,11 @@ export interface EhrSearchCriteria {
   created_on?: string;
   created_before?: string;
   created_after?: string;
+  // Whether the EHR has a DIRECTORY (FOLDER structure) set. Applied as a
+  // post-filter server-side (AQL has no path for it) — see build_ehr_search_aql
+  // / filter_by_directory_presence in src-tauri/src/commands/ehr.rs. Unlike
+  // has_compositions, both true and false are supported.
+  has_directory?: boolean;
 }
 
 export interface EhrSearchResult {

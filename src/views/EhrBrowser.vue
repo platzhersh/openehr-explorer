@@ -6,6 +6,7 @@ import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "..
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import EhrFilterModal from "../components/EhrFilterModal.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
@@ -38,10 +39,18 @@ const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
-const showHelpPopover = ref(false);
+const showHelpModal = ref(false);
+const showFilterModal = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
 const showHistory = ref(false);
+
+// The single source of truth for "what filters are currently applied" —
+// whether they came from typing colon-syntax into the search box or from
+// building them in the Filters modal. Drives the removable filter chips
+// below the search bar so either entry point stays visible/editable the
+// same way.
+const activeCriteria = ref<EhrSearchCriteria | null>(null);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -140,6 +149,16 @@ function parseSearchInput(raw: string): {
         }
         criteria.has_compositions = value === "true";
         break;
+      case "hasDirectory":
+        if (value !== "true" && value !== "false") {
+          return {
+            criteria: null,
+            error: "hasDirectory: expects 'true' or 'false'.",
+            warning: null,
+          };
+        }
+        criteria.has_directory = value === "true";
+        break;
       case "created-on":
         if (!DATE_RE.test(value)) {
           return {
@@ -221,12 +240,78 @@ function executeSearch() {
   }
 
   showHistory.value = false;
+  runSearch(criteria);
+}
+
+/** Shared tail of every search path (text box, Filters modal, chip removal):
+ *  records the applied criteria and fires the backend query. */
+function runSearch(criteria: EhrSearchCriteria) {
+  if (!serverStore.activeServerId) return;
+  activeCriteria.value = criteria;
   // Feature-adoption ping only — never the query text itself or the raw
   // criteria. Users construct search queries with patient identifiers
   // encoded in the input, so the text is treated as PII and stays local.
   void analytics.track("ehr_searched");
   ehrStore.searchEhrs(serverStore.activeServerId, criteria);
 }
+
+/** Applies the structured criteria built in the Filters modal. The text box
+ *  is cleared so it doesn't sit there showing a stale, out-of-sync string. */
+function handleFilterModalApply(criteria: EhrSearchCriteria) {
+  searchQuery.value = "";
+  validationError.value = null;
+  showFilterModal.value = false;
+  runSearch(criteria);
+}
+
+/** Removes a single active filter chip and re-runs the search with what's
+ *  left — or clears the search entirely if that was the last filter. */
+function removeFilterChip(key: keyof EhrSearchCriteria) {
+  if (!activeCriteria.value) return;
+  const next = { ...activeCriteria.value };
+  delete next[key];
+  searchQuery.value = "";
+  if (Object.keys(next).length === 0) {
+    clearSearch();
+  } else {
+    runSearch(next);
+  }
+}
+
+interface FilterChip {
+  key: keyof EhrSearchCriteria;
+  label: string;
+}
+
+const filterChips = computed<FilterChip[]>(() => {
+  const c = activeCriteria.value;
+  if (!c) return [];
+  const chips: FilterChip[] = [];
+  if (c.ehr_id_prefix)
+    chips.push({ key: "ehr_id_prefix", label: `ID starts with "${c.ehr_id_prefix}"` });
+  if (c.subject_id) chips.push({ key: "subject_id", label: `Subject contains "${c.subject_id}"` });
+  if (c.subject_namespace)
+    chips.push({ key: "subject_namespace", label: `Namespace: ${c.subject_namespace}` });
+  if (c.system_id) chips.push({ key: "system_id", label: `System: ${c.system_id}` });
+  if (c.modifiable !== undefined)
+    chips.push({ key: "modifiable", label: `Modifiable: ${c.modifiable ? "Yes" : "No"}` });
+  if (c.has_compositions !== undefined)
+    chips.push({
+      key: "has_compositions",
+      label: `Has compositions: ${c.has_compositions ? "Yes" : "No"}`,
+    });
+  if (c.has_directory !== undefined)
+    chips.push({
+      key: "has_directory",
+      label: `Has directory entries: ${c.has_directory ? "Yes" : "No"}`,
+    });
+  if (c.created_on) chips.push({ key: "created_on", label: `Created on ${c.created_on}` });
+  if (c.created_before)
+    chips.push({ key: "created_before", label: `Created before ${c.created_before}` });
+  if (c.created_after)
+    chips.push({ key: "created_after", label: `Created after ${c.created_after}` });
+  return chips;
+});
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (e.key === "Enter") {
@@ -250,6 +335,7 @@ function onSearchInput() {
 function clearSearch() {
   searchQuery.value = "";
   validationError.value = null;
+  activeCriteria.value = null;
   ehrStore.clearSearch();
   if (serverStore.activeServerId) {
     ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
@@ -449,7 +535,7 @@ function lookupContribution() {
             class="input search-input"
             data-tour="ehr-search"
             v-model="searchQuery"
-            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:true"
+            placeholder="Search by EHR ID, or click Filters for more options"
             autocapitalize="off"
             autocorrect="off"
             spellcheck="false"
@@ -469,9 +555,21 @@ function lookupContribution() {
           </button>
           <button
             type="button"
+            class="filter-btn"
+            data-tour="ehr-search-filters"
+            @click="showFilterModal = true"
+            title="Build filters without typing"
+          >
+            Filters
+            <span v-if="filterChips.length" class="filter-count-badge">{{
+              filterChips.length
+            }}</span>
+          </button>
+          <button
+            type="button"
             class="help-btn"
             data-tour="ehr-search-help"
-            @click="showHelpPopover = !showHelpPopover"
+            @click="showHelpModal = true"
             title="Search syntax help"
           >
             ?
@@ -488,47 +586,22 @@ function lookupContribution() {
           Search failed: {{ ehrStore.searchError }}
         </div>
 
-        <!-- Help popover -->
-        <div v-if="showHelpPopover" class="help-popover">
-          <div class="help-popover-header">
-            <strong>Search Syntax</strong>
-            <button type="button" class="close-btn" @click="showHelpPopover = false">
+        <!-- Active filter chips — works whether the filters came from the
+             Filters modal or from typing colon-syntax into the box, since
+             both write into the same `activeCriteria` state. -->
+        <div v-if="filterChips.length" class="filter-chips">
+          <span v-for="chip in filterChips" :key="chip.key" class="filter-chip">
+            {{ chip.label }}
+            <button
+              type="button"
+              class="chip-remove"
+              @click="removeFilterChip(chip.key)"
+              :title="`Remove filter: ${chip.label}`"
+            >
               &times;
             </button>
-          </div>
-          <table class="help-table">
-            <tbody>
-              <tr>
-                <td class="help-example">fde80e0e...</td>
-                <td>EHR ID prefix match</td>
-              </tr>
-              <tr>
-                <td class="help-example">subject:value</td>
-                <td>Subject ID contains match</td>
-              </tr>
-              <tr>
-                <td class="help-example">namespace:value</td>
-                <td>Subject namespace exact match</td>
-              </tr>
-              <tr>
-                <td class="help-example">system:value</td>
-                <td>System ID exact match</td>
-              </tr>
-              <tr>
-                <td class="help-example">modifiable:true|false</td>
-                <td>EHR status is_modifiable</td>
-              </tr>
-              <tr>
-                <td class="help-example">hasCompositions:true</td>
-                <td>Has compositions (false not supported)</td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="help-note">Combine terms with spaces (implicit AND).</p>
-          <p class="help-note">
-            Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
-            Inspector.
-          </p>
+          </span>
+          <button type="button" class="chip-clear-all" @click="clearSearch">Clear all</button>
         </div>
 
         <!-- Search history dropdown -->
@@ -812,6 +885,65 @@ function lookupContribution() {
       @created="handleEhrCreated"
     />
 
+    <!-- Filters Modal — structured filter builder, no syntax to remember -->
+    <EhrFilterModal
+      :open="showFilterModal"
+      :criteria="activeCriteria ?? {}"
+      @close="showFilterModal = false"
+      @apply="handleFilterModalApply"
+    />
+
+    <!-- Search Syntax Help Modal (for the quick-search box's colon syntax) -->
+    <div v-if="showHelpModal" class="dialog-overlay" @click="showHelpModal = false">
+      <div class="dialog" @click.stop>
+        <h3>Search Syntax</h3>
+        <p>
+          Prefer building filters visually? Use the <strong>Filters</strong> button instead — this
+          syntax is a shortcut for the quick search box.
+        </p>
+        <table class="help-table">
+          <tbody>
+            <tr>
+              <td class="help-example">fde80e0e...</td>
+              <td>EHR ID prefix match</td>
+            </tr>
+            <tr>
+              <td class="help-example">subject:value</td>
+              <td>Subject ID contains match</td>
+            </tr>
+            <tr>
+              <td class="help-example">namespace:value</td>
+              <td>Subject namespace exact match</td>
+            </tr>
+            <tr>
+              <td class="help-example">system:value</td>
+              <td>System ID exact match</td>
+            </tr>
+            <tr>
+              <td class="help-example">modifiable:true|false</td>
+              <td>EHR status is_modifiable</td>
+            </tr>
+            <tr>
+              <td class="help-example">hasCompositions:true</td>
+              <td>Has compositions (false not supported)</td>
+            </tr>
+            <tr>
+              <td class="help-example">hasDirectory:true|false</td>
+              <td>Has a DIRECTORY (checked per matching EHR)</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="help-note">Combine terms with spaces (implicit AND).</p>
+        <p class="help-note">
+          Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
+          Inspector.
+        </p>
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-sm" @click="showHelpModal = false">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- EHR Delete Confirmation Dialog -->
     <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
       <div class="dialog" @click.stop>
@@ -972,6 +1104,41 @@ function lookupContribution() {
   color: var(--color-text);
 }
 
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.filter-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+.filter-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .search-validation-error {
   margin-top: 6px;
   padding: 6px 10px;
@@ -982,34 +1149,55 @@ function lookupContribution() {
   font-size: 12px;
 }
 
-.help-popover {
-  position: absolute;
-  top: 100%;
-  left: 16px;
-  right: 16px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 12px;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.help-popover-header {
+.filter-chips {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-top: 8px;
 }
-.help-popover-header strong {
-  font-size: 13px;
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: var(--color-primary-dim);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
 }
-.close-btn {
+.chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.chip-remove:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.chip-clear-all {
   background: none;
   border: none;
-  font-size: 16px;
+  padding: 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-decoration: underline;
   cursor: pointer;
-  color: var(--color-text-secondary);
 }
+.chip-clear-all:hover {
+  color: var(--color-text);
+}
+
 .help-table {
   width: 100%;
   font-size: 12px;

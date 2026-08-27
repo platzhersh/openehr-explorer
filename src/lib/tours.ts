@@ -102,13 +102,18 @@ export const TOURS: Tour[] = [
     steps: [
       {
         target: '[data-tour="ehr-search"]',
-        title: "Search & filter EHRs",
-        body: "Type an EHR ID prefix, or use structured filters like subject:, namespace:, system:, modifiable:, and hasCompositions: to narrow the list.",
+        title: "Search EHRs",
+        body: "Type an EHR ID prefix here for a quick lookup — for anything more specific, use the Filters button instead.",
+      },
+      {
+        target: '[data-tour="ehr-search-filters"]',
+        title: "Build filters without typing",
+        body: "Click Filters to narrow the list with real form controls — subject, namespace, system, modifiable, has compositions, and whether the EHR has directory entries. Applied filters show up as removable chips below the search box.",
       },
       {
         target: '[data-tour="ehr-search-help"]',
-        title: "Full filter syntax",
-        body: "Click the ? icon any time for the complete list of supported search filters with examples.",
+        title: "Prefer typing? There's a shortcut syntax",
+        body: "Click the ? icon for the complete colon-syntax reference (subject:, namespace:, hasCompositions:true, ...) if you'd rather type filters straight into the search box.",
       },
       {
         target: '[data-tour="ehr-create"]',
