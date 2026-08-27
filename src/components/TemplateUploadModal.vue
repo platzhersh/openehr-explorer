@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { useServerStore } from "../stores/server";
-import { useTemplateStore } from "../stores/template";
-import { useAnalytics } from "../composables/useAnalytics";
-import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { watch } from "vue";
+import { useTemplateUpload } from "../composables/useTemplateUpload";
 
 const props = defineProps<{
   open: boolean;
@@ -14,14 +10,8 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const serverStore = useServerStore();
-const templateStore = useTemplateStore();
-const analytics = useAnalytics();
-
-const dragOver = ref(false);
-const uploading = ref(false);
-const uploadStatus = ref<string | null>(null);
-const uploadError = ref<string | null>(null);
+const { dragOver, uploading, uploadStatus, uploadError, resetState, handleDrop, handleFileSelect } =
+  useTemplateUpload();
 
 // Reset transient state whenever the modal is (re)opened, so a previous
 // upload's success/error message doesn't linger into the next visit.
@@ -31,80 +21,6 @@ watch(
     if (isOpen) resetState();
   },
 );
-
-function resetState() {
-  dragOver.value = false;
-  uploading.value = false;
-  uploadStatus.value = null;
-  uploadError.value = null;
-}
-
-async function uploadFile(file: File) {
-  if (!serverStore.activeServerId) return;
-
-  uploading.value = true;
-  uploadStatus.value = null;
-  uploadError.value = null;
-
-  try {
-    const text = await file.text();
-    const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
-    uploadStatus.value = result;
-    void analytics.track("template_uploaded");
-    templateStore.fetchTemplates(serverStore.activeServerId);
-  } catch (e) {
-    uploadError.value = String(e);
-  } finally {
-    uploading.value = false;
-  }
-}
-
-async function handleDrop(event: DragEvent) {
-  event.preventDefault();
-  dragOver.value = false;
-  const file = event.dataTransfer?.files[0];
-  if (!file) return;
-
-  await uploadFile(file);
-}
-
-async function handleFileSelect() {
-  try {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "OPT Files",
-          extensions: ["opt", "xml"],
-        },
-      ],
-    });
-
-    if (selected && typeof selected === "string") {
-      if (!serverStore.activeServerId) return;
-
-      uploading.value = true;
-      uploadStatus.value = null;
-      uploadError.value = null;
-
-      try {
-        // Read file using Tauri's FS plugin
-        const text = await readTextFile(selected);
-
-        const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
-        uploadStatus.value = result;
-        void analytics.track("template_uploaded");
-        templateStore.fetchTemplates(serverStore.activeServerId);
-      } catch (e) {
-        uploadError.value = String(e);
-      } finally {
-        uploading.value = false;
-      }
-    }
-  } catch (e) {
-    uploadError.value = String(e);
-  }
-}
 
 function handleClose() {
   emit("close");

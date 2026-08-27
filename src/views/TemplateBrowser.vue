@@ -14,6 +14,7 @@ import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
 import TemplateUploadModal from "../components/TemplateUploadModal.vue";
+import { useTemplateUpload } from "../composables/useTemplateUpload";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -41,6 +42,11 @@ const currentMatchIndex = ref(0);
 const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
 const showBoundConceptsHelp = ref(false);
 const showUploadModal = ref(false);
+
+// Independent instance from the one inside TemplateUploadModal — this one
+// backs the inline drop zone shown when the server has no templates yet
+// (see the empty-state markup below), so the two never need to share state.
+const inlineUpload = useTemplateUpload();
 
 const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
 const termBindings = ref<TermBinding[]>([]);
@@ -346,6 +352,35 @@ onUnmounted(() => {
             >
               New Composition
             </button>
+          </div>
+        </div>
+
+        <!-- Inline drop zone for the empty-server case — with no templates
+             to scroll past, this stays visible without needing the header
+             button, which is the only entry point once the list fills up. -->
+        <div v-if="templateStore.templates.length === 0" class="empty-upload-state">
+          <p class="empty-upload-hint">No templates on this server yet.</p>
+          <div
+            class="upload-zone"
+            :class="{ 'drag-over': inlineUpload.dragOver.value }"
+            @dragover.prevent="inlineUpload.dragOver.value = true"
+            @dragleave="inlineUpload.dragOver.value = false"
+            @drop="inlineUpload.handleDrop"
+          >
+            <p>Drop OPT file here to upload</p>
+            <button
+              class="btn btn-sm"
+              :disabled="inlineUpload.uploading.value"
+              @click="inlineUpload.handleFileSelect"
+            >
+              {{ inlineUpload.uploading.value ? "Uploading..." : "Or choose file..." }}
+            </button>
+          </div>
+          <div v-if="inlineUpload.uploadStatus.value" class="upload-msg success">
+            {{ inlineUpload.uploadStatus.value }}
+          </div>
+          <div v-if="inlineUpload.uploadError.value" class="upload-msg error">
+            {{ inlineUpload.uploadError.value }}
           </div>
         </div>
       </div>
@@ -935,6 +970,55 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-size: 11px;
   color: var(--color-text-muted);
   font-family: var(--font-mono);
+}
+
+.empty-upload-state {
+  padding: 0 16px 16px;
+}
+
+.empty-upload-hint {
+  margin: 16px 0 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.upload-zone {
+  padding: 24px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.upload-zone.drag-over {
+  border-color: var(--color-primary);
+  background: rgba(100, 255, 218, 0.05);
+}
+.upload-zone p {
+  margin: 0;
+}
+
+.upload-msg {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.upload-msg.success {
+  color: var(--color-success);
+  background: rgba(100, 255, 218, 0.1);
+  border: 1px solid rgba(100, 255, 218, 0.3);
+}
+.upload-msg.error {
+  color: var(--color-error);
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
 }
 
 .tab-bar {
