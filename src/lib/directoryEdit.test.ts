@@ -199,4 +199,11 @@ describe("getFolderAtPath", () => {
     expect(getFolderAtPath(root, [0]).name).toBe("A");
     expect(getFolderAtPath(root, [1]).name).toBe("B");
   });
+
+  it("throws with the offending path rather than returning undefined for a stale index", () => {
+    const root = emptyFolder("Root");
+    addSubfolder(root, "A");
+    expect(() => getFolderAtPath(root, [5])).toThrow(/no folder at index 5/);
+    expect(() => getFolderAtPath(root, [0, 3])).toThrow(/no folder at index 3/);
+  });
 });

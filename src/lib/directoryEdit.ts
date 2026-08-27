@@ -157,11 +157,23 @@ export function removeItem(folder: EditableFolder, key: string): void {
  *  without ever writing to its own `folder` prop: it emits `path` up to
  *  whichever component owns the tree (via `DIRECTORY_MUTATIONS_KEY`), which
  *  resolves it back to a real `EditableFolder` and calls the mutators above
- *  on that — a value it owns, not a prop. */
+ *  on that — a value it owns, not a prop.
+ *
+ *  Every `path` in practice comes straight from an index this module handed
+ *  out while iterating `folders[]` (see `DirectoryTreeEditor.vue`), so it
+ *  should always resolve — but indexing `folders[]` directly would silently
+ *  hand back `undefined` on a stale path (e.g. a folder removed out from
+ *  under an in-flight edit) and defer the failure to whatever the caller
+ *  does next. Failing here instead, with the path that didn't resolve,
+ *  turns that into a clear error at the point of the mistake. */
 export function getFolderAtPath(root: EditableFolder, path: readonly number[]): EditableFolder {
   let current = root;
   for (const index of path) {
-    current = current.folders[index];
+    const next: EditableFolder | undefined = current.folders[index];
+    if (!next) {
+      throw new Error(`getFolderAtPath: no folder at index ${index} in path [${path.join(", ")}]`);
+    }
+    current = next;
   }
   return current;
 }
