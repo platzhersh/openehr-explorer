@@ -45,6 +45,11 @@ export interface EhrSearchCriteria {
   created_on?: string;
   created_before?: string;
   created_after?: string;
+  // Whether the EHR has a DIRECTORY (FOLDER structure) set. Applied as a
+  // post-filter server-side (AQL has no path for it) — see build_ehr_search_aql
+  // / filter_by_directory_presence in src-tauri/src/commands/ehr.rs. Unlike
+  // has_compositions, both true and false are supported.
+  has_directory?: boolean;
 }
 
 export interface EhrSearchResult {
@@ -198,7 +203,14 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearSearch() so a slow response for a since-superseded search
+  // (the user applied different filters, or removed a chip, before the
+  // previous request came back) can't land after a newer one and overwrite
+  // results that no longer match what's shown as the active criteria.
+  let searchRequestId = 0;
+
   async function searchEhrs(serverId: string, criteria: EhrSearchCriteria) {
+    const requestId = ++searchRequestId;
     searchLoading.value = true;
     searchError.value = null;
     searchActive.value = true;
@@ -207,12 +219,14 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         criteria,
       });
+      if (requestId !== searchRequestId) return; // superseded by a newer search
       searchResults.value = result.results;
       searchLimitReached.value = result.limit_reached;
     } catch (e) {
+      if (requestId !== searchRequestId) return;
       searchError.value = String(e);
     } finally {
-      searchLoading.value = false;
+      if (requestId === searchRequestId) searchLoading.value = false;
     }
   }
 
@@ -255,6 +269,7 @@ export const useEhrStore = defineStore("ehr", () => {
   }
 
   function clearSearch() {
+    searchRequestId++; // invalidate any in-flight searchEhrs call
     searchResults.value = [];
     searchActive.value = false;
     searchError.value = null;

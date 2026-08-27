@@ -6,8 +6,10 @@ import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "..
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import EhrFilterModal from "../components/EhrFilterModal.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import FilterIcon from "../components/FilterIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 
@@ -38,10 +40,17 @@ const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
-const showHelpPopover = ref(false);
+const showFilterModal = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
 const showHistory = ref(false);
+
+// The single source of truth for "what filters are currently applied" —
+// whether they came from typing colon-syntax into the search box or from
+// building them in the Filters modal. Drives the removable filter chips
+// below the search bar so either entry point stays visible/editable the
+// same way.
+const activeCriteria = ref<EhrSearchCriteria | null>(null);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -83,6 +92,82 @@ watch(ehrId, (id) => {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Parses a `true`/`false` token value for a boolean filter (modifiable:,
+ *  hasCompositions:, hasDirectory:), assigning it into `criteria[field]` on
+ *  success. Returns an error message on an invalid value, or null. Pulled
+ *  out of `applyToken`'s switch so each boolean case there is a single
+ *  return-call rather than its own nested if — see applyToken. */
+function applyBooleanToken(
+  criteria: EhrSearchCriteria,
+  field: "modifiable" | "has_compositions" | "has_directory",
+  prefix: string,
+  value: string,
+): string | null {
+  if (value !== "true" && value !== "false") {
+    return `${prefix}: expects 'true' or 'false'.`;
+  }
+  criteria[field] = value === "true";
+  return null;
+}
+
+/** Same shape as applyBooleanToken, for the YYYY-MM-DD date filters. */
+function applyDateToken(
+  criteria: EhrSearchCriteria,
+  field: "created_on" | "created_before" | "created_after",
+  prefix: string,
+  value: string,
+): string | null {
+  if (!DATE_RE.test(value)) {
+    return `${prefix}: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).`;
+  }
+  criteria[field] = value;
+  return null;
+}
+
+/** Applies one whitespace-separated token to `criteria`, mutating it in
+ *  place. Returns an error message on failure, or null on success —
+ *  including for a bare token (no colon) or an unrecognized prefix, both of
+ *  which fall back to extending `ehr_id_prefix`. */
+function applyToken(criteria: EhrSearchCriteria, token: string): string | null {
+  const colonIdx = token.indexOf(":");
+  if (colonIdx === -1) {
+    criteria.ehr_id_prefix = (criteria.ehr_id_prefix ?? "") + token;
+    return null;
+  }
+
+  const prefix = token.substring(0, colonIdx);
+  const value = token.substring(colonIdx + 1);
+  if (!value) return `${prefix}: value cannot be empty.`;
+
+  switch (prefix) {
+    case "subject":
+      criteria.subject_id = value;
+      return null;
+    case "namespace":
+      criteria.subject_namespace = value;
+      return null;
+    case "system":
+      criteria.system_id = value;
+      return null;
+    case "modifiable":
+      return applyBooleanToken(criteria, "modifiable", "modifiable", value);
+    case "hasCompositions":
+      return applyBooleanToken(criteria, "has_compositions", "hasCompositions", value);
+    case "hasDirectory":
+      return applyBooleanToken(criteria, "has_directory", "hasDirectory", value);
+    case "created-on":
+      return applyDateToken(criteria, "created_on", "created-on", value);
+    case "created-before":
+      return applyDateToken(criteria, "created_before", "created-before", value);
+    case "created-after":
+      return applyDateToken(criteria, "created_after", "created-after", value);
+    default:
+      // Unknown prefix — treat as EHR ID prefix (safe fallback)
+      criteria.ehr_id_prefix = (criteria.ehr_id_prefix ?? "") + token;
+      return null;
+  }
+}
+
 function parseSearchInput(raw: string): {
   criteria: EhrSearchCriteria | null;
   error: string | null;
@@ -92,96 +177,13 @@ function parseSearchInput(raw: string): {
   if (!trimmed) return { criteria: null, error: null, warning: null };
 
   const criteria: EhrSearchCriteria = {};
-  let warning: string | null = null;
-  const tokens = trimmed.split(/\s+/);
-
-  for (const token of tokens) {
-    const colonIdx = token.indexOf(":");
-    if (colonIdx === -1) {
-      // No colon — treat as EHR ID prefix
-      if (criteria.ehr_id_prefix) {
-        criteria.ehr_id_prefix += token; // append if multiple bare tokens
-      } else {
-        criteria.ehr_id_prefix = token;
-      }
-      continue;
-    }
-
-    const prefix = token.substring(0, colonIdx);
-    const value = token.substring(colonIdx + 1);
-
-    if (!value) {
-      return { criteria: null, error: `${prefix}: value cannot be empty.`, warning: null };
-    }
-
-    switch (prefix) {
-      case "subject":
-        criteria.subject_id = value;
-        break;
-      case "namespace":
-        criteria.subject_namespace = value;
-        break;
-      case "system":
-        criteria.system_id = value;
-        break;
-      case "modifiable":
-        if (value !== "true" && value !== "false") {
-          return { criteria: null, error: "modifiable: expects 'true' or 'false'.", warning: null };
-        }
-        criteria.modifiable = value === "true";
-        break;
-      case "hasCompositions":
-        if (value !== "true" && value !== "false") {
-          return {
-            criteria: null,
-            error: "hasCompositions: expects 'true' or 'false'.",
-            warning: null,
-          };
-        }
-        criteria.has_compositions = value === "true";
-        break;
-      case "created-on":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-on: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_on = value;
-        break;
-      case "created-before":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-before: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_before = value;
-        break;
-      case "created-after":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-after: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_after = value;
-        break;
-      default:
-        // Unknown prefix — treat as EHR ID prefix (safe fallback)
-        if (criteria.ehr_id_prefix) {
-          criteria.ehr_id_prefix += token;
-        } else {
-          criteria.ehr_id_prefix = token;
-        }
-        break;
-    }
+  for (const token of trimmed.split(/\s+/)) {
+    const error = applyToken(criteria, token);
+    if (error) return { criteria: null, error, warning: null };
   }
 
   // Conflict resolution: created_on overrides created_before/created_after
+  let warning: string | null = null;
   if (criteria.created_on && (criteria.created_before || criteria.created_after)) {
     warning = "created-on overrides created-before/created-after. Only created-on is used.";
     delete criteria.created_before;
@@ -221,12 +223,87 @@ function executeSearch() {
   }
 
   showHistory.value = false;
+  runSearch(criteria);
+}
+
+/** Shared tail of every search path (text box, Filters modal, chip removal):
+ *  records the applied criteria and fires the backend query. */
+function runSearch(criteria: EhrSearchCriteria) {
+  if (!serverStore.activeServerId) return;
+  activeCriteria.value = criteria;
   // Feature-adoption ping only — never the query text itself or the raw
   // criteria. Users construct search queries with patient identifiers
   // encoded in the input, so the text is treated as PII and stays local.
   void analytics.track("ehr_searched");
   ehrStore.searchEhrs(serverStore.activeServerId, criteria);
 }
+
+/** Applies the structured criteria built in the Filters modal. The text box
+ *  is cleared so it doesn't sit there showing a stale, out-of-sync string. */
+function handleFilterModalApply(criteria: EhrSearchCriteria) {
+  searchQuery.value = "";
+  validationError.value = null;
+  showFilterModal.value = false;
+  runSearch(criteria);
+}
+
+/** Removes a single active filter chip and re-runs the search with what's
+ *  left — or clears the search entirely if that was the last filter. */
+function removeFilterChip(key: keyof EhrSearchCriteria) {
+  if (!activeCriteria.value) return;
+  const next = { ...activeCriteria.value };
+  delete next[key];
+  searchQuery.value = "";
+  if (Object.keys(next).length === 0) {
+    clearSearch();
+  } else {
+    runSearch(next);
+  }
+}
+
+interface FilterChip {
+  key: keyof EhrSearchCriteria;
+  label: string;
+}
+
+/** `value ? "Yes" : "No"`, pulled out to a one-liner so filterChips' string
+ *  templates can call it instead of embedding the ternary — that keeps each
+ *  of filterChips' many `if` branches to a flat structural cost instead of
+ *  a nested one, which otherwise pushes its Cognitive Complexity over the
+ *  usual gate (SonarCloud flagged this at 17 for the original version). */
+function yesNo(value: boolean): string {
+  return value ? "Yes" : "No";
+}
+
+const filterChips = computed<FilterChip[]>(() => {
+  const c = activeCriteria.value;
+  if (!c) return [];
+  const chips: FilterChip[] = [];
+  if (c.ehr_id_prefix)
+    chips.push({ key: "ehr_id_prefix", label: `ID starts with "${c.ehr_id_prefix}"` });
+  if (c.subject_id) chips.push({ key: "subject_id", label: `Subject contains "${c.subject_id}"` });
+  if (c.subject_namespace)
+    chips.push({ key: "subject_namespace", label: `Namespace: ${c.subject_namespace}` });
+  if (c.system_id) chips.push({ key: "system_id", label: `System: ${c.system_id}` });
+  if (c.modifiable !== undefined)
+    chips.push({ key: "modifiable", label: `Modifiable: ${yesNo(c.modifiable)}` });
+  if (c.has_compositions !== undefined)
+    chips.push({
+      key: "has_compositions",
+      label: `Has compositions: ${yesNo(c.has_compositions)}`,
+    });
+  if (c.has_directory !== undefined)
+    chips.push({
+      key: "has_directory",
+      label: `Has directory entries: ${yesNo(c.has_directory)}`,
+    });
+  if (c.created_on) chips.push({ key: "created_on", label: `Created on ${c.created_on}` });
+  if (c.created_before)
+    chips.push({ key: "created_before", label: `Created before ${c.created_before}` });
+  if (c.created_after)
+    chips.push({ key: "created_after", label: `Created after ${c.created_after}` });
+  return chips;
+});
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (e.key === "Enter") {
@@ -250,6 +327,7 @@ function onSearchInput() {
 function clearSearch() {
   searchQuery.value = "";
   validationError.value = null;
+  activeCriteria.value = null;
   ehrStore.clearSearch();
   if (serverStore.activeServerId) {
     ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
@@ -449,7 +527,7 @@ function lookupContribution() {
             class="input search-input"
             data-tour="ehr-search"
             v-model="searchQuery"
-            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:true"
+            placeholder="Search by EHR ID, or click Filters for more options"
             autocapitalize="off"
             autocorrect="off"
             spellcheck="false"
@@ -469,12 +547,15 @@ function lookupContribution() {
           </button>
           <button
             type="button"
-            class="help-btn"
-            data-tour="ehr-search-help"
-            @click="showHelpPopover = !showHelpPopover"
-            title="Search syntax help"
+            class="filter-btn"
+            data-tour="ehr-search-filters"
+            @click="showFilterModal = true"
+            title="Build filters — includes a shortcut-syntax reference"
           >
-            ?
+            <FilterIcon />
+            <span v-if="filterChips.length" class="filter-count-badge">{{
+              filterChips.length
+            }}</span>
           </button>
         </div>
 
@@ -488,47 +569,22 @@ function lookupContribution() {
           Search failed: {{ ehrStore.searchError }}
         </div>
 
-        <!-- Help popover -->
-        <div v-if="showHelpPopover" class="help-popover">
-          <div class="help-popover-header">
-            <strong>Search Syntax</strong>
-            <button type="button" class="close-btn" @click="showHelpPopover = false">
+        <!-- Active filter chips — works whether the filters came from the
+             Filters modal or from typing colon-syntax into the box, since
+             both write into the same `activeCriteria` state. -->
+        <div v-if="filterChips.length" class="filter-chips">
+          <span v-for="chip in filterChips" :key="chip.key" class="filter-chip">
+            {{ chip.label }}
+            <button
+              type="button"
+              class="chip-remove"
+              @click="removeFilterChip(chip.key)"
+              :title="`Remove filter: ${chip.label}`"
+            >
               &times;
             </button>
-          </div>
-          <table class="help-table">
-            <tbody>
-              <tr>
-                <td class="help-example">fde80e0e...</td>
-                <td>EHR ID prefix match</td>
-              </tr>
-              <tr>
-                <td class="help-example">subject:value</td>
-                <td>Subject ID contains match</td>
-              </tr>
-              <tr>
-                <td class="help-example">namespace:value</td>
-                <td>Subject namespace exact match</td>
-              </tr>
-              <tr>
-                <td class="help-example">system:value</td>
-                <td>System ID exact match</td>
-              </tr>
-              <tr>
-                <td class="help-example">modifiable:true|false</td>
-                <td>EHR status is_modifiable</td>
-              </tr>
-              <tr>
-                <td class="help-example">hasCompositions:true</td>
-                <td>Has compositions (false not supported)</td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="help-note">Combine terms with spaces (implicit AND).</p>
-          <p class="help-note">
-            Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
-            Inspector.
-          </p>
+          </span>
+          <button type="button" class="chip-clear-all" @click="clearSearch">Clear all</button>
         </div>
 
         <!-- Search history dropdown -->
@@ -812,6 +868,14 @@ function lookupContribution() {
       @created="handleEhrCreated"
     />
 
+    <!-- Filters Modal — structured filter builder, no syntax to remember -->
+    <EhrFilterModal
+      :open="showFilterModal"
+      :criteria="activeCriteria ?? {}"
+      @close="showFilterModal = false"
+      @apply="handleFilterModalApply"
+    />
+
     <!-- EHR Delete Confirmation Dialog -->
     <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
       <div class="dialog" @click.stop>
@@ -950,8 +1014,7 @@ function lookupContribution() {
   flex: 1;
   font-size: 12px;
 }
-.clear-btn,
-.help-btn {
+.clear-btn {
   width: 24px;
   height: 24px;
   border: 1px solid var(--color-border);
@@ -966,10 +1029,47 @@ function lookupContribution() {
   flex-shrink: 0;
   transition: all 0.15s;
 }
-.clear-btn:hover,
-.help-btn:hover {
+.clear-btn:hover {
   background: var(--color-border);
   color: var(--color-text);
+}
+
+.filter-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.filter-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+.filter-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--color-bg);
 }
 
 .search-validation-error {
@@ -982,55 +1082,53 @@ function lookupContribution() {
   font-size: 12px;
 }
 
-.help-popover {
-  position: absolute;
-  top: 100%;
-  left: 16px;
-  right: 16px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 12px;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.help-popover-header {
+.filter-chips {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-top: 8px;
 }
-.help-popover-header strong {
-  font-size: 13px;
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: var(--color-primary-dim);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
 }
-.close-btn {
+.chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.chip-remove:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.chip-clear-all {
   background: none;
   border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-}
-.help-table {
-  width: 100%;
-  font-size: 12px;
-  border-collapse: collapse;
-}
-.help-table td {
-  padding: 3px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-.help-example {
-  font-family: var(--font-mono);
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-.help-note {
+  padding: 0;
   font-size: 11px;
   color: var(--color-text-muted);
-  margin: 6px 0 0;
+  text-decoration: underline;
+  cursor: pointer;
 }
-.help-warning {
-  color: var(--color-warning, #e6a817);
+.chip-clear-all:hover {
+  color: var(--color-text);
 }
 
 .history-dropdown {
