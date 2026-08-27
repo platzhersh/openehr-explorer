@@ -183,6 +183,65 @@ function buildFlatPayload(): Record<string, unknown> {
   return payload;
 }
 
+// A medblocks-ui field we skip when transforming its export() output —
+// either owned by the ctx/* shortcuts we add ourselves, or metadata rather
+// than actual composition content.
+function shouldSkipMedblocksField(key: string): boolean {
+  if (key.startsWith("ctx/")) return true;
+  // Context-related fields medblocks exports alongside ctx/* (e.g.
+  // "minimal/language|code" or "minimal/minimal:0/language|code")
+  if (key.match(/\/(language|territory|composer|encoding)\|/)) return true;
+  // Name fields are metadata, not actual content — FLAT format omits them
+  if (key.endsWith("/name")) return true;
+  // Structural metadata at the event_series level
+  if (key.match(/event_series\/(duration|period)$/)) return true;
+  return false;
+}
+
+// Rewrites one medblocks-ui export() path into EHRBase FLAT format, per the
+// oehrpy validator's expectations: "arbol/text/value" -> "arbol/name|value",
+// and a trailing /attribute -> |attribute for known data-value attributes
+// only (not structural paths like /time in the middle).
+function transformMedblocksKey(key: string): string {
+  const transformedKey = key.replace(/\/text\/value$/, "/name|value");
+
+  const lastSlashIndex = transformedKey.lastIndexOf("/");
+  if (lastSlashIndex === -1) return transformedKey;
+
+  const lastSegment = transformedKey.substring(lastSlashIndex + 1);
+  const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
+  if (!pipeAttributes.includes(lastSegment)) return transformedKey;
+
+  return transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
+}
+
+// Transforms a raw medblocks-ui export() object into an EHRBase-compatible
+// FLAT payload (minus context fields — see withContextFields). Shared by
+// the live preview and the actual submit path so they can't drift apart.
+function transformMedblocksExport(rawData: Record<string, unknown>): Record<string, unknown> {
+  const formData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawData)) {
+    if (shouldSkipMedblocksField(key)) continue;
+    formData[transformMedblocksKey(key)] = value;
+  }
+  return formData;
+}
+
+// Merges the ctx/* shortcuts (which EHRBase expands automatically) onto a
+// transformed FLAT payload.
+function withContextFields(
+  formData: Record<string, unknown>,
+  isoTime: string,
+): Record<string, unknown> {
+  return {
+    ...formData,
+    "ctx/language": language.value,
+    "ctx/territory": territory.value,
+    "ctx/composer_name": composerName.value,
+    "ctx/time": isoTime,
+  };
+}
+
 // Trigger for manual refresh
 const previewRefreshTrigger = ref(0);
 
@@ -194,67 +253,11 @@ const previewData = computed<unknown>(() => {
   if (mbFormRef.value) {
     try {
       const rawData = (mbFormRef.value as any).export?.() || {};
-
-      // Transform paths (same logic as in handleSubmit)
-      const formData: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(rawData)) {
-        // Skip ctx/ fields - they're added separately
-        if (key.startsWith("ctx/")) {
-          continue;
-        }
-
-        // Skip context-related fields that medblocks exports
-        if (key.match(/\/(language|territory|composer|encoding)\|/)) {
-          continue;
-        }
-
-        // Skip name fields (these are metadata, not actual content)
-        if (key.endsWith("/name")) {
-          continue;
-        }
-
-        // Skip structural metadata fields
-        if (key.match(/event_series\/(duration|period)$/)) {
-          continue;
-        }
-
-        // Transform to match oehrpy validator expectations
-        let transformedKey = key;
-
-        // Step 1: Keep ":0" - EHRBase example shows it's needed
-
-        // Step 2: Handle special case for value paths
-        transformedKey = transformedKey.replace(/\/text\/value$/, "/name|value");
-
-        // Step 3: Convert /attribute to |attribute for data value attributes only
-        const lastSlashIndex = transformedKey.lastIndexOf("/");
-        if (lastSlashIndex !== -1) {
-          const lastSegment = transformedKey.substring(lastSlashIndex + 1);
-          const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
-          if (pipeAttributes.includes(lastSegment)) {
-            transformedKey = transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
-          }
-        }
-
-        formData[transformedKey] = value;
-      }
-
-      // Add context fields using ctx/ shortcuts
+      const formData = transformMedblocksExport(rawData);
       const isoTime = compositionTime.value
         ? new Date(compositionTime.value).toISOString()
         : new Date().toISOString();
-
-      const payload = {
-        ...formData,
-
-        // Context shortcuts - EHRBase expands these automatically
-        "ctx/language": language.value,
-        "ctx/territory": territory.value,
-        "ctx/composer_name": composerName.value,
-        "ctx/time": isoTime,
-      };
-
-      return payload;
+      return withContextFields(formData, isoTime);
     } catch (e) {
       console.error("Failed to export form data:", e);
     }
@@ -288,74 +291,15 @@ async function handleSubmit() {
   loading.value = true;
 
   try {
-    // Get form data using export() method
+    // Get form data using export() method. medblocks-ui paths follow the
+    // pattern "template_short/archetype:0/path/to/field" and need
+    // transforming to EHRBase FLAT format — see transformMedblocksExport.
     let formData: Record<string, unknown> = {};
     if (mbFormRef.value) {
       try {
         const rawData = (mbFormRef.value as any).export?.() || {};
         console.log("Raw exported data:", rawData);
-
-        // Transform medblocks-ui paths to EHRBase FLAT format
-        // EHRBase expects paths like: "template_id/content/field"
-        // medblocks-ui exports paths like: "template_short_name/archetype_name:0/field"
-
-        formData = {} as Record<string, unknown>;
-        for (const [key, value] of Object.entries(rawData)) {
-          // Skip ctx/ fields - they're added separately
-          if (key.startsWith("ctx/")) {
-            continue;
-          }
-
-          // Skip context-related fields that medblocks exports
-          // These are handled separately via ctx/* fields
-          // Match both "minimal/language|code" and "minimal/minimal:0/language|code"
-          if (key.match(/\/(language|territory|composer|encoding)\|/)) {
-            continue;
-          }
-
-          // Skip name fields (these are metadata, not actual content)
-          // FLAT format typically doesn't include name fields
-          if (key.endsWith("/name")) {
-            continue;
-          }
-
-          // Skip structural metadata fields like duration and period at event_series level
-          if (key.match(/event_series\/(duration|period)$/)) {
-            continue;
-          }
-
-          // medblocks-ui paths follow pattern: "template_short/archetype:0/path/to/field"
-          // We need to remove "template_short/archetype:0/" and replace with "template_id/"
-          // Example: "minimal/minimal:0/event_series/..." -> "minimal_observation.en.v1/event_series/..."
-
-          let transformedKey = key;
-
-          // Based on oehrpy validator, the correct format is:
-          // Input: "minimal/minimal:0/event_series/cualquier_evento/arbol/text/value"
-          // Output: "minimal/minimal/event_series/cualquier_evento/arbol/value|value"
-
-          // Step 1: Keep ":0" for archetype instances (EHRBase example shows minimal:0)
-          // Don't remove :0 - EHRBase needs it!
-
-          // Step 2: Handle the special case for value paths
-          // "arbol/text/value" should become "arbol/name|value"
-          transformedKey = transformedKey.replace(/\/text\/value$/, "/name|value");
-
-          // Step 3: Convert /attribute to |attribute for known attributes at the end
-          // But NOT for structural paths like /time in the middle
-          const lastSlashIndex = transformedKey.lastIndexOf("/");
-          if (lastSlashIndex !== -1) {
-            const lastSegment = transformedKey.substring(lastSlashIndex + 1);
-            // Only convert to pipe notation for data value attributes, not structural time
-            const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
-            if (pipeAttributes.includes(lastSegment)) {
-              transformedKey = transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
-            }
-          }
-
-          formData[transformedKey] = value;
-        }
-
+        formData = transformMedblocksExport(rawData);
         console.log("Form data (transformed):", formData);
       } catch (e) {
         console.error("Failed to export form data:", e);
@@ -376,18 +320,7 @@ async function handleSubmit() {
     const isoTime = compositionTime.value
       ? new Date(compositionTime.value).toISOString()
       : new Date().toISOString();
-
-    // Build EHRBase-compatible FLAT payload using the transformed form data
-    const payload = {
-      // Add form data fields
-      ...formData,
-
-      // Context shortcuts - EHRBase expands these automatically
-      "ctx/language": language.value,
-      "ctx/territory": territory.value,
-      "ctx/composer_name": composerName.value,
-      "ctx/time": isoTime,
-    };
+    const payload = withContextFields(formData, isoTime);
 
     console.log("Final payload:", payload);
     console.log("Template ID:", templateId);
