@@ -69,6 +69,14 @@ watch(
   (isOpen) => {
     if (isOpen) seedFromCriteria(props.criteria);
   },
+  // Without this, a consumer that mounts the component with `open` already
+  // true (as a Storybook story does, and as any parent legitimately could)
+  // would never see the fields seeded — the watcher only fires on a
+  // false→true transition, never on the initial value. EhrBrowser.vue
+  // happens to always mount with `open: false` and flip it later, which is
+  // exactly why this went unnoticed until a story rendered `open: true`
+  // from the start.
+  { immediate: true },
 );
 
 function buildCriteria(): EhrSearchCriteria {
