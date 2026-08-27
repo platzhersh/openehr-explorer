@@ -4,6 +4,7 @@ import {
   addSubfolder,
   emptyFolder,
   fromWireFolder,
+  getFolderAtPath,
   removeItem,
   removeSubfolder,
   toWireFolder,
@@ -173,5 +174,29 @@ describe("addSubfolder / addItem / removeSubfolder / removeItem", () => {
     expect(folder.folders[0].name).toBe("B");
     expect(folder.items).toHaveLength(1);
     expect(folder.items[0].id).toBe("item-b");
+  });
+});
+
+describe("getFolderAtPath", () => {
+  it("returns the root for an empty path", () => {
+    const root = emptyFolder("Root");
+    expect(getFolderAtPath(root, [])).toBe(root);
+  });
+
+  it("resolves a nested path through folders[]", () => {
+    const root = emptyFolder("Root");
+    addSubfolder(root, "2026");
+    addSubfolder(root.folders[0], "August");
+    const resolved = getFolderAtPath(root, [0, 0]);
+    expect(resolved.name).toBe("August");
+    expect(resolved).toBe(root.folders[0].folders[0]);
+  });
+
+  it("distinguishes siblings by index", () => {
+    const root = emptyFolder("Root");
+    addSubfolder(root, "A");
+    addSubfolder(root, "B");
+    expect(getFolderAtPath(root, [0]).name).toBe("A");
+    expect(getFolderAtPath(root, [1]).name).toBe("B");
   });
 });

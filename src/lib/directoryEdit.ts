@@ -1,3 +1,5 @@
+import type { InjectionKey } from "vue";
+
 /**
  * Editing model for the DIRECTORY (FOLDER hierarchy) — see PRD/OEH-27.
  *
@@ -14,7 +16,20 @@
  * (`DirectoryTreeEditor.vue`) binds to; `fromWireFolder`/`toWireFolder`
  * convert to and from RM JSON at the edges — loading an existing DIRECTORY
  * into edit mode, and building the request body to send back.
+ *
+ * `DirectoryTreeEditor.vue` only ever *reads* the `EditableFolder` it's
+ * given as a prop — every write goes through `DIRECTORY_MUTATIONS_KEY`
+ * (injected from the component that owns the tree, e.g. EhrBrowser.vue's
+ * `editableDirectory`), addressed by `path` rather than mutating the prop
+ * in place. `getFolderAtPath` resolves a `path` back to the `EditableFolder`
+ * the owner should mutate.
  */
+
+/** Default OBJECT_REF type/namespace for a newly added DIRECTORY item —
+ *  almost always a COMPOSITION stored alongside the EHR that owns this
+ *  DIRECTORY. */
+const DEFAULT_ITEM_TYPE = "COMPOSITION";
+const DEFAULT_ITEM_NAMESPACE = "local";
 
 export interface EditableItem {
   /** Local editing key — not part of the wire format. Needed for a stable
@@ -68,8 +83,8 @@ export function fromWireFolder(folder: Record<string, unknown>): EditableFolder 
     items: (f.items ?? []).map((item) => ({
       key: nextKey("item"),
       id: item.id?.value ?? "",
-      type: item.type ?? "COMPOSITION",
-      namespace: item.namespace ?? "local",
+      type: item.type ?? DEFAULT_ITEM_TYPE,
+      namespace: item.namespace ?? DEFAULT_ITEM_NAMESPACE,
     })),
     folders: (f.folders ?? []).map(fromWireFolder),
   };
@@ -87,6 +102,8 @@ export function fromWireFolder(folder: Record<string, unknown>): EditableFolder 
  * EHR_STATUS. Nested FOLDERs share that archetype and aren't roots, so
  * stricter CDRs don't require it on them.
  */
+const FOLDER_ARCHETYPE_ID = "openEHR-EHR-FOLDER.generic.v1";
+
 export function toWireFolder(folder: EditableFolder, isRoot = true): Record<string, unknown> {
   const wire: Record<string, unknown> = {
     _type: "FOLDER",
@@ -96,19 +113,19 @@ export function toWireFolder(folder: EditableFolder, isRoot = true): Record<stri
       .map((item) => ({
         _type: "OBJECT_REF",
         id: { _type: "HIER_OBJECT_ID", value: item.id.trim() },
-        namespace: item.namespace.trim() || "local",
-        type: item.type.trim() || "COMPOSITION",
+        namespace: item.namespace.trim() || DEFAULT_ITEM_NAMESPACE,
+        type: item.type.trim() || DEFAULT_ITEM_TYPE,
       })),
     folders: folder.folders.map((sub) => toWireFolder(sub, false)),
   };
 
   if (isRoot) {
-    wire.archetype_node_id = "openEHR-EHR-FOLDER.generic.v1";
+    wire.archetype_node_id = FOLDER_ARCHETYPE_ID;
     wire.archetype_details = {
       _type: "ARCHETYPED",
       archetype_id: {
         _type: "ARCHETYPE_ID",
-        value: "openEHR-EHR-FOLDER.generic.v1",
+        value: FOLDER_ARCHETYPE_ID,
       },
       rm_version: "1.0.4",
     };
@@ -121,8 +138,8 @@ export function addSubfolder(folder: EditableFolder, name = "New folder"): void 
   folder.folders.push(emptyFolder(name));
 }
 
-export function addItem(folder: EditableFolder, id: string, type = "COMPOSITION"): void {
-  folder.items.push({ key: nextKey("item"), id, type, namespace: "local" });
+export function addItem(folder: EditableFolder, id: string, type = DEFAULT_ITEM_TYPE): void {
+  folder.items.push({ key: nextKey("item"), id, type, namespace: DEFAULT_ITEM_NAMESPACE });
 }
 
 export function removeSubfolder(folder: EditableFolder, key: string): void {
@@ -132,3 +149,41 @@ export function removeSubfolder(folder: EditableFolder, key: string): void {
 export function removeItem(folder: EditableFolder, key: string): void {
   folder.items = folder.items.filter((item) => item.key !== key);
 }
+
+/** Resolves `path` (a sequence of `folders[]` indices from the root) to the
+ *  `EditableFolder` at that location. `path: []` is the root itself.
+ *
+ *  This is how `DirectoryTreeEditor.vue` addresses a folder to mutate
+ *  without ever writing to its own `folder` prop: it emits `path` up to
+ *  whichever component owns the tree (via `DIRECTORY_MUTATIONS_KEY`), which
+ *  resolves it back to a real `EditableFolder` and calls the mutators above
+ *  on that — a value it owns, not a prop. */
+export function getFolderAtPath(root: EditableFolder, path: readonly number[]): EditableFolder {
+  let current = root;
+  for (const index of path) {
+    current = current.folders[index];
+  }
+  return current;
+}
+
+/** The mutation API a DIRECTORY-tree owner (e.g. `EhrBrowser.vue`'s
+ *  `editableDirectory`) provides via Vue's `provide`/`inject` under
+ *  `DIRECTORY_MUTATIONS_KEY`. `DirectoryTreeEditor.vue` — at any depth —
+ *  injects this instead of mutating the `EditableFolder` it receives as a
+ *  prop, so every write lands on the tree the owner actually holds.
+ *
+ *  `path` addresses the folder the action applies to; `removeSubfolder`/
+ *  `removeItem` take the *parent's* path plus the child's `key`, matching
+ *  the `(folder, key)` shape of the plain `removeSubfolder`/`removeItem`
+ *  functions above. */
+export interface DirectoryMutations {
+  renameFolder(path: readonly number[], name: string): void;
+  renameItemId(path: readonly number[], key: string, id: string): void;
+  addSubfolder(path: readonly number[]): void;
+  addItem(path: readonly number[], compositionUid: string): void;
+  removeSubfolder(parentPath: readonly number[], key: string): void;
+  removeItem(parentPath: readonly number[], key: string): void;
+}
+
+export const DIRECTORY_MUTATIONS_KEY: InjectionKey<DirectoryMutations> =
+  Symbol("directoryMutations");

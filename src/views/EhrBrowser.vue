@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from "vue";
+import { ref, watch, computed, onMounted, provide } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
@@ -14,8 +14,14 @@ import FilterIcon from "../components/FilterIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import {
+  addItem as addDirectoryItem,
+  addSubfolder as addDirectorySubfolder,
+  DIRECTORY_MUTATIONS_KEY,
   emptyFolder,
   fromWireFolder,
+  getFolderAtPath,
+  removeItem as removeDirectoryItem,
+  removeSubfolder as removeDirectorySubfolder,
   toWireFolder,
   type EditableFolder,
 } from "../lib/directoryEdit";
@@ -56,6 +62,38 @@ const directorySaveError = ref<string | null>(null);
 const showDeleteDirectoryDialog = ref(false);
 const deletingDirectory = ref(false);
 const deleteDirectoryError = ref<string | null>(null);
+
+// `DirectoryTreeEditor` (at any depth) injects this instead of mutating the
+// `EditableFolder` it receives as a prop — every write is applied here, to
+// the tree this view actually owns, addressed by `path` (see
+// DIRECTORY_MUTATIONS_KEY in src/lib/directoryEdit.ts for the full "why").
+provide(DIRECTORY_MUTATIONS_KEY, {
+  renameFolder(path, name) {
+    if (!editableDirectory.value) return;
+    getFolderAtPath(editableDirectory.value, path).name = name;
+  },
+  renameItemId(path, key, id) {
+    if (!editableDirectory.value) return;
+    const item = getFolderAtPath(editableDirectory.value, path).items.find((it) => it.key === key);
+    if (item) item.id = id;
+  },
+  addSubfolder(path) {
+    if (!editableDirectory.value) return;
+    addDirectorySubfolder(getFolderAtPath(editableDirectory.value, path));
+  },
+  addItem(path, compositionUid) {
+    if (!editableDirectory.value) return;
+    addDirectoryItem(getFolderAtPath(editableDirectory.value, path), compositionUid);
+  },
+  removeSubfolder(parentPath, key) {
+    if (!editableDirectory.value) return;
+    removeDirectorySubfolder(getFolderAtPath(editableDirectory.value, parentPath), key);
+  },
+  removeItem(parentPath, key) {
+    if (!editableDirectory.value) return;
+    removeDirectoryItem(getFolderAtPath(editableDirectory.value, parentPath), key);
+  },
+});
 
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
@@ -882,6 +920,7 @@ function lookupContribution() {
             <div v-if="directorySaveError" class="delete-error">{{ directorySaveError }}</div>
             <DirectoryTreeEditor
               :folder="editableDirectory"
+              :path="[]"
               :depth="0"
               :is-root="true"
               :available-compositions="availableCompositionOptions"

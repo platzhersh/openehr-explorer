@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import type { CompositionOption, EditableFolder } from "../lib/directoryEdit";
-import { addItem, addSubfolder, removeItem, removeSubfolder } from "../lib/directoryEdit";
+import { inject, ref } from "vue";
+import type { CompositionOption, DirectoryMutations, EditableFolder } from "../lib/directoryEdit";
+import { DIRECTORY_MUTATIONS_KEY } from "../lib/directoryEdit";
 
 // Editable counterpart to DirectoryTree.vue — same FOLDER/OBJECT_REF
 // recursion, but bound to plain-field inputs instead of rendering the RM
-// JSON read-only. See `src/lib/directoryEdit.ts` for the editable model and
-// the conversion to/from the wire FOLDER shape.
+// JSON read-only.
+//
+// `folder` is read-only here: every edit is applied by the component that
+// owns the tree (injected as `DIRECTORY_MUTATIONS_KEY`), addressed by
+// `path` — see the comment on that key in src/lib/directoryEdit.ts for why
+// (writing straight into a prop, at any depth of this recursion, would tie
+// the edit to whichever component happens to be holding it rather than the
+// single tree the owner serializes on Save).
 const props = defineProps<{
   folder: EditableFolder;
+  /** Indices into `folders[]` from the tree root down to this folder. */
+  path: readonly number[];
   depth: number;
   /** The root folder can't remove itself — the "remove" button is hidden
    *  for it, and it's the only node that gets archetype_details on save. */
@@ -16,9 +24,18 @@ const props = defineProps<{
   availableCompositions: CompositionOption[];
 }>();
 
-defineEmits<{
-  (e: "remove"): void;
-}>();
+// A no-op fallback keeps this component inert (rather than throwing) when
+// rendered without a real provider — e.g. a Storybook story with no
+// decorator wired up.
+const noopMutations: DirectoryMutations = {
+  renameFolder: () => {},
+  renameItemId: () => {},
+  addSubfolder: () => {},
+  addItem: () => {},
+  removeSubfolder: () => {},
+  removeItem: () => {},
+};
+const mutations = inject(DIRECTORY_MUTATIONS_KEY, noopMutations);
 
 const expanded = ref(true);
 const selectedCompositionUid = ref("");
@@ -27,23 +44,37 @@ function toggle() {
   expanded.value = !expanded.value;
 }
 
+function inputValue(event: Event): string {
+  return (event.target as HTMLInputElement).value;
+}
+
+function handleRenameFolder(event: Event) {
+  mutations.renameFolder(props.path, inputValue(event));
+}
+
+function handleRenameItem(key: string, event: Event) {
+  mutations.renameItemId(props.path, key, inputValue(event));
+}
+
 function handleAddSubfolder() {
-  addSubfolder(props.folder);
+  mutations.addSubfolder(props.path);
   expanded.value = true;
 }
 
 function handleAddItem() {
   if (!selectedCompositionUid.value) return;
-  addItem(props.folder, selectedCompositionUid.value);
+  mutations.addItem(props.path, selectedCompositionUid.value);
   selectedCompositionUid.value = "";
 }
 
 function handleRemoveItem(key: string) {
-  removeItem(props.folder, key);
+  mutations.removeItem(props.path, key);
 }
 
-function handleRemoveSubfolder(key: string) {
-  removeSubfolder(props.folder, key);
+// This folder removing itself from its own parent — the parent's path is
+// this folder's path minus its own trailing index.
+function handleRemoveSelf() {
+  mutations.removeSubfolder(props.path.slice(0, -1), props.folder.key);
 }
 
 function compositionLabel(uid: string): string {
@@ -57,18 +88,19 @@ function compositionLabel(uid: string): string {
       <button type="button" class="toggle" @click="toggle">{{ expanded ? "▼" : "▶" }}</button>
       <span class="folder-icon">📁</span>
       <input
-        v-model="folder.name"
+        :value="folder.name"
         type="text"
         class="folder-name-input"
         placeholder="Folder name"
         :aria-label="`Folder name (depth ${depth})`"
+        @input="handleRenameFolder"
       />
       <button
         v-if="!isRoot"
         type="button"
         class="btn-icon-remove"
         title="Remove this folder"
-        @click="$emit('remove')"
+        @click="handleRemoveSelf"
       >
         ✕
       </button>
@@ -76,23 +108,24 @@ function compositionLabel(uid: string): string {
 
     <div v-if="expanded" class="dir-edit-children">
       <DirectoryTreeEditor
-        v-for="sub in folder.folders"
+        v-for="(sub, i) in folder.folders"
         :key="sub.key"
         :folder="sub"
+        :path="[...path, i]"
         :depth="depth + 1"
         :available-compositions="availableCompositions"
-        @remove="handleRemoveSubfolder(sub.key)"
       />
 
       <div v-for="item in folder.items" :key="item.key" class="dir-edit-item">
         <span class="item-icon">📄</span>
         <span class="item-type">{{ item.type }}</span>
         <input
-          v-model="item.id"
+          :value="item.id"
           type="text"
           class="item-id-input mono"
           placeholder="Composition UID"
           :title="compositionLabel(item.id)"
+          @input="handleRenameItem(item.key, $event)"
         />
         <button
           type="button"
