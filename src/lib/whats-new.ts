@@ -28,8 +28,27 @@ export interface WhatsNewEntry {
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     version: "0.7.0",
-    date: "2026-08-25",
+    date: "2026-08-27",
     highlights: [
+      {
+        title: "Contribution audit trail",
+        description:
+          "Every write to an EHR — creating or updating a composition — is wrapped in a CONTRIBUTION with a full audit trail: who changed it, when, and why. Open it from any composition or EHR.",
+      },
+      {
+        title: "Browse the DIRECTORY",
+        description:
+          "Explore an EHR's DIRECTORY — the versioned folder hierarchy linking compositions into a navigable structure — right from the EHR Browser.",
+        tourId: "ehrs",
+        routePath: "/ehrs",
+      },
+      {
+        title: "Stored queries",
+        description:
+          "Server-defined STORED_QUERY definitions now show up in the AQL Runner — pick one, fill in its parameters, and run it without writing AQL by hand.",
+        tourId: "aql",
+        routePath: "/aql",
+      },
       {
         title: "Feature tours",
         description:
