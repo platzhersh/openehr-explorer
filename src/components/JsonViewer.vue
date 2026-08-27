@@ -378,9 +378,16 @@ async function copyAll() {
           :style="{ paddingLeft: `${line.depth * 16}px` }"
         >
           <span v-if="showLineNumbers" class="jv-line-number">{{ i + 1 }}</span>
-          <span v-if="line.isOpener" class="jv-toggle" @click="toggle(line.id)">{{
-            effectiveCollapsed.has(line.id) ? "▶" : "▼"
-          }}</span>
+          <button
+            v-if="line.isOpener"
+            type="button"
+            class="jv-toggle"
+            :aria-expanded="!effectiveCollapsed.has(line.id)"
+            :aria-label="effectiveCollapsed.has(line.id) ? 'Expand' : 'Collapse'"
+            @click="toggle(line.id)"
+          >
+            {{ effectiveCollapsed.has(line.id) ? "▶" : "▼" }}
+          </button>
           <span v-else class="jv-toggle-spacer" />
 
           <span class="jv-content">
@@ -474,12 +481,22 @@ async function copyAll() {
 .jv-toggle {
   flex-shrink: 0;
   width: 14px;
+  height: 14px;
   margin-right: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
   font-size: 9px;
+  line-height: 1;
   text-align: center;
   color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;
+}
+.jv-toggle:focus-visible {
+  outline: 1px solid var(--color-primary-dim);
+  outline-offset: 1px;
 }
 .jv-toggle:hover {
   color: var(--color-primary);

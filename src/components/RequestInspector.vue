@@ -109,13 +109,16 @@ const drawerHeight = computed(() => {
 
 const selected = computed(() => store.selectedEntry);
 
-// Parse body JSON
-function tryParseJson(body: string | null): unknown | null {
-  if (!body) return null;
+// Parse body JSON. Returns `undefined` on an empty/missing body or a parse
+// failure — distinct from a legitimately parsed `null`/`false`/`0`/`""`,
+// none of which JSON.parse can ever produce for those inputs, so callers can
+// tell "not JSON" apart from "JSON, and it happens to be falsy".
+function tryParseJson(body: string | null): unknown {
+  if (!body) return undefined;
   try {
     return JSON.parse(body);
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -174,10 +177,10 @@ function highlightXml(xml: string): string {
 }
 
 const responseJson = computed(() =>
-  selected.value ? tryParseJson(selected.value.response_body) : null,
+  selected.value ? tryParseJson(selected.value.response_body) : undefined,
 );
 const requestJson = computed(() =>
-  selected.value ? tryParseJson(selected.value.request_body) : null,
+  selected.value ? tryParseJson(selected.value.request_body) : undefined,
 );
 
 const isResponseXml = computed(() => isXmlResponse(selected.value));
@@ -406,10 +409,16 @@ function doClear() {
                     Raw
                   </button>
                 </div>
-                <div v-if="bodyViewTab === 'tree' && requestJson" class="tree-container">
+                <div
+                  v-if="bodyViewTab === 'tree' && requestJson !== undefined"
+                  class="tree-container"
+                >
                   <JsonTreeNode label="root" :value="requestJson" :depth="0" />
                 </div>
-                <div v-else-if="bodyViewTab === 'raw' && requestJson" class="raw-container">
+                <div
+                  v-else-if="bodyViewTab === 'raw' && requestJson !== undefined"
+                  class="raw-container"
+                >
                   <JsonViewer :value="requestJson" />
                 </div>
                 <pre v-else class="raw-body">{{ selected.request_body }}</pre>
@@ -498,7 +507,10 @@ function doClear() {
                 </div>
 
                 <!-- Tree View -->
-                <div v-if="bodyViewTab === 'tree' && responseJson" class="tree-container">
+                <div
+                  v-if="bodyViewTab === 'tree' && responseJson !== undefined"
+                  class="tree-container"
+                >
                   <div class="tree-toolbar">
                     <input
                       v-model="treeSearch"
@@ -531,7 +543,7 @@ function doClear() {
 
                 <!-- Raw View -->
                 <div v-else-if="bodyViewTab === 'raw'" class="raw-container">
-                  <JsonViewer v-if="responseJson" :value="responseJson" />
+                  <JsonViewer v-if="responseJson !== undefined" :value="responseJson" />
                   <template v-else>
                     <div class="raw-toolbar">
                       <button
