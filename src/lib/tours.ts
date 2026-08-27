@@ -15,6 +15,14 @@
  * a template card) — those may not exist yet when the tour auto-starts
  * right after navigation, and a missing target is silently skipped rather
  * than blocking the tour (see `useTourStore`).
+ *
+ * Most tours are route-aware (auto-start the first time their route is
+ * visited) or `global` (offered only via a manual trigger, e.g. the Request
+ * Inspector). The `app-intro` tour (`APP_INTRO_TOUR_ID`) is a third case:
+ * it targets the always-mounted app chrome — the sidebar and Request
+ * Inspector bar — rather than any one screen, so it auto-starts once at
+ * launch instead of on navigation. See `maybeAutoStartIntro` in
+ * `useTourStore`.
  */
 
 export interface TourStep {
@@ -44,7 +52,49 @@ export interface Tour {
   steps: TourStep[];
 }
 
+/**
+ * The app-wide intro tour's id. Unlike every other tour, it isn't offered
+ * via route navigation (see `maybeAutoStartIntro` in `useTourStore`) — it
+ * auto-starts once, at launch, before the destination route's own tour gets
+ * a turn. Exported so `App.vue`/`useTourStore` don't have to hardcode the
+ * string.
+ */
+export const APP_INTRO_TOUR_ID = "app-intro";
+
 export const TOURS: Tour[] = [
+  {
+    id: APP_INTRO_TOUR_ID,
+    routeNames: [],
+    global: true,
+    label: "App Tour",
+    steps: [
+      {
+        target: '[data-tour="server-select"]',
+        title: "Pick your server",
+        body: "Every screen works against whichever server profile is selected here. Add EHRBase, Better Platform, FerroEHR, or any generic openEHR REST server from the Server Manager, then switch between them any time.",
+      },
+      {
+        target: '[data-tour="nav-tabs"]',
+        title: "Find your way around",
+        body: "Browse EHRs and compositions, inspect templates, run AQL queries, and manage server profiles — each gets its own screen here, or jump straight there with Ctrl/Cmd+1 through 4.",
+      },
+      {
+        target: '[data-tour="nav-docs"]',
+        title: "Full documentation",
+        body: "Opens the online docs in your browser whenever you need more depth than these tours cover (Ctrl/Cmd+Shift+D).",
+      },
+      {
+        target: '[data-tour="nav-settings"]',
+        title: "Global settings",
+        body: "Analytics, update checks, and product tour preferences all live here — including replaying this tour or any single screen's tour later.",
+      },
+      {
+        target: '[data-tour="inspector-header"]',
+        title: "See every request",
+        body: "The Request Inspector at the bottom of the window logs every HTTP call the app makes to the connected CDR. It's always available; toggle it with Ctrl/Cmd+Shift+I.",
+      },
+    ],
+  },
   {
     id: "ehrs",
     routeNames: ["ehrs", "ehr-detail"],

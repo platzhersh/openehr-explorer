@@ -5,7 +5,7 @@ const serverStore = useServerStore();
 </script>
 
 <template>
-  <div class="server-switcher">
+  <div class="server-switcher" data-tour="server-select">
     <label class="switcher-label">Server</label>
     <select
       class="input server-select"

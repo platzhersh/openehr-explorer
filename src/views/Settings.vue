@@ -5,6 +5,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
 import { useUpdateStore } from "../stores/update";
 import { useTourStore } from "../stores/tour";
+import { APP_INTRO_TOUR_ID } from "../lib/tours";
 import { useWhatsNewStore } from "../stores/whatsNew";
 import { useAnalytics } from "../composables/useAnalytics";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
@@ -84,6 +85,12 @@ async function replayAllTours() {
   form.value.completed_tours = [...settingsStore.settings.completed_tours];
   toursResetMessage.value = "Tours will be shown again as you visit each screen.";
   void analytics.track("tours_reset");
+}
+
+/** Manual replay for the app-wide intro tour — ignores completion state, like `replayAllTours`. */
+function replayAppTour() {
+  void analytics.track("tour_replayed", { tour_id: APP_INTRO_TOUR_ID });
+  tourStore.start(APP_INTRO_TOUR_ID);
 }
 
 function viewWhatsNew() {
@@ -172,14 +179,16 @@ function viewWhatsNew() {
             label="Automatically show feature tours and What's New on updates"
           />
           <p class="form-help">
-            When enabled, each screen's tour is offered the first time you visit it, and a summary
-            appears after an update that changed something worth knowing about. You can always
-            replay a tour manually via the compass icon in a screen's header or in the Request
-            Inspector header, regardless of this setting.
+            When enabled, a one-time app tour introduces the sidebar and Request Inspector on first
+            launch, each screen's tour is offered the first time you visit it, and a summary appears
+            after an update that changed something worth knowing about. You can always replay a tour
+            manually via the compass icon in a screen's header or in the Request Inspector header,
+            regardless of this setting.
           </p>
         </div>
 
         <div class="form-group tour-actions-group">
+          <button type="button" class="btn btn-sm" @click="replayAppTour">Replay App Tour</button>
           <button type="button" class="btn btn-sm" @click="replayAllTours">Replay All Tours</button>
           <button type="button" class="btn btn-sm" @click="viewWhatsNew">View What's New</button>
         </div>
