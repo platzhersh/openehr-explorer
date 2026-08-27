@@ -818,6 +818,13 @@ FROM EHR e CONTAINS EHR_STATUS s"
 /// concurrency so a 200-row result set doesn't fire 200 requests at once.
 /// Original ordering is preserved even though the requests complete out of
 /// order, so results don't visibly reshuffle between identical searches.
+///
+/// A fetch failure (auth, transport, a non-404 HTTP error, bad JSON, ...) is
+/// *not* treated as "no directory" — that would silently misclassify an EHR
+/// we simply couldn't check. Only a confirmed 404 (which `fetch_directory`
+/// itself maps to `Ok(None)`) counts as absence; anything else drops that
+/// EHR from the result entirely, matching this function's existing
+/// best-effort handling of a panicked task below.
 async fn filter_by_directory_presence(
     app: &tauri::AppHandle,
     client: &reqwest::Client,
@@ -840,23 +847,27 @@ async fn filter_by_directory_presence(
             // Permit is held for the duration of the request; dropped (and the
             // slot freed) when this task completes.
             let _permit = semaphore.acquire_owned().await;
-            let has_directory = fetch_directory(&app, &client, &url, &auth)
-                .await
-                .unwrap_or(None)
-                .is_some();
-            (index, result, has_directory)
+            let directory_result = fetch_directory(&app, &client, &url, &auth).await;
+            (index, result, directory_result)
         });
     }
 
     let mut kept: Vec<(usize, EhrSearchResult)> = Vec::new();
     while let Some(joined) = set.join_next().await {
-        if let Ok((index, result, has_directory)) = joined {
-            if has_directory == want {
+        // Only a *confirmed* answer counts: Ok(Some(_)) means the EHR has a
+        // directory, Ok(None) means fetch_directory saw a real 404 (its own
+        // documented way of reporting "no directory set" — not an error).
+        // An Err (auth failure, transport error, a non-404 HTTP error, bad
+        // JSON, ...) means we genuinely don't know, so that EHR is left out
+        // of the filtered list entirely rather than being silently
+        // miscounted as "no directory" either way. Likewise, a panicked
+        // task is dropped rather than surfaced — its EHR is simply left out
+        // of the (already best-effort) filtered list.
+        if let Ok((index, result, Ok(directory))) = joined {
+            if directory.is_some() == want {
                 kept.push((index, result));
             }
         }
-        // A panicked task is dropped rather than surfaced — the corresponding
-        // EHR is simply left out of the (already best-effort) filtered list.
     }
     kept.sort_by_key(|(index, _)| *index);
     kept.into_iter().map(|(_, result)| result).collect()

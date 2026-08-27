@@ -203,7 +203,14 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearSearch() so a slow response for a since-superseded search
+  // (the user applied different filters, or removed a chip, before the
+  // previous request came back) can't land after a newer one and overwrite
+  // results that no longer match what's shown as the active criteria.
+  let searchRequestId = 0;
+
   async function searchEhrs(serverId: string, criteria: EhrSearchCriteria) {
+    const requestId = ++searchRequestId;
     searchLoading.value = true;
     searchError.value = null;
     searchActive.value = true;
@@ -212,12 +219,14 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         criteria,
       });
+      if (requestId !== searchRequestId) return; // superseded by a newer search
       searchResults.value = result.results;
       searchLimitReached.value = result.limit_reached;
     } catch (e) {
+      if (requestId !== searchRequestId) return;
       searchError.value = String(e);
     } finally {
-      searchLoading.value = false;
+      if (requestId === searchRequestId) searchLoading.value = false;
     }
   }
 
@@ -260,6 +269,7 @@ export const useEhrStore = defineStore("ehr", () => {
   }
 
   function clearSearch() {
+    searchRequestId++; // invalidate any in-flight searchEhrs call
     searchResults.value = [];
     searchActive.value = false;
     searchError.value = null;
