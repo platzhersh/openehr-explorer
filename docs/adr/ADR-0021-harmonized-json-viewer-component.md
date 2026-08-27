@@ -1,7 +1,7 @@
 # ADR-0021: Harmonized JSON Viewer Component
 
 **Date:** 2026-08-27
-**Status:** Proposed
+**Status:** Accepted
 **Repo:** `openehr-explorer`
 **Related:** [OEH-33](https://linear.app/platzh1rsch/issue/OEH-33/harmonize-json-display-across-the-app-with-a-reusable-jsonviewer), ADR-0012 (CodeMirror 6 for AQL Editor)
 

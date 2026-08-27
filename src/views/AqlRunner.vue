@@ -7,6 +7,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import AqlEditor from "../components/AqlEditor.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
@@ -508,7 +509,9 @@ const editorStyle = computed(() => ({
                         <summary class="cell-summary">
                           {{ JSON.stringify(cell).substring(0, 40) }}...
                         </summary>
-                        <pre class="cell-detail">{{ JSON.stringify(cell, null, 2) }}</pre>
+                        <div class="cell-detail">
+                          <JsonViewer :value="cell" :show-line-numbers="false" />
+                        </div>
                       </details>
                       <span v-else>{{ formatCellValue(cell) }}</span>
                     </td>
@@ -871,8 +874,6 @@ const editorStyle = computed(() => ({
 .cell-detail {
   margin-top: 8px;
   font-size: 11px;
-  white-space: pre-wrap;
-  word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
 }

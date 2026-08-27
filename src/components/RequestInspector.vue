@@ -12,6 +12,7 @@ import type { RequestLogEntry } from "../stores/inspector";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import JsonTreeNode from "./JsonTreeNode.vue";
+import JsonViewer from "./JsonViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
 
 type DrawerState = "collapsed" | "half" | "expanded";
@@ -408,6 +409,9 @@ function doClear() {
                 <div v-if="bodyViewTab === 'tree' && requestJson" class="tree-container">
                   <JsonTreeNode label="root" :value="requestJson" :depth="0" />
                 </div>
+                <div v-else-if="bodyViewTab === 'raw' && requestJson" class="raw-container">
+                  <JsonViewer :value="requestJson" />
+                </div>
                 <pre v-else class="raw-body">{{ selected.request_body }}</pre>
               </div>
 
@@ -527,17 +531,18 @@ function doClear() {
 
                 <!-- Raw View -->
                 <div v-else-if="bodyViewTab === 'raw'" class="raw-container">
-                  <div class="raw-toolbar">
-                    <button
-                      class="btn btn-sm"
-                      @click="copyToClipboard(selected.response_body || '')"
-                    >
-                      Copy All
-                    </button>
-                  </div>
-                  <pre class="raw-body">{{
-                    responseJson ? JSON.stringify(responseJson, null, 2) : selected.response_body
-                  }}</pre>
+                  <JsonViewer v-if="responseJson" :value="responseJson" />
+                  <template v-else>
+                    <div class="raw-toolbar">
+                      <button
+                        class="btn btn-sm"
+                        @click="copyToClipboard(selected.response_body || '')"
+                      >
+                        Copy All
+                      </button>
+                    </div>
+                    <pre class="raw-body">{{ selected.response_body }}</pre>
+                  </template>
                 </div>
 
                 <!-- FLAT View -->
@@ -961,7 +966,8 @@ function doClear() {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
-  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .raw-toolbar {
@@ -971,8 +977,6 @@ function doClear() {
 }
 
 .raw-body {
-  max-height: 400px;
-  overflow: auto;
   padding: 8px;
   margin: 0;
   font-family: var(--font-mono);

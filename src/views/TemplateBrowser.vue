@@ -12,6 +12,7 @@ import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -104,12 +105,6 @@ const filteredTemplates = computed(() => {
   return templateStore.templates.filter((t) => t.template_id.toLowerCase().includes(q));
 });
 
-const webTemplateJson = computed(() => {
-  return templateStore.selectedWebTemplate
-    ? JSON.stringify(templateStore.selectedWebTemplate, null, 2)
-    : "";
-});
-
 const flatPaths = computed(() => {
   if (!templateStore.selectedWebTemplate) return [];
   return extractFlatPaths(templateStore.selectedWebTemplate);
@@ -160,19 +155,6 @@ async function uploadFile(file: File) {
   }
 }
 
-// Syntax highlighting functions
-function highlightJson(json: string): string {
-  return json
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
-    .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
-    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-    .replace(/: (null)/g, ': <span class="json-null">$1</span>');
-}
-
 // Pretty-print XML with indentation so long OPT documents wrap readably.
 // Mirrors the formatter used in RequestInspector.vue.
 function formatXml(xml: string): string {
@@ -213,12 +195,6 @@ function highlightXml(xml: string): string {
     .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
     .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
 }
-
-// Unused - replaced by highlightedWebTemplateWithSearch and highlightedOptWithSearch
-// const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
-// const highlightedOpt = computed(() =>
-//   templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
-// );
 
 async function handleDrop(event: DragEvent) {
   event.preventDefault();
@@ -405,14 +381,6 @@ function highlightSearchInContent(html: string, searchQuery: string): string {
   return result;
 }
 
-const highlightedWebTemplateWithSearch = computed(() => {
-  let highlighted = highlightJson(webTemplateJson.value);
-  if (panelSearchQuery.value) {
-    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
-  }
-  return highlighted;
-});
-
 const formattedOptXml = computed(() => {
   return templateStore.selectedOpt ? formatXml(templateStore.selectedOpt) : "";
 });
@@ -426,25 +394,31 @@ const highlightedOptWithSearch = computed(() => {
   return highlighted;
 });
 
-const jsonXmlMatches = computed(() => {
-  if (!panelSearchQuery.value) return 0;
-  const content = activeTab.value === "json" ? webTemplateJson.value : formattedOptXml.value;
+// Web Template JSON match count comes from JsonViewer itself (see
+// @total-matches on the JsonViewer instance below). OPT XML still uses the
+// regex-based highlighter/counter — XML highlighting is out of scope here.
+const jsonViewerMatches = ref(0);
+const optMatches = computed(() => {
+  if (!panelSearchQuery.value || activeTab.value !== "opt") return 0;
   const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
-  const matches = content.match(regex);
+  const matches = formattedOptXml.value.match(regex);
   return matches ? matches.length : 0;
 });
+const activeTabMatches = computed(() =>
+  activeTab.value === "json" ? jsonViewerMatches.value : optMatches.value,
+);
 
 function goToNextMatch() {
-  if (jsonXmlMatches.value === 0) return;
-  currentMatchIndex.value = (currentMatchIndex.value + 1) % jsonXmlMatches.value;
-  scrollToMatch();
+  if (activeTabMatches.value === 0) return;
+  currentMatchIndex.value = (currentMatchIndex.value + 1) % activeTabMatches.value;
+  if (activeTab.value === "opt") scrollToMatch();
 }
 
 function goToPreviousMatch() {
-  if (jsonXmlMatches.value === 0) return;
+  if (activeTabMatches.value === 0) return;
   currentMatchIndex.value =
-    (currentMatchIndex.value - 1 + jsonXmlMatches.value) % jsonXmlMatches.value;
-  scrollToMatch();
+    (currentMatchIndex.value - 1 + activeTabMatches.value) % activeTabMatches.value;
+  if (activeTab.value === "opt") scrollToMatch();
 }
 
 function scrollToMatch() {
@@ -466,7 +440,9 @@ function scrollToMatch() {
 
 watch(panelSearchQuery, () => {
   currentMatchIndex.value = 0;
-  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "opt")) {
+  // JsonViewer scrolls its own current match into view when the search term
+  // changes; only the XML tab's regex-highlighted <pre> needs this.
+  if (panelSearchQuery.value && activeTab.value === "opt") {
     scrollToMatch();
   }
 });
@@ -682,15 +658,17 @@ onUnmounted(() => {
             v-model="panelSearchQuery"
             placeholder="Search JSON..."
             :match-count="currentMatchIndex"
-            :total-matches="jsonXmlMatches"
+            :total-matches="jsonViewerMatches"
             @close="closePanelSearch"
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
           />
-          <div class="json-actions">
-            <button class="btn btn-sm" @click="copyToClipboard(webTemplateJson)">Copy JSON</button>
-          </div>
-          <pre class="json-pre"><code v-html="highlightedWebTemplateWithSearch"></code></pre>
+          <JsonViewer
+            :value="templateStore.selectedWebTemplate"
+            :search-term="panelSearchQuery"
+            :current-match-index="currentMatchIndex"
+            @total-matches="jsonViewerMatches = $event"
+          />
         </div>
 
         <!-- OPT XML -->
@@ -701,7 +679,7 @@ onUnmounted(() => {
             v-model="panelSearchQuery"
             placeholder="Search XML..."
             :match-count="currentMatchIndex"
-            :total-matches="jsonXmlMatches"
+            :total-matches="optMatches"
             @close="closePanelSearch"
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
@@ -1390,34 +1368,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
 .json-view {
   padding-top: 16px;
-}
-.json-actions {
-  margin-bottom: 12px;
-}
-.json-pre {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* JSON syntax highlighting */
-.json-pre :deep(.json-key) {
-  color: #6495ed;
-  font-weight: 600;
-}
-.json-pre :deep(.json-string) {
-  color: #6bff8e;
-}
-.json-pre :deep(.json-number) {
-  color: #ffa500;
-}
-.json-pre :deep(.json-boolean) {
-  color: #ff6b6b;
-}
-.json-pre :deep(.json-null) {
-  color: var(--color-text-muted);
 }
 
 /* XML view */

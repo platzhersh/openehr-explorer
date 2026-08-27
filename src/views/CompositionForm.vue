@@ -8,6 +8,7 @@ import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
 import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
 
 const analytics = useAnalytics();
@@ -37,8 +38,14 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const success = ref<string | null>(null);
 const flatData = ref<Record<string, unknown>>({});
-const requestDetails = ref<string>("");
-const responseDetails = ref<string>("");
+// The Request/Response debug panel shows a plain-text summary line (method
+// + URL, or HTTP status) alongside the actual JSON payload, rendered with
+// JsonViewer — see ADR-0021. `*Payload` is null until there's something to
+// show (or when the response was a bare error string with no JSON body).
+const requestSummaryLine = ref<string>("");
+const requestPayload = ref<unknown>(null);
+const responseSummaryLine = ref<string>("");
+const responsePayload = ref<unknown>(null);
 
 // medblocks-ui form ref
 const mbFormRef = ref<HTMLElement | null>(null);
@@ -179,7 +186,7 @@ function buildFlatPayload(): Record<string, unknown> {
 // Trigger for manual refresh
 const previewRefreshTrigger = ref(0);
 
-const previewJson = computed(() => {
+const previewData = computed<unknown>(() => {
   // Access trigger to force re-computation
   void previewRefreshTrigger.value;
 
@@ -247,14 +254,14 @@ const previewJson = computed(() => {
         "ctx/time": isoTime,
       };
 
-      return JSON.stringify(payload, null, 2);
+      return payload;
     } catch (e) {
       console.error("Failed to export form data:", e);
     }
   }
 
   // Fallback to buildFlatPayload
-  return JSON.stringify(buildFlatPayload(), null, 2);
+  return buildFlatPayload();
 });
 
 function refreshPreview() {
@@ -391,7 +398,8 @@ async function handleSubmit() {
       ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
       : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
 
-    requestDetails.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json\n\n${JSON.stringify(payload, null, 2)}`;
+    requestSummaryLine.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json`;
+    requestPayload.value = payload;
 
     console.log("Submitting composition...");
 
@@ -420,7 +428,8 @@ async function handleSubmit() {
       void analytics.track("composition_created");
     }
 
-    responseDetails.value = `HTTP 201 Created\n\n${JSON.stringify({ uid: { value: result } }, null, 2)}`;
+    responseSummaryLine.value = "HTTP 201 Created";
+    responsePayload.value = { uid: { value: result } };
 
     // Clear draft
     clearDraft();
@@ -435,7 +444,8 @@ async function handleSubmit() {
   } catch (e) {
     console.error("Composition submission error:", e);
     error.value = String(e);
-    responseDetails.value = `Error: ${e}`;
+    responseSummaryLine.value = `Error: ${e}`;
+    responsePayload.value = null;
   } finally {
     loading.value = false;
     console.log("handleSubmit completed");
@@ -509,10 +519,6 @@ function loadDraft() {
 
 function clearDraft() {
   localStorage.removeItem(draftKey.value);
-}
-
-async function copyPreviewJson() {
-  await navigator.clipboard.writeText(previewJson.value);
 }
 
 // Auto-save draft every 30 seconds
@@ -680,13 +686,15 @@ watch(
       </div>
 
       <!-- Request/Response Details -->
-      <div v-if="requestDetails" class="details-section">
+      <div v-if="requestSummaryLine" class="details-section">
         <h3>Request</h3>
-        <pre class="details-pre">{{ requestDetails }}</pre>
+        <pre class="details-summary-line">{{ requestSummaryLine }}</pre>
+        <JsonViewer v-if="requestPayload !== null" :value="requestPayload" />
       </div>
-      <div v-if="responseDetails" class="details-section">
+      <div v-if="responseSummaryLine" class="details-section">
         <h3>Response</h3>
-        <pre class="details-pre">{{ responseDetails }}</pre>
+        <pre class="details-summary-line">{{ responseSummaryLine }}</pre>
+        <JsonViewer v-if="responsePayload !== null" :value="responsePayload" />
       </div>
     </div>
 
@@ -696,10 +704,11 @@ watch(
         <h3>FLAT JSON Preview</h3>
         <div class="preview-actions">
           <button class="btn btn-sm" @click="refreshPreview" title="Refresh preview">↻</button>
-          <button class="btn btn-sm" @click="copyPreviewJson">Copy JSON</button>
         </div>
       </div>
-      <pre class="preview-json">{{ previewJson }}</pre>
+      <div class="preview-json">
+        <JsonViewer :value="previewData" />
+      </div>
     </div>
 
     <!-- EHR Create Dialog -->
@@ -825,18 +834,14 @@ watch(
   color: var(--color-text-secondary);
 }
 
-.details-pre {
+.details-summary-line {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--color-surface);
-  padding: 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border);
-  max-height: 300px;
-  overflow-y: auto;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
 }
 
 .preview-panel {
@@ -869,13 +874,7 @@ watch(
 .preview-json {
   flex: 1;
   overflow-y: auto;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
   padding: 16px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .loading {

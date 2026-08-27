@@ -8,6 +8,7 @@ import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -397,17 +398,6 @@ const canDelete = computed(() => {
   return deleteConfirmText.value === ehrId.value;
 });
 
-const ehrJson = computed(() => {
-  if (!ehrStore.selectedEhr) return "";
-  return JSON.stringify(ehrStore.selectedEhr, null, 2);
-});
-
-async function copyEhrJson() {
-  if (ehrJson.value) {
-    await navigator.clipboard.writeText(ehrJson.value);
-  }
-}
-
 // CONTRIBUTION lookup (OEH-28). openEHR has no "list contributions for an
 // EHR" endpoint — only GET-by-UID — so this is a manual lookup form. The
 // composition Versions tab is the other, more common entry point: it
@@ -697,14 +687,6 @@ function lookupContribution() {
                 Contributions
               </button>
             </div>
-            <button
-              type="button"
-              class="btn btn-sm"
-              v-if="activeTab === 'json'"
-              @click="copyEhrJson"
-            >
-              Copy JSON
-            </button>
             <button type="button" class="btn btn-sm btn-danger" @click="openDeleteDialog">
               Delete EHR
             </button>
@@ -753,7 +735,7 @@ function lookupContribution() {
 
         <!-- JSON View -->
         <div v-if="activeTab === 'json'" class="json-view">
-          <pre class="json-pre">{{ ehrJson }}</pre>
+          <JsonViewer v-if="ehrStore.selectedEhr" :value="ehrStore.selectedEhr" />
         </div>
 
         <!-- Directory View (OEH-27) -->
@@ -976,18 +958,6 @@ function lookupContribution() {
 .directory-view {
   margin-top: 16px;
   overflow: auto;
-}
-.json-pre {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: var(--color-surface);
-  padding: 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border);
 }
 
 .search-bar {
