@@ -15,6 +15,7 @@ import JsonTreeNode from "./JsonTreeNode.vue";
 import JsonViewer from "./JsonViewer.vue";
 import XmlViewer from "./XmlViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
+import CopyButton from "./CopyButton.vue";
 
 type DrawerState = "collapsed" | "half" | "expanded";
 
@@ -192,15 +193,6 @@ function responseBodySize(entry: RequestLogEntry): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
-
-async function copyCurl() {
-  if (!selected.value) return;
-  await copyToClipboard(generateCurl(selected.value));
-}
-
 function confirmClear() {
   showClearConfirm.value = true;
 }
@@ -331,13 +323,7 @@ function doClear() {
                     <td class="header-key">{{ key }}</td>
                     <td class="header-value">
                       {{ val }}
-                      <button
-                        class="copy-btn"
-                        @click="copyToClipboard(`${key}: ${val}`)"
-                        title="Copy"
-                      >
-                        copy
-                      </button>
+                      <CopyButton :text="`${key}: ${val}`" title="Copy header" />
                     </td>
                   </tr>
                 </table>
@@ -375,7 +361,14 @@ function doClear() {
               </div>
 
               <div class="detail-section">
-                <button class="btn btn-sm" @click="copyCurl">Copy as curl</button>
+                <div class="section-header">cURL Command</div>
+                <CopyButton
+                  v-if="selected"
+                  :text="generateCurl(selected)"
+                  title="Copy as curl"
+                  size="md"
+                  variant="bordered"
+                />
               </div>
             </template>
 
@@ -412,13 +405,7 @@ function doClear() {
                     <td class="header-key">{{ key }}</td>
                     <td class="header-value">
                       {{ val }}
-                      <button
-                        class="copy-btn"
-                        @click="copyToClipboard(`${key}: ${val}`)"
-                        title="Copy"
-                      >
-                        copy
-                      </button>
+                      <CopyButton :text="`${key}: ${val}`" title="Copy header" />
                     </td>
                   </tr>
                 </table>
@@ -488,12 +475,12 @@ function doClear() {
                   <JsonViewer v-if="responseJson !== undefined" :value="responseJson" />
                   <template v-else>
                     <div class="raw-toolbar">
-                      <button
-                        class="btn btn-sm"
-                        @click="copyToClipboard(selected.response_body || '')"
-                      >
-                        Copy All
-                      </button>
+                      <CopyButton
+                        :text="selected.response_body || ''"
+                        title="Copy response body"
+                        size="md"
+                        variant="bordered"
+                      />
                     </div>
                     <pre class="raw-body">{{ selected.response_body }}</pre>
                   </template>
@@ -511,23 +498,11 @@ function doClear() {
                       <tr v-for="entry in flatEntries" :key="entry.path">
                         <td class="flat-path">
                           {{ entry.path }}
-                          <button
-                            class="copy-btn"
-                            @click="copyToClipboard(entry.path)"
-                            title="Copy path"
-                          >
-                            copy
-                          </button>
+                          <CopyButton :text="entry.path" title="Copy path" />
                         </td>
                         <td class="flat-value">
                           {{ entry.value }}
-                          <button
-                            class="copy-btn"
-                            @click="copyToClipboard(entry.value)"
-                            title="Copy value"
-                          >
-                            copy
-                          </button>
+                          <CopyButton :text="entry.value" title="Copy value" />
                         </td>
                       </tr>
                     </table>

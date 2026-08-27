@@ -9,6 +9,7 @@ import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
+import CopyButton from "../components/CopyButton.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -327,10 +328,6 @@ function refresh() {
   }
 }
 
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
-
 // Sort paginated EHRs by time_created descending (only when not searching)
 const sortedEhrs = computed(() => {
   return [...ehrStore.ehrs].sort((a, b) => {
@@ -588,14 +585,7 @@ function lookupContribution() {
           >
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
-              <button
-                type="button"
-                class="copy-btn"
-                @click.stop="copyToClipboard(ehr.ehr_id)"
-                title="Copy full ID"
-              >
-                Copy
-              </button>
+              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
               <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
@@ -620,14 +610,7 @@ function lookupContribution() {
           >
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
-              <button
-                type="button"
-                class="copy-btn"
-                @click.stop="copyToClipboard(ehr.ehr_id)"
-                title="Copy full ID"
-              >
-                Copy
-              </button>
+              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
               <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
@@ -698,13 +681,7 @@ function lookupContribution() {
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
               {{ ehrStore.selectedEhr.ehr_id }}
-              <button
-                type="button"
-                class="copy-btn"
-                @click="copyToClipboard(ehrStore.selectedEhr!.ehr_id)"
-              >
-                Copy
-              </button>
+              <CopyButton :text="ehrStore.selectedEhr!.ehr_id" title="Copy EHR ID" />
             </span>
           </div>
           <div class="detail-row" v-if="ehrStore.selectedEhr.time_created">

@@ -13,6 +13,7 @@ import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
+import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
 import { useTourStore } from "../stores/tour";
 
@@ -198,10 +199,6 @@ async function handleFileSelect() {
   } catch (e) {
     uploadError.value = String(e);
   }
-}
-
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
 }
 
 function createComposition(templateId: string) {
@@ -524,7 +521,6 @@ onUnmounted(() => {
               :node="filteredWtTree"
               :depth="0"
               :search-query="panelSearchQuery"
-              @copy="copyToClipboard"
             />
           </div>
           <div v-else-if="panelSearchQuery" class="empty-search">
@@ -594,7 +590,7 @@ onUnmounted(() => {
             <div class="flat-paths-list">
               <div v-for="path in filteredFlatPaths" :key="path" class="flat-path-item">
                 <span class="path-text" v-html="highlightPathMatch(path, panelSearchQuery)"></span>
-                <button class="copy-btn" @click="copyToClipboard(path)">Copy</button>
+                <CopyButton :text="path" title="Copy path" />
               </div>
             </div>
           </div>
@@ -630,8 +626,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
     node: { type: Object as PropType<WtNodeType>, required: true },
     depth: { type: Number, default: 0 },
   },
-  emits: ["copy"],
-  setup(props, { emit }): () => VNode {
+  setup(props): () => VNode {
     const collapsed = vueRef(props.depth > 2);
 
     return (): VNode => {
@@ -687,16 +682,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 
       if (node.aqlPath) {
         headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(
-          h(
-            "button",
-            {
-              class: "copy-btn",
-              onClick: () => emit("copy", node.aqlPath),
-            },
-            "Copy",
-          ),
-        );
+        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
       }
 
       elements.push(
@@ -716,7 +702,6 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
             h(WtTreeNode, {
               node: child,
               depth: props.depth + 1,
-              onCopy: (v: string) => emit("copy", v),
             }),
           ),
         );
@@ -739,8 +724,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
     depth: { type: Number, default: 0 },
     searchQuery: { type: String, default: "" },
   },
-  emits: ["copy"],
-  setup(props, { emit }): () => VNode {
+  setup(props): () => VNode {
     function highlightMatch(text: string, query: string): VNode[] {
       if (!query) return [h("span", text)];
 
@@ -801,16 +785,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
       if (node.aqlPath) {
         headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(
-          h(
-            "button",
-            {
-              class: "copy-btn",
-              onClick: () => emit("copy", node.aqlPath),
-            },
-            "Copy",
-          ),
-        );
+        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
       }
 
       elements.push(
@@ -831,7 +806,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
               node: child,
               depth: props.depth + 1,
               searchQuery: props.searchQuery,
-              onCopy: (v: string) => emit("copy", v),
             }),
           ),
         );

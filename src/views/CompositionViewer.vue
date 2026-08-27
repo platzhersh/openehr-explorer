@@ -11,6 +11,7 @@ import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
+import CopyButton from "../components/CopyButton.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -201,14 +202,6 @@ function replayTour() {
   tourStore.start("composition");
 }
 
-async function copyJson() {
-  const json =
-    activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
-  if (json) {
-    await navigator.clipboard.writeText(JSON.stringify(json, null, 2));
-  }
-}
-
 // Data shown in the JSON / FLAT tabs — JsonViewer takes the parsed value
 // directly rather than a pre-stringified, pre-highlighted string.
 const jsonViewerData = computed(() => {
@@ -216,6 +209,11 @@ const jsonViewerData = computed(() => {
     ? flatComposition.value
     : composition.value;
 });
+
+// Text for the header's "copy active tab" button — works regardless of
+// which tab is showing (unlike JsonViewer's own copy button, which only
+// exists once the JSON/FLAT tab is mounted).
+const headerCopyText = computed(() => JSON.stringify(jsonViewerData.value, null, 2));
 
 // Match count comes from JsonViewer itself (see @total-matches below); this
 // just tracks the total so the SearchOverlay can show "X of Y" and so
@@ -334,9 +332,13 @@ onUnmounted(() => {
         >
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
         </button>
-        <button type="button" class="btn btn-sm" data-tour="composition-copy" @click="copyJson">
-          Copy JSON
-        </button>
+        <CopyButton
+          :text="headerCopyText"
+          title="Copy JSON to clipboard"
+          size="md"
+          variant="bordered"
+          data-tour="composition-copy"
+        />
         <button class="btn btn-sm" @click="handleEdit">Edit</button>
         <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
       </div>

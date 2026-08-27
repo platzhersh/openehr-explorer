@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useServerStore } from "../stores/server";
 import { useEhrStore } from "../stores/ehr";
+import CopyButton from "./CopyButton.vue";
 
 defineProps<{
   open: boolean;
@@ -75,12 +76,6 @@ function handleClose() {
   emit("close");
   resetForm();
 }
-
-async function copyEhrId() {
-  if (createdEhrId.value) {
-    await navigator.clipboard.writeText(createdEhrId.value);
-  }
-}
 </script>
 
 <template>
@@ -150,7 +145,7 @@ async function copyEhrId() {
             EHR created successfully!
             <div class="ehr-id-display">
               <code>{{ createdEhrId }}</code>
-              <button type="button" class="btn btn-sm" @click="copyEhrId">Copy</button>
+              <CopyButton :text="createdEhrId" title="Copy EHR ID" size="md" variant="bordered" />
             </div>
           </div>
 

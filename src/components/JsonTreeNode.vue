@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import CopyButton from "./CopyButton.vue";
 
 const props = defineProps<{
   label: string;
@@ -81,10 +82,6 @@ const matchesSearch = computed(() => {
 function toggle() {
   expanded.value = !expanded.value;
 }
-
-async function copyValue(text: string) {
-  await navigator.clipboard.writeText(text);
-}
 </script>
 
 <template>
@@ -107,14 +104,7 @@ async function copyValue(text: string) {
         <span v-if="isOpenEhrType" class="openehr-type-pill">{{ value }}</span>
         <span v-else-if="isArchetypeNodeId" class="archetype-id">{{ value }}</span>
         <span v-else :class="['node-value', `value-${valueType}`]">{{ displayValue }}</span>
-        <button
-          v-if="isCopyableId"
-          class="copy-btn"
-          title="Copy"
-          @click.stop="copyValue(String(value))"
-        >
-          copy
-        </button>
+        <CopyButton v-if="isCopyableId" :text="String(value)" @click.stop />
       </template>
     </div>
 
@@ -233,20 +223,5 @@ async function copyValue(text: string) {
 
 .search-match > .node-row {
   background: rgba(255, 217, 61, 0.15);
-}
-
-.copy-btn {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 0 4px;
-  font-size: 10px;
-  border-radius: 3px;
-  margin-left: 4px;
-}
-.copy-btn:hover {
-  color: var(--color-primary);
-  background: var(--color-surface);
 }
 </style>
