@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from "vue";
 import { useTemplateUpload } from "../composables/useTemplateUpload";
+import TemplateUploadZone from "./TemplateUploadZone.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -40,20 +41,16 @@ function handleClose() {
           Publish an Operational Template (OPT) XML file to the active server.
         </p>
 
-        <div
-          class="upload-zone"
-          :class="{ 'drag-over': dragOver }"
-          @dragover.prevent="dragOver = true"
+        <TemplateUploadZone
+          :drag-over="dragOver"
+          :uploading="uploading"
+          :upload-status="uploadStatus"
+          :upload-error="uploadError"
+          @dragover="dragOver = true"
           @dragleave="dragOver = false"
           @drop="handleDrop"
-        >
-          <p>Drop OPT file here to upload</p>
-          <button class="btn btn-sm" :disabled="uploading" @click="handleFileSelect">
-            {{ uploading ? "Uploading..." : "Or choose file..." }}
-          </button>
-        </div>
-        <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
-        <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
+          @choose-file="handleFileSelect"
+        />
 
         <div class="dialog-actions">
           <button type="button" class="btn btn-secondary" @click="handleClose">Close</button>
@@ -127,44 +124,6 @@ function handleClose() {
   margin: 0 0 16px;
   font-size: 13px;
   color: var(--color-text-secondary);
-}
-
-.upload-zone {
-  padding: 24px;
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius);
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: 13px;
-  transition: all 0.15s;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-}
-.upload-zone.drag-over {
-  border-color: var(--color-primary);
-  background: rgba(100, 255, 218, 0.05);
-}
-.upload-zone p {
-  margin: 0;
-}
-
-.upload-msg {
-  margin: 16px 0 0;
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  font-size: 12px;
-}
-.upload-msg.success {
-  color: var(--color-success);
-  background: rgba(100, 255, 218, 0.1);
-  border: 1px solid rgba(100, 255, 218, 0.3);
-}
-.upload-msg.error {
-  color: var(--color-error);
-  background: rgba(255, 90, 90, 0.1);
-  border: 1px solid rgba(255, 90, 90, 0.3);
 }
 
 .dialog-actions {
