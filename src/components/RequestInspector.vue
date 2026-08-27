@@ -140,6 +140,8 @@ const requestJson = computed(() =>
 
 const isResponseXml = computed(() => isXmlResponse(selected.value));
 
+const curlCommand = computed(() => (selected.value ? generateCurl(selected.value) : ""));
+
 // Auto-switch to XML tab when XML response is detected
 watch(isResponseXml, (isXml) => {
   if (isXml && (bodyViewTab.value === "tree" || bodyViewTab.value === "flat")) {
@@ -362,13 +364,17 @@ function doClear() {
 
               <div class="detail-section">
                 <div class="section-header">cURL Command</div>
-                <CopyButton
-                  v-if="selected"
-                  :text="generateCurl(selected)"
-                  title="Copy as curl"
-                  size="md"
-                  variant="bordered"
-                />
+                <div class="raw-container">
+                  <div class="raw-toolbar">
+                    <CopyButton
+                      :text="curlCommand"
+                      title="Copy as curl"
+                      size="md"
+                      variant="bordered"
+                    />
+                  </div>
+                  <pre class="raw-body">{{ curlCommand }}</pre>
+                </div>
               </div>
             </template>
 
