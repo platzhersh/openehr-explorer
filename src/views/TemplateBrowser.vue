@@ -13,6 +13,7 @@ import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
+import XmlViewer from "../components/XmlViewer.vue";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -153,47 +154,6 @@ async function uploadFile(file: File) {
   } catch (e) {
     uploadError.value = String(e);
   }
-}
-
-// Pretty-print XML with indentation so long OPT documents wrap readably.
-// Mirrors the formatter used in RequestInspector.vue.
-function formatXml(xml: string): string {
-  let formatted = "";
-  let indent = 0;
-  const lines = xml.split(/>\s*</);
-
-  lines.forEach((line, index) => {
-    if (index > 0) line = "<" + line;
-    if (index < lines.length - 1) line = line + ">";
-
-    if (line.match(/^<\/\w/)) indent--;
-
-    formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
-
-    if (line.match(/^<\w[^>]*[^/]>$/)) indent++;
-  });
-
-  return formatted.trim();
-}
-
-function highlightXml(xml: string): string {
-  return xml
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(
-      /(&lt;\/?)([\w-:]+)([\s\S]*?)(&gt;)/g,
-      (_match, openBracket, tagName, content, closeBracket) => {
-        const highlightedTag = `${openBracket}<span class="xml-tag">${tagName}</span>`;
-        const highlightedContent = content.replace(
-          /([\w-:]+)=(["'])(.*?)\2/g,
-          '<span class="xml-attr-name">$1</span>=<span class="xml-attr-value">$2$3$2</span>',
-        );
-        return `${highlightedTag}${highlightedContent}${closeBracket}`;
-      },
-    )
-    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
-    .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
 }
 
 async function handleDrop(event: DragEvent) {
@@ -345,106 +305,28 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function highlightSearchInContent(html: string, searchQuery: string): string {
-  if (!searchQuery) return html;
-
-  // We need to search in the text content, not the HTML
-  // Strategy: find matches in plain text positions, then inject marks in HTML
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
-  const plainText = tempDiv.textContent || "";
-
-  const regex = new RegExp(escapeRegex(searchQuery), "gi");
-  const matches: Array<{ start: number; end: number }> = [];
-  let match;
-
-  while ((match = regex.exec(plainText)) !== null) {
-    matches.push({ start: match.index, end: match.index + match[0].length });
-  }
-
-  if (matches.length === 0) return html;
-
-  // Rebuild HTML with <mark> tags
-  // This is complex because we need to preserve HTML structure
-  // Simplified approach: wrap matches in the final HTML string
-  // This may not be perfect but works for most cases
-  let result = html;
-  const escapedQuery = escapeHtml(searchQuery);
-  const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
-
-  result = result.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
-
-  return result;
-}
-
-const formattedOptXml = computed(() => {
-  return templateStore.selectedOpt ? formatXml(templateStore.selectedOpt) : "";
-});
-
-const highlightedOptWithSearch = computed(() => {
-  if (!formattedOptXml.value) return "";
-  let highlighted = highlightXml(formattedOptXml.value);
-  if (panelSearchQuery.value) {
-    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
-  }
-  return highlighted;
-});
-
-// Web Template JSON match count comes from JsonViewer itself (see
-// @total-matches on the JsonViewer instance below). OPT XML still uses the
-// regex-based highlighter/counter — XML highlighting is out of scope here.
+// Both match counts come from their respective viewer component (see
+// @total-matches on the JsonViewer/XmlViewer instances below) — each viewer
+// owns its own highlighting, current-match tracking, and scroll-into-view.
 const jsonViewerMatches = ref(0);
-const optMatches = computed(() => {
-  if (!panelSearchQuery.value || activeTab.value !== "opt") return 0;
-  const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
-  const matches = formattedOptXml.value.match(regex);
-  return matches ? matches.length : 0;
-});
+const xmlViewerMatches = ref(0);
 const activeTabMatches = computed(() =>
-  activeTab.value === "json" ? jsonViewerMatches.value : optMatches.value,
+  activeTab.value === "json" ? jsonViewerMatches.value : xmlViewerMatches.value,
 );
 
 function goToNextMatch() {
   if (activeTabMatches.value === 0) return;
   currentMatchIndex.value = (currentMatchIndex.value + 1) % activeTabMatches.value;
-  if (activeTab.value === "opt") scrollToMatch();
 }
 
 function goToPreviousMatch() {
   if (activeTabMatches.value === 0) return;
   currentMatchIndex.value =
     (currentMatchIndex.value - 1 + activeTabMatches.value) % activeTabMatches.value;
-  if (activeTab.value === "opt") scrollToMatch();
-}
-
-function scrollToMatch() {
-  nextTick(() => {
-    const matches = document.querySelectorAll(".search-match");
-    if (matches[currentMatchIndex.value]) {
-      // Remove current-match class from all
-      matches.forEach((el) => el.classList.remove("current-match"));
-
-      // Add to current
-      matches[currentMatchIndex.value].classList.add("current-match");
-      matches[currentMatchIndex.value].scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  });
 }
 
 watch(panelSearchQuery, () => {
   currentMatchIndex.value = 0;
-  // JsonViewer scrolls its own current match into view when the search term
-  // changes; only the XML tab's regex-highlighted <pre> needs this.
-  if (panelSearchQuery.value && activeTab.value === "opt") {
-    scrollToMatch();
-  }
 });
 
 onMounted(() => {
@@ -679,15 +561,17 @@ onUnmounted(() => {
             v-model="panelSearchQuery"
             placeholder="Search XML..."
             :match-count="currentMatchIndex"
-            :total-matches="optMatches"
+            :total-matches="xmlViewerMatches"
             @close="closePanelSearch"
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
           />
-          <div class="xml-actions">
-            <button class="btn btn-sm" @click="copyToClipboard(formattedOptXml)">Copy XML</button>
-          </div>
-          <pre class="xml-pre"><code v-html="highlightedOptWithSearch"></code></pre>
+          <XmlViewer
+            :xml="templateStore.selectedOpt ?? ''"
+            :search-term="panelSearchQuery"
+            :current-match-index="currentMatchIndex"
+            @total-matches="xmlViewerMatches = $event"
+          />
         </div>
 
         <!-- FLAT Paths -->
@@ -1373,35 +1257,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 /* XML view */
 .xml-view {
   padding-top: 16px;
-}
-.xml-actions {
-  margin-bottom: 12px;
-}
-.xml-pre {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* XML syntax highlighting */
-.xml-pre :deep(.xml-tag) {
-  color: #6495ed;
-  font-weight: 600;
-}
-.xml-pre :deep(.xml-attr-name) {
-  color: #ffd93d;
-}
-.xml-pre :deep(.xml-attr-value) {
-  color: #6bff8e;
-}
-.xml-pre :deep(.xml-comment) {
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-.xml-pre :deep(.xml-declaration) {
-  color: #ff6b6b;
 }
 
 /* Search highlighting */
