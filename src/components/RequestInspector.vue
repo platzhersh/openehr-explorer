@@ -14,6 +14,7 @@ import { useTourStore } from "../stores/tour";
 import JsonTreeNode from "./JsonTreeNode.vue";
 import JsonViewer from "./JsonViewer.vue";
 import XmlViewer from "./XmlViewer.vue";
+import BashViewer from "./BashViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
 import CopyButton from "./CopyButton.vue";
 
@@ -364,16 +365,8 @@ function doClear() {
 
               <div class="detail-section">
                 <div class="section-header">cURL Command</div>
-                <div class="raw-container">
-                  <div class="raw-toolbar">
-                    <CopyButton
-                      :text="curlCommand"
-                      title="Copy as curl"
-                      size="md"
-                      variant="bordered"
-                    />
-                  </div>
-                  <pre class="raw-body">{{ curlCommand }}</pre>
+                <div class="curl-container">
+                  <BashViewer :code="curlCommand" copy-title="Copy as curl" />
                 </div>
               </div>
             </template>
@@ -984,6 +977,15 @@ function doClear() {
 
 /* XML view */
 .xml-container {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* cURL command view */
+.curl-container {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
