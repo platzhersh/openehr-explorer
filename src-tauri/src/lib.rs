@@ -128,6 +128,9 @@ pub fn run() {
             ehr::search_ehrs,
             ehr::get_directory,
             ehr::get_directory_version,
+            ehr::create_directory,
+            ehr::update_directory,
+            ehr::delete_directory,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,

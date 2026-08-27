@@ -8,10 +8,17 @@ import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import EhrFilterModal from "../components/EhrFilterModal.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
+import DirectoryTreeEditor from "../components/DirectoryTreeEditor.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import FilterIcon from "../components/FilterIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
+import {
+  emptyFolder,
+  fromWireFolder,
+  toWireFolder,
+  type EditableFolder,
+} from "../lib/directoryEdit";
 
 const route = useRoute();
 const router = useRouter();
@@ -38,6 +45,18 @@ const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
+
+// DIRECTORY create/update/delete (OEH-27 follow-up) — editing state for the
+// Directory tab. `editableDirectory` is a plain-field working copy (see
+// src/lib/directoryEdit.ts); it only replaces `ehrStore.directory` on save.
+const directoryEditMode = ref(false);
+const editableDirectory = ref<EditableFolder | null>(null);
+const directorySaving = ref(false);
+const directorySaveError = ref<string | null>(null);
+const showDeleteDirectoryDialog = ref(false);
+const deletingDirectory = ref(false);
+const deleteDirectoryError = ref<string | null>(null);
+
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
 const showFilterModal = ref(false);
@@ -68,6 +87,7 @@ watch(
     // the DIRECTORY tab would keep showing data fetched from the
     // now-abandoned server for whatever EHR ID happens to still be selected.
     ehrStore.clearDirectory();
+    cancelEditDirectory();
     if (activeTab.value === "directory" && ehrId.value && id) {
       ehrStore.fetchDirectory(id, ehrId.value);
     }
@@ -85,6 +105,7 @@ watch(ehrId, (id) => {
   // The DIRECTORY tab's data is EHR-scoped — reset it whenever the selected
   // EHR changes, and re-fetch for the new EHR if that tab is currently open.
   ehrStore.clearDirectory();
+  cancelEditDirectory();
   if (activeTab.value === "directory" && id && serverStore.activeServerId) {
     ehrStore.fetchDirectory(serverStore.activeServerId, id);
   }
@@ -379,6 +400,90 @@ function openCompositionRef(objectRef: { id?: { value?: string } }) {
       name: "composition",
       params: { ehrId: ehrId.value, compositionUid: objectRef.id.value },
     });
+  }
+}
+
+// Compositions available to pick from in the "add item" dropdown while
+// editing the DIRECTORY — sourced from the same list shown on the Detail tab.
+const availableCompositionOptions = computed(() => {
+  if (!ehrStore.selectedEhr) return [];
+  return ehrStore.selectedEhr.compositions.map((comp) => ({
+    uid: comp.uid,
+    label: comp.name ?? comp.template_id ?? comp.uid,
+  }));
+});
+
+function directoryVersionUid(): string | undefined {
+  return (ehrStore.directory as { uid?: { value?: string } } | null)?.uid?.value;
+}
+
+function startCreateDirectory() {
+  editableDirectory.value = emptyFolder("Root");
+  directorySaveError.value = null;
+  directoryEditMode.value = true;
+}
+
+function startEditDirectory() {
+  if (!ehrStore.directory) return;
+  editableDirectory.value = fromWireFolder(ehrStore.directory);
+  directorySaveError.value = null;
+  directoryEditMode.value = true;
+}
+
+function cancelEditDirectory() {
+  directoryEditMode.value = false;
+  editableDirectory.value = null;
+  directorySaveError.value = null;
+}
+
+async function saveDirectory() {
+  if (!editableDirectory.value || !serverStore.activeServerId || !ehrId.value) return;
+
+  directorySaving.value = true;
+  directorySaveError.value = null;
+  const wireFolder = toWireFolder(editableDirectory.value);
+  const existingVersionUid = directoryVersionUid();
+  try {
+    if (existingVersionUid) {
+      await ehrStore.updateDirectory(
+        serverStore.activeServerId,
+        ehrId.value,
+        wireFolder,
+        existingVersionUid,
+      );
+      void analytics.track("directory_updated");
+    } else {
+      await ehrStore.createDirectory(serverStore.activeServerId, ehrId.value, wireFolder);
+      void analytics.track("directory_created");
+    }
+    directoryEditMode.value = false;
+    editableDirectory.value = null;
+  } catch (e) {
+    directorySaveError.value = String(e);
+  } finally {
+    directorySaving.value = false;
+  }
+}
+
+function openDeleteDirectoryDialog() {
+  deleteDirectoryError.value = null;
+  showDeleteDirectoryDialog.value = true;
+}
+
+async function handleDeleteDirectory() {
+  const existingVersionUid = directoryVersionUid();
+  if (!serverStore.activeServerId || !ehrId.value || !existingVersionUid) return;
+
+  deletingDirectory.value = true;
+  deleteDirectoryError.value = null;
+  try {
+    await ehrStore.deleteDirectory(serverStore.activeServerId, ehrId.value, existingVersionUid);
+    void analytics.track("directory_deleted");
+    showDeleteDirectoryDialog.value = false;
+  } catch (e) {
+    deleteDirectoryError.value = String(e);
+  } finally {
+    deletingDirectory.value = false;
   }
 }
 
@@ -773,23 +878,75 @@ function lookupContribution() {
 
         <!-- Directory View (OEH-27) -->
         <div v-if="activeTab === 'directory'" class="directory-view">
-          <div v-if="ehrStore.directoryLoading" class="loading">
-            <span class="spinner"></span> Loading directory...
-          </div>
-          <div v-else-if="ehrStore.directoryError" class="empty-state">
-            <h3>Failed to load directory</h3>
-            <p class="error-detail">{{ ehrStore.directoryError }}</p>
-          </div>
-          <DirectoryTree
-            v-else-if="ehrStore.directory"
-            :folder="ehrStore.directory"
-            :depth="0"
-            @open-item="openCompositionRef"
-          />
-          <div v-else class="empty-state">
-            <h3>No directory set</h3>
-            <p>This EHR doesn't have a DIRECTORY folder structure.</p>
-          </div>
+          <template v-if="directoryEditMode && editableDirectory">
+            <div v-if="directorySaveError" class="delete-error">{{ directorySaveError }}</div>
+            <DirectoryTreeEditor
+              :folder="editableDirectory"
+              :depth="0"
+              :is-root="true"
+              :available-compositions="availableCompositionOptions"
+            />
+            <div class="directory-edit-actions">
+              <button
+                type="button"
+                class="btn btn-sm"
+                :disabled="directorySaving"
+                @click="cancelEditDirectory"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                :disabled="directorySaving"
+                @click="saveDirectory"
+              >
+                {{ directorySaving ? "Saving..." : "Save Directory" }}
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div v-if="!ehrStore.directoryLoading" class="directory-toolbar">
+              <button
+                v-if="ehrStore.directory"
+                type="button"
+                class="btn btn-sm"
+                @click="startEditDirectory"
+              >
+                Edit Directory
+              </button>
+              <button v-else type="button" class="btn btn-sm" @click="startCreateDirectory">
+                Create Directory
+              </button>
+              <button
+                v-if="ehrStore.directory"
+                type="button"
+                class="btn btn-sm btn-danger"
+                @click="openDeleteDirectoryDialog"
+              >
+                Delete Directory
+              </button>
+            </div>
+
+            <div v-if="ehrStore.directoryLoading" class="loading">
+              <span class="spinner"></span> Loading directory...
+            </div>
+            <div v-else-if="ehrStore.directoryError" class="empty-state">
+              <h3>Failed to load directory</h3>
+              <p class="error-detail">{{ ehrStore.directoryError }}</p>
+            </div>
+            <DirectoryTree
+              v-else-if="ehrStore.directory"
+              :folder="ehrStore.directory"
+              :depth="0"
+              @open-item="openCompositionRef"
+            />
+            <div v-else class="empty-state">
+              <h3>No directory set</h3>
+              <p>This EHR doesn't have a DIRECTORY folder structure.</p>
+            </div>
+          </template>
         </div>
 
         <!-- Contributions View (OEH-28) -->
@@ -923,6 +1080,43 @@ function lookupContribution() {
         </div>
       </div>
     </div>
+
+    <!-- Directory Delete Confirmation Dialog -->
+    <div
+      v-if="showDeleteDirectoryDialog"
+      class="dialog-overlay"
+      @click="showDeleteDirectoryDialog = false"
+    >
+      <div class="dialog" @click.stop>
+        <h3>Delete Directory</h3>
+        <p>
+          This removes the entire DIRECTORY folder structure for this EHR. This action cannot be
+          undone. The compositions it references are not deleted.
+        </p>
+        <div v-if="deleteDirectoryError" class="delete-error">
+          <strong>Failed to delete directory</strong>
+          <p class="error-detail">{{ deleteDirectoryError }}</p>
+        </div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showDeleteDirectoryDialog = false"
+            :disabled="deletingDirectory"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-danger"
+            @click="handleDeleteDirectory"
+            :disabled="deletingDirectory"
+          >
+            {{ deletingDirectory ? "Deleting..." : "Delete Directory" }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -999,6 +1193,21 @@ function lookupContribution() {
 .directory-view {
   margin-top: 16px;
   overflow: auto;
+}
+
+.directory-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.directory-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
 }
 
 .search-bar {

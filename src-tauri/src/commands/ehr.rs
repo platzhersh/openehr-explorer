@@ -640,6 +640,144 @@ pub async fn get_directory_version(
     fetch_directory(&app, &client, &url, &profile.auth_method).await
 }
 
+/// Creates the DIRECTORY for an EHR that doesn't have one yet.
+///
+/// POSTs `folder` (a full FOLDER structure: `_type`, `name`, and optional
+/// `items`/`folders`) to the DIRECTORY resource, then re-fetches it via GET
+/// rather than trusting the POST response body — servers vary in whether
+/// that body is present at all (some return 201 with an empty body and only
+/// a `Location`/`ETag`), so re-fetching is the one path that always yields
+/// the server's canonical stored representation (assigned `uid`, any
+/// server-side normalization).
+#[tauri::command]
+pub async fn create_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    folder: Value,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_url(base, &ehr_id, None, None);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&folder),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    fetch_directory(&app, &client, &url, &profile.auth_method)
+        .await?
+        .ok_or_else(|| "Directory was created but could not be re-fetched".to_string())
+}
+
+/// Replaces the DIRECTORY's FOLDER hierarchy in place.
+///
+/// `preceding_version_uid` must be the `uid.value` of the directory version
+/// currently on screen (from a prior `get_directory`/`create_directory`
+/// call) — sent as `If-Match` so the server rejects the write with a 409/412
+/// if the DIRECTORY changed underneath the client since it was loaded,
+/// rather than silently clobbering that change. See `update_ehr_status` for
+/// the same optimistic-concurrency pattern.
+#[tauri::command]
+pub async fn update_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    folder: Value,
+    preceding_version_uid: String,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_url(base, &ehr_id, None, None);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .header("If-Match", preceding_version_uid)
+            .json(&folder),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    fetch_directory(&app, &client, &url, &profile.auth_method)
+        .await?
+        .ok_or_else(|| "Directory was updated but could not be re-fetched".to_string())
+}
+
+/// Builds the URL for deleting the DIRECTORY: the base DIRECTORY resource
+/// URL plus a `version_uid` query parameter identifying the version being
+/// deleted (the openEHR REST API's optimistic-concurrency guard for this
+/// endpoint — unlike composition/EHR deletion, DIRECTORY has no per-version
+/// path segment to address instead).
+fn build_directory_delete_url(base: &str, ehr_id: &str, preceding_version_uid: &str) -> String {
+    let directory_url = build_directory_url(base, ehr_id, None, None);
+
+    match reqwest::Url::parse(&directory_url) {
+        Ok(mut u) => {
+            u.query_pairs_mut()
+                .append_pair("version_uid", preceding_version_uid);
+            u.to_string()
+        }
+        // Malformed base URL — fall back to manual interpolation; the
+        // request will fail downstream with a clearer connection error.
+        Err(_) => format!(
+            "{}?version_uid={}",
+            directory_url,
+            urlencoding::encode(preceding_version_uid)
+        ),
+    }
+}
+
+/// Deletes the DIRECTORY entirely.
+///
+/// `preceding_version_uid` is the same optimistic-concurrency guard as
+/// `update_directory`, but unlike composition/EHR deletion (which address
+/// the resource by path segment) the openEHR REST API takes it as a
+/// `version_uid` query parameter on DELETE — the DIRECTORY resource itself
+/// has no per-version path.
+#[tauri::command]
+pub async fn delete_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    preceding_version_uid: String,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_delete_url(base, &ehr_id, &preceding_version_uid);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    Ok(format!("Directory for EHR {} deleted successfully", ehr_id))
+}
+
 // --- AQL-backed EHR search (PRD-0013) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1197,6 +1335,16 @@ mod tests {
         assert_eq!(
             url,
             "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory/uid::system::1"
+        );
+    }
+
+    #[test]
+    fn test_build_directory_delete_url() {
+        let url =
+            build_directory_delete_url("https://cdr.example.com", "ehr-123", "uid::system::1");
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory?version_uid=uid%3A%3Asystem%3A%3A1"
         );
     }
 
