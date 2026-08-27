@@ -59,17 +59,15 @@ onMounted(async () => {
       </router-link>
     </div>
     <div class="nav-bottom">
-      <a
+      <button
         v-if="appVersion"
+        type="button"
         @click="openWhatsNew"
         class="version-display"
-        role="button"
-        tabindex="0"
         title="View What's New"
-        @keydown.enter="openWhatsNew"
       >
         v{{ appVersion }}
-      </a>
+      </button>
       <div class="nav-divider"></div>
       <a
         @click="openDocumentation"
@@ -221,13 +219,15 @@ onMounted(async () => {
 
 .version-display {
   display: block;
+  width: 100%;
   padding: 8px 12px;
   text-align: left;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--color-text-muted);
   letter-spacing: 0.3px;
-  text-decoration: none;
+  background: none;
+  border: none;
   cursor: pointer;
   border-radius: var(--radius);
   transition: all 0.15s;
