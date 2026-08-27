@@ -725,6 +725,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
     searchQuery: { type: String, default: "" },
   },
   setup(props): () => VNode {
+    const collapsed = vueRef(props.depth > 2);
+
+    const toggle = () => {
+      collapsed.value = !collapsed.value;
+    };
+
     function highlightMatch(text: string, query: string): VNode[] {
       if (!query) return [h("span", text)];
 
@@ -744,7 +750,9 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
       const headerChildren = [];
 
       if (hasChildren) {
-        headerChildren.push(h("span", { class: "toggle-expanded" }, "\u25BC"));
+        headerChildren.push(
+          h("span", { class: "toggle", onClick: toggle }, collapsed.value ? "\u25B6" : "\u25BC"),
+        );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
       }
@@ -799,7 +807,8 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
         ),
       );
 
-      if (hasChildren) {
+      const shouldShowChildren = hasChildren && (!collapsed.value || props.searchQuery);
+      if (shouldShowChildren) {
         elements.push(
           ...node.children.map((child) =>
             h(WtTreeNodeFiltered, {
@@ -1265,14 +1274,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
 :deep(.wt-name.ancestor) {
   color: var(--color-text-muted);
-}
-
-:deep(.toggle-expanded) {
-  width: 16px;
-  text-align: center;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  user-select: none;
 }
 
 .empty-search {
