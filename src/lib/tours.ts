@@ -157,7 +157,7 @@ export const TOURS: Tour[] = [
       {
         target: '[data-tour="template-upload"]',
         title: "Upload an OPT",
-        body: "Drop an Operational Template XML file here (or click to browse) to publish it to the active server.",
+        body: "Opens a dialog where you can drop an Operational Template XML file (or click to browse) to publish it to the active server.",
       },
     ],
   },

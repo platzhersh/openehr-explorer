@@ -7,14 +7,15 @@ import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
 import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
-import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
+import TemplateUploadModal from "../components/TemplateUploadModal.vue";
+import TemplateUploadZone from "../components/TemplateUploadZone.vue";
+import { useTemplateUpload } from "../composables/useTemplateUpload";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -40,10 +41,13 @@ const showPanelSearch = ref(false);
 const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
 const currentMatchIndex = ref(0);
 const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
-const uploadDragOver = ref(false);
 const showBoundConceptsHelp = ref(false);
-const uploadStatus = ref<string | null>(null);
-const uploadError = ref<string | null>(null);
+const showUploadModal = ref(false);
+
+// Independent instance from the one inside TemplateUploadModal — this one
+// backs the inline drop zone shown when the server has no templates yet
+// (see the empty-state markup below), so the two never need to share state.
+const inlineUpload = useTemplateUpload();
 
 const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
 const termBindings = ref<TermBinding[]>([]);
@@ -151,67 +155,6 @@ const wtTree = computed(() => {
   const tree = templateStore.selectedWebTemplate.tree as Record<string, unknown> | undefined;
   return tree ? buildWtTree(tree) : null;
 });
-
-async function uploadFile(file: File) {
-  if (!serverStore.activeServerId) return;
-
-  uploadStatus.value = null;
-  uploadError.value = null;
-
-  const text = await file.text();
-  try {
-    const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
-    uploadStatus.value = result;
-    void analytics.track("template_uploaded");
-    templateStore.fetchTemplates(serverStore.activeServerId);
-  } catch (e) {
-    uploadError.value = String(e);
-  }
-}
-
-async function handleDrop(event: DragEvent) {
-  event.preventDefault();
-  uploadDragOver.value = false;
-  const file = event.dataTransfer?.files[0];
-  if (!file) return;
-
-  await uploadFile(file);
-}
-
-async function handleFileSelect() {
-  try {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "OPT Files",
-          extensions: ["opt", "xml"],
-        },
-      ],
-    });
-
-    if (selected && typeof selected === "string") {
-      if (!serverStore.activeServerId) return;
-
-      uploadStatus.value = null;
-      uploadError.value = null;
-
-      try {
-        // Read file using Tauri's FS plugin
-        const text = await readTextFile(selected);
-
-        const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
-        uploadStatus.value = result;
-        void analytics.track("template_uploaded");
-        templateStore.fetchTemplates(serverStore.activeServerId);
-      } catch (e) {
-        uploadError.value = String(e);
-      }
-    }
-  } catch (e) {
-    uploadError.value = String(e);
-  }
-}
 
 function createComposition(templateId: string) {
   router.push({ name: "compose", params: { templateId } });
@@ -353,14 +296,24 @@ onUnmounted(() => {
     <div class="panel-left">
       <div class="panel-header">
         <h2>Templates</h2>
-        <button
-          type="button"
-          class="tour-trigger-btn"
-          title="Take a tour of the Template Browser"
-          @click="replayTour"
-        >
-          <CompassIcon />
-        </button>
+        <div class="header-actions">
+          <button
+            type="button"
+            class="tour-trigger-btn"
+            title="Take a tour of the Template Browser"
+            @click="replayTour"
+          >
+            <CompassIcon />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            data-tour="template-upload"
+            @click="showUploadModal = true"
+          >
+            + Upload Template
+          </button>
+        </div>
       </div>
 
       <div class="search-bar">
@@ -403,20 +356,22 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Upload zone -->
-        <div
-          class="upload-zone"
-          data-tour="template-upload"
-          :class="{ 'drag-over': uploadDragOver }"
-          @dragover.prevent="uploadDragOver = true"
-          @dragleave="uploadDragOver = false"
-          @drop="handleDrop"
-        >
-          <p>Drop OPT file here to upload</p>
-          <button class="btn btn-sm" @click="handleFileSelect">Or choose file...</button>
+        <!-- Inline drop zone for the empty-server case — with no templates
+             to scroll past, this stays visible without needing the header
+             button, which is the only entry point once the list fills up. -->
+        <div v-if="templateStore.templates.length === 0" class="empty-upload-state">
+          <p class="empty-upload-hint">No templates on this server yet.</p>
+          <TemplateUploadZone
+            :drag-over="inlineUpload.dragOver.value"
+            :uploading="inlineUpload.uploading.value"
+            :upload-status="inlineUpload.uploadStatus.value"
+            :upload-error="inlineUpload.uploadError.value"
+            @dragover="inlineUpload.dragOver.value = true"
+            @dragleave="inlineUpload.dragOver.value = false"
+            @drop="inlineUpload.handleDrop"
+            @choose-file="inlineUpload.handleFileSelect"
+          />
         </div>
-        <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
-        <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
       </div>
     </div>
 
@@ -621,6 +576,8 @@ onUnmounted(() => {
         <p>Click on a template to view its structure and FLAT paths.</p>
       </div>
     </div>
+
+    <TemplateUploadModal :open="showUploadModal" @close="showUploadModal = false" />
   </div>
 </template>
 
@@ -938,6 +895,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-weight: 600;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .search-bar {
   padding: 8px 16px;
 }
@@ -998,39 +961,15 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-family: var(--font-mono);
 }
 
-.upload-zone {
-  margin: 16px;
-  padding: 24px;
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius);
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: 13px;
-  transition: all 0.15s;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-}
-.upload-zone.drag-over {
-  border-color: var(--color-primary);
-  background: rgba(100, 255, 218, 0.05);
-}
-.upload-zone p {
-  margin: 0;
+.empty-upload-state {
+  padding: 0 16px 16px;
 }
 
-.upload-msg {
-  margin: 0 16px;
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  font-size: 12px;
-}
-.upload-msg.success {
-  color: var(--color-success);
-}
-.upload-msg.error {
-  color: var(--color-error);
+.empty-upload-hint {
+  margin: 16px 0 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .tab-bar {
