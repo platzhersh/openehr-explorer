@@ -267,6 +267,15 @@ interface FilterChip {
   label: string;
 }
 
+/** `value ? "Yes" : "No"`, pulled out to a one-liner so filterChips' string
+ *  templates can call it instead of embedding the ternary — that keeps each
+ *  of filterChips' many `if` branches to a flat structural cost instead of
+ *  a nested one, which otherwise pushes its Cognitive Complexity over the
+ *  usual gate (SonarCloud flagged this at 17 for the original version). */
+function yesNo(value: boolean): string {
+  return value ? "Yes" : "No";
+}
+
 const filterChips = computed<FilterChip[]>(() => {
   const c = activeCriteria.value;
   if (!c) return [];
@@ -278,16 +287,16 @@ const filterChips = computed<FilterChip[]>(() => {
     chips.push({ key: "subject_namespace", label: `Namespace: ${c.subject_namespace}` });
   if (c.system_id) chips.push({ key: "system_id", label: `System: ${c.system_id}` });
   if (c.modifiable !== undefined)
-    chips.push({ key: "modifiable", label: `Modifiable: ${c.modifiable ? "Yes" : "No"}` });
+    chips.push({ key: "modifiable", label: `Modifiable: ${yesNo(c.modifiable)}` });
   if (c.has_compositions !== undefined)
     chips.push({
       key: "has_compositions",
-      label: `Has compositions: ${c.has_compositions ? "Yes" : "No"}`,
+      label: `Has compositions: ${yesNo(c.has_compositions)}`,
     });
   if (c.has_directory !== undefined)
     chips.push({
       key: "has_directory",
-      label: `Has directory entries: ${c.has_directory ? "Yes" : "No"}`,
+      label: `Has directory entries: ${yesNo(c.has_directory)}`,
     });
   if (c.created_on) chips.push({ key: "created_on", label: `Created on ${c.created_on}` });
   if (c.created_before)
