@@ -982,12 +982,19 @@ function doClear() {
   font-size: 13px;
 }
 
-/* XML view */
+/* XML view — bounded like .tree-container/.tree-scroll above, but the
+   scrolling itself must happen on XmlViewer's own inner .xv-scroll (a flex
+   column handing it the box's real height) rather than here: XmlViewer
+   fills whatever height it's given instead of capping itself, so without
+   this the box would just grow to the full (possibly huge) document height
+   and defeat virtualization — see ADR-0023. */
 .xml-container {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
   max-height: 400px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 </style>

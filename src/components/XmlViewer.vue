@@ -219,6 +219,10 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   position: relative;
   font-family: var(--font-mono);
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .xv-copy-btn-wrap {
@@ -228,9 +232,16 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   z-index: 1;
 }
 
+/* Fills whatever height the caller's layout gives it (flex:1 in a bounded
+   flex ancestor — see TemplateBrowser.vue's `.panel-right--xml` and
+   RequestInspector.vue's `.xml-container`), rather than a hardcoded
+   max-height: a fixed vh guess either clips a taller panel short or leaves
+   a shorter one with dead space below the viewer. With no bounded ancestor
+   (e.g. a Storybook story) this just shrinks to the content's natural size. */
 .xv-scroll {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  max-height: 65vh;
 }
 
 .xv-lines {
@@ -243,7 +254,15 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   align-items: center;
   height: 20px;
   line-height: 20px;
-  white-space: pre;
+  overflow: hidden;
+  /* nowrap, not pre: free-text content (e.g. a <purpose> description) can
+     contain literal embedded newlines in the source XML, and `pre` renders
+     those as real line breaks — overflowing this row's fixed 20px height
+     and bleeding into the next row. `nowrap` collapses embedded whitespace
+     runs to a single space (a display-only normalization; copy-to-clipboard
+     still uses the untouched token text) while still never wrapping, so
+     every XmlLine renders as exactly the one row virtualization assumes. */
+  white-space: nowrap;
 }
 
 .xv-line-number {

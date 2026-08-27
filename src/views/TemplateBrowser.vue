@@ -409,7 +409,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Right: Template detail -->
-    <div class="panel-right">
+    <div class="panel-right" :class="{ 'panel-right--xml': activeTab === 'opt' }">
       <template v-if="selectedTemplateId && templateStore.selectedWebTemplate">
         <div class="panel-header">
           <h2>{{ selectedTemplateId }}</h2>
@@ -853,6 +853,18 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   padding: 0 24px 24px;
 }
 
+/* The OPT XML tab needs a real bounded height to virtualize against
+   (XmlViewer.vue fills whatever height it's given rather than guessing a
+   viewport-relative max-height — see ADR-0023) — so while it's active,
+   panel-right itself stops scrolling and instead becomes a flex column
+   that hands `.xml-view` the remaining space below the header. Other tabs
+   are untouched and keep scrolling the whole panel as before. */
+.panel-right.panel-right--xml {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -1231,6 +1243,17 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 /* XML view */
 .xml-view {
   padding-top: 16px;
+}
+
+/* Fills the remaining height panel-right--xml hands it (see above), so
+   XmlViewer's own flex:1 sizing has a real height to fill instead of
+   shrinking to its content (which would just push the page taller). */
+.panel-right--xml .xml-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Search highlighting */
