@@ -4,8 +4,10 @@ pub mod inspector;
 pub mod settings;
 
 use commands::{composition, contribution, ehr, query, server, template, terminology};
+#[cfg(not(target_os = "macos"))]
+use tauri::menu::HELP_SUBMENU_ID;
 use tauri::{
-    menu::{Menu, MenuItem, MenuItemKind, HELP_SUBMENU_ID},
+    menu::{Menu, MenuItem, MenuItemKind},
     Emitter,
 };
 use tauri_plugin_aptabase::EventTracker;
