@@ -23,7 +23,14 @@ export interface BashLine {
   tokens: BashToken[];
 }
 
-const TOKEN_RE = /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")|(\s+)|(\S+)/g;
+// Split into one alternative per quote style rather than nesting an
+// escape-aware alternation inside each quantifier (`'(?:\\.|[^'\\])*'`) —
+// that nested-alternation-in-a-quantifier shape is what SonarCloud's regex
+// complexity check flags. It's also unnecessary here: `generateCurl` (see
+// stores/inspector.ts) escapes embedded quotes with the POSIX `'\''`
+// idiom — close quote, escaped literal quote, reopen quote — so the
+// backslash always sits *outside* a quoted run, never inside one.
+const TOKEN_RE = /('[^']*')|("[^"]*")|(\s+)|(\S+)/g;
 
 export function parseBashLines(source: string): BashLine[] {
   if (!source) return [];
@@ -34,7 +41,8 @@ export function parseBashLines(source: string): BashLine[] {
     TOKEN_RE.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = TOKEN_RE.exec(rawLine))) {
-      const [, quoted, space, word] = match;
+      const [, singleQuoted, doubleQuoted, space, word] = match;
+      const quoted = singleQuoted || doubleQuoted;
       if (quoted) {
         tokens.push({ type: "string", text: quoted });
         isFirstWord = false;
