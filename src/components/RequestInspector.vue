@@ -13,6 +13,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import JsonTreeNode from "./JsonTreeNode.vue";
 import JsonViewer from "./JsonViewer.vue";
+import XmlViewer from "./XmlViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
 import CopyButton from "./CopyButton.vue";
 
@@ -130,53 +131,6 @@ function isXmlResponse(entry: RequestLogEntry | null): boolean {
   return contentType.includes("application/xml") || contentType.includes("text/xml");
 }
 
-// Format XML with syntax highlighting
-function formatXml(xml: string): string {
-  // Basic XML formatting with indentation
-  let formatted = "";
-  let indent = 0;
-  const lines = xml.split(/>\s*</);
-
-  lines.forEach((line, index) => {
-    if (index > 0) line = "<" + line;
-    if (index < lines.length - 1) line = line + ">";
-
-    // Detect closing tags
-    if (line.match(/^<\/\w/)) indent--;
-
-    // Add indentation
-    formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
-
-    // Detect opening tags (not self-closing)
-    if (line.match(/^<\w[^>]*[^/]>$/)) indent++;
-  });
-
-  return formatted.trim();
-}
-
-// Apply syntax highlighting to XML
-function highlightXml(xml: string): string {
-  return xml
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(
-      /(&lt;\/?)([\w-]+)([\s\S]*?)(&gt;)/g,
-      (_match, openBracket, tagName, content, closeBracket) => {
-        // Highlight tag names
-        const highlightedTag = `${openBracket}<span class="xml-tag">${tagName}</span>`;
-        // Highlight attributes
-        const highlightedContent = content.replace(
-          /([\w-]+)=(["'])(.*?)\2/g,
-          '<span class="xml-attr-name">$1</span>=<span class="xml-attr-value">$2$3$2</span>',
-        );
-        return `${highlightedTag}${highlightedContent}${closeBracket}`;
-      },
-    )
-    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
-    .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
-}
-
 const responseJson = computed(() =>
   selected.value ? tryParseJson(selected.value.response_body) : undefined,
 );
@@ -185,10 +139,6 @@ const requestJson = computed(() =>
 );
 
 const isResponseXml = computed(() => isXmlResponse(selected.value));
-const formattedXml = computed(() => {
-  if (!selected.value?.response_body || !isResponseXml.value) return "";
-  return formatXml(selected.value.response_body);
-});
 
 // Auto-switch to XML tab when XML response is detected
 watch(isResponseXml, (isXml) => {
@@ -516,15 +466,7 @@ function doClear() {
 
                 <!-- XML View -->
                 <div v-else-if="bodyViewTab === 'xml'" class="xml-container">
-                  <div class="xml-toolbar">
-                    <CopyButton
-                      :text="selected.response_body || ''"
-                      title="Copy XML"
-                      size="md"
-                      variant="bordered"
-                    />
-                  </div>
-                  <pre class="xml-body" v-html="highlightXml(formattedXml)"></pre>
+                  <XmlViewer :xml="selected.response_body || ''" />
                 </div>
 
                 <!-- Raw View -->
@@ -1038,48 +980,7 @@ function doClear() {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
-  overflow: hidden;
-}
-
-.xml-toolbar {
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--color-border);
-  text-align: right;
-}
-
-.xml-body {
   max-height: 400px;
-  overflow: auto;
-  padding: 8px;
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text);
-  white-space: pre;
-  background: var(--color-bg);
-  line-height: 1.5;
-}
-
-/* XML syntax highlighting */
-.xml-body :deep(.xml-tag) {
-  color: #6495ed;
-  font-weight: 600;
-}
-
-.xml-body :deep(.xml-attr-name) {
-  color: #ffd93d;
-}
-
-.xml-body :deep(.xml-attr-value) {
-  color: #6bff8e;
-}
-
-.xml-body :deep(.xml-comment) {
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-
-.xml-body :deep(.xml-declaration) {
-  color: #ff6b6b;
+  overflow-y: auto;
 }
 </style>
