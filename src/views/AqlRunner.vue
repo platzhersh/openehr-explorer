@@ -282,7 +282,7 @@ const editorStyle = computed(() => ({
             <div class="saved-name">{{ sq.name }}</div>
             <button
               type="button"
-              class="copy-btn"
+              class="icon-btn-ghost"
               @click.stop="deleteSavedQuery(sq.id)"
               title="Delete"
             >

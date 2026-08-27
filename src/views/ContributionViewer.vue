@@ -6,6 +6,7 @@ import { useContributionStore } from "../stores/contribution";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import CompassIcon from "../components/CompassIcon.vue";
+import CopyButton from "../components/CopyButton.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -43,16 +44,6 @@ function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
 
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
-
-function copyContributionUid() {
-  const detail = contributionStore.detail;
-  if (!detail) return;
-  void copyToClipboard(detail.contribution_uid);
-}
-
 function openVersion(versionId: string) {
   router.push({
     name: "composition",
@@ -85,7 +76,11 @@ function openVersion(versionId: string) {
         <span class="detail-label">Contribution UID</span>
         <span class="detail-value mono">
           {{ contributionStore.detail.contribution_uid }}
-          <button type="button" class="copy-btn" @click="copyContributionUid">Copy</button>
+          <CopyButton
+            class="uid-copy"
+            :text="contributionStore.detail.contribution_uid"
+            title="Copy contribution UID"
+          />
         </span>
       </div>
 
@@ -127,7 +122,7 @@ function openVersion(versionId: string) {
             <span class="version-id mono">{{ v.id }}</span>
           </div>
           <div class="version-actions">
-            <button type="button" class="copy-btn" @click="copyToClipboard(v.id)">Copy</button>
+            <CopyButton :text="v.id" title="Copy version id" />
             <button
               v-if="v.version_type === 'COMPOSITION'"
               type="button"
@@ -204,19 +199,9 @@ function openVersion(versionId: string) {
   word-break: break-all;
 }
 
-.copy-btn {
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 11px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-.copy-btn:hover {
-  background: var(--color-border);
-  color: var(--color-text);
+.uid-copy {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 
 .badge {

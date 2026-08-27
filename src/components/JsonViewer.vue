@@ -6,6 +6,7 @@
 // `highlightSearchInContent()` helpers that used to live in
 // CompositionViewer.vue and TemplateBrowser.vue.
 import { computed, ref, watch } from "vue";
+import CopyButton from "./CopyButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -318,56 +319,14 @@ watch(
   },
 );
 
-const copied = ref(false);
-async function copyAll() {
-  await navigator.clipboard.writeText(JSON.stringify(props.value, null, 2));
-  copied.value = true;
-  setTimeout(() => (copied.value = false), 1200);
-}
+const copyText = computed(() => JSON.stringify(props.value, null, 2));
 </script>
 
 <template>
   <div ref="root" class="json-viewer">
-    <button
-      v-if="showCopyButton"
-      type="button"
-      class="jv-copy-btn"
-      :class="{ copied }"
-      :title="copied ? 'Copied!' : 'Copy JSON to clipboard'"
-      @click="copyAll"
-    >
-      <svg
-        v-if="!copied"
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-        <path
-          d="M3.5 10.5h-1a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"
-          stroke="currentColor"
-          stroke-width="1.3"
-        />
-      </svg>
-      <svg
-        v-else
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M3 8.5l3 3 7-7"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-    </button>
+    <div v-if="showCopyButton" class="jv-copy-btn-wrap">
+      <CopyButton :text="copyText" title="Copy JSON to clipboard" size="md" variant="bordered" />
+    </div>
 
     <div class="jv-scroll">
       <div class="jv-lines">
@@ -425,31 +384,11 @@ async function copyAll() {
   font-size: 12px;
 }
 
-.jv-copy-btn {
+.jv-copy-btn-wrap {
   position: absolute;
   top: 4px;
   right: 4px;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.jv-copy-btn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary-dim);
-  background: var(--color-surface-hover);
-}
-.jv-copy-btn.copied {
-  color: var(--color-success);
-  border-color: var(--color-success);
 }
 
 .jv-scroll {

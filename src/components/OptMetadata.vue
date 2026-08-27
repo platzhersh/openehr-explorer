@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import LifecycleBadge from "./LifecycleBadge.vue";
+import CopyButton from "./CopyButton.vue";
 
 interface OptMetadata {
   originalAuthor: {
@@ -196,10 +197,6 @@ const descriptionPreview = computed(() => {
 
   return details.substring(0, maxLength) + "...";
 });
-
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
 </script>
 
 <template>
@@ -292,14 +289,7 @@ async function copyToClipboard(text: string) {
               <span class="technical-value" :class="{ monospace: item.monospace }">
                 {{ item.value }}
               </span>
-              <button
-                v-if="item.monospace && item.value"
-                class="copy-btn-small"
-                @click="copyToClipboard(item.value)"
-                title="Copy to clipboard"
-              >
-                Copy
-              </button>
+              <CopyButton v-if="item.monospace && item.value" :text="item.value" />
             </div>
           </div>
         </div>
@@ -485,21 +475,5 @@ async function copyToClipboard(text: string) {
 .technical-value.monospace {
   font-family: var(--font-mono);
   font-size: 11px;
-}
-
-.copy-btn-small {
-  padding: 2px 6px;
-  font-size: 10px;
-  background: rgba(100, 255, 218, 0.1);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.copy-btn-small:hover {
-  background: rgba(100, 255, 218, 0.2);
-  border-color: var(--color-primary);
 }
 </style>

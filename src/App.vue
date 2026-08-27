@@ -424,7 +424,10 @@ select.input {
   border-color: var(--color-primary);
 }
 
-.copy-btn {
+/* Minimal-chrome ghost icon button — e.g. a small "remove"/"×" control in a
+   list row. Not for copy-to-clipboard buttons; use CopyButton.vue for those
+   (see OEH-37) — this class only remains for non-copy icon buttons. */
+.icon-btn-ghost {
   background: none;
   border: none;
   color: var(--color-text-muted);
@@ -433,7 +436,7 @@ select.input {
   border-radius: 3px;
   font-size: 12px;
 }
-.copy-btn:hover {
+.icon-btn-ghost:hover {
   color: var(--color-primary);
   background: var(--color-surface);
 }
