@@ -21,9 +21,9 @@ type Story = StoryObj<typeof OptMetadata>;
 const FULL_OPT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <template>
   <description>
-    <original_author id="name">Hendrik Heiser</original_author>
+    <original_author id="name">Example Author</original_author>
     <original_author id="organisation">Cistec AG</original_author>
-    <original_author id="email">hendrik.heiser@cistec.com</original_author>
+    <original_author id="email">author@example.test</original_author>
     <original_author id="date">2025-03-19</original_author>
     <other_contributors>Jonas Bucher (Reviewer)</other_contributors>
     <lifecycle_state>published</lifecycle_state>

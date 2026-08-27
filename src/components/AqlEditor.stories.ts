@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { useArgs } from "storybook/preview-api";
 import AqlEditor from "./AqlEditor.vue";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
@@ -27,21 +28,26 @@ CONTAINS COMPOSITION c
 CONTAINS OBSERVATION o[openEHR-EHR-OBSERVATION.blood_pressure.v2]
 WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'`;
 
-// v-model is wired back to args (mutated from the template, not typed TS —
-// Storybook's own args type marks props readonly) so typing/formatting in
-// the Storybook canvas behaves like it would with a real parent (e.g.
-// AqlRunner.vue).
-const render: NonNullable<Story["render"]> = (args) => ({
-  components: { AqlEditor },
-  setup() {
-    return { args };
-  },
-  template: `
-    <div style="height: 260px; border: 1px solid var(--color-border); border-radius: var(--radius);">
-      <AqlEditor v-bind="args" @update:modelValue="args.modelValue = $event" />
-    </div>
-  `,
-});
+// v-model is wired back through Storybook's useArgs so both the editor and
+// the Controls panel stay in sync, the same as a real parent (e.g.
+// AqlRunner.vue) would with its own ref.
+const render: NonNullable<Story["render"]> = (args) => {
+  const [, updateArgs] = useArgs();
+  return {
+    components: { AqlEditor },
+    setup() {
+      function onInput(value: string) {
+        updateArgs({ modelValue: value });
+      }
+      return { args, onInput };
+    },
+    template: `
+      <div style="height: 260px; border: 1px solid var(--color-border); border-radius: var(--radius);">
+        <AqlEditor v-bind="args" @update:modelValue="onInput" />
+      </div>
+    `,
+  };
+};
 
 export const Default: Story = {
   render,

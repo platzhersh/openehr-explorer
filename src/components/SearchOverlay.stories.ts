@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { fn } from "storybook/test";
+import { useArgs } from "storybook/preview-api";
 import SearchOverlay from "./SearchOverlay.vue";
 
 const meta: Meta<typeof SearchOverlay> = {
@@ -19,16 +20,21 @@ const meta: Meta<typeof SearchOverlay> = {
 export default meta;
 type Story = StoryObj<typeof SearchOverlay>;
 
-// v-model is wired back to args (mutated from the template, not typed TS —
-// Storybook's own args type marks props readonly) so typing in the
-// Storybook canvas behaves like it would in the real app.
-const render: NonNullable<Story["render"]> = (args) => ({
-  components: { SearchOverlay },
-  setup() {
-    return { args };
-  },
-  template: `<SearchOverlay v-bind="args" @update:modelValue="args.modelValue = $event" />`,
-});
+// v-model is wired back through Storybook's useArgs so both the input and
+// the Controls panel stay in sync, like a real parent's v-model ref would.
+const render: NonNullable<Story["render"]> = (args) => {
+  const [, updateArgs] = useArgs();
+  return {
+    components: { SearchOverlay },
+    setup() {
+      function onInput(value: string) {
+        updateArgs({ modelValue: value });
+      }
+      return { args, onInput };
+    },
+    template: `<SearchOverlay v-bind="args" @update:modelValue="onInput" />`,
+  };
+};
 
 export const Empty: Story = {
   render,
