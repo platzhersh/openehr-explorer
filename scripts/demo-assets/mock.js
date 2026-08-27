@@ -205,6 +205,24 @@
     { id: "q2", name: "Compositions per EHR", query: "SELECT e/ehr_id/value, COUNT(c) FROM EHR e CONTAINS COMPOSITION c", server_id: null, created_at: VITAL_SIGNS_TIME },
   ];
 
+  // STORED_QUERY: query definitions registered server-side (distinct from
+  // SAVED_QUERIES above, which are persisted locally). Keyed by
+  // "qualified_query_name|version" for get_stored_query_definition lookups.
+  const STORED_QUERY_NAME = "org.openehr::vital_signs_report";
+  const STORED_QUERY_VERSION = "1.0.0";
+  const STORED_QUERIES = [
+    { qualified_query_name: STORED_QUERY_NAME, version: STORED_QUERY_VERSION, query_type: "AQL", saved_time: VITAL_SIGNS_TIME },
+  ];
+  const STORED_QUERY_DEFINITIONS = {
+    [`${STORED_QUERY_NAME}|${STORED_QUERY_VERSION}`]: {
+      qualified_query_name: STORED_QUERY_NAME,
+      version: STORED_QUERY_VERSION,
+      query_type: "AQL",
+      q: `SELECT c/uid/value, ${vsPath("at0004")}/magnitude AS systolic FROM EHR e[ehr_id/value=$ehrId] CONTAINS COMPOSITION c CONTAINS OBSERVATION o[${VITAL_SIGNS_ARCHETYPE}]`,
+      saved_time: VITAL_SIGNS_TIME,
+    },
+  };
+
   const AQL_RESULT = {
     columns: [
       { name: "ehr_id", path: "/ehr_id/value" },
@@ -362,6 +380,18 @@
       return SAVED_QUERIES.slice();
     },
     execute_aql: function () {
+      return AQL_RESULT;
+    },
+    list_stored_queries: function () {
+      return STORED_QUERIES.slice();
+    },
+    get_stored_query_definition: function (args) {
+      const key = `${args.qualifiedQueryName}|${args.version || STORED_QUERY_VERSION}`;
+      const def = STORED_QUERY_DEFINITIONS[key];
+      if (!def) throw new Error("Stored query not found: " + args.qualifiedQueryName);
+      return def;
+    },
+    execute_stored_query: function () {
       return AQL_RESULT;
     },
   };
