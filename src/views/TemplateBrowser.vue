@@ -120,17 +120,29 @@ interface WtNode {
   aqlPath: string;
   children: WtNode[];
   terminologyType: string | null;
+  /**
+   * Stable structural identity for this node — the id chain from the root,
+   * with each segment's sibling index folded in so repeated archetype ids
+   * (or empty ids) at different positions never collide. Search filtering
+   * rebuilds the node objects on every keystroke, so this (not array
+   * position) is what per-node UI state like collapse must key off of —
+   * see `wtTreeCollapsedByPath` below.
+   */
+  path: string;
 }
 
-function buildWtTree(node: Record<string, unknown>): WtNode {
+function buildWtTree(node: Record<string, unknown>, parentPath = ""): WtNode {
   const children = (node.children as Record<string, unknown>[]) ?? [];
+  const id = (node.id as string) ?? "";
+  const path = parentPath ? `${parentPath}/${id}` : id;
   return {
-    id: (node.id as string) ?? "",
+    id,
     name: (node.name as string) ?? (node.localizedName as string) ?? "",
     rmType: (node.rmType as string) ?? "",
     aqlPath: (node.aqlPath as string) ?? "",
-    children: children.map(buildWtTree),
+    children: children.map((child, index) => buildWtTree(child, `${path}[${index}]`)),
     terminologyType: classifyCodedTextNode(node),
+    path,
   };
 }
 
@@ -521,6 +533,7 @@ onUnmounted(() => {
 
           <div v-if="filteredWtTree" class="wt-tree">
             <WtTreeNodeFiltered
+              :key="filteredWtTree.path"
               :node="filteredWtTree"
               :depth="0"
               :search-query="panelSearchQuery"
@@ -612,7 +625,7 @@ onUnmounted(() => {
 </template>
 
 <script lang="ts">
-import { defineComponent, h, ref as vueRef, type PropType, type VNode } from "vue";
+import { defineComponent, h, reactive, ref as vueRef, type PropType, type VNode } from "vue";
 
 interface WtNodeType {
   id: string;
@@ -621,6 +634,22 @@ interface WtNodeType {
   aqlPath: string;
   children: WtNodeType[];
   terminologyType: string | null;
+  path: string;
+}
+
+/**
+ * Collapse state for the OPT tree, keyed by each node's structural `path`
+ * rather than held as local per-instance state. `filterTreeNode` rebuilds
+ * the filtered node objects (and their VNodes) on every search keystroke,
+ * so instance-local state would get reused across — or dropped for —
+ * whichever node happens to land in the same position, silently losing or
+ * misapplying a manual expand/collapse once the search is cleared. Keying
+ * by path instead makes a node's collapse state survive filtering intact.
+ */
+const wtTreeCollapsedByPath = reactive<Record<string, boolean>>({});
+
+function isCollapsedByDefault(depth: number): boolean {
+  return depth > 2;
 }
 
 const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
@@ -728,6 +757,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
     searchQuery: { type: String, default: "" },
   },
   setup(props): () => VNode {
+    const toggle = () => {
+      const path = props.node.path;
+      const current = wtTreeCollapsedByPath[path] ?? isCollapsedByDefault(props.depth);
+      wtTreeCollapsedByPath[path] = !current;
+    };
+
     function highlightMatch(text: string, query: string): VNode[] {
       if (!query) return [h("span", text)];
 
@@ -742,12 +777,25 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
     return (): VNode => {
       const node = props.node;
       const hasChildren = node.children.length > 0;
+      const collapsed = wtTreeCollapsedByPath[node.path] ?? isCollapsedByDefault(props.depth);
 
       const elements = [];
       const headerChildren = [];
 
       if (hasChildren) {
-        headerChildren.push(h("span", { class: "toggle-expanded" }, "\u25BC"));
+        headerChildren.push(
+          h(
+            "button",
+            {
+              type: "button",
+              class: "toggle",
+              "aria-expanded": !collapsed,
+              "aria-label": `${collapsed ? "Expand" : "Collapse"} ${node.name || node.id}`,
+              onClick: toggle,
+            },
+            collapsed ? "\u25B6" : "\u25BC",
+          ),
+        );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
       }
@@ -802,10 +850,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
         ),
       );
 
-      if (hasChildren) {
+      const shouldShowChildren = hasChildren && (!collapsed || props.searchQuery);
+      if (shouldShowChildren) {
         elements.push(
           ...node.children.map((child) =>
             h(WtTreeNodeFiltered, {
+              key: child.path,
               node: child,
               depth: props.depth + 1,
               searchQuery: props.searchQuery,
@@ -1069,6 +1119,10 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-size: 10px;
   color: var(--color-text-muted);
   user-select: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
 }
 :deep(.toggle-spacer) {
   width: 16px;
@@ -1294,14 +1348,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
 :deep(.wt-name.ancestor) {
   color: var(--color-text-muted);
-}
-
-:deep(.toggle-expanded) {
-  width: 16px;
-  text-align: center;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  user-select: none;
 }
 
 .empty-search {
