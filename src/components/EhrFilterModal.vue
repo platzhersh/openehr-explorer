@@ -111,9 +111,9 @@ function handleClose() {
 
 <template>
   <div v-if="open" class="dialog-overlay" @click.self="handleClose">
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ehr-filter-title">
+    <div class="dialog">
       <div class="dialog-header">
-        <h2 id="ehr-filter-title">Filter EHRs</h2>
+        <h2>Filter EHRs</h2>
         <button type="button" class="close-btn" title="Close" @click="handleClose">&times;</button>
       </div>
 
@@ -222,6 +222,12 @@ function handleClose() {
             </button>
             <div v-if="showSyntaxHelp" class="syntax-help-body">
               <table class="help-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Syntax</th>
+                    <th scope="col">Meaning</th>
+                  </tr>
+                </thead>
                 <tbody>
                   <tr>
                     <td class="help-example">fde80e0e...</td>
@@ -413,9 +419,15 @@ function handleClose() {
   font-size: 12px;
   border-collapse: collapse;
 }
-.help-table td {
+.help-table td,
+.help-table th {
   padding: 3px 8px;
   border-bottom: 1px solid var(--color-border);
+}
+.help-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 .help-example {
   font-family: var(--font-mono);
