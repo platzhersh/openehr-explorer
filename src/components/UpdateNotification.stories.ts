@@ -35,6 +35,12 @@ function withStores(state: StoryUpdateState) {
       updateStore.update = {
         version: state.version ?? "1.4.0",
         currentVersion: state.currentVersion ?? "1.3.2",
+        // Storybook runs outside a Tauri runtime, so the real Update
+        // instance's downloadAndInstall isn't available. Stub it as a no-op
+        // so clicking "Download & Install" in the Available story doesn't
+        // throw "downloadAndInstall is not a function" — it just resolves
+        // and the store's own error handling takes it from there.
+        downloadAndInstall: async () => {},
       } as Update;
       updateStore.dismissed = false;
       updateStore.downloading = state.downloading ?? false;
