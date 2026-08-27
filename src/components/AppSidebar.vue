@@ -36,7 +36,7 @@ onMounted(async () => {
 
 <template>
   <nav class="sidebar-nav">
-    <div class="nav-main">
+    <div class="nav-main" data-tour="nav-tabs">
       <router-link
         v-for="item in navItems"
         :key="item.path"
@@ -51,7 +51,13 @@ onMounted(async () => {
     <div class="nav-bottom">
       <div v-if="appVersion" class="version-display">v{{ appVersion }}</div>
       <div class="nav-divider"></div>
-      <a @click="openDocumentation" class="nav-item external-link" role="button" tabindex="0">
+      <a
+        @click="openDocumentation"
+        class="nav-item external-link"
+        role="button"
+        tabindex="0"
+        data-tour="nav-docs"
+      >
         <span class="nav-icon doc-icon">
           <svg
             width="14"
@@ -83,7 +89,12 @@ onMounted(async () => {
           />
         </svg>
       </a>
-      <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
+      <router-link
+        to="/settings"
+        class="nav-item"
+        :class="{ active: isActive('/settings') }"
+        data-tour="nav-settings"
+      >
         <span class="nav-icon gear-icon">
           <svg
             width="14"

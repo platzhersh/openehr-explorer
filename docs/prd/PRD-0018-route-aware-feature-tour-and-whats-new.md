@@ -71,6 +71,16 @@ The `contribution` tour is deliberately a single step targeting the always-rende
 
 Not every tour subject maps to one route. The **Request Inspector** (`inspector` tour) is a drawer mounted once, globally, in `App.vue` and visible on every screen — there's no single navigation event that means "the user is now looking at it". A `Tour` may set `global: true` and an empty `routeNames` array to opt out of route-based auto-start entirely; it's offered only via its own manual "Take a tour" trigger (the compass icon in the Request Inspector's header bar). This avoids racing the route-aware auto-start — the inspector's first HTTP entry can land at the exact moment another route's tour is already auto-starting, and a lower-priority global auto-start would either interrupt it or silently lose the race and never offer itself again.
 
+### 1b. App Intro Tour
+**Priority: P1 (added post-launch)**
+
+Per-route tours teach one screen's features exactly when the user is looking at it, but they say nothing about the app's persistent chrome — the server switcher, the sidebar's tab navigation, the Documentation link, Settings, and the Request Inspector bar — which sits outside any single route. The `app-intro` tour (`APP_INTRO_TOUR_ID` in `src/lib/tours.ts`) fills that gap: a five-step walkthrough of exactly those five areas, using `global: true`/`routeNames: []` like the Request Inspector tour (see 1a), but with its own auto-start path rather than manual-only:
+
+- `useTourStore.maybeAutoStartIntro()` is called once at launch — after the analytics-consent decision and the What's New modal (if either is showing), same ordering as route tours — and again whenever What's New is dismissed. It auto-starts `app-intro` if `tours_enabled` is on and the tour isn't already in `completed_tours`, taking priority over that launch's route tour.
+- If the intro tour doesn't auto-start (already seen/skipped, or tours disabled), `App.vue` falls straight through to the existing per-route `maybeAutoStart` — behavior is unchanged for anyone who's already completed the intro.
+- Completing/skipping persists to `completed_tours` exactly like any other tour, so it never auto-starts again; "Replay All Tours" in Settings resets it along with every route tour (it's stored in the same list). A dedicated "Replay App Tour" button in Settings' Product Tours section replays just this one via `tourStore.start(APP_INTRO_TOUR_ID)`.
+- Its steps target `[data-tour="server-select"]` (`ServerSwitcher.vue`), `[data-tour="nav-tabs"]`, `[data-tour="nav-docs"]`, `[data-tour="nav-settings"]` (all three in `AppSidebar.vue`), and the existing `[data-tour="inspector-header"]` (`RequestInspector.vue`) — all chrome that's mounted unconditionally in `App.vue`'s layout regardless of route, so there's no async-data race to worry about.
+
 Finishing (clicking "Done" on the last step) or skipping (Escape, the × button, or "Skip tour") both mark the tour completed — a skip is not distinguished from a completion, since either way the user has seen enough to make an informed choice not to continue.
 
 A step whose target element never appears in the DOM (e.g. an empty state, a collapsed panel) is silently skipped rather than stalling the tour.
@@ -141,6 +151,8 @@ Tour step targets use a dedicated `data-tour="…"` attribute rather than reusin
 - [x] Settings exposes the tours toggle, "Replay All Tours", and "View What's New".
 - [x] `npm run lint`, `npm run fmt:check`, `npx vue-tsc --noEmit`, and `npm run test` all pass.
 - [x] `cargo fmt -- --check` passes for the Rust changes.
+- [x] A fresh app launch (or one where `app-intro` isn't yet in `completed_tours`) shows the app intro tour — covering the server switcher, tab navigation, Documentation link, Settings, and the Request Inspector — before that route's own tour, provided `tours_enabled` is on.
+- [x] The app intro tour never auto-starts a second time once completed/skipped; "Replay App Tour" and "Replay All Tours" in Settings both offer it again on demand.
 
 ## Alternatives Considered
 - **A single, app-wide onboarding wizard on first launch:** Rejected — front-loads every feature before the user has any context for why it matters, and doesn't scale as more screens gain capability. Per-route tours teach a feature exactly when the user is looking at it.
