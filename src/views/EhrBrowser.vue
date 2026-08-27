@@ -9,6 +9,7 @@ import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import EhrFilterModal from "../components/EhrFilterModal.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import FilterIcon from "../components/FilterIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 
@@ -92,6 +93,82 @@ watch(ehrId, (id) => {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Parses a `true`/`false` token value for a boolean filter (modifiable:,
+ *  hasCompositions:, hasDirectory:), assigning it into `criteria[field]` on
+ *  success. Returns an error message on an invalid value, or null. Pulled
+ *  out of `applyToken`'s switch so each boolean case there is a single
+ *  return-call rather than its own nested if — see applyToken. */
+function applyBooleanToken(
+  criteria: EhrSearchCriteria,
+  field: "modifiable" | "has_compositions" | "has_directory",
+  prefix: string,
+  value: string,
+): string | null {
+  if (value !== "true" && value !== "false") {
+    return `${prefix}: expects 'true' or 'false'.`;
+  }
+  criteria[field] = value === "true";
+  return null;
+}
+
+/** Same shape as applyBooleanToken, for the YYYY-MM-DD date filters. */
+function applyDateToken(
+  criteria: EhrSearchCriteria,
+  field: "created_on" | "created_before" | "created_after",
+  prefix: string,
+  value: string,
+): string | null {
+  if (!DATE_RE.test(value)) {
+    return `${prefix}: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).`;
+  }
+  criteria[field] = value;
+  return null;
+}
+
+/** Applies one whitespace-separated token to `criteria`, mutating it in
+ *  place. Returns an error message on failure, or null on success —
+ *  including for a bare token (no colon) or an unrecognized prefix, both of
+ *  which fall back to extending `ehr_id_prefix`. */
+function applyToken(criteria: EhrSearchCriteria, token: string): string | null {
+  const colonIdx = token.indexOf(":");
+  if (colonIdx === -1) {
+    criteria.ehr_id_prefix = (criteria.ehr_id_prefix ?? "") + token;
+    return null;
+  }
+
+  const prefix = token.substring(0, colonIdx);
+  const value = token.substring(colonIdx + 1);
+  if (!value) return `${prefix}: value cannot be empty.`;
+
+  switch (prefix) {
+    case "subject":
+      criteria.subject_id = value;
+      return null;
+    case "namespace":
+      criteria.subject_namespace = value;
+      return null;
+    case "system":
+      criteria.system_id = value;
+      return null;
+    case "modifiable":
+      return applyBooleanToken(criteria, "modifiable", "modifiable", value);
+    case "hasCompositions":
+      return applyBooleanToken(criteria, "has_compositions", "hasCompositions", value);
+    case "hasDirectory":
+      return applyBooleanToken(criteria, "has_directory", "hasDirectory", value);
+    case "created-on":
+      return applyDateToken(criteria, "created_on", "created-on", value);
+    case "created-before":
+      return applyDateToken(criteria, "created_before", "created-before", value);
+    case "created-after":
+      return applyDateToken(criteria, "created_after", "created-after", value);
+    default:
+      // Unknown prefix — treat as EHR ID prefix (safe fallback)
+      criteria.ehr_id_prefix = (criteria.ehr_id_prefix ?? "") + token;
+      return null;
+  }
+}
+
 function parseSearchInput(raw: string): {
   criteria: EhrSearchCriteria | null;
   error: string | null;
@@ -101,106 +178,13 @@ function parseSearchInput(raw: string): {
   if (!trimmed) return { criteria: null, error: null, warning: null };
 
   const criteria: EhrSearchCriteria = {};
-  let warning: string | null = null;
-  const tokens = trimmed.split(/\s+/);
-
-  for (const token of tokens) {
-    const colonIdx = token.indexOf(":");
-    if (colonIdx === -1) {
-      // No colon — treat as EHR ID prefix
-      if (criteria.ehr_id_prefix) {
-        criteria.ehr_id_prefix += token; // append if multiple bare tokens
-      } else {
-        criteria.ehr_id_prefix = token;
-      }
-      continue;
-    }
-
-    const prefix = token.substring(0, colonIdx);
-    const value = token.substring(colonIdx + 1);
-
-    if (!value) {
-      return { criteria: null, error: `${prefix}: value cannot be empty.`, warning: null };
-    }
-
-    switch (prefix) {
-      case "subject":
-        criteria.subject_id = value;
-        break;
-      case "namespace":
-        criteria.subject_namespace = value;
-        break;
-      case "system":
-        criteria.system_id = value;
-        break;
-      case "modifiable":
-        if (value !== "true" && value !== "false") {
-          return { criteria: null, error: "modifiable: expects 'true' or 'false'.", warning: null };
-        }
-        criteria.modifiable = value === "true";
-        break;
-      case "hasCompositions":
-        if (value !== "true" && value !== "false") {
-          return {
-            criteria: null,
-            error: "hasCompositions: expects 'true' or 'false'.",
-            warning: null,
-          };
-        }
-        criteria.has_compositions = value === "true";
-        break;
-      case "hasDirectory":
-        if (value !== "true" && value !== "false") {
-          return {
-            criteria: null,
-            error: "hasDirectory: expects 'true' or 'false'.",
-            warning: null,
-          };
-        }
-        criteria.has_directory = value === "true";
-        break;
-      case "created-on":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-on: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_on = value;
-        break;
-      case "created-before":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-before: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_before = value;
-        break;
-      case "created-after":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-after: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_after = value;
-        break;
-      default:
-        // Unknown prefix — treat as EHR ID prefix (safe fallback)
-        if (criteria.ehr_id_prefix) {
-          criteria.ehr_id_prefix += token;
-        } else {
-          criteria.ehr_id_prefix = token;
-        }
-        break;
-    }
+  for (const token of trimmed.split(/\s+/)) {
+    const error = applyToken(criteria, token);
+    if (error) return { criteria: null, error, warning: null };
   }
 
   // Conflict resolution: created_on overrides created_before/created_after
+  let warning: string | null = null;
   if (criteria.created_on && (criteria.created_before || criteria.created_after)) {
     warning = "created-on overrides created-before/created-after. Only created-on is used.";
     delete criteria.created_before;
@@ -560,7 +544,7 @@ function lookupContribution() {
             @click="showFilterModal = true"
             title="Build filters without typing"
           >
-            Filters
+            <FilterIcon />
             <span v-if="filterChips.length" class="filter-count-badge">{{
               filterChips.length
             }}</span>
@@ -1105,18 +1089,17 @@ function lookupContribution() {
 }
 
 .filter-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  position: relative;
+  width: 24px;
   height: 24px;
-  padding: 0 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   transition: all 0.15s;
 }
@@ -1125,6 +1108,9 @@ function lookupContribution() {
   color: var(--color-text);
 }
 .filter-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1137,6 +1123,7 @@ function lookupContribution() {
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
+  box-shadow: 0 0 0 2px var(--color-bg);
 }
 
 .search-validation-error {
