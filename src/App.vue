@@ -143,9 +143,11 @@ function checkWhatsNewAndTours() {
   }
 }
 
-// Try the app-wide intro tour first — it auto-starts once, ever, ahead of
-// any route-aware tour. Once it's been seen/skipped (or is disabled), fall
-// back to offering the current route's tour, same as before its existence.
+/**
+ * Try the app-wide intro tour first — it auto-starts once, ever, ahead of
+ * any route-aware tour. Once it's been seen/skipped (or is disabled), fall
+ * back to offering the current route's tour, same as before its existence.
+ */
 function offerNextTour() {
   if (!tourStore.maybeAutoStartIntro()) {
     tourStore.maybeAutoStart(route.name as string | undefined);

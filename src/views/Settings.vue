@@ -87,6 +87,7 @@ async function replayAllTours() {
   void analytics.track("tours_reset");
 }
 
+/** Manual replay for the app-wide intro tour — ignores completion state, like `replayAllTours`. */
 function replayAppTour() {
   void analytics.track("tour_replayed", { tour_id: APP_INTRO_TOUR_ID });
   tourStore.start(APP_INTRO_TOUR_ID);
