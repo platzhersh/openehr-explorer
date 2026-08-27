@@ -361,6 +361,7 @@ function doClear() {
               </div>
 
               <div class="detail-section">
+                <div class="section-header">cURL Command</div>
                 <CopyButton
                   v-if="selected"
                   :text="generateCurl(selected)"
