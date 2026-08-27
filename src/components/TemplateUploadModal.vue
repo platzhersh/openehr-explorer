@@ -33,7 +33,7 @@ function handleClose() {
     <div class="dialog">
       <div class="dialog-header">
         <h2>Upload Template</h2>
-        <button class="close-btn" @click="handleClose">×</button>
+        <button type="button" class="close-btn" @click="handleClose">×</button>
       </div>
 
       <div class="dialog-body">

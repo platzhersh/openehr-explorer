@@ -28,7 +28,7 @@ const emit = defineEmits<{
       @drop="emit('drop', $event)"
     >
       <p>Drop OPT file here to upload</p>
-      <button class="btn btn-sm" :disabled="uploading" @click="emit('chooseFile')">
+      <button type="button" class="btn btn-sm" :disabled="uploading" @click="emit('chooseFile')">
         {{ uploading ? "Uploading..." : "Or choose file..." }}
       </button>
     </div>
