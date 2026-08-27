@@ -268,6 +268,79 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryLoaded.value = false;
   }
 
+  /** Creates the DIRECTORY for an EHR that doesn't have one yet. `folder` is
+   *  DIRECTORY FOLDER RM JSON (see `toWireFolder` in `src/lib/directoryEdit.ts`).
+   *  The backend re-fetches after writing, so `directory` ends up holding the
+   *  server's canonical stored representation rather than what was sent. */
+  async function createDirectory(serverId: string, ehrId: string, folder: Record<string, unknown>) {
+    directoryRequestId++; // invalidate any in-flight fetchDirectory call
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("create_directory", {
+        serverId,
+        ehrId,
+        folder,
+      });
+      directoryLoaded.value = true;
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  /** Replaces the DIRECTORY's FOLDER hierarchy. `precedingVersionUid` must be
+   *  the `uid.value` of the version currently loaded (sent as `If-Match` so a
+   *  concurrent change elsewhere isn't silently clobbered). */
+  async function updateDirectory(
+    serverId: string,
+    ehrId: string,
+    folder: Record<string, unknown>,
+    precedingVersionUid: string,
+  ) {
+    directoryRequestId++;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("update_directory", {
+        serverId,
+        ehrId,
+        folder,
+        precedingVersionUid,
+      });
+      directoryLoaded.value = true;
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  /** Deletes the DIRECTORY entirely. Same `precedingVersionUid` guard as
+   *  `updateDirectory`. */
+  async function deleteDirectory(serverId: string, ehrId: string, precedingVersionUid: string) {
+    directoryRequestId++;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      await invoke<string>("delete_directory", {
+        serverId,
+        ehrId,
+        precedingVersionUid,
+      });
+      directory.value = null;
+      directoryLoaded.value = true; // "no directory" is now the confirmed, stable state
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
   function clearSearch() {
     searchRequestId++; // invalidate any in-flight searchEhrs call
     searchResults.value = [];
@@ -297,6 +370,9 @@ export const useEhrStore = defineStore("ehr", () => {
     fetchEhrDetail,
     fetchDirectory,
     clearDirectory,
+    createDirectory,
+    updateDirectory,
+    deleteDirectory,
     searchEhrs,
     clearSearch,
     createEhr,
