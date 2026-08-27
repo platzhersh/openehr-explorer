@@ -32,6 +32,7 @@ export interface BashLine {
 // backslash always sits *outside* a quoted run, never inside one.
 const TOKEN_RE = /('[^']*')|("[^"]*")|(\s+)|(\S+)/g;
 
+/** Tokenizes a shell/cURL command string into renderable, per-line typed tokens. */
 export function parseBashLines(source: string): BashLine[] {
   if (!source) return [];
   const rawLines = source.split("\n");
