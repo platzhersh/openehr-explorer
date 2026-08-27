@@ -3,22 +3,23 @@
 **Date:** 2026-08-27
 **Status:** Accepted
 **Repo:** `openehr-explorer`
-**Related:** ADR-0022 (harmonized XML viewer, the component fixed here), ADR-0021 (harmonized JSON viewer)
+**Related:** ADR-0022 (harmonized XML viewer, the component fixed here), ADR-0021 (harmonized JSON viewer, also fixed here)
 
 ---
 
 ## Context
 
-Two views became slow or fully unresponsive against real-world data volumes:
+Three views became slow or fully unresponsive against real-world data volumes:
 
 - **OPT XML tab** (`TemplateBrowser.vue`, via `XmlViewer.vue`): a real-world OPT XML document of ~12k lines rendered every line as DOM up front — one `<span>` per token, several tokens per line, so tens of thousands of nodes for a single document. The initial render blocked the main thread long enough to look frozen, and because nothing was ever removed from the DOM as the user scrolled, memory kept growing until the whole app (not just the XML tab) became unresponsive, forcing a restart. `RequestInspector.vue`'s XML tab shares the same component and the same failure mode for large response bodies.
+- **Web Template JSON tab** (`TemplateBrowser.vue`, via `JsonViewer.vue`) and **Composition JSON/FLAT tabs** (`CompositionViewer.vue`, same component): the same problem, one row of DOM per visible (uncollapsed) line, for a large Web Template or composition. Less severe than the XML case in practice (`JsonViewer.vue` supports per-node collapse, so a user can manually shrink what's rendered), but the same unbounded-DOM root cause, and collapsing doesn't help the *first* render of a large document before anything's been collapsed.
 - **AQL Runner → Stored Queries** (`AqlRunner.vue`): a CDR with hundreds/thousands of registered `STORED_QUERY` definitions rendered one `.saved-item` row per entry immediately on load, making the AQL Runner sluggish to open or switch servers on.
 
-Both are the same underlying problem: a `v-for` over an unbounded server- or file-provided list, with no bound on the DOM node count.
+All three are the same underlying problem: a `v-for` over an unbounded server- or file-provided list, with no bound on the DOM node count.
 
 ## Decision
 
-Add fixed-row-height list virtualization — render only the rows near the visible viewport (plus a small overscan buffer), backed by top/bottom spacer padding so the scrollbar still reflects the full list length — and apply it at both sites.
+Add fixed-row-height list virtualization — render only the rows near the visible viewport (plus a small overscan buffer), backed by top/bottom spacer padding so the scrollbar still reflects the full list length — and apply it at all three sites.
 
 ### Implementation
 
@@ -28,6 +29,7 @@ Add fixed-row-height list virtualization — render only the rows near the visib
 - **`TemplateBrowser.vue`**: while the OPT XML tab is active, `.panel-right` (normally just a big `overflow-y: auto` box scrolling all four tabs' content together) switches to a non-scrolling flex column (`.panel-right--xml`) so `.xml-view` can be handed the exact remaining height below the header as a real `flex: 1; min-height: 0` box — which `XmlViewer.vue` then fills. The other three tabs are untouched. This is a class toggle keyed off `activeTab`, not a permanent layout change, specifically to avoid touching the tree/JSON/FLAT tabs' scroll behavior in the same pass.
 - **`RequestInspector.vue`**: `.xml-container` already capped itself at `max-height: 400px` (mirroring the sibling `.tree-container`/`.tree-scroll` pattern for the Tree body-view tab) — but it did so by scrolling *itself* (`overflow-y: auto`), which, now that `XmlViewer.vue` fills rather than caps its own height, would let the (potentially huge) document grow unbounded inside it before that outer scrollbar ever kicked in, defeating virtualization. Fixed by making `.xml-container` a flex column (`overflow: hidden`) so the bounded `max-height: 400px` box is what `XmlViewer.vue` fills, and its own inner `.xv-scroll` is what actually scrolls.
 - **`AqlRunner.vue`**: the "Saved Queries (local)" and "Stored Queries (server)" lists each get their own virtualized, independently-scrolling region (`flex: 1; min-height: 0; overflow-y: auto` on `.saved-list`, replacing one shared `overflow-y: auto` on the whole `.saved-panel`) rather than one scrollbar for both sections combined — this also fixes a secondary UX issue where a long first section could scroll the second section's header out of view. `.saved-item` gets a fixed `34px` height (`box-sizing: border-box`) to match `QUERY_ROW_HEIGHT`.
+- **`JsonViewer.vue`**: virtualizes over `visibleLines` — the *already-collapse-filtered* array the component computes today — so per-node collapse/expand keeps working exactly as before; the virtual list just windows over however many lines are currently visible. Gets the identical `.jv-scroll` flex-fill treatment and `white-space: nowrap` row fix `XmlViewer.vue` got (see above), and the same `querySelector(".jv-match-current")` → index-based `scrollToIndex()` change to the search "scroll to current match" behavior — except the reverse lookup here is keyed by `line.id` (JSON lines already carry a stable id for collapse tracking) rather than XmlViewer's positional line index. `TemplateBrowser.vue`'s Web Template JSON tab and `CompositionViewer.vue`'s JSON/FLAT tabs each get the same bounded-flex-ancestor treatment `TemplateBrowser.vue`'s OPT XML tab got (`.panel-right--bounded` / `.main-content--bounded`, toggled by `activeTab`). `JsonViewer.vue`'s other call sites (`RequestInspector.vue`, `CompositionForm.vue`, `EhrBrowser.vue`, and the AQL Runner's per-cell popover) are untouched: none of them previously gave `JsonViewer.vue` a self-imposed cap the way `RequestInspector.vue`'s `.xml-container` did, so they keep behaving exactly as before (content-hugging inside whatever ancestor already scrolled them) — virtualized under the hood as a free correctness improvement, but not part of this pass's call-site layout work since those values are typically small.
 
 ### Why fixed-row-height, not a general/measuring virtualizer
 
@@ -41,28 +43,29 @@ Consistent with ADR-0021/ADR-0022/ADR-0012's stated preference for small hand-ro
 
 ### Positive
 
-- Both views now render a bounded number of DOM nodes regardless of list/document size — opening a 12k-line OPT XML document or a stored-queries list in the thousands no longer blocks the main thread or grows memory as the user scrolls.
-- `useVirtualList`/`virtualList.ts` are generic over the row content (`<T>`), so a future large list in this app can reuse them directly.
-- `RequestInspector.vue`'s XML tab gets the same fix for free, since it shares `XmlViewer.vue`.
+- All three views now render a bounded number of DOM nodes regardless of list/document size — opening a 12k-line OPT XML document, a large Web Template/composition JSON, or a stored-queries list in the thousands no longer blocks the main thread or grows memory as the user scrolls.
+- `useVirtualList`/`virtualList.ts` are generic over the row content (`<T>`), so a future large list in this app can reuse them directly — as `JsonViewer.vue` already does, reusing the exact same composable `XmlViewer.vue` introduced.
+- `RequestInspector.vue`'s XML tab and `JsonViewer.vue`'s other call sites (request/response payload previews, EHR detail JSON, AQL result cell popovers) get the same fix for free, since they share the two virtualized components.
 
 ### Negative
 
-- `XmlViewer.vue` changes from page-scrolling (the OPT XML tab scrolled along with the rest of `TemplateBrowser.vue`'s right panel) to a bounded, self-scrolling box. This is a deliberate, necessary trade-off — a virtualized window needs a real viewport — but it is a visible behavior change from before this ADR.
-- Because `XmlViewer.vue` now fills rather than caps its own height, every call site is responsible for handing it a genuinely bounded ancestor (a real flex height, or its own `max-height`/`overflow`) — there's no longer a component-level fallback that bounds it on its own. Both current call sites do this (`TemplateBrowser.vue`'s `.panel-right--xml`, `RequestInspector.vue`'s pre-existing `.xml-container` cap), but a future call site that drops `<XmlViewer>` into an unbounded container without doing the same would silently reintroduce the original freeze/memory-growth bug. Mitigated by the comments left at both existing call sites and at `.xv-scroll`'s own declaration; a component-owned `max-height` fallback was considered and rejected (see Alternatives) because any fixed value is exactly the "guessed viewport size" problem this pass replaced.
-- Both call sites now need their row height kept in sync between CSS and the JS constant that assumes it (`ROW_HEIGHT` / `QUERY_ROW_HEIGHT`); a future style change to `.xv-line` or `.saved-item` that isn't mirrored in the matching constant will silently misalign virtualization (rows rendered at the wrong scroll offset). Documented at both declaration sites as the mitigation; a runtime-measured row height was considered (see Alternatives) and rejected for the added complexity.
-- `white-space: nowrap` is a display-only normalization of embedded whitespace runs (including literal newlines) within a single OPT XML text node — a `<purpose>` or similar free-text element containing intentional multiple-space formatting will render it collapsed to one space. Copy-to-clipboard is unaffected (it serializes the untouched token text, not the rendered DOM).
+- `XmlViewer.vue` and `JsonViewer.vue` change from page-scrolling (the OPT XML/Web Template JSON tabs scrolled along with the rest of their panel) to a bounded, self-scrolling box wherever their call site now supplies one. This is a deliberate, necessary trade-off — a virtualized window needs a real viewport — but it is a visible behavior change from before this ADR.
+- Because both components now fill rather than cap their own height, every call site that wants the fill-available-height behavior is responsible for handing it a genuinely bounded ancestor (a real flex height, or its own `max-height`/`overflow`) — there's no longer a component-level fallback that bounds it on its own. The four call sites that need this do it (`TemplateBrowser.vue`'s `.panel-right--bounded`, `CompositionViewer.vue`'s `.main-content--bounded`, `RequestInspector.vue`'s pre-existing `.xml-container` cap), but a future call site that drops either component into an unbounded container without doing the same would silently reintroduce the original freeze/memory-growth bug. Mitigated by the comments left at every call site and at each component's own scroll-container declaration; a component-owned `max-height` fallback was considered and rejected (see Alternatives) because any fixed value is exactly the "guessed viewport size" problem this pass replaced.
+- All three virtualized rows need their height kept in sync between CSS and the JS constant that assumes it (`ROW_HEIGHT` in both `XmlViewer.vue`/`JsonViewer.vue`, `QUERY_ROW_HEIGHT` in `AqlRunner.vue`); a future style change to `.xv-line`/`.jv-line`/`.saved-item` that isn't mirrored in the matching constant will silently misalign virtualization (rows rendered at the wrong scroll offset). Documented at both declaration sites as the mitigation; a runtime-measured row height was considered (see Alternatives) and rejected for the added complexity.
+- `white-space: nowrap` is a display-only normalization of embedded whitespace runs (including literal newlines) within a single row — for `XmlViewer.vue` this can affect a free-text OPT XML element (e.g. `<purpose>`) with intentional multiple-space formatting, rendering it collapsed to one space. Copy-to-clipboard is unaffected in both components (each serializes the untouched token text/parsed value, not the rendered DOM). `JsonViewer.vue`'s string tokens are `JSON.stringify()`'d already, so real newlines were already escaped there and this change is precautionary rather than fixing an observed bug the way it did for `XmlViewer.vue`.
 
 ### Neutral
 
 - `AqlRunner.vue`'s "Saved Queries (local)" list is virtualized even though it's typically small (user-curated, local-file-backed) — done for consistency and because the composable makes it free, not because it was independently reported as slow.
+- `JsonViewer.vue`'s other call sites (`RequestInspector.vue`'s request/response JSON, `CompositionForm.vue`'s payload previews, `EhrBrowser.vue`'s EHR detail JSON, `AqlRunner.vue`'s per-cell popover) get virtualization but not the fill-available-height layout change, since none of them were reported slow and their values are typically small — see the `JsonViewer.vue` implementation note above.
 
 ## Alternatives Considered
 
-### Keep a component-owned `max-height` fallback on `.xv-scroll` (e.g. `65vh`) instead of requiring every call site to supply a bounded ancestor
+### Keep a component-owned `max-height` fallback on `.xv-scroll`/`.jv-scroll` (e.g. `65vh`) instead of requiring every call site to supply a bounded ancestor
 
 - **Pros:** a call site that forgets to bound its container still gets *some* cap, rather than silently regressing to unbounded growth.
-- **Cons:** this is exactly the bug being fixed — an early version of this change shipped with a `65vh` cap, and it clipped `TemplateBrowser.vue`'s OPT XML tab short of the panel's actual (taller) available height, leaving visible dead space below the viewer. Any single fixed value is wrong for some panel size; there's no vh guess that's simultaneously "big enough to fill a tall panel" and "small enough not to overflow a short one."
-- **Verdict:** rejected. Correctness here means each call site owning its real bound, the same way `RequestInspector.vue`'s `.tree-container`/`.tree-scroll` already did for the Tree body-view tab before this ADR.
+- **Cons:** this is exactly the bug being fixed — an early version of this change shipped with a `65vh` cap on `XmlViewer.vue`, and it clipped `TemplateBrowser.vue`'s OPT XML tab short of the panel's actual (taller) available height, leaving visible dead space below the viewer. Any single fixed value is wrong for some panel size; there's no vh guess that's simultaneously "big enough to fill a tall panel" and "small enough not to overflow a short one."
+- **Verdict:** rejected for both components. Correctness here means each call site owning its real bound, the same way `RequestInspector.vue`'s `.tree-container`/`.tree-scroll` already did for the Tree body-view tab before this ADR.
 
 ### Measure actual row height at runtime (e.g. via `ResizeObserver` on a rendered sample row) instead of a hardcoded constant
 
@@ -82,6 +85,6 @@ Consistent with ADR-0021/ADR-0022/ADR-0012's stated preference for small hand-ro
 
 ## References
 
-- ADR-0022 — Harmonized XML Viewer Component (the component this ADR fixes the performance of)
-- ADR-0021 — Harmonized JSON Viewer Component (precedent for splitting pure logic from the Vue component for testability)
+- ADR-0022 — Harmonized XML Viewer Component (one of the two components this ADR fixes the performance of)
+- ADR-0021 — Harmonized JSON Viewer Component (the other component this ADR fixes the performance of; also the precedent for splitting pure logic from the Vue component for testability)
 - ADR-0012 — CodeMirror 6 for AQL Editor (precedent for `useCodeMirror.ts`'s caller-owned container ref pattern, reused here)
