@@ -67,6 +67,13 @@ npm run tauri build      # Build production app (creates DMG on macOS)
 npm run build            # Build frontend only (runs vue-tsc + vite build)
 ```
 
+### Storybook
+```bash
+npm run storybook        # Run Storybook dev server (http://localhost:6006)
+npm run build-storybook  # Build static Storybook (storybook-static/, gitignored)
+```
+Component stories live next to the component they document, e.g. `src/components/ToggleSwitch.vue` + `src/components/ToggleSwitch.stories.ts`. See ADR-0021 for scope and rationale.
+
 ### Type Checking
 ```bash
 npx vue-tsc --noEmit     # Type check Vue/TypeScript without emitting files

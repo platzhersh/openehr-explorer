@@ -25,6 +25,8 @@ jobs:
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -38,6 +40,7 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+      - run: npm run build-storybook
 
   rust:
     name: Rust checks
