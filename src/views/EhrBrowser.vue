@@ -40,7 +40,6 @@ const deleteError = ref<string | null>(null);
 const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
-const showHelpModal = ref(false);
 const showFilterModal = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
@@ -551,21 +550,12 @@ function lookupContribution() {
             class="filter-btn"
             data-tour="ehr-search-filters"
             @click="showFilterModal = true"
-            title="Build filters without typing"
+            title="Build filters — includes a shortcut-syntax reference"
           >
             <FilterIcon />
             <span v-if="filterChips.length" class="filter-count-badge">{{
               filterChips.length
             }}</span>
-          </button>
-          <button
-            type="button"
-            class="help-btn"
-            data-tour="ehr-search-help"
-            @click="showHelpModal = true"
-            title="Search syntax help"
-          >
-            ?
           </button>
         </div>
 
@@ -886,57 +876,6 @@ function lookupContribution() {
       @apply="handleFilterModalApply"
     />
 
-    <!-- Search Syntax Help Modal (for the quick-search box's colon syntax) -->
-    <div v-if="showHelpModal" class="dialog-overlay" @click="showHelpModal = false">
-      <div class="dialog" @click.stop>
-        <h3>Search Syntax</h3>
-        <p>
-          Prefer building filters visually? Use the <strong>Filters</strong> button instead — this
-          syntax is a shortcut for the quick search box.
-        </p>
-        <table class="help-table">
-          <tbody>
-            <tr>
-              <td class="help-example">fde80e0e...</td>
-              <td>EHR ID prefix match</td>
-            </tr>
-            <tr>
-              <td class="help-example">subject:value</td>
-              <td>Subject ID contains match</td>
-            </tr>
-            <tr>
-              <td class="help-example">namespace:value</td>
-              <td>Subject namespace exact match</td>
-            </tr>
-            <tr>
-              <td class="help-example">system:value</td>
-              <td>System ID exact match</td>
-            </tr>
-            <tr>
-              <td class="help-example">modifiable:true|false</td>
-              <td>EHR status is_modifiable</td>
-            </tr>
-            <tr>
-              <td class="help-example">hasCompositions:true</td>
-              <td>Has compositions (false not supported)</td>
-            </tr>
-            <tr>
-              <td class="help-example">hasDirectory:true|false</td>
-              <td>Has a DIRECTORY (checked per matching EHR)</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="help-note">Combine terms with spaces (implicit AND).</p>
-        <p class="help-note">
-          Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
-          Inspector.
-        </p>
-        <div class="dialog-actions">
-          <button type="button" class="btn btn-sm" @click="showHelpModal = false">Close</button>
-        </div>
-      </div>
-    </div>
-
     <!-- EHR Delete Confirmation Dialog -->
     <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
       <div class="dialog" @click.stop>
@@ -1075,8 +1014,7 @@ function lookupContribution() {
   flex: 1;
   font-size: 12px;
 }
-.clear-btn,
-.help-btn {
+.clear-btn {
   width: 24px;
   height: 24px;
   border: 1px solid var(--color-border);
@@ -1091,8 +1029,7 @@ function lookupContribution() {
   flex-shrink: 0;
   transition: all 0.15s;
 }
-.clear-btn:hover,
-.help-btn:hover {
+.clear-btn:hover {
   background: var(--color-border);
   color: var(--color-text);
 }
@@ -1192,29 +1129,6 @@ function lookupContribution() {
 }
 .chip-clear-all:hover {
   color: var(--color-text);
-}
-
-.help-table {
-  width: 100%;
-  font-size: 12px;
-  border-collapse: collapse;
-}
-.help-table td {
-  padding: 3px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-.help-example {
-  font-family: var(--font-mono);
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-.help-note {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  margin: 6px 0 0;
-}
-.help-warning {
-  color: var(--color-warning, #e6a817);
 }
 
 .history-dropdown {

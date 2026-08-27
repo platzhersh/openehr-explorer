@@ -108,12 +108,7 @@ export const TOURS: Tour[] = [
       {
         target: '[data-tour="ehr-search-filters"]',
         title: "Build filters without typing",
-        body: "Click Filters to narrow the list with real form controls — subject, namespace, system, modifiable, has compositions, and whether the EHR has directory entries. Applied filters show up as removable chips below the search box.",
-      },
-      {
-        target: '[data-tour="ehr-search-help"]',
-        title: "Prefer typing? There's a shortcut syntax",
-        body: "Click the ? icon for the complete colon-syntax reference (subject:, namespace:, hasCompositions:true, ...) if you'd rather type filters straight into the search box.",
+        body: "Click Filters to narrow the list with real form controls — subject, namespace, system, modifiable, has compositions, and whether the EHR has directory entries. Applied filters show up as removable chips below the search box. Prefer typing? The same dialog has a shortcut-syntax reference too.",
       },
       {
         target: '[data-tour="ehr-create"]',

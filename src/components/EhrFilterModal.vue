@@ -37,6 +37,12 @@ const hasCompositions = ref<"" | "true">("");
 // runs, not expressed as an AQL predicate.
 const hasDirectory = ref<TriState>("");
 const formError = ref<string | null>(null);
+// Collapsed shortcut-syntax reference for the quick search box's
+// colon-syntax (subject:, hasDirectory:true, ...) — folded away since most
+// people just use the form fields above, but kept one click away for
+// anyone who'd rather type. Replaces what used to be a separate "?" help
+// button/modal next to the search box.
+const showSyntaxHelp = ref(false);
 
 function boolToTriState(value: boolean | undefined): TriState {
   if (value === true) return "true";
@@ -53,6 +59,7 @@ function seedFromCriteria(criteria: EhrSearchCriteria) {
   hasCompositions.value = criteria.has_compositions === true ? "true" : "";
   hasDirectory.value = boolToTriState(criteria.has_directory);
   formError.value = null;
+  showSyntaxHelp.value = false;
 }
 
 // Re-seed every time the modal opens, so it always reflects the filters
@@ -209,6 +216,51 @@ function handleClose() {
             </div>
           </div>
 
+          <div class="syntax-help">
+            <button type="button" class="syntax-toggle" @click="showSyntaxHelp = !showSyntaxHelp">
+              {{ showSyntaxHelp ? "Hide" : "Show" }} shortcut syntax for the quick search box
+            </button>
+            <div v-if="showSyntaxHelp" class="syntax-help-body">
+              <table class="help-table">
+                <tbody>
+                  <tr>
+                    <td class="help-example">fde80e0e...</td>
+                    <td>EHR ID prefix match</td>
+                  </tr>
+                  <tr>
+                    <td class="help-example">subject:value</td>
+                    <td>Subject ID contains match</td>
+                  </tr>
+                  <tr>
+                    <td class="help-example">namespace:value</td>
+                    <td>Subject namespace exact match</td>
+                  </tr>
+                  <tr>
+                    <td class="help-example">system:value</td>
+                    <td>System ID exact match</td>
+                  </tr>
+                  <tr>
+                    <td class="help-example">modifiable:true|false</td>
+                    <td>EHR status is_modifiable</td>
+                  </tr>
+                  <tr>
+                    <td class="help-example">hasCompositions:true</td>
+                    <td>Has compositions (false not supported)</td>
+                  </tr>
+                  <tr>
+                    <td class="help-example">hasDirectory:true|false</td>
+                    <td>Has a DIRECTORY (checked per matching EHR)</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="help-note">Combine terms with spaces (implicit AND).</p>
+              <p class="help-note">
+                Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
+                Inspector.
+              </p>
+            </div>
+          </div>
+
           <div v-if="formError" class="error-banner">{{ formError }}</div>
 
           <div class="dialog-actions">
@@ -331,6 +383,49 @@ function handleClose() {
   color: var(--color-error);
   font-size: 13px;
   margin-bottom: 16px;
+}
+
+.syntax-help {
+  margin-bottom: 8px;
+}
+.syntax-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.syntax-toggle:hover {
+  color: var(--color-text);
+}
+.syntax-help-body {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.help-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.help-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.help-example {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+.help-note {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 6px 0 0;
 }
 
 .dialog-actions {
