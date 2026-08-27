@@ -799,6 +799,17 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
+        <ul>
+          <li><strong>Contribution Audit Trail:</strong> A new Contribution viewer shows every version, deletion, and audit-trail entry behind a composition, with links from the EHR and composition views for tracing who changed what and when</li>
+          <li><strong>DIRECTORY Support:</strong> Browse and inspect the EHR's DIRECTORY (folder hierarchy) directly in the EHR browser, with a dedicated tree view</li>
+          <li><strong>Stored Query Execution:</strong> Run server-defined stored queries as a distinct capability in the AQL Runner, alongside ad-hoc AQL</li>
+          <li><strong>App-Wide Intro Tour:</strong> First launch now walks new users through the app with a guided tour, building on the existing route-aware feature tours and What's New modal</li>
+          <li><strong>Request Inspector curl Text:</strong> The Request Inspector now shows the equivalent curl command as copyable text for every logged request</li>
+          <li><strong>EHR Creation Fix:</strong> EHR creation now supplies <code>archetype_details</code> on the initial EHR_STATUS, fixing 422 errors against stricter CDRs like FerroEHR</li>
+          <li><strong>Sidebar Connection Status Fix:</strong> The server connection indicator now updates on every request instead of only after an explicit connection test</li>
+        </ul>
+
         <h3>v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
         <ul>
           <li><strong>FerroEHR Support:</strong> Added <code>FerroEHR</code> as a recognized server type, including automatic version detection against its unauthenticated status endpoint</li>
