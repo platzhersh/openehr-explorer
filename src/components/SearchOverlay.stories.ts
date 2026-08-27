@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { fn } from "storybook/test";
-import { useArgs } from "storybook/preview-api";
 import SearchOverlay from "./SearchOverlay.vue";
+import { updateArgOnEvent } from "../lib/storybook-args";
 
 const meta: Meta<typeof SearchOverlay> = {
   title: "Components/SearchOverlay",
@@ -23,13 +23,10 @@ type Story = StoryObj<typeof SearchOverlay>;
 // v-model is wired back through Storybook's useArgs so both the input and
 // the Controls panel stay in sync, like a real parent's v-model ref would.
 const render: NonNullable<Story["render"]> = (args) => {
-  const [, updateArgs] = useArgs();
+  const onInput = updateArgOnEvent("modelValue");
   return {
     components: { SearchOverlay },
     setup() {
-      function onInput(value: string) {
-        updateArgs({ modelValue: value });
-      }
       return { args, onInput };
     },
     template: `<SearchOverlay v-bind="args" @update:modelValue="onInput" />`,

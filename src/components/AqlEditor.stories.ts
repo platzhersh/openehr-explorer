@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { useArgs } from "storybook/preview-api";
 import AqlEditor from "./AqlEditor.vue";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
+import { updateArgOnEvent } from "../lib/storybook-args";
 
 const meta: Meta<typeof AqlEditor> = {
   title: "Components/AqlEditor",
@@ -32,13 +32,10 @@ WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'`;
 // the Controls panel stay in sync, the same as a real parent (e.g.
 // AqlRunner.vue) would with its own ref.
 const render: NonNullable<Story["render"]> = (args) => {
-  const [, updateArgs] = useArgs();
+  const onInput = updateArgOnEvent("modelValue");
   return {
     components: { AqlEditor },
     setup() {
-      function onInput(value: string) {
-        updateArgs({ modelValue: value });
-      }
       return { args, onInput };
     },
     template: `
