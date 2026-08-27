@@ -31,9 +31,17 @@ function withStores(state: StoryUpdateState) {
       // "What's new →" calls openUrl(), both of which invoke real Tauri IPC
       // commands. Intercept those with Tauri's own mock-IPC helper (the same
       // one it recommends for tests) instead of letting them hit a missing
-      // backend and reject.
-      mockIPC((cmd) => {
-        if (cmd === "plugin:process|restart" || cmd === "plugin:opener|open_url") {
+      // backend and reject. For the changelog link specifically, open the
+      // URL in a real browser tab — Storybook *is* a browser, so this is a
+      // truer stand-in for what openUrl() does in the actual app than a
+      // silent no-op.
+      mockIPC((cmd, payload) => {
+        if (cmd === "plugin:opener|open_url") {
+          const url = (payload as { url?: string } | undefined)?.url;
+          if (url) window.open(url, "_blank", "noopener,noreferrer");
+          return null;
+        }
+        if (cmd === "plugin:process|restart") {
           return null;
         }
       });
