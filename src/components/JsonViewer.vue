@@ -5,7 +5,14 @@
 // the real structure. Replaces the duplicated `highlightJson()` /
 // `highlightSearchInContent()` helpers that used to live in
 // CompositionViewer.vue and TemplateBrowser.vue.
+//
+// Rendering is virtualized (src/composables/useVirtualList.ts, ADR-0023):
+// a large Web Template or composition JSON document rendered one row of
+// DOM per visible (uncollapsed) line up front, which got slow and grew
+// memory the same way XmlViewer's OPT XML rendering did before that ADR.
+// Only rows near the viewport are rendered now.
 import { computed, ref, watch } from "vue";
+import { useVirtualList } from "../composables/useVirtualList";
 import CopyButton from "./CopyButton.vue";
 
 const props = withDefaults(
@@ -245,10 +252,28 @@ function isHidden(line: JsonLine): boolean {
 
 const visibleLines = computed(() => lines.value.filter((line) => !isHidden(line)));
 
+// Must match `.jv-line`'s fixed height in <style> below — row virtualization
+// assumes every line takes exactly this many px.
+const ROW_HEIGHT = 20;
+
+const scrollEl = ref<HTMLElement | null>(null);
+const {
+  onScroll,
+  startIndex,
+  topPadding,
+  bottomPadding,
+  visibleItems: windowedLines,
+  scrollToIndex,
+} = useVirtualList(visibleLines, scrollEl, { rowHeight: ROW_HEIGHT, overscan: 20 });
+
 // Global running index of each match, in document order — used to mark the
 // "current" one (bold/outlined + scrolled into view) from `currentMatchIndex`.
-const matchGlobalIndex = computed(() => {
-  const map = new Map<string, number>(); // `${lineId}:${tokenIndex}:${start}` -> global index
+// Built in one pass alongside a reverse lookup (global index -> line id) so
+// scrolling to the current match doesn't depend on it already being
+// rendered in the (now virtualized) DOM.
+const matchIndex = computed(() => {
+  const byKey = new Map<string, number>(); // `${lineId}:${tokenIndex}:${start}` -> global index
+  const lineIdByGlobalIndex: string[] = [];
   let counter = 0;
   for (const line of lines.value) {
     const lineMap = matchesByLine.value.get(line.id);
@@ -257,10 +282,22 @@ const matchGlobalIndex = computed(() => {
       const spans = lineMap.get(tokenIndex);
       if (!spans) return;
       for (const span of spans) {
-        map.set(`${line.id}:${tokenIndex}:${span.start}`, counter++);
+        byKey.set(`${line.id}:${tokenIndex}:${span.start}`, counter);
+        lineIdByGlobalIndex.push(line.id);
+        counter++;
       }
     });
   }
+  return { byKey, lineIdByGlobalIndex };
+});
+const matchGlobalIndex = computed(() => matchIndex.value.byKey);
+
+// Index of each visible line within `visibleLines` — the array the virtual
+// list windows over — so a match's line id can be turned into a row index
+// to scroll to.
+const visibleLineIndexById = computed(() => {
+  const map = new Map<string, number>();
+  visibleLines.value.forEach((line, idx) => map.set(line.id, idx));
   return map;
 });
 
@@ -306,16 +343,19 @@ function collapsedSuffix(line: JsonLine): string {
   return ` … ${count} ${unit}${count === 1 ? "" : "s"} `;
 }
 
-const root = ref<HTMLElement | null>(null);
+// Scrolls the current match into view by its row index directly (via the
+// virtual list's own scrollTo), rather than querying the DOM for the
+// rendered .jv-match-current node — that node may not exist yet since only
+// rows near the viewport are rendered.
 watch(
   () => [props.currentMatchIndex, props.searchTerm],
-  async () => {
+  () => {
     if (totalMatches.value === 0) return;
-    await new Promise((r) => requestAnimationFrame(r));
-    root.value?.querySelector(".jv-match.jv-match-current")?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    const lineId = matchIndex.value.lineIdByGlobalIndex[currentGlobalIndex.value];
+    if (lineId === undefined) return;
+    const rowIndex = visibleLineIndexById.value.get(lineId);
+    if (rowIndex === undefined) return;
+    scrollToIndex(rowIndex, { center: true, behavior: "smooth" });
   },
 );
 
@@ -323,20 +363,23 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
 </script>
 
 <template>
-  <div ref="root" class="json-viewer">
+  <div class="json-viewer">
     <div v-if="showCopyButton" class="jv-copy-btn-wrap">
       <CopyButton :text="copyText" title="Copy JSON to clipboard" size="md" variant="bordered" />
     </div>
 
-    <div class="jv-scroll">
-      <div class="jv-lines">
+    <div ref="scrollEl" class="jv-scroll" @scroll="onScroll">
+      <div
+        class="jv-lines"
+        :style="{ paddingTop: `${topPadding}px`, paddingBottom: `${bottomPadding}px` }"
+      >
         <div
-          v-for="(line, i) in visibleLines"
+          v-for="(line, i) in windowedLines"
           :key="line.id"
           class="jv-line"
           :style="{ paddingLeft: `${line.depth * 16}px` }"
         >
-          <span v-if="showLineNumbers" class="jv-line-number">{{ i + 1 }}</span>
+          <span v-if="showLineNumbers" class="jv-line-number">{{ startIndex + i + 1 }}</span>
           <button
             v-if="line.isOpener"
             type="button"
@@ -382,6 +425,10 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
   position: relative;
   font-family: var(--font-mono);
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .jv-copy-btn-wrap {
@@ -391,20 +438,33 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
   z-index: 1;
 }
 
+/* Fills whatever height the caller's layout gives it (flex:1 in a bounded
+   flex ancestor), rather than growing to the full document height and
+   relying on the page/panel to scroll — see ADR-0023 (XmlViewer.vue went
+   through the same change first). With no bounded ancestor this just
+   shrinks to the content's natural size. */
 .jv-scroll {
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .jv-lines {
   display: flex;
   flex-direction: column;
-  line-height: 1.6;
 }
 
 .jv-line {
   display: flex;
-  align-items: flex-start;
-  white-space: pre;
+  align-items: center;
+  height: 20px;
+  line-height: 20px;
+  overflow: hidden;
+  /* nowrap, not pre: matches XmlViewer.vue's row-height guarantee (see
+     ADR-0023) — string values are JSON.stringify()'d so real newlines are
+     already escaped to "\n", but nowrap keeps every JsonLine's rendered
+     height exactly the fixed row height virtualization assumes regardless. */
+  white-space: nowrap;
 }
 
 .jv-line-number {

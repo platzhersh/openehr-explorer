@@ -347,7 +347,13 @@ onUnmounted(() => {
     <div v-if="loading" class="loading">Loading composition...</div>
     <div v-else-if="error" class="error-msg">{{ error }}</div>
     <div v-else-if="composition" class="viewer-content">
-      <div class="main-content" :class="{ 'with-sidebar': showFlatPaths }">
+      <div
+        class="main-content"
+        :class="{
+          'with-sidebar': showFlatPaths,
+          'main-content--bounded': activeTab === 'json' || activeTab === 'flat',
+        }"
+      >
         <!-- Pretty View -->
         <div v-if="activeTab === 'pretty'" class="pretty-view">
           <SearchOverlay
@@ -542,8 +548,27 @@ onUnmounted(() => {
   border-right: 1px solid var(--color-border);
 }
 
+/* The JSON and FLAT tabs need a real bounded height to virtualize against
+   (JsonViewer.vue fills whatever height it's given rather than guessing a
+   viewport-relative max-height — see ADR-0023) — so while either is
+   active, main-content itself stops scrolling and instead becomes a flex
+   column that hands `.json-view` the remaining space below the tab bar.
+   The Pretty/Versions tabs are untouched and keep scrolling normally. */
+.main-content.main-content--bounded {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .json-view {
   overflow: auto;
+}
+.main-content--bounded .json-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .versions-view {

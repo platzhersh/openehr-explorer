@@ -7,8 +7,15 @@
 // `highlightXml()` helper pairs that used to live in TemplateBrowser.vue and
 // RequestInspector.vue. The copy button composes CopyButton.vue (OEH-37)
 // rather than reimplementing it.
+//
+// Rendering is virtualized (src/composables/useVirtualList.ts): a large OPT
+// XML document (10k+ lines) used to render one <span> tree per line for the
+// entire document at once, which froze the app and kept growing memory as
+// more of the document was scrolled into (and never out of) the DOM. Only
+// the lines near the viewport are rendered now — see the perf ADR.
 import { computed, ref, watch } from "vue";
 import { parseXmlLines, xmlLinesToText, type XmlLine, type XmlToken } from "../lib/xml";
+import { useVirtualList } from "../composables/useVirtualList";
 import CopyButton from "./CopyButton.vue";
 
 const props = withDefaults(
@@ -34,6 +41,20 @@ const emit = defineEmits<{
 }>();
 
 const lines = computed<XmlLine[]>(() => (props.xml ? parseXmlLines(props.xml) : []));
+
+// Must match `.xv-line`'s fixed height in <style> below — row virtualization
+// assumes every line takes exactly this many px.
+const ROW_HEIGHT = 20;
+
+const scrollEl = ref<HTMLElement | null>(null);
+const {
+  onScroll,
+  startIndex,
+  topPadding,
+  bottomPadding,
+  visibleItems: visibleLines,
+  scrollToIndex,
+} = useVirtualList(lines, scrollEl, { rowHeight: ROW_HEIGHT, overscan: 20 });
 
 const searchLower = computed(() => props.searchTerm.trim().toLowerCase());
 
@@ -75,8 +96,12 @@ watch(totalMatches, (n) => emit("total-matches", n), { immediate: true });
 
 // Global running index of each match, in document order — used to mark the
 // "current" one (highlighted + scrolled into view) from `currentMatchIndex`.
-const matchGlobalIndex = computed(() => {
-  const map = new Map<string, number>(); // `${lineIndex}:${tokenIndex}:${start}` -> global index
+// Built in one pass alongside a reverse lookup (global index -> line index)
+// so scrolling to the current match doesn't depend on it already being
+// rendered in the (now virtualized) DOM.
+const matchIndex = computed(() => {
+  const byKey = new Map<string, number>(); // `${lineIndex}:${tokenIndex}:${start}` -> global index
+  const lineByGlobalIndex: number[] = [];
   let counter = 0;
   lines.value.forEach((line, lineIndex) => {
     const lineMap = matchesByLine.value.get(lineIndex);
@@ -85,11 +110,13 @@ const matchGlobalIndex = computed(() => {
       const spans = lineMap.get(tokenIndex);
       if (!spans) return;
       for (const span of spans) {
-        map.set(`${lineIndex}:${tokenIndex}:${span.start}`, counter++);
+        byKey.set(`${lineIndex}:${tokenIndex}:${span.start}`, counter);
+        lineByGlobalIndex.push(lineIndex);
+        counter++;
       }
     });
   });
-  return map;
+  return { byKey, lineByGlobalIndex };
 });
 
 const currentGlobalIndex = computed(() => {
@@ -114,7 +141,7 @@ function tokenParts(lineIndex: number, tokenIndex: number, token: XmlToken): Tok
     if (span.start > cursor) {
       parts.push({ text: token.text.slice(cursor, span.start), isMatch: false, isCurrent: false });
     }
-    const globalIdx = matchGlobalIndex.value.get(`${lineIndex}:${tokenIndex}:${span.start}`);
+    const globalIdx = matchIndex.value.byKey.get(`${lineIndex}:${tokenIndex}:${span.start}`);
     parts.push({
       text: token.text.slice(span.start, span.end),
       isMatch: true,
@@ -128,16 +155,17 @@ function tokenParts(lineIndex: number, tokenIndex: number, token: XmlToken): Tok
   return parts;
 }
 
-const root = ref<HTMLElement | null>(null);
+// Scrolls the current match into view by its line index directly (via the
+// virtual list's own scrollTo), rather than querying the DOM for the
+// rendered .xv-match-current node — that node may not exist yet since only
+// lines near the viewport are rendered.
 watch(
   () => [props.currentMatchIndex, props.searchTerm],
-  async () => {
+  () => {
     if (totalMatches.value === 0) return;
-    await new Promise((r) => requestAnimationFrame(r));
-    root.value?.querySelector(".xv-match.xv-match-current")?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    const lineIndex = matchIndex.value.lineByGlobalIndex[currentGlobalIndex.value];
+    if (lineIndex === undefined) return;
+    scrollToIndex(lineIndex, { center: true, behavior: "smooth" });
   },
 );
 
@@ -145,24 +173,30 @@ const copyText = computed(() => xmlLinesToText(lines.value));
 </script>
 
 <template>
-  <div ref="root" class="xml-viewer">
+  <div class="xml-viewer">
     <div v-if="showCopyButton" class="xv-copy-btn-wrap">
       <CopyButton :text="copyText" title="Copy XML to clipboard" size="md" variant="bordered" />
     </div>
 
-    <div class="xv-scroll">
-      <div class="xv-lines">
+    <div ref="scrollEl" class="xv-scroll" @scroll="onScroll">
+      <div
+        class="xv-lines"
+        :style="{ paddingTop: `${topPadding}px`, paddingBottom: `${bottomPadding}px` }"
+      >
         <div
-          v-for="(line, lineIndex) in lines"
-          :key="lineIndex"
+          v-for="(line, i) in visibleLines"
+          :key="startIndex + i"
           class="xv-line"
           :style="{ paddingLeft: `${line.depth * 16}px` }"
         >
-          <span v-if="showLineNumbers" class="xv-line-number">{{ lineIndex + 1 }}</span>
+          <span v-if="showLineNumbers" class="xv-line-number">{{ startIndex + i + 1 }}</span>
           <span class="xv-content">
             <template v-for="(token, tokenIndex) in line.tokens" :key="tokenIndex">
               <span :class="`xv-${token.type}`">
-                <template v-for="(part, pi) in tokenParts(lineIndex, tokenIndex, token)" :key="pi">
+                <template
+                  v-for="(part, pi) in tokenParts(startIndex + i, tokenIndex, token)"
+                  :key="pi"
+                >
                   <mark
                     v-if="part.isMatch"
                     class="xv-match"
@@ -185,6 +219,10 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   position: relative;
   font-family: var(--font-mono);
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .xv-copy-btn-wrap {
@@ -194,20 +232,37 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   z-index: 1;
 }
 
+/* Fills whatever height the caller's layout gives it (flex:1 in a bounded
+   flex ancestor — see TemplateBrowser.vue's `.panel-right--xml` and
+   RequestInspector.vue's `.xml-container`), rather than a hardcoded
+   max-height: a fixed vh guess either clips a taller panel short or leaves
+   a shorter one with dead space below the viewer. With no bounded ancestor
+   (e.g. a Storybook story) this just shrinks to the content's natural size. */
 .xv-scroll {
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .xv-lines {
   display: flex;
   flex-direction: column;
-  line-height: 1.6;
 }
 
 .xv-line {
   display: flex;
-  align-items: flex-start;
-  white-space: pre;
+  align-items: center;
+  height: 20px;
+  line-height: 20px;
+  overflow: hidden;
+  /* nowrap, not pre: free-text content (e.g. a <purpose> description) can
+     contain literal embedded newlines in the source XML, and `pre` renders
+     those as real line breaks — overflowing this row's fixed 20px height
+     and bleeding into the next row. `nowrap` collapses embedded whitespace
+     runs to a single space (a display-only normalization; copy-to-clipboard
+     still uses the untouched token text) while still never wrapping, so
+     every XmlLine renders as exactly the one row virtualization assumes. */
+  white-space: nowrap;
 }
 
 .xv-line-number {
