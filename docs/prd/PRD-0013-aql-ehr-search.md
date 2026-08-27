@@ -158,7 +158,7 @@ Predicate clauses are appended to a `WHERE` block based on which criteria are no
 | `created_before: 2026-03-12` | `e/time_created/value < '2026-03-12T00:00:00'` |
 | `created_after: 2026-03-12` | `e/time_created/value > '2026-03-12T23:59:59'` |
 
-A `LIMIT 200` clause is always appended. If results are exactly 200, a banner is shown: "Showing first 200 results — refine your search to narrow down."
+A `LIMIT` clause is always appended: 200 rows by default, or 1000 when a `modifiable` criterion is present (see `ehr_search_limit` in `ehr.rs`) — some CDRs' AQL doesn't reliably evaluate `is_modifiable = true` server-side, so `search_ehrs` re-checks it client-side against the already-`SELECT`ed column after the query returns (see `filter_by_modifiable`); the higher cap gives that post-filter more rows to work with so it isn't mostly discarding non-matching rows before it ever runs. If the raw result set hits the cap, a banner is shown: "Showing the first page of results — refine your search to narrow down."
 
 All AQL strings are built by string interpolation with parameterised escaping: values are single-quoted and any embedded single-quotes are doubled (`'` -> `''`). No raw user input reaches the AQL string unescaped.
 
