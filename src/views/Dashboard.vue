@@ -107,7 +107,7 @@ watch(
         </router-link>
       </div>
 
-      <div class="server-info-card">
+      <router-link to="/servers" class="server-info-card">
         <h3>Connected Server</h3>
         <dl class="server-info-grid">
           <dt>Name</dt>
@@ -137,7 +137,7 @@ watch(
             <dd>v{{ serverStore.versionInfo[serverStore.activeServer.id]?.server_version }}</dd>
           </template>
         </dl>
-      </div>
+      </router-link>
     </template>
   </div>
 </template>
@@ -192,11 +192,19 @@ watch(
 }
 
 .server-info-card {
+  display: block;
   padding: 20px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   max-width: 560px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.15s;
+}
+.server-info-card:hover {
+  border-color: var(--color-primary-dim);
+  background: var(--color-surface-hover);
 }
 .server-info-card h3 {
   font-size: 13px;
