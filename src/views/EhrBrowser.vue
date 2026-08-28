@@ -562,6 +562,14 @@ const sortFieldOptions: { value: EhrSortField; label: string }[] = [
   { value: "system_id", label: "System ID" },
 ];
 
+// Shown as a tooltip on the (disabled) sort controls when the active
+// server rejected ORDER BY and list_ehrs fell back to an unsorted query
+// (see ehrStore.sortApplied / sort_applied in src-tauri/src/commands/ehr.rs).
+// All three fields hit the same EHR-level-attribute limitation, so there's
+// no field left to offer instead — disabling avoids the user repeatedly
+// triggering the same failed-request-then-fallback round trip.
+const sortUnsupportedTitle = "Sorting isn't supported by this server";
+
 function onSortFieldChange(field: string) {
   if (!serverStore.activeServerId) return;
   currentPage.value = 0;
@@ -820,6 +828,8 @@ function lookupContribution() {
             id="ehr-sort-field"
             class="input sort-select"
             :value="ehrStore.sortBy"
+            :disabled="!ehrStore.sortApplied"
+            :title="!ehrStore.sortApplied ? sortUnsupportedTitle : undefined"
             @change="onSortFieldChange(($event.target as HTMLSelectElement).value)"
           >
             <option v-for="opt in sortFieldOptions" :key="opt.value" :value="opt.value">
@@ -829,10 +839,13 @@ function lookupContribution() {
           <button
             type="button"
             class="btn btn-sm sort-dir-btn"
+            :disabled="!ehrStore.sortApplied"
             :title="
-              ehrStore.sortDir === 'asc'
-                ? 'Ascending — click for descending'
-                : 'Descending — click for ascending'
+              !ehrStore.sortApplied
+                ? sortUnsupportedTitle
+                : ehrStore.sortDir === 'asc'
+                  ? 'Ascending — click for descending'
+                  : 'Descending — click for ascending'
             "
             @click="onToggleSortDir"
           >
