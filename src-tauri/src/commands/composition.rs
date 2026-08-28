@@ -1,8 +1,30 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request};
+use super::server::{create_client, get_profile_by_id, make_request, ServerType};
 use crate::inspector::send_instrumented;
+
+/// The `Content-Type` to use when committing a FLAT-format composition body.
+///
+/// The openEHR REST API spec's current media type for this is
+/// `application/openehr.wt.flat+json` — and that's exactly what FerroEHR's
+/// own 415 error message names as accepted. EHRBase's actual deployed REST
+/// endpoint (verified directly against sandbox.ehrbase.org), however, only
+/// recognizes the older/draft `application/openehr.wt.flat.schema+json`
+/// variant on its composition write endpoint: sending the spec-current
+/// media type gets rejected before it even reaches EHRBase's own
+/// validation logic (a generic framework-level 415), while the `.schema`
+/// variant is parsed and validated as expected. Better Platform and
+/// unspecified/generic servers keep the same `.schema` value this app has
+/// always sent them (unconfirmed either way, but unbroken until reported).
+fn flat_composition_content_type(server_type: &ServerType) -> &'static str {
+    match server_type {
+        ServerType::FerroEhr => "application/openehr.wt.flat+json",
+        ServerType::Ehrbase | ServerType::BetterPlatform | ServerType::Generic => {
+            "application/openehr.wt.flat.schema+json"
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompositionVersion {
@@ -259,7 +281,10 @@ pub async fn create_composition(
         &app,
         &client,
         make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-            .header("Content-Type", "application/openehr.wt.flat+json")
+            .header(
+                "Content-Type",
+                flat_composition_content_type(&profile.server_type),
+            )
             .header("Accept", "application/json")
             .json(&composition_data),
     )
@@ -326,7 +351,10 @@ pub async fn update_composition(
         &app,
         &client,
         make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
-            .header("Content-Type", "application/openehr.wt.flat+json")
+            .header(
+                "Content-Type",
+                flat_composition_content_type(&profile.server_type),
+            )
             .header("Accept", "application/json")
             .json(&composition_data),
     )

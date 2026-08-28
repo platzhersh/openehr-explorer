@@ -330,6 +330,19 @@ function withContextFields(
   };
 }
 
+// Mirrors flat_composition_content_type() in src-tauri/src/commands/composition.rs —
+// keep the two in sync. FerroEHR only accepts the openEHR REST spec's
+// current FLAT media type (application/openehr.wt.flat+json, per its own
+// 415 error message); EHRBase's actual deployed endpoint only recognizes
+// the older application/openehr.wt.flat.schema+json variant. Better
+// Platform / generic servers keep the `.schema` value this app has always
+// sent them.
+function flatCompositionContentType(): string {
+  return serverStore.activeServer?.server_type === "ferro_ehr"
+    ? "application/openehr.wt.flat+json"
+    : "application/openehr.wt.flat.schema+json";
+}
+
 // Trigger for manual refresh
 const previewRefreshTrigger = ref(0);
 
@@ -420,7 +433,7 @@ async function handleSubmit() {
       ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
       : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
 
-    requestSummaryLine.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat+json`;
+    requestSummaryLine.value = `${method} ${url}\nContent-Type: ${flatCompositionContentType()}`;
     requestPayload.value = payload;
 
     console.log("Submitting composition...");
