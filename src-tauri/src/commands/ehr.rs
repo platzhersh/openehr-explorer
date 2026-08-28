@@ -44,22 +44,61 @@ pub struct EhrListResponse {
     pub limit: usize,
 }
 
+/// Whitelisted EHR-list sort fields, mapped to their AQL path expressions.
+/// A whitelist (rather than interpolating the caller-supplied field name
+/// straight into the query) is what makes it safe to build the `ORDER BY`
+/// clause via string formatting in `build_ehr_list_aql` below.
+fn sort_field_path(field: &str) -> Option<&'static str> {
+    match field {
+        "time_created" => Some("e/time_created/value"),
+        "ehr_id" => Some("e/ehr_id/value"),
+        "system_id" => Some("e/system_id/value"),
+        _ => None,
+    }
+}
+
+/// Builds the AQL query used by `list_ehrs`, including an `ORDER BY` clause
+/// for the given sort field/direction. Both default to `time_created DESC`
+/// (newest first) when omitted, matching the app's historical default
+/// ordering (see PRD-0001).
+fn build_ehr_list_aql(
+    offset: usize,
+    limit: usize,
+    sort_by: Option<&str>,
+    sort_dir: Option<&str>,
+) -> Result<String, String> {
+    let field = sort_by.unwrap_or("time_created");
+    let path =
+        sort_field_path(field).ok_or_else(|| format!("Unsupported sort field: {}", field))?;
+
+    let dir = match sort_dir.unwrap_or("desc").to_ascii_lowercase().as_str() {
+        "asc" => "ASC",
+        "desc" => "DESC",
+        other => return Err(format!("Unsupported sort direction: {}", other)),
+    };
+
+    Ok(format!(
+        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e \
+         ORDER BY {} {} LIMIT {} OFFSET {}",
+        path, dir, limit, offset
+    ))
+}
+
 #[tauri::command]
 pub async fn list_ehrs(
     app: tauri::AppHandle,
     server_id: String,
     offset: usize,
     limit: usize,
+    sort_by: Option<String>,
+    sort_dir: Option<String>,
 ) -> Result<EhrListResponse, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
     // Use AQL to list EHRs since the REST API list endpoint varies by implementation
-    let aql = format!(
-        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {} OFFSET {}",
-        limit, offset
-    );
+    let aql = build_ehr_list_aql(offset, limit, sort_by.as_deref(), sort_dir.as_deref())?;
 
     let url = format!("{}/rest/openehr/v1/query/aql", base);
     let resp = send_instrumented(
@@ -1097,6 +1136,52 @@ pub async fn search_ehrs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_build_ehr_list_aql_defaults_to_time_created_desc() {
+        let aql = build_ehr_list_aql(0, 20, None, None).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value DESC"));
+        assert!(aql.contains("LIMIT 20 OFFSET 0"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_asc() {
+        let aql = build_ehr_list_aql(40, 20, Some("time_created"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value ASC"));
+        assert!(aql.contains("LIMIT 20 OFFSET 40"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_direction_is_case_insensitive() {
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("ASC")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_sort_by_ehr_id() {
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("desc")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value DESC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_sort_by_system_id() {
+        let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/system_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_rejects_unknown_field() {
+        let result = build_ehr_list_aql(0, 20, Some("subject_id"), Some("asc"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported sort field"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_rejects_unknown_direction() {
+        let result = build_ehr_list_aql(0, 20, Some("time_created"), Some("sideways"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported sort direction"));
+    }
 
     fn empty_criteria() -> EhrSearchCriteria {
         EhrSearchCriteria {

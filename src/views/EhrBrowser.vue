@@ -2,7 +2,12 @@
 import { ref, watch, computed, onMounted, provide } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
-import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
+import {
+  useEhrStore,
+  type CompositionSummary,
+  type EhrSearchCriteria,
+  type EhrSortField,
+} from "../stores/ehr";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
@@ -549,15 +554,25 @@ function refresh() {
   }
 }
 
-// Sort paginated EHRs by time_created descending (only when not searching)
-const sortedEhrs = computed(() => {
-  return [...ehrStore.ehrs].sort((a, b) => {
-    if (!a.time_created && !b.time_created) return 0;
-    if (!a.time_created) return 1;
-    if (!b.time_created) return -1;
-    return b.time_created.localeCompare(a.time_created);
-  });
-});
+// Sort options for the paginated (non-search) EHR list — the AQL ORDER BY
+// clause built server-side in list_ehrs handles the actual sorting.
+const sortFieldOptions: { value: EhrSortField; label: string }[] = [
+  { value: "time_created", label: "Created date" },
+  { value: "ehr_id", label: "EHR ID" },
+  { value: "system_id", label: "System ID" },
+];
+
+function onSortFieldChange(field: string) {
+  if (!serverStore.activeServerId) return;
+  currentPage.value = 0;
+  void ehrStore.setSortBy(serverStore.activeServerId, field as EhrSortField);
+}
+
+function onToggleSortDir() {
+  if (!serverStore.activeServerId) return;
+  currentPage.value = 0;
+  void ehrStore.toggleSortDir(serverStore.activeServerId);
+}
 
 // Group compositions by template_id
 const compositionsByTemplate = computed(() => {
@@ -799,9 +814,35 @@ function lookupContribution() {
 
       <!-- Normal paginated list -->
       <div v-else>
+        <div class="sort-bar">
+          <label class="sort-label" for="ehr-sort-field">Sort by</label>
+          <select
+            id="ehr-sort-field"
+            class="input sort-select"
+            :value="ehrStore.sortBy"
+            @change="onSortFieldChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option v-for="opt in sortFieldOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+          <button
+            type="button"
+            class="btn btn-sm sort-dir-btn"
+            :title="
+              ehrStore.sortDir === 'asc'
+                ? 'Ascending — click for descending'
+                : 'Descending — click for ascending'
+            "
+            @click="onToggleSortDir"
+          >
+            {{ ehrStore.sortDir === "asc" ? "↑ Asc" : "↓ Desc" }}
+          </button>
+        </div>
+
         <div class="ehr-list">
           <div
-            v-for="ehr in sortedEhrs"
+            v-for="ehr in ehrStore.ehrs"
             :key="ehr.ehr_id"
             class="ehr-item"
             :class="{ active: ehr.ehr_id === ehrId }"
@@ -1516,6 +1557,25 @@ function lookupContribution() {
 .page-info {
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+.sort-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.sort-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  width: auto;
+}
+.sort-dir-btn {
+  white-space: nowrap;
 }
 
 .detail-section {

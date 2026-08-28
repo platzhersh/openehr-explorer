@@ -35,6 +35,11 @@ export interface EhrListResponse {
   limit: number;
 }
 
+// Whitelisted server-side (AQL ORDER BY) sort fields for the EHR list — must
+// match the fields accepted by `sort_field_path` in src-tauri/src/commands/ehr.rs.
+export type EhrSortField = "time_created" | "ehr_id" | "system_id";
+export type SortDir = "asc" | "desc";
+
 export interface EhrSearchCriteria {
   ehr_id_prefix?: string;
   subject_id?: string;
@@ -77,6 +82,12 @@ export const useEhrStore = defineStore("ehr", () => {
   const error = ref<string | null>(null);
   const selectedEhr = ref<EhrDetail | null>(null);
 
+  // Sort state for the paginated (non-search) EHR list — sorted server-side
+  // via AQL ORDER BY (see list_ehrs in src-tauri/src/commands/ehr.rs).
+  // Defaults match the app's historical default ordering: newest first.
+  const sortBy = ref<EhrSortField>("time_created");
+  const sortDir = ref<SortDir>("desc");
+
   // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
   // and data-driven, so it's kept as raw JSON rather than a typed interface,
   // matching how `composition.ts` handles the composition body.
@@ -105,6 +116,8 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         offset: page * limit.value,
         limit: limit.value,
+        sortBy: sortBy.value,
+        sortDir: sortDir.value,
       });
       ehrs.value = result.ehrs;
       total.value = result.total;
@@ -114,6 +127,20 @@ export const useEhrStore = defineStore("ehr", () => {
     } finally {
       loading.value = false;
     }
+  }
+
+  /** Changes the sort field for the paginated EHR list and re-fetches page 0.
+   *  Direction is left as-is — changing field doesn't guess a "natural"
+   *  default direction per field, it just re-sorts the same way. */
+  async function setSortBy(serverId: string, field: EhrSortField) {
+    sortBy.value = field;
+    await fetchEhrs(serverId, 0);
+  }
+
+  /** Flips asc/desc for the current sort field and re-fetches page 0. */
+  async function toggleSortDir(serverId: string) {
+    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+    await fetchEhrs(serverId, 0);
   }
 
   async function fetchEhrDetail(serverId: string, ehrId: string) {
@@ -354,6 +381,8 @@ export const useEhrStore = defineStore("ehr", () => {
     total,
     offset,
     limit,
+    sortBy,
+    sortDir,
     loading,
     error,
     selectedEhr,
@@ -367,6 +396,8 @@ export const useEhrStore = defineStore("ehr", () => {
     searchError,
     searchLimitReached,
     fetchEhrs,
+    setSortBy,
+    toggleSortDir,
     fetchEhrDetail,
     fetchDirectory,
     clearDirectory,
