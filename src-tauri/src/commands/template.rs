@@ -1,3 +1,4 @@
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
@@ -279,7 +280,8 @@ fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
                 }
             }
             Ok(Event::Text(e)) if in_items && current_tag == "code_string" => {
-                current_code = e.unescape().unwrap_or_default().to_string();
+                let text = e.decode().unwrap_or_default();
+                current_code = unescape(&text).unwrap_or_default().into_owned();
             }
             Ok(Event::End(e)) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
