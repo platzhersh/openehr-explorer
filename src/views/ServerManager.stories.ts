@@ -3,18 +3,9 @@ import { expect, userEvent, within } from "storybook/test";
 import ServerManager from "./ServerManager.vue";
 import type { ServerProfile, ServerVersionInfo } from "../stores/server";
 import { mockTauriStores } from "../lib/storybook-tauri";
+import { SAMPLE_EHRBASE_PROFILE, SAMPLE_EHRBASE_VERSION } from "../lib/storybook-fixtures";
 
-const EHRBASE_PROFILE: ServerProfile = {
-  id: "profile-ehrbase",
-  name: "EhrBase Sandkiste",
-  base_url: "https://sandbox.ehrbase.org/ehrbase",
-  server_type: "ehrbase",
-  auth_method: { type: "basic", username: "ehrbase-user", has_password: true },
-  admin_auth_method: null,
-  terminology_url: null,
-  credential_backend: "encrypted_file",
-  is_default: true,
-};
+const EHRBASE_PROFILE = SAMPLE_EHRBASE_PROFILE;
 
 const FERRO_PROFILE: ServerProfile = {
   id: "profile-ferro",
@@ -43,15 +34,7 @@ const INSECURE_PROFILE: ServerProfile = {
 // Keyed by profile id so the mocked get_server_version handler can return
 // the right version per card (ServerManager fetches one per profile on mount).
 const VERSION_BY_PROFILE: Record<string, ServerVersionInfo> = {
-  [EHRBASE_PROFILE.id]: {
-    server_version: "2.33.0",
-    ehrbase_version: "2.33.0",
-    sdk_version: null,
-    archie_version: null,
-    jvm_version: null,
-    os_version: null,
-    postgres_version: null,
-  },
+  [EHRBASE_PROFILE.id]: SAMPLE_EHRBASE_VERSION,
   [FERRO_PROFILE.id]: {
     server_version: "4.0.6-rc1",
     ehrbase_version: null,

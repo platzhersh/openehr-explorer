@@ -4,6 +4,38 @@
 // legitimately want the exact same "here's a realistic openEHR composition"
 // fixture to demonstrate their JSON rendering.
 
+import type { ServerProfile, ServerVersionInfo } from "../stores/server";
+
+/**
+ * A realistic connected EHRBase profile — shared by Dashboard.stories.ts and
+ * ServerManager.stories.ts, both of which want the same "here's a live
+ * server" fixture rather than two near-identical copies.
+ */
+export const SAMPLE_EHRBASE_PROFILE: ServerProfile = {
+  id: "profile-ehrbase",
+  name: "EhrBase Sandkiste",
+  base_url: "https://sandbox.ehrbase.org/ehrbase",
+  server_type: "ehrbase",
+  auth_method: { type: "basic", username: "ehrbase-user", has_password: true },
+  admin_auth_method: null,
+  terminology_url: null,
+  credential_backend: "encrypted_file",
+  is_default: true,
+};
+
+// For EHRBase specifically, the backend mirrors ehrbase_version into
+// server_version too (see get_server_version in server.rs) — that's the
+// field the app's "Version" displays actually read.
+export const SAMPLE_EHRBASE_VERSION: ServerVersionInfo = {
+  server_version: "2.33.0",
+  ehrbase_version: "2.33.0",
+  sdk_version: null,
+  archie_version: null,
+  jvm_version: null,
+  os_version: null,
+  postgres_version: null,
+};
+
 /**
  * A trimmed but realistic openEHR-shaped composition fragment: an
  * OBSERVATION with a coded finding (DV_CODED_TEXT, external terminology)

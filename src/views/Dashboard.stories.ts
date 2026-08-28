@@ -1,33 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import Dashboard from "./Dashboard.vue";
-import { useServerStore, type ServerProfile, type ServerVersionInfo } from "../stores/server";
+import { useServerStore } from "../stores/server";
 import type { DashboardCounts } from "../stores/dashboard";
 import { mockTauriStores } from "../lib/storybook-tauri";
+import { SAMPLE_EHRBASE_PROFILE, SAMPLE_EHRBASE_VERSION } from "../lib/storybook-fixtures";
 
-const PROFILE: ServerProfile = {
-  id: "profile-1",
-  name: "EhrBase Sandkiste",
-  base_url: "https://sandbox.ehrbase.org/ehrbase",
-  server_type: "ehrbase",
-  auth_method: { type: "basic", username: "ehrbase-user", has_password: true },
-  admin_auth_method: null,
-  terminology_url: null,
-  credential_backend: "keychain",
-  is_default: true,
-};
-
-// For EHRBase specifically, the backend mirrors ehrbase_version into
-// server_version too (see get_server_version in server.rs) — that's the
-// field Dashboard.vue's "Version" row actually reads.
-const VERSION_INFO: ServerVersionInfo = {
-  server_version: "2.33.0",
-  ehrbase_version: "2.33.0",
-  sdk_version: null,
-  archie_version: null,
-  jvm_version: null,
-  os_version: null,
-  postgres_version: null,
-};
+const PROFILE = SAMPLE_EHRBASE_PROFILE;
 
 const COUNTS: DashboardCounts = {
   ehr_count: 1384,
@@ -64,7 +42,7 @@ function withStores(state: StoryState = {}) {
             return COUNTS;
           }
           if (cmd === "get_server_version") {
-            return VERSION_INFO;
+            return SAMPLE_EHRBASE_VERSION;
           }
           if (cmd === "list_server_profiles") {
             return [];
