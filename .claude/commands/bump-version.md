@@ -61,3 +61,10 @@ Add a matching entry for `$1` to `src/lib/whats-new.ts` (the in-app "What's New"
   ```
 
 - Do NOT push or open a PR unless the user explicitly asks.
+
+## Step 4: Demo assets
+
+Regenerate the landing page screenshots and hero video/gif so they reflect the app as it looks in `$1`, since the UI has likely changed since these were last captured:
+
+1. Run the `/generate-demo-assets` command (`both`) — it covers prerequisites (ffmpeg, gifsicle, Playwright's Chromium, a running `npm run dev`), regenerates `docs/assets/screenshots/*.webp`, `demo.mp4`, `demo.gif`, and `demo.vtt`, and commits the result itself.
+2. Skip this step only if the user explicitly says not to regenerate assets for this bump.
