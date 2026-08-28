@@ -87,9 +87,12 @@ onMounted(async () => {
 
   // Edit mode: the route carries no templateId, so resolve it from the
   // existing composition's archetype details before loading the template.
+  // Keep the fetched (structured) composition around — loadCompositionForEdit
+  // needs it too, for composer/language/territory (see there for why).
+  let existingComposition: Record<string, unknown> | null = null;
   if (!templateId && props.compositionUid && props.ehrId) {
     try {
-      const existingComposition = await invoke<Record<string, unknown>>("get_composition", {
+      existingComposition = await invoke<Record<string, unknown>>("get_composition", {
         serverId: serverStore.activeServerId,
         ehrId: props.ehrId,
         compositionUid: props.compositionUid,
@@ -118,7 +121,7 @@ onMounted(async () => {
   // Edit mode: load existing composition
   if (props.compositionUid && props.ehrId) {
     isEditMode.value = true;
-    await loadCompositionForEdit();
+    await loadCompositionForEdit(existingComposition);
   }
 
   // Set default time
@@ -152,11 +155,28 @@ onMounted(async () => {
   }, 100);
 });
 
-async function loadCompositionForEdit() {
+async function loadCompositionForEdit(existingComposition: Record<string, unknown> | null) {
   if (!props.ehrId || !props.compositionUid || !serverStore.activeServerId) return;
 
   try {
     loading.value = true;
+
+    // composer/language/territory are RM attributes on the composition
+    // itself, not archetype content — EHRbase's FLAT representation (fetched
+    // below) omits them entirely, so they have to come from the structured
+    // composition instead. Reuse the one already fetched for template-ID
+    // resolution when we have it; otherwise fetch it fresh.
+    const composition =
+      existingComposition ??
+      (await invoke<Record<string, unknown>>("get_composition", {
+        serverId: serverStore.activeServerId,
+        ehrId: props.ehrId,
+        compositionUid: props.compositionUid,
+      }));
+    composerName.value = ((composition as any)?.composer?.name as string) || "";
+    language.value = ((composition as any)?.language?.code_string as string) || "en";
+    territory.value = ((composition as any)?.territory?.code_string as string) || "US";
+
     const flatComp = await invoke<Record<string, unknown>>("get_composition_flat", {
       serverId: serverStore.activeServerId,
       ehrId: props.ehrId,
@@ -164,14 +184,6 @@ async function loadCompositionForEdit() {
     });
 
     if (!flatComp) return;
-
-    // Extract context fields. These are plain refs, independent of whether
-    // the mb-auto-form element has mounted yet — it hasn't at this point,
-    // since it only renders once `isReady` (the web template load above)
-    // has flowed through a render pass, which is still pending here.
-    composerName.value = (flatComp["ctx/composer_name"] as string) || "";
-    language.value = (flatComp["ctx/language"] as string) || "en";
-    territory.value = (flatComp["ctx/territory"] as string) || "US";
     flatData.value = flatComp;
 
     // Push the FLAT data into the medblocks-ui form once its element has
