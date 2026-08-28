@@ -49,6 +49,17 @@ const responsePayload = ref<unknown>(null);
 // Template ID for edit mode is resolved from the existing composition since
 // the /edit/:ehrId/:compositionUid route carries no templateId param.
 const resolvedTemplateId = ref<string>("");
+// Snapshot of the composition as originally loaded for editing, captured
+// once by loadCompositionForEdit. `composerName`/`language`/`territory`/
+// `flatData` above track live (possibly user-edited) form state, so Reset
+// needs this separate copy to revert to the last-saved composition instead
+// of wiping the form blank (see handleReset).
+const originalEditState = ref<{
+  composerName: string;
+  language: string;
+  territory: string;
+  flatData: Record<string, unknown>;
+} | null>(null);
 
 // medblocks-ui form ref
 const mbFormRef = ref<HTMLElement | null>(null);
@@ -167,6 +178,12 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
     // hydrateMbForm() pushes this into the mb-auto-form once it has mounted
     // — after its webTemplate, so it knows what to do with these paths.
     flatData.value = flatComp;
+    originalEditState.value = {
+      composerName: composerName.value,
+      language: language.value,
+      territory: territory.value,
+      flatData: flatComp,
+    };
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
   } finally {
@@ -458,16 +475,27 @@ async function handleSubmit() {
 }
 
 function handleReset() {
-  // mb-auto-form has no reset() method — clear() is its equivalent (see
-  // hydrateMbForm for why .value/.reset aren't real properties/methods here).
-  if (mbFormRef.value) {
-    (mbFormRef.value as any).clear?.();
+  // Editing an existing composition: revert to the composition as loaded,
+  // not a blank form — the user is undoing their in-progress edits, not
+  // starting a new composition.
+  if (isEditMode.value && originalEditState.value) {
+    const original = originalEditState.value;
+    composerName.value = original.composerName;
+    language.value = original.language;
+    territory.value = original.territory;
+    flatData.value = original.flatData;
+    // mb-auto-form has no reset()/value setter — import() is how its data
+    // is (re-)populated (see hydrateMbForm for why .value isn't real here).
+    (mbFormRef.value as any)?.import?.(original.flatData);
+  } else {
+    // New composition: clear() is mb-auto-form's equivalent of reset().
+    (mbFormRef.value as any)?.clear?.();
+    composerName.value = "";
+    language.value = "en";
+    territory.value = "US";
+    flatData.value = {};
   }
-  composerName.value = "";
-  language.value = "en";
-  territory.value = "US";
   compositionTime.value = new Date().toISOString().slice(0, 16);
-  flatData.value = {};
   error.value = null;
   success.value = null;
   clearDraft();
