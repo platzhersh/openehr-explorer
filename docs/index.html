@@ -817,8 +817,8 @@
       <p class="downloads-badge">
         <a href="https://github.com/platzhersh/openehr-explorer/releases"><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads"></a>
       </p>
-      <!-- Hidden until the daily snapshot history has ≥2 points to draw a
-           line between — see the downloads-sparkline script below. -->
+      <!-- Hidden until the daily snapshot history has at least a week's
+           worth of points — see the downloads-sparkline script below. -->
       <div class="downloads-sparkline" id="downloads-sparkline" hidden>
         <svg id="downloads-sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-labelledby="downloads-sparkline-desc">
           <desc id="downloads-sparkline-desc"></desc>
@@ -1160,6 +1160,9 @@
     // needed, the docs site stays fully static. See OEH-25.
     (function () {
       var HISTORY_URL = 'https://raw.githubusercontent.com/platzhersh/openehr-explorer/data/docs/downloads-history.json';
+      // A couple of days of noisy, near-flat snapshots isn't a curve worth
+      // showing — wait for a full week before the sparkline appears.
+      var MIN_POINTS = 7;
 
       function buildPaths(points, width, height) {
         var totals = points.map(function (p) { return p.total; });
@@ -1179,7 +1182,7 @@
       }
 
       function render(points) {
-        if (points.length < 2) return; // nothing to draw a line between yet
+        if (points.length < MIN_POINTS) return;
 
         var container = document.getElementById('downloads-sparkline');
         var svg = document.getElementById('downloads-sparkline-svg');
