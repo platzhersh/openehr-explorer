@@ -1,3 +1,4 @@
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
@@ -719,7 +720,8 @@ fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
                 current_tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
             }
             Ok(Event::Text(e)) => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let text = e.decode().unwrap_or_default();
+                let text = unescape(&text).unwrap_or_default().into_owned();
                 match current_tag.as_str() {
                     "ehrbase_version" => {
                         version_info.server_version = Some(text.clone());

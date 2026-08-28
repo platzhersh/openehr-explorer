@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::Semaphore;
 
 use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
 use crate::inspector::{send_instrumented, InstrumentedResponse};
@@ -39,6 +42,89 @@ pub struct EhrListResponse {
     pub total: usize,
     pub offset: usize,
     pub limit: usize,
+    /// False when the requested sort couldn't actually be applied — the CDR
+    /// rejected `ORDER BY` on the sort field and `list_ehrs` fell back to an
+    /// unsorted query (see `is_order_by_unsupported`). The frontend uses
+    /// this to tell the user sorting isn't supported rather than implying
+    /// the shown order matches what they asked for.
+    pub sort_applied: bool,
+}
+
+/// Whitelisted EHR-list sort fields, mapped to their AQL path expressions.
+/// A whitelist (rather than interpolating the caller-supplied field name
+/// straight into the query) is what makes it safe to build the `ORDER BY`
+/// clause via string formatting in `build_ehr_list_aql` below.
+fn sort_field_path(field: &str) -> Option<&'static str> {
+    match field {
+        "time_created" => Some("e/time_created/value"),
+        "ehr_id" => Some("e/ehr_id/value"),
+        "system_id" => Some("e/system_id/value"),
+        _ => None,
+    }
+}
+
+/// Builds the AQL query used by `list_ehrs`, including an `ORDER BY` clause
+/// for the given sort field/direction. Both default to `time_created DESC`
+/// (newest first) when omitted, matching the app's historical default
+/// ordering (see PRD-0001).
+///
+/// Always appends `e/ehr_id/value ASC` as a secondary sort key (unless
+/// `ehr_id` is itself the primary field) so ties on the primary field — e.g.
+/// several EHRs created in the same instant — get a total, stable order.
+/// Without one, a CDR is free to return tied rows in a different relative
+/// order across separate paginated queries, which could duplicate or skip
+/// rows across page boundaries.
+fn build_ehr_list_aql(
+    offset: usize,
+    limit: usize,
+    sort_by: Option<&str>,
+    sort_dir: Option<&str>,
+) -> Result<String, String> {
+    let field = sort_by.unwrap_or("time_created");
+    let path =
+        sort_field_path(field).ok_or_else(|| format!("Unsupported sort field: {}", field))?;
+
+    let dir = match sort_dir.unwrap_or("desc").to_ascii_lowercase().as_str() {
+        "asc" => "ASC",
+        "desc" => "DESC",
+        other => return Err(format!("Unsupported sort direction: {}", other)),
+    };
+
+    let tiebreaker = if field == "ehr_id" {
+        String::new()
+    } else {
+        ", e/ehr_id/value ASC".to_string()
+    };
+
+    Ok(format!(
+        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e \
+         ORDER BY {} {}{} LIMIT {} OFFSET {}",
+        path, dir, tiebreaker, limit, offset
+    ))
+}
+
+/// Same `SELECT`/`FROM`/`LIMIT`/`OFFSET` as `build_ehr_list_aql`, but with no
+/// `ORDER BY` at all — the fallback used when the CDR rejects sorting on
+/// EHR-level attributes (see `list_ehrs`).
+fn build_ehr_list_aql_unsorted(offset: usize, limit: usize) -> String {
+    format!(
+        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {} OFFSET {}",
+        limit, offset
+    )
+}
+
+/// Detects the specific "`ORDER BY` on an EHR-level attribute isn't
+/// implemented" error some CDRs return for this query shape — confirmed
+/// against a real EHRBase instance, which rejects `ORDER BY e/time_created/value`
+/// the same way it's documented (in `build_ehr_search_aql` above) to reject
+/// `WHERE` on EHR-level paths, even though the AQL spec allows both. Kept
+/// narrow (requires `order_by` plus a not-implemented/not-supported phrase)
+/// so it doesn't swallow unrelated 400s from `list_ehrs`'s query — those
+/// still surface as a normal error.
+fn is_order_by_unsupported(response_body: &str) -> bool {
+    let lower = response_body.to_ascii_lowercase();
+    lower.contains("order_by")
+        && (lower.contains("not implemented") || lower.contains("not supported"))
 }
 
 #[tauri::command]
@@ -47,18 +133,16 @@ pub async fn list_ehrs(
     server_id: String,
     offset: usize,
     limit: usize,
+    sort_by: Option<String>,
+    sort_dir: Option<String>,
 ) -> Result<EhrListResponse, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
+    let url = format!("{}/rest/openehr/v1/query/aql", base);
 
     // Use AQL to list EHRs since the REST API list endpoint varies by implementation
-    let aql = format!(
-        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {} OFFSET {}",
-        limit, offset
-    );
-
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
+    let aql = build_ehr_list_aql(offset, limit, sort_by.as_deref(), sort_dir.as_deref())?;
     let resp = send_instrumented(
         &app,
         &client,
@@ -67,6 +151,27 @@ pub async fn list_ehrs(
             .json(&serde_json::json!({ "q": aql })),
     )
     .await?;
+
+    // Some CDRs (confirmed: EHRBase) don't implement `ORDER BY` on EHR-level
+    // attributes. Rather than surfacing a hard error and leaving the EHR
+    // Browser unusable on those servers, retry once without the ORDER BY
+    // clause; `sort_applied: false` in the response tells the frontend the
+    // requested order wasn't actually honored, so it can say so instead of
+    // silently showing unsorted results as if they were sorted.
+    let (resp, sort_applied) = if !resp.is_success && is_order_by_unsupported(&resp.body) {
+        let fallback_aql = build_ehr_list_aql_unsorted(offset, limit);
+        let fallback_resp = send_instrumented(
+            &app,
+            &client,
+            make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({ "q": fallback_aql })),
+        )
+        .await?;
+        (fallback_resp, false)
+    } else {
+        (resp, true)
+    };
 
     if !resp.is_success {
         return Err(format!(
@@ -104,6 +209,7 @@ pub async fn list_ehrs(
         offset,
         limit,
         ehrs,
+        sort_applied,
     })
 }
 
@@ -254,30 +360,26 @@ pub struct CreateEhrResponse {
     pub time_created: Option<String>,
 }
 
-#[tauri::command]
-pub async fn create_ehr(
-    app: tauri::AppHandle,
-    server_id: String,
-    request: CreateEhrRequest,
-) -> Result<CreateEhrResponse, String> {
-    let profile = get_profile_by_id(&server_id)?;
-    let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-
-    // Build EHR request body
-    let mut ehr_body = serde_json::json!({});
-
-    if let Some(ehr_id) = &request.ehr_id {
-        ehr_body["ehr_id"] = serde_json::json!({
-            "_type": "HIER_OBJECT_ID",
-            "value": ehr_id
-        });
-    }
-
-    // Build EHR status
+/// Builds the EHR_STATUS JSON object for an EHR creation request.
+///
+/// `archetype_details` is technically mandatory on any LOCATABLE that is an
+/// archetype root (per the RM's Archetyped_valid invariant): EHR_STATUS sets
+/// `archetype_node_id`, so it's a root and needs `archetype_details` with a
+/// matching `archetype_id`. EHRBase fills this in server-side if it's
+/// missing, but stricter CDRs (e.g. FerroEHR) reject the request with a 422
+/// if it's absent, so we always supply it here.
+fn build_ehr_status_json(request: &CreateEhrRequest) -> serde_json::Value {
     let mut ehr_status = serde_json::json!({
         "_type": "EHR_STATUS",
         "archetype_node_id": "openEHR-EHR-EHR_STATUS.generic.v1",
+        "archetype_details": {
+            "_type": "ARCHETYPED",
+            "archetype_id": {
+                "_type": "ARCHETYPE_ID",
+                "value": "openEHR-EHR-EHR_STATUS.generic.v1"
+            },
+            "rm_version": "1.0.4"
+        },
         "name": {
             "_type": "DV_TEXT",
             "value": "EHR Status"
@@ -291,7 +393,7 @@ pub async fn create_ehr(
 
     // Override subject if external identity is provided
     if let (Some(subject_id), Some(subject_namespace)) =
-        (request.subject_id, request.subject_namespace)
+        (&request.subject_id, &request.subject_namespace)
     {
         ehr_status["subject"] = serde_json::json!({
             "_type": "PARTY_SELF",
@@ -308,11 +410,31 @@ pub async fn create_ehr(
         });
     }
 
+    ehr_status
+}
+
+#[tauri::command]
+pub async fn create_ehr(
+    app: tauri::AppHandle,
+    server_id: String,
+    request: CreateEhrRequest,
+) -> Result<CreateEhrResponse, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let ehr_status = build_ehr_status_json(&request);
+
     // For EHR creation, EHRBase expects the EHR_STATUS object directly, not wrapped
-    let request_body = if request.ehr_id.is_some() {
-        // If custom EHR ID is provided, we need to wrap it
-        ehr_body["ehr_status"] = ehr_status.clone();
-        ehr_body
+    let request_body = if let Some(ehr_id) = &request.ehr_id {
+        // If custom EHR ID is provided, we need to wrap it alongside ehr_status
+        serde_json::json!({
+            "ehr_id": {
+                "_type": "HIER_OBJECT_ID",
+                "value": ehr_id
+            },
+            "ehr_status": ehr_status
+        })
     } else {
         // Otherwise, send EHR_STATUS directly as the root object
         ehr_status
@@ -621,6 +743,144 @@ pub async fn get_directory_version(
     fetch_directory(&app, &client, &url, &profile.auth_method).await
 }
 
+/// Creates the DIRECTORY for an EHR that doesn't have one yet.
+///
+/// POSTs `folder` (a full FOLDER structure: `_type`, `name`, and optional
+/// `items`/`folders`) to the DIRECTORY resource, then re-fetches it via GET
+/// rather than trusting the POST response body — servers vary in whether
+/// that body is present at all (some return 201 with an empty body and only
+/// a `Location`/`ETag`), so re-fetching is the one path that always yields
+/// the server's canonical stored representation (assigned `uid`, any
+/// server-side normalization).
+#[tauri::command]
+pub async fn create_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    folder: Value,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_url(base, &ehr_id, None, None);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&folder),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    fetch_directory(&app, &client, &url, &profile.auth_method)
+        .await?
+        .ok_or_else(|| "Directory was created but could not be re-fetched".to_string())
+}
+
+/// Replaces the DIRECTORY's FOLDER hierarchy in place.
+///
+/// `preceding_version_uid` must be the `uid.value` of the directory version
+/// currently on screen (from a prior `get_directory`/`create_directory`
+/// call) — sent as `If-Match` so the server rejects the write with a 409/412
+/// if the DIRECTORY changed underneath the client since it was loaded,
+/// rather than silently clobbering that change. See `update_ehr_status` for
+/// the same optimistic-concurrency pattern.
+#[tauri::command]
+pub async fn update_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    folder: Value,
+    preceding_version_uid: String,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_url(base, &ehr_id, None, None);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .header("If-Match", preceding_version_uid)
+            .json(&folder),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    fetch_directory(&app, &client, &url, &profile.auth_method)
+        .await?
+        .ok_or_else(|| "Directory was updated but could not be re-fetched".to_string())
+}
+
+/// Builds the URL for deleting the DIRECTORY: the base DIRECTORY resource
+/// URL plus a `version_uid` query parameter identifying the version being
+/// deleted (the openEHR REST API's optimistic-concurrency guard for this
+/// endpoint — unlike composition/EHR deletion, DIRECTORY has no per-version
+/// path segment to address instead).
+fn build_directory_delete_url(base: &str, ehr_id: &str, preceding_version_uid: &str) -> String {
+    let directory_url = build_directory_url(base, ehr_id, None, None);
+
+    match reqwest::Url::parse(&directory_url) {
+        Ok(mut u) => {
+            u.query_pairs_mut()
+                .append_pair("version_uid", preceding_version_uid);
+            u.to_string()
+        }
+        // Malformed base URL — fall back to manual interpolation; the
+        // request will fail downstream with a clearer connection error.
+        Err(_) => format!(
+            "{}?version_uid={}",
+            directory_url,
+            urlencoding::encode(preceding_version_uid)
+        ),
+    }
+}
+
+/// Deletes the DIRECTORY entirely.
+///
+/// `preceding_version_uid` is the same optimistic-concurrency guard as
+/// `update_directory`, but unlike composition/EHR deletion (which address
+/// the resource by path segment) the openEHR REST API takes it as a
+/// `version_uid` query parameter on DELETE — the DIRECTORY resource itself
+/// has no per-version path.
+#[tauri::command]
+pub async fn delete_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    preceding_version_uid: String,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_delete_url(base, &ehr_id, &preceding_version_uid);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    Ok(format!("Directory for EHR {} deleted successfully", ehr_id))
+}
+
 // --- AQL-backed EHR search (PRD-0013) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -634,6 +894,13 @@ pub struct EhrSearchCriteria {
     pub created_on: Option<String>,     // YYYY-MM-DD
     pub created_before: Option<String>, // YYYY-MM-DD
     pub created_after: Option<String>,  // YYYY-MM-DD
+    /// Whether the EHR has a DIRECTORY (FOLDER structure) set. Unlike the
+    /// other criteria, this can't be expressed as an AQL predicate — the
+    /// DIRECTORY is only reachable via its own REST resource — so it's
+    /// applied as a post-filter in `search_ehrs` after the AQL results come
+    /// back (see `filter_by_directory_presence`). Both `true` and `false`
+    /// are supported, since the post-filter just checks presence either way.
+    pub has_directory: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -766,8 +1033,10 @@ FROM EHR e CONTAINS EHR_STATUS s"
         );
     }
 
-    // Check if any criteria was provided (either predicates or has_compositions:true)
-    if predicates.is_empty() && !has_compositions_filter {
+    // Check if any criteria was provided (either predicates, has_compositions:true,
+    // or has_directory — the latter never adds a predicate since it's applied as a
+    // post-filter in `search_ehrs`, but it's still a real criterion the user asked for).
+    if predicates.is_empty() && !has_compositions_filter && criteria.has_directory.is_none() {
         return Err("At least one search criterion must be provided".to_string());
     }
 
@@ -779,6 +1048,70 @@ FROM EHR e CONTAINS EHR_STATUS s"
         let where_clause = predicates.join(" AND ");
         Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
     }
+}
+
+/// Filters `results` down to only the EHRs whose DIRECTORY presence matches
+/// `want` (`true` keeps EHRs that have one, `false` keeps EHRs that don't).
+///
+/// AQL has no path for this — the DIRECTORY is only reachable via its own
+/// `GET /ehr/{id}/directory` resource, not a queryable attribute — so this
+/// issues one directory fetch per candidate EHR instead, bounded to a modest
+/// concurrency so a 200-row result set doesn't fire 200 requests at once.
+/// Original ordering is preserved even though the requests complete out of
+/// order, so results don't visibly reshuffle between identical searches.
+///
+/// A fetch failure (auth, transport, a non-404 HTTP error, bad JSON, ...) is
+/// *not* treated as "no directory" — that would silently misclassify an EHR
+/// we simply couldn't check. Only a confirmed 404 (which `fetch_directory`
+/// itself maps to `Ok(None)`) counts as absence; anything else drops that
+/// EHR from the result entirely, matching this function's existing
+/// best-effort handling of a panicked task below.
+async fn filter_by_directory_presence(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    base: &str,
+    auth: &AuthMethod,
+    results: Vec<EhrSearchResult>,
+    want: bool,
+) -> Vec<EhrSearchResult> {
+    const CONCURRENCY: usize = 8;
+    let semaphore = Arc::new(Semaphore::new(CONCURRENCY));
+    let mut set = tokio::task::JoinSet::new();
+
+    for (index, result) in results.into_iter().enumerate() {
+        let semaphore = semaphore.clone();
+        let app = app.clone();
+        let client = client.clone();
+        let auth = auth.clone();
+        let url = build_directory_url(base, &result.ehr_id, None, None);
+        set.spawn(async move {
+            // Permit is held for the duration of the request; dropped (and the
+            // slot freed) when this task completes.
+            let _permit = semaphore.acquire_owned().await;
+            let directory_result = fetch_directory(&app, &client, &url, &auth).await;
+            (index, result, directory_result)
+        });
+    }
+
+    let mut kept: Vec<(usize, EhrSearchResult)> = Vec::new();
+    while let Some(joined) = set.join_next().await {
+        // Only a *confirmed* answer counts: Ok(Some(_)) means the EHR has a
+        // directory, Ok(None) means fetch_directory saw a real 404 (its own
+        // documented way of reporting "no directory set" — not an error).
+        // An Err (auth failure, transport error, a non-404 HTTP error, bad
+        // JSON, ...) means we genuinely don't know, so that EHR is left out
+        // of the filtered list entirely rather than being silently
+        // miscounted as "no directory" either way. Likewise, a panicked
+        // task is dropped rather than surfaced — its EHR is simply left out
+        // of the (already best-effort) filtered list.
+        if let Ok((index, result, Ok(directory))) = joined {
+            if directory.is_some() == want {
+                kept.push((index, result));
+            }
+        }
+    }
+    kept.sort_by_key(|(index, _)| *index);
+    kept.into_iter().map(|(_, result)| result).collect()
 }
 
 #[tauri::command]
@@ -835,8 +1168,27 @@ pub async fn search_ehrs(
         })
         .collect();
 
+    // `limit_reached` reflects the raw AQL result set (capped at 200 rows by
+    // the query's own LIMIT) — computed before the directory post-filter so
+    // "showing first 200, refine your search" still means what it says even
+    // when has_directory then narrows the displayed count further.
+    let limit_reached = results.len() >= 200;
+
+    let results = if let Some(want_directory) = criteria.has_directory {
+        filter_by_directory_presence(
+            &app,
+            &client,
+            base,
+            &profile.auth_method,
+            results,
+            want_directory,
+        )
+        .await
+    } else {
+        results
+    };
+
     let total = results.len();
-    let limit_reached = total >= 200;
 
     Ok(EhrSearchResponse {
         results,
@@ -849,6 +1201,98 @@ pub async fn search_ehrs(
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_build_ehr_list_aql_defaults_to_time_created_desc() {
+        let aql = build_ehr_list_aql(0, 20, None, None).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value DESC"));
+        assert!(aql.contains("LIMIT 20 OFFSET 0"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_asc() {
+        let aql = build_ehr_list_aql(40, 20, Some("time_created"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value ASC"));
+        assert!(aql.contains("LIMIT 20 OFFSET 40"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_direction_is_case_insensitive() {
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("ASC")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_sort_by_ehr_id() {
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("desc")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value DESC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_sort_by_system_id() {
+        let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/system_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_appends_ehr_id_tiebreaker_for_other_fields() {
+        // A secondary sort key on the unique ehr_id gives ties on the
+        // primary field (e.g. several EHRs created in the same instant) a
+        // stable, total order across separate paginated queries.
+        let aql = build_ehr_list_aql(0, 20, Some("time_created"), Some("desc")).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value DESC, e/ehr_id/value ASC LIMIT"));
+
+        let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/system_id/value ASC, e/ehr_id/value ASC LIMIT"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_no_duplicate_tiebreaker_when_sorting_by_ehr_id() {
+        // ehr_id is already the (unique) primary key here, so appending it
+        // again as a tiebreaker would be redundant.
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value ASC LIMIT"));
+        assert_eq!(aql.matches("e/ehr_id/value").count(), 2); // SELECT column + ORDER BY, no third occurrence
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_unsorted_has_no_order_by() {
+        let aql = build_ehr_list_aql_unsorted(40, 20);
+        assert!(!aql.to_ascii_uppercase().contains("ORDER BY"));
+        assert!(aql.contains("LIMIT 20 OFFSET 40"));
+        assert!(aql.contains("SELECT e/ehr_id/value, e/time_created/value, e/system_id/value"));
+    }
+
+    #[test]
+    fn test_is_order_by_unsupported_matches_confirmed_ehrbase_error() {
+        // Actual error body observed from a real EHRBase instance.
+        let body = r#"{"error":"Bad Request","message":"Not implemented: ORDER_BY: identified path 'time_created/value' for type EHR not supported"}"#;
+        assert!(is_order_by_unsupported(body));
+    }
+
+    #[test]
+    fn test_is_order_by_unsupported_ignores_unrelated_errors() {
+        assert!(!is_order_by_unsupported(
+            r#"{"error":"Unauthorized","message":"Invalid credentials"}"#
+        ));
+        assert!(!is_order_by_unsupported(
+            r#"{"error":"Bad Request","message":"malformed AQL query"}"#
+        ));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_rejects_unknown_field() {
+        let result = build_ehr_list_aql(0, 20, Some("subject_id"), Some("asc"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported sort field"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_rejects_unknown_direction() {
+        let result = build_ehr_list_aql(0, 20, Some("time_created"), Some("sideways"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported sort direction"));
+    }
+
     fn empty_criteria() -> EhrSearchCriteria {
         EhrSearchCriteria {
             ehr_id_prefix: None,
@@ -860,6 +1304,7 @@ mod tests {
             created_on: None,
             created_before: None,
             created_after: None,
+            has_directory: None,
         }
     }
 
@@ -993,6 +1438,49 @@ mod tests {
     }
 
     #[test]
+    fn test_has_directory_true_alone_is_a_valid_criterion() {
+        // has_directory can't become an AQL predicate (it's applied as a
+        // post-filter in search_ehrs), but it must still count as "a
+        // criterion was provided" so the query isn't rejected.
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("FROM EHR e CONTAINS EHR_STATUS s"));
+        assert!(!aql.contains("WHERE"));
+        assert!(aql.contains("LIMIT 200"));
+    }
+
+    #[test]
+    fn test_has_directory_false_alone_is_also_valid() {
+        // Unlike has_compositions:false, has_directory:false is supported —
+        // the post-filter checks presence either way — so it shouldn't error.
+        let mut c = empty_criteria();
+        c.has_directory = Some(false);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(!aql.contains("WHERE"));
+    }
+
+    #[test]
+    fn test_has_directory_combines_with_other_predicates() {
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+        // has_directory itself never appears as a predicate.
+        assert!(!aql.to_lowercase().contains("directory"));
+    }
+
+    #[test]
+    fn test_has_directory_combines_with_has_compositions() {
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        c.has_compositions = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("FROM EHR e CONTAINS COMPOSITION c"));
+    }
+
+    #[test]
     fn test_multi_criteria_and() {
         let mut c = empty_criteria();
         c.subject_namespace = Some("patnr".to_string());
@@ -1046,6 +1534,16 @@ mod tests {
     }
 
     #[test]
+    fn test_build_directory_delete_url() {
+        let url =
+            build_directory_delete_url("https://cdr.example.com", "ehr-123", "uid::system::1");
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory?version_uid=uid%3A%3Asystem%3A%3A1"
+        );
+    }
+
+    #[test]
     fn test_build_directory_url_at_time() {
         let url = build_directory_url(
             "https://cdr.example.com",
@@ -1072,5 +1570,58 @@ mod tests {
         assert!(aql.contains("s/is_queryable AS queryable"));
         assert!(aql.contains("e/system_id/value AS system_id"));
         assert!(aql.contains("FROM EHR e CONTAINS EHR_STATUS s"));
+    }
+
+    fn empty_create_ehr_request() -> CreateEhrRequest {
+        CreateEhrRequest {
+            subject_namespace: None,
+            subject_id: None,
+            is_queryable: None,
+            is_modifiable: None,
+            ehr_id: None,
+        }
+    }
+
+    #[test]
+    fn test_ehr_status_includes_archetype_details() {
+        // Stricter CDRs (e.g. FerroEHR) reject an EHR_STATUS root without
+        // archetype_details, so it must always be present.
+        let status = build_ehr_status_json(&empty_create_ehr_request());
+        assert_eq!(
+            status["archetype_details"]["archetype_id"]["value"],
+            "openEHR-EHR-EHR_STATUS.generic.v1"
+        );
+        assert_eq!(status["archetype_details"]["_type"], "ARCHETYPED");
+        assert!(status["archetype_details"]["rm_version"].is_string());
+    }
+
+    #[test]
+    fn test_ehr_status_defaults_queryable_and_modifiable_true() {
+        let status = build_ehr_status_json(&empty_create_ehr_request());
+        assert_eq!(status["is_queryable"], true);
+        assert_eq!(status["is_modifiable"], true);
+        assert_eq!(status["subject"]["_type"], "PARTY_SELF");
+        assert!(status["subject"].get("external_ref").is_none());
+    }
+
+    #[test]
+    fn test_ehr_status_respects_explicit_flags() {
+        let mut req = empty_create_ehr_request();
+        req.is_queryable = Some(false);
+        req.is_modifiable = Some(false);
+        let status = build_ehr_status_json(&req);
+        assert_eq!(status["is_queryable"], false);
+        assert_eq!(status["is_modifiable"], false);
+    }
+
+    #[test]
+    fn test_ehr_status_with_subject_identity() {
+        let mut req = empty_create_ehr_request();
+        req.subject_id = Some("Testtest".to_string());
+        req.subject_namespace = Some("ch.ahv".to_string());
+        let status = build_ehr_status_json(&req);
+        let external_ref = &status["subject"]["external_ref"];
+        assert_eq!(external_ref["id"]["value"], "Testtest");
+        assert_eq!(external_ref["id"]["scheme"], "ch.ahv");
     }
 }

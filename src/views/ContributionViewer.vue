@@ -4,12 +4,21 @@ import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useContributionStore } from "../stores/contribution";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
+import CompassIcon from "../components/CompassIcon.vue";
+import CopyButton from "../components/CopyButton.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const contributionStore = useContributionStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "contribution" });
+  tourStore.start("contribution");
+}
 
 const ehrId = computed(() => route.params.ehrId as string);
 const contributionUid = computed(() => route.params.contributionUid as string);
@@ -35,16 +44,6 @@ function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
 
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
-
-function copyContributionUid() {
-  const detail = contributionStore.detail;
-  if (!detail) return;
-  void copyToClipboard(detail.contribution_uid);
-}
-
 function openVersion(versionId: string) {
   router.push({
     name: "composition",
@@ -57,7 +56,15 @@ function openVersion(versionId: string) {
   <div class="contribution-viewer">
     <div class="viewer-header">
       <button type="button" class="btn btn-sm" @click="goBack">Back</button>
-      <h2>Contribution</h2>
+      <h2 data-tour="contribution-header">Contribution</h2>
+      <button
+        type="button"
+        class="tour-trigger-btn"
+        title="Take a tour of the Contribution Viewer"
+        @click="replayTour"
+      >
+        <CompassIcon />
+      </button>
     </div>
 
     <div v-if="contributionStore.loading" class="loading">Loading contribution...</div>
@@ -69,7 +76,11 @@ function openVersion(versionId: string) {
         <span class="detail-label">Contribution UID</span>
         <span class="detail-value mono">
           {{ contributionStore.detail.contribution_uid }}
-          <button type="button" class="copy-btn" @click="copyContributionUid">Copy</button>
+          <CopyButton
+            class="uid-copy"
+            :text="contributionStore.detail.contribution_uid"
+            title="Copy contribution UID"
+          />
         </span>
       </div>
 
@@ -111,7 +122,7 @@ function openVersion(versionId: string) {
             <span class="version-id mono">{{ v.id }}</span>
           </div>
           <div class="version-actions">
-            <button type="button" class="copy-btn" @click="copyToClipboard(v.id)">Copy</button>
+            <CopyButton :text="v.id" title="Copy version id" />
             <button
               v-if="v.version_type === 'COMPOSITION'"
               type="button"
@@ -150,6 +161,9 @@ function openVersion(versionId: string) {
   font-size: 16px;
   font-weight: 600;
 }
+.viewer-header .tour-trigger-btn {
+  margin-left: auto;
+}
 
 .viewer-content {
   padding: 16px 24px 24px;
@@ -185,19 +199,9 @@ function openVersion(versionId: string) {
   word-break: break-all;
 }
 
-.copy-btn {
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 11px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-.copy-btn:hover {
-  background: var(--color-border);
-  color: var(--color-text);
+.uid-copy {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 
 .badge {

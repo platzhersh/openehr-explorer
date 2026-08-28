@@ -33,7 +33,17 @@ export interface EhrListResponse {
   total: number;
   offset: number;
   limit: number;
+  // False when the CDR rejected the requested sort (e.g. EHRBase doesn't
+  // implement ORDER BY on EHR-level attributes) and list_ehrs fell back to
+  // an unsorted query. See sort_field_path/is_order_by_unsupported in
+  // src-tauri/src/commands/ehr.rs.
+  sort_applied: boolean;
 }
+
+// Whitelisted server-side (AQL ORDER BY) sort fields for the EHR list — must
+// match the fields accepted by `sort_field_path` in src-tauri/src/commands/ehr.rs.
+export type EhrSortField = "time_created" | "ehr_id" | "system_id";
+export type SortDir = "asc" | "desc";
 
 export interface EhrSearchCriteria {
   ehr_id_prefix?: string;
@@ -45,6 +55,11 @@ export interface EhrSearchCriteria {
   created_on?: string;
   created_before?: string;
   created_after?: string;
+  // Whether the EHR has a DIRECTORY (FOLDER structure) set. Applied as a
+  // post-filter server-side (AQL has no path for it) — see build_ehr_search_aql
+  // / filter_by_directory_presence in src-tauri/src/commands/ehr.rs. Unlike
+  // has_compositions, both true and false are supported.
+  has_directory?: boolean;
 }
 
 export interface EhrSearchResult {
@@ -72,6 +87,17 @@ export const useEhrStore = defineStore("ehr", () => {
   const error = ref<string | null>(null);
   const selectedEhr = ref<EhrDetail | null>(null);
 
+  // Sort state for the paginated (non-search) EHR list — sorted server-side
+  // via AQL ORDER BY (see list_ehrs in src-tauri/src/commands/ehr.rs).
+  // Defaults match the app's historical default ordering: newest first.
+  const sortBy = ref<EhrSortField>("time_created");
+  const sortDir = ref<SortDir>("desc");
+  // False when the server most recently rejected the requested sort (e.g.
+  // EHRBase doesn't implement ORDER BY on EHR-level attributes) and the
+  // list shown is actually unsorted. Starts true so no banner flashes
+  // before the first fetch resolves.
+  const sortApplied = ref(true);
+
   // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
   // and data-driven, so it's kept as raw JSON rather than a typed interface,
   // matching how `composition.ts` handles the composition body.
@@ -92,7 +118,15 @@ export const useEhrStore = defineStore("ehr", () => {
   const searchError = ref<string | null>(null);
   const searchLimitReached = ref(false);
 
+  // Bumped on every fetchEhrs call so a slow response for a since-superseded
+  // request (the user changed page, sort field, or sort direction again
+  // before the previous request came back) can't land after a newer one and
+  // overwrite the list with stale — e.g. wrongly ordered — data. Same
+  // pattern as searchRequestId/directoryRequestId below.
+  let fetchRequestId = 0;
+
   async function fetchEhrs(serverId: string, page = 0) {
+    const requestId = ++fetchRequestId;
     loading.value = true;
     error.value = null;
     try {
@@ -100,15 +134,34 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         offset: page * limit.value,
         limit: limit.value,
+        sortBy: sortBy.value,
+        sortDir: sortDir.value,
       });
+      if (requestId !== fetchRequestId) return; // superseded by a newer request
       ehrs.value = result.ehrs;
       total.value = result.total;
       offset.value = result.offset;
+      sortApplied.value = result.sort_applied;
     } catch (e) {
+      if (requestId !== fetchRequestId) return;
       error.value = String(e);
     } finally {
-      loading.value = false;
+      if (requestId === fetchRequestId) loading.value = false;
     }
+  }
+
+  /** Changes the sort field for the paginated EHR list and re-fetches page 0.
+   *  Direction is left as-is — changing field doesn't guess a "natural"
+   *  default direction per field, it just re-sorts the same way. */
+  async function setSortBy(serverId: string, field: EhrSortField) {
+    sortBy.value = field;
+    await fetchEhrs(serverId, 0);
+  }
+
+  /** Flips asc/desc for the current sort field and re-fetches page 0. */
+  async function toggleSortDir(serverId: string) {
+    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+    await fetchEhrs(serverId, 0);
   }
 
   async function fetchEhrDetail(serverId: string, ehrId: string) {
@@ -198,7 +251,14 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearSearch() so a slow response for a since-superseded search
+  // (the user applied different filters, or removed a chip, before the
+  // previous request came back) can't land after a newer one and overwrite
+  // results that no longer match what's shown as the active criteria.
+  let searchRequestId = 0;
+
   async function searchEhrs(serverId: string, criteria: EhrSearchCriteria) {
+    const requestId = ++searchRequestId;
     searchLoading.value = true;
     searchError.value = null;
     searchActive.value = true;
@@ -207,12 +267,14 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         criteria,
       });
+      if (requestId !== searchRequestId) return; // superseded by a newer search
       searchResults.value = result.results;
       searchLimitReached.value = result.limit_reached;
     } catch (e) {
+      if (requestId !== searchRequestId) return;
       searchError.value = String(e);
     } finally {
-      searchLoading.value = false;
+      if (requestId === searchRequestId) searchLoading.value = false;
     }
   }
 
@@ -254,7 +316,81 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryLoaded.value = false;
   }
 
+  /** Creates the DIRECTORY for an EHR that doesn't have one yet. `folder` is
+   *  DIRECTORY FOLDER RM JSON (see `toWireFolder` in `src/lib/directoryEdit.ts`).
+   *  The backend re-fetches after writing, so `directory` ends up holding the
+   *  server's canonical stored representation rather than what was sent. */
+  async function createDirectory(serverId: string, ehrId: string, folder: Record<string, unknown>) {
+    directoryRequestId++; // invalidate any in-flight fetchDirectory call
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("create_directory", {
+        serverId,
+        ehrId,
+        folder,
+      });
+      directoryLoaded.value = true;
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  /** Replaces the DIRECTORY's FOLDER hierarchy. `precedingVersionUid` must be
+   *  the `uid.value` of the version currently loaded (sent as `If-Match` so a
+   *  concurrent change elsewhere isn't silently clobbered). */
+  async function updateDirectory(
+    serverId: string,
+    ehrId: string,
+    folder: Record<string, unknown>,
+    precedingVersionUid: string,
+  ) {
+    directoryRequestId++;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("update_directory", {
+        serverId,
+        ehrId,
+        folder,
+        precedingVersionUid,
+      });
+      directoryLoaded.value = true;
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  /** Deletes the DIRECTORY entirely. Same `precedingVersionUid` guard as
+   *  `updateDirectory`. */
+  async function deleteDirectory(serverId: string, ehrId: string, precedingVersionUid: string) {
+    directoryRequestId++;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      await invoke<string>("delete_directory", {
+        serverId,
+        ehrId,
+        precedingVersionUid,
+      });
+      directory.value = null;
+      directoryLoaded.value = true; // "no directory" is now the confirmed, stable state
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
   function clearSearch() {
+    searchRequestId++; // invalidate any in-flight searchEhrs call
     searchResults.value = [];
     searchActive.value = false;
     searchError.value = null;
@@ -266,6 +402,9 @@ export const useEhrStore = defineStore("ehr", () => {
     total,
     offset,
     limit,
+    sortBy,
+    sortDir,
+    sortApplied,
     loading,
     error,
     selectedEhr,
@@ -279,9 +418,14 @@ export const useEhrStore = defineStore("ehr", () => {
     searchError,
     searchLimitReached,
     fetchEhrs,
+    setSortBy,
+    toggleSortDir,
     fetchEhrDetail,
     fetchDirectory,
     clearDirectory,
+    createDirectory,
+    updateDirectory,
+    deleteDirectory,
     searchEhrs,
     clearSearch,
     createEhr,

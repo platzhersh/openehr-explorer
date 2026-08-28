@@ -95,9 +95,9 @@
     }
     .logo:hover { text-decoration: none; }
     .wordmark {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
-      color: var(--primary);
+      letter-spacing: -0.01em;
     }
     .nav-links {
       display: flex;
@@ -107,7 +107,7 @@
     }
     .nav-links a {
       color: var(--text-secondary);
-      font-size: 15px;
+      font-size: 14px;
       text-decoration: none;
       transition: color 0.2s;
     }
@@ -122,7 +122,7 @@
       border: 1px solid var(--border);
       border-radius: 20px;
       color: var(--text-secondary);
-      font-size: 14px;
+      font-size: 13px;
       transition: border-color 0.2s, color 0.2s;
     }
     .github-btn:hover { border-color: var(--primary); color: var(--text); text-decoration: none; }
@@ -355,7 +355,6 @@
       .docs-layout { flex-direction: column; }
       .docs-content { padding: 24px 16px; }
       .header-inner { padding: 0 16px; }
-      .wordmark { font-size: 16px; }
       .nav-links { gap: 12px; }
     }
   </style>
@@ -407,6 +406,7 @@
       <a href="#first-connection" class="sidebar-link">First Connection</a>
 
       <div class="sidebar-group-title">Features</div>
+      <a href="#overview-dashboard" class="sidebar-link">Overview Dashboard</a>
       <a href="#server-manager" class="sidebar-link">Server Manager</a>
       <a href="#ehr-browser" class="sidebar-link">EHR Browser</a>
       <a href="#composition-viewer" class="sidebar-link">Composition Viewer</a>
@@ -475,8 +475,8 @@ scoop install openehr-explorer</div>
         <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span><br>
 sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openEHR.Explorer_0.6.0_amd64.AppImage<br>
-./openEHR.Explorer_0.6.0_amd64.AppImage</div>
+        <div class="code-block">chmod +x openEHR.Explorer_0.7.0_amd64.AppImage<br>
+./openEHR.Explorer_0.7.0_amd64.AppImage</div>
         <p>An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.</p>
       </section>
 
@@ -503,6 +503,17 @@ sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
       </section>
 
       <!-- Features -->
+      <section id="overview-dashboard">
+        <h2>Overview Dashboard</h2>
+        <p>The Overview tab is the app's landing view — it's where you land after connecting to a server, before diving into the EHR Browser, Templates, or AQL Runner.</p>
+        <ul>
+          <li><strong>Live counts:</strong> total EHRs, compositions, and templates on the connected server, computed with AQL <code>COUNT</code> queries (visible in the Request Inspector).</li>
+          <li><strong>Connected server info:</strong> name, base URL, server type, connection status, and detected CDR version — the same information surfaced on the Server Manager card, consolidated here too.</li>
+          <li><strong>Refresh:</strong> counts are fetched fresh, not cached — click "Refresh" (or switch servers) to re-run the queries and see a "last updated" timestamp.</li>
+          <li>Click any stat card to jump straight to the EHR Browser or Template Browser.</li>
+        </ul>
+      </section>
+
       <section id="server-manager">
         <h2>Server Manager</h2>
         <p>The Server Manager lets you create, edit, and delete server profiles. Each profile stores a connection configuration for a specific openEHR CDR instance.</p>
@@ -798,6 +809,17 @@ LIMIT 10</div>
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
+        <ul>
+          <li><strong>Contribution Audit Trail:</strong> A new Contribution viewer shows every version, deletion, and audit-trail entry behind a composition, with links from the EHR and composition views for tracing who changed what and when</li>
+          <li><strong>DIRECTORY Support:</strong> Browse and inspect the EHR's DIRECTORY (folder hierarchy) directly in the EHR browser, with a dedicated tree view</li>
+          <li><strong>Stored Query Execution:</strong> Run server-defined stored queries as a distinct capability in the AQL Runner, alongside ad-hoc AQL</li>
+          <li><strong>App-Wide Intro Tour:</strong> First launch now walks new users through the app with a guided tour, building on the existing route-aware feature tours and What's New modal</li>
+          <li><strong>Request Inspector curl Text:</strong> The Request Inspector now shows the equivalent curl command as copyable text for every logged request</li>
+          <li><strong>EHR Creation Fix:</strong> EHR creation now supplies <code>archetype_details</code> on the initial EHR_STATUS, fixing 422 errors against stricter CDRs like FerroEHR</li>
+          <li><strong>Sidebar Connection Status Fix:</strong> The server connection indicator now updates on every request instead of only after an explicit connection test</li>
+        </ul>
 
         <h3>v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
         <ul>

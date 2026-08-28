@@ -1,0 +1,148 @@
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import Dashboard from "./Dashboard.vue";
+import { useServerStore } from "../stores/server";
+import type { DashboardCounts } from "../stores/dashboard";
+import { mockTauriStores } from "../lib/storybook-tauri";
+import { SAMPLE_EHRBASE_PROFILE, SAMPLE_EHRBASE_VERSION } from "../lib/storybook-fixtures";
+
+const PROFILE = SAMPLE_EHRBASE_PROFILE;
+
+const COUNTS: DashboardCounts = {
+  ehr_count: 1384,
+  composition_count: 11415,
+  template_count: 485,
+};
+
+interface StoryState {
+  /** No server profiles configured at all — the "Welcome" onboarding card. */
+  empty?: boolean;
+  /** A profile exists but nothing is selected as active — the rarer of the two empty-state copies. */
+  noActiveServer?: boolean;
+  /** `get_dashboard_counts` rejects instead of resolving. */
+  countsError?: string;
+  /** `get_dashboard_counts` never resolves, to freeze the view in its loading state. */
+  stayLoading?: boolean;
+}
+
+// Dashboard.vue reads everything from the `server`/`dashboard` Pinia stores
+// and fetches live via Tauri `invoke()` in its own onMounted/watch hooks —
+// there's nothing to pass as component props. Each story instead mocks the
+// Tauri IPC boundary so those real invoke() calls resolve to canned data,
+// and seeds the bits of store state (profiles, connection status) that
+// aren't themselves the result of an invoke() call the component makes.
+function withStores(state: StoryState = {}) {
+  return () => ({
+    components: { Dashboard },
+    setup() {
+      mockTauriStores(
+        (cmd) => {
+          if (cmd === "get_dashboard_counts") {
+            if (state.countsError) throw new Error(state.countsError);
+            if (state.stayLoading) return new Promise(() => {}); // never resolves
+            return COUNTS;
+          }
+          if (cmd === "get_server_version") {
+            return SAMPLE_EHRBASE_VERSION;
+          }
+          if (cmd === "list_server_profiles") {
+            return [];
+          }
+        },
+        () => {
+          if (!state.empty) {
+            const serverStore = useServerStore();
+            serverStore.profiles = [PROFILE];
+            if (!state.noActiveServer) {
+              serverStore.activeServerId = PROFILE.id;
+              serverStore.connectionStatus[PROFILE.id] = "connected";
+            }
+          }
+        },
+      );
+
+      return {};
+    },
+    template: `<Dashboard />`,
+  });
+}
+
+const meta: Meta<typeof Dashboard> = {
+  title: "Views/Dashboard",
+  component: Dashboard,
+  tags: ["autodocs"],
+  parameters: {
+    layout: "fullscreen",
+    docs: {
+      description: {
+        component:
+          "The Overview tab (OEH-17) — the app's landing view. Shows live EHR/composition/template counts (AQL `COUNT` queries, refetched fresh on every load/refresh, never cached) plus the connected server's info. Renders under `/dashboard`, which `/` redirects to.",
+      },
+    },
+  },
+};
+
+export default meta;
+type Story = StoryObj<typeof Dashboard>;
+
+export const Populated: Story = {
+  render: withStores(),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Connected server with live counts. Each stat card links through to the EHR Browser or Template Browser; the Connected Server card links to the Server Manager.",
+      },
+    },
+  },
+};
+
+export const Loading: Story = {
+  render: withStores({ stayLoading: true }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Counts still in flight — stat cards dim and show a placeholder until the AQL queries return.",
+      },
+    },
+  },
+};
+
+export const CountsFailed: Story = {
+  render: withStores({
+    countsError:
+      'AQL error (HTTP 400): {"error":"Bad Request","message":"Not implemented: selecting the full EHR object (e)"}',
+  }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "The AQL COUNT query failed — surfaced as an inline error banner rather than silently showing zeroes.",
+      },
+    },
+  },
+};
+
+export const NoServerConfigured: Story = {
+  render: withStores({ empty: true }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'First-run state: no server profiles exist yet. A welcoming card with a prominent call to action, rather than the same muted "no results" empty state used elsewhere in the app.',
+      },
+    },
+  },
+};
+
+export const NoServerSelected: Story = {
+  render: withStores({ noActiveServer: true }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A profile exists but none is active — normally unreachable (the server store auto-selects one as soon as any profile is loaded), included for completeness.",
+      },
+    },
+  },
+};

@@ -125,10 +125,10 @@ async function handleConsentDecision(accepted: boolean) {
   checkWhatsNewAndTours();
 }
 
-// What's New (version-gated) and the route-aware feature tour both hold off
-// until the consent dialog is resolved, so we never stack two modals — see
-// PRD-0018. If What's New has something to show, the tour waits for it to
-// be dismissed (below) rather than starting behind/alongside it.
+// What's New (version-gated) and the feature tours both hold off until the
+// consent dialog is resolved, so we never stack two modals — see PRD-0018.
+// If What's New has something to show, tours wait for it to be dismissed
+// (below) rather than starting behind/alongside it.
 function checkWhatsNewAndTours() {
   if (appVersion.value) {
     whatsNewStore.checkForUpdate(appVersion.value);
@@ -139,6 +139,17 @@ function checkWhatsNewAndTours() {
       source: "auto",
     });
   } else {
+    offerNextTour();
+  }
+}
+
+/**
+ * Try the app-wide intro tour first — it auto-starts once, ever, ahead of
+ * any route-aware tour. Once it's been seen/skipped (or is disabled), fall
+ * back to offering the current route's tour, same as before its existence.
+ */
+function offerNextTour() {
+  if (!tourStore.maybeAutoStartIntro()) {
     tourStore.maybeAutoStart(route.name as string | undefined);
   }
 }
@@ -146,6 +157,7 @@ function checkWhatsNewAndTours() {
 onMounted(async () => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
+  serverStore.startTrackingRequests();
   // Settings must be loaded before the first analytics call so the consent
   // flag is accurate — otherwise the composable would gate on a stale default.
   await settingsStore.loadSettings();
@@ -177,6 +189,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
   unlistenMenuCheckForUpdates?.();
+  serverStore.stopTrackingRequests();
 });
 
 // Reset inspector when active server changes
@@ -199,12 +212,12 @@ watch(
   },
 );
 
-// Once the What's New modal is dismissed, offer the current route's tour —
-// it was held back while the modal was up (see checkWhatsNewAndTours).
+// Once the What's New modal is dismissed, offer the next tour — it was
+// held back while the modal was up (see checkWhatsNewAndTours).
 watch(
   () => whatsNewStore.visible,
   (visible) => {
-    if (!visible) tourStore.maybeAutoStart(route.name as string | undefined);
+    if (!visible) offerNextTour();
   },
 );
 </script>
@@ -236,6 +249,11 @@ watch(
 </template>
 
 <style>
+/* .btn, .badge, .input, .error-msg, .empty-state, etc. — a separate
+   stylesheet (rather than inline here) so .storybook/preview.css can
+   import the exact same file instead of duplicating it. */
+@import "./styles/shared-utilities.css";
+
 *,
 *::before,
 *::after {
@@ -317,147 +335,5 @@ body {
   flex: 1;
   overflow: auto;
   background: var(--color-bg);
-}
-
-/* Shared utility styles */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-primary-dim);
-}
-.btn-primary {
-  background: var(--color-primary-dim);
-  border-color: var(--color-primary);
-  color: #fff;
-}
-.btn-primary:hover {
-  background: var(--color-primary);
-  color: var(--color-bg);
-}
-.btn-sm {
-  padding: 3px 8px;
-  font-size: 12px;
-}
-.btn-danger {
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-.btn-danger:hover {
-  background: var(--color-error);
-  color: #fff;
-}
-
-/* Manual "take a tour" trigger — used in view headers alongside the
-   feature-tour system (see PRD-0018). A circular icon button so it reads
-   as a secondary affordance next to primary header actions. */
-.tour-trigger-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.tour-trigger-btn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary-dim);
-  background: var(--color-surface-hover);
-}
-
-.input {
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.input:focus {
-  border-color: var(--color-primary-dim);
-}
-.input::placeholder {
-  color: var(--color-text-muted);
-}
-
-select.input {
-  cursor: pointer;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-}
-.badge-primary {
-  background: var(--color-primary-dim);
-  color: #fff;
-  border-color: var(--color-primary);
-}
-
-.copy-btn {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 12px;
-}
-.copy-btn:hover {
-  color: var(--color-primary);
-  background: var(--color-surface);
-}
-
-.error-msg {
-  padding: 12px;
-  background: rgba(255, 107, 107, 0.1);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius);
-  color: var(--color-error);
-  font-size: 13px;
-}
-
-.loading {
-  padding: 24px;
-  text-align: center;
-  color: var(--color-text-muted);
-}
-
-.empty-state {
-  padding: 48px 24px;
-  text-align: center;
-  color: var(--color-text-muted);
-}
-.empty-state h3 {
-  margin-bottom: 8px;
-  color: var(--color-text-secondary);
 }
 </style>

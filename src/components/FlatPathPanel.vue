@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import CopyButton from "./CopyButton.vue";
 
 const props = defineProps<{
   paths: string[];
@@ -16,10 +17,6 @@ const filteredPaths = computed(() => {
   const q = searchQuery.value.toLowerCase();
   return props.paths.filter((p) => p.toLowerCase().includes(q));
 });
-
-async function copyPath(path: string) {
-  await navigator.clipboard.writeText(path);
-}
 </script>
 
 <template>
@@ -42,7 +39,7 @@ async function copyPath(path: string) {
         @mouseleave="emit('highlight', null)"
       >
         <span class="path-text">{{ path }}</span>
-        <button class="copy-btn" @click="copyPath(path)" title="Copy path">Copy</button>
+        <CopyButton :text="path" title="Copy path" />
       </div>
 
       <div v-if="filteredPaths.length === 0" class="empty-state">

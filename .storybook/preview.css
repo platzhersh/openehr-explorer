@@ -1,0 +1,49 @@
+/*
+ * Subset of the app's theme tokens (see src/App.vue's global <style> block),
+ * so components render with their real colors instead of unstyled defaults.
+ * Keep this in sync if the source palette changes.
+ *
+ * Shared utility classes (.btn, .badge, .error-msg, …) live in
+ * shared-utilities.css — the same file src/App.vue imports — rather than
+ * being duplicated here. Any component/view story that uses them (buttons,
+ * badges, error banners, empty states) would otherwise render unstyled,
+ * since App.vue itself is never mounted in Storybook.
+ */
+@import "../src/styles/shared-utilities.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --sidebar-width: 240px;
+  --color-bg: #1a1a2e;
+  --color-bg-secondary: #16213e;
+  --color-bg-tertiary: #0f3460;
+  --color-surface: #1e2a4a;
+  --color-surface-hover: #253456;
+  --color-border: #2a3a5c;
+  --color-text: #e0e0e0;
+  --color-text-secondary: #8892b0;
+  --color-text-muted: #5a6a8a;
+  --color-primary: #64ffda;
+  --color-primary-dim: #3d9e85;
+  --color-error: #ff6b6b;
+  --color-warning: #ffd93d;
+  --color-success: #6bff8e;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --radius: 6px;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.5;
+}

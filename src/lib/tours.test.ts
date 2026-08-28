@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOURS, getTourById, getTourForRoute } from "./tours";
+import { APP_INTRO_TOUR_ID, TOURS, getTourById, getTourForRoute } from "./tours";
 
 describe("tours", () => {
   it("every tour has a unique id", () => {
@@ -7,10 +7,19 @@ describe("tours", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("every tour has at least one step and one route name", () => {
+  it("every tour has at least one step", () => {
     for (const tour of TOURS) {
       expect(tour.steps.length).toBeGreaterThan(0);
-      expect(tour.routeNames.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("every non-global tour has at least one route name; global tours have none", () => {
+    for (const tour of TOURS) {
+      if (tour.global) {
+        expect(tour.routeNames.length).toBe(0);
+      } else {
+        expect(tour.routeNames.length).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -46,5 +55,19 @@ describe("tours", () => {
     expect(getTourForRoute("settings")).toBeUndefined();
     expect(getTourForRoute(undefined)).toBeUndefined();
     expect(getTourForRoute(null)).toBeUndefined();
+  });
+
+  it("a global tour is resolvable by id but not offered via any route", () => {
+    const inspector = getTourById("inspector");
+    expect(inspector?.global).toBe(true);
+    expect(inspector?.routeNames).toEqual([]);
+    expect(getTourForRoute("inspector")).toBeUndefined();
+  });
+
+  it("the app intro tour is global and not offered via any route", () => {
+    const intro = getTourById(APP_INTRO_TOUR_ID);
+    expect(intro?.global).toBe(true);
+    expect(intro?.routeNames).toEqual([]);
+    expect(getTourForRoute(APP_INTRO_TOUR_ID)).toBeUndefined();
   });
 });
