@@ -24,6 +24,8 @@ pub struct ServerProfile {
     pub admin_auth_method: Option<AuthMethod>,
     #[serde(default)]
     pub terminology_url: Option<String>,
+    #[serde(default)]
+    pub is_default: bool,
 }
 
 /// Public profile returned over IPC — secrets are replaced with flags.
@@ -39,6 +41,8 @@ pub struct ServerProfilePublic {
     #[serde(default)]
     pub terminology_url: Option<String>,
     pub credential_backend: String,
+    #[serde(default)]
+    pub is_default: bool,
 }
 
 /// Inbound profile from the frontend when saving (credentials included).
@@ -60,6 +64,7 @@ pub struct ServerProfileInput {
 pub enum ServerType {
     Ehrbase,
     BetterPlatform,
+    FerroEhr,
     Generic,
 }
 
@@ -112,6 +117,8 @@ pub struct StoredProfile {
     pub admin_auth_method: Option<StoredAuthMethod>,
     #[serde(default)]
     pub terminology_url: Option<String>,
+    #[serde(default)]
+    pub is_default: bool,
 }
 
 /// On-disk auth method — secrets replaced with sentinel null/empty values.
@@ -320,6 +327,7 @@ fn load_resolved_profile(
         auth_method,
         admin_auth_method,
         terminology_url: stored.terminology_url.clone(),
+        is_default: stored.is_default,
     })
 }
 
@@ -338,6 +346,7 @@ fn to_public_profile(profile: &ServerProfile, backend: &StorageBackend) -> Serve
         admin_auth_method: profile.admin_auth_method.as_ref().map(to_public_auth),
         terminology_url: profile.terminology_url.clone(),
         credential_backend: backend_str.to_string(),
+        is_default: profile.is_default,
     }
 }
 
@@ -385,6 +394,7 @@ pub fn migrate_plaintext_credentials() {
                         auth_method: to_stored_auth(&full.auth_method),
                         admin_auth_method: full.admin_auth_method.as_ref().map(to_stored_auth),
                         terminology_url: full.terminology_url,
+                        is_default: full.is_default,
                     });
                     needs_rewrite = true;
                     continue;
@@ -442,6 +452,21 @@ fn build_request(
     }
 }
 
+/// Resolve secrets for each stored profile and convert to the IPC-safe public
+/// representation. Shared by every command that returns the profile list.
+fn to_public_profiles(
+    mgr: &CredentialManager,
+    profiles: &[StoredProfile],
+    config_dir: &std::path::Path,
+) -> Result<Vec<ServerProfilePublic>, String> {
+    let mut public = Vec::with_capacity(profiles.len());
+    for sp in profiles {
+        let resolved = load_resolved_profile(mgr, sp, config_dir)?;
+        public.push(to_public_profile(&resolved, mgr.backend()));
+    }
+    Ok(public)
+}
+
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
@@ -451,12 +476,7 @@ pub async fn list_server_profiles() -> Result<Vec<ServerProfilePublic>, String> 
     let config_dir = get_config_dir();
     let mgr = cred_manager();
     let stored = load_stored_profiles();
-    let mut public = Vec::with_capacity(stored.len());
-    for sp in &stored {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+    to_public_profiles(mgr, &stored, &config_dir)
 }
 
 #[tauri::command]
@@ -476,6 +496,15 @@ pub async fn save_server_profile(
         mgr.delete_secret(&profile.id, "admin_token", &config_dir)?;
     }
 
+    let mut profiles = load_stored_profiles();
+
+    // Preserve the existing default flag — the save form doesn't carry it.
+    let is_default = profiles
+        .iter()
+        .find(|p| p.id == profile.id)
+        .map(|p| p.is_default)
+        .unwrap_or(false);
+
     // Build stored profile (without secrets)
     let stored_profile = StoredProfile {
         id: profile.id.clone(),
@@ -485,9 +514,9 @@ pub async fn save_server_profile(
         auth_method: to_stored_auth(&profile.auth_method),
         admin_auth_method: profile.admin_auth_method.as_ref().map(to_stored_auth),
         terminology_url: profile.terminology_url,
+        is_default,
     };
 
-    let mut profiles = load_stored_profiles();
     if let Some(existing) = profiles.iter_mut().find(|p| p.id == stored_profile.id) {
         *existing = stored_profile;
     } else {
@@ -495,13 +524,7 @@ pub async fn save_server_profile(
     }
     save_stored_profiles(&profiles)?;
 
-    // Return public list
-    let mut public = Vec::with_capacity(profiles.len());
-    for sp in &profiles {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+    to_public_profiles(mgr, &profiles, &config_dir)
 }
 
 #[tauri::command]
@@ -516,13 +539,28 @@ pub async fn delete_server_profile(id: String) -> Result<Vec<ServerProfilePublic
     profiles.retain(|p| p.id != id);
     save_stored_profiles(&profiles)?;
 
-    // Return public list
-    let mut public = Vec::with_capacity(profiles.len());
-    for sp in &profiles {
-        let resolved = load_resolved_profile(mgr, sp, &config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
+    to_public_profiles(mgr, &profiles, &config_dir)
+}
+
+#[tauri::command]
+pub async fn set_default_server_profile(id: String) -> Result<Vec<ServerProfilePublic>, String> {
+    let config_dir = get_config_dir();
+    let mgr = cred_manager();
+
+    let mut profiles = load_stored_profiles();
+    let already_default = profiles
+        .iter()
+        .find(|p| p.id == id)
+        .map(|p| p.is_default)
+        .ok_or_else(|| format!("Server profile '{}' not found", id))?;
+    // Toggle: clicking the current default clears it, falling back to
+    // first-of-list preselection; otherwise make it the sole default.
+    for p in profiles.iter_mut() {
+        p.is_default = !already_default && p.id == id;
     }
-    Ok(public)
+    save_stored_profiles(&profiles)?;
+
+    to_public_profiles(mgr, &profiles, &config_dir)
 }
 
 #[tauri::command]
@@ -564,6 +602,7 @@ pub async fn test_unsaved_connection(
         auth_method: profile.auth_method,
         admin_auth_method: profile.admin_auth_method,
         terminology_url: profile.terminology_url,
+        is_default: false,
     };
     let client = build_client(&full);
     let url = format!(
@@ -627,6 +666,24 @@ pub async fn get_server_version(
                 return Err(format!("Server returned HTTP {}", resp.status));
             }
             parse_version_json(&resp.body)
+        }
+        ServerType::FerroEhr => {
+            // FerroEHR's status endpoint is unauthenticated (mounted outside
+            // its auth layer) — sending credentials here would make version
+            // detection fail for a reachable server whose stored credentials
+            // happen to be invalid or expired.
+            let url = format!("{}/rest/status", base);
+            let resp = send_instrumented(
+                &app,
+                &client,
+                build_request(&client, reqwest::Method::GET, &url, &AuthMethod::None),
+            )
+            .await?;
+
+            if !resp.is_success {
+                return Err(format!("Server returned HTTP {}", resp.status));
+            }
+            parse_ferroehr_status_json(&resp.body)
         }
         ServerType::Generic => {
             Err("Version detection is not available for generic openEHR servers".to_string())
@@ -698,6 +755,40 @@ fn parse_version_json(body: &str) -> Result<ServerVersionInfo, String> {
     }
 
     Ok(info)
+}
+
+/// Parses FerroEHR's `GET /rest/status` body: `{status, server_version,
+/// openehr_rest_api_version, timestamp}`.
+fn parse_ferroehr_status_json(body: &str) -> Result<ServerVersionInfo, String> {
+    let json: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+
+    let mut info = ServerVersionInfo::default();
+
+    if let Some(obj) = json.as_object() {
+        if let Some(v) = obj.get("server_version").and_then(|v| v.as_str()) {
+            info.server_version = Some(v.to_string());
+        }
+    }
+
+    Ok(info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_ferroehr_status_json() {
+        let body = r#"{"status":"UP","server_version":"0.4.0","openehr_rest_api_version":"1.1.0","timestamp":"2026-08-24T12:00:00Z"}"#;
+        let info = parse_ferroehr_status_json(body).unwrap();
+        assert_eq!(info.server_version.as_deref(), Some("0.4.0"));
+        assert_eq!(info.ehrbase_version, None);
+    }
+
+    #[test]
+    fn parse_ferroehr_status_json_rejects_invalid_json() {
+        assert!(parse_ferroehr_status_json("not json").is_err());
+    }
 }
 
 // ---------------------------------------------------------------------------

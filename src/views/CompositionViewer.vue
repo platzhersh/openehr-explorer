@@ -5,15 +5,20 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
+import CopyButton from "../components/CopyButton.vue";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const compositionStore = useCompositionStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const ehrId = computed(() => route.params.ehrId as string);
 const compositionUid = computed(() => route.params.compositionUid as string);
@@ -23,11 +28,34 @@ const flatComposition = ref<Record<string, unknown> | null>(null);
 const webTemplate = ref<Record<string, unknown> | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
-const activeTab = ref<"pretty" | "json" | "flat">("pretty");
+const activeTab = ref<"pretty" | "json" | "flat" | "versions">("pretty");
 const showFlatPaths = ref(false);
 const highlightedPath = ref<string | null>(null);
 const showDeleteDialog = ref(false);
 const deleting = ref(false);
+
+// Version history / CONTRIBUTION linkage (OEH-28)
+interface CommitAudit {
+  change_type: string | null;
+  committer_name: string | null;
+  time_committed: string | null;
+  description: string | null;
+}
+interface CompositionVersion {
+  version_id: string;
+  preceding_version_uid: string | null;
+  lifecycle_state: string | null;
+  commit_audit: CommitAudit | null;
+  time_committed: string | null;
+}
+const versions = ref<CompositionVersion[]>([]);
+const versionsLoading = ref(false);
+const versionsError = ref<string | null>(null);
+const contributionLookupError = ref<string | null>(null);
+
+// The versioned_object_uid is the part of a version UID before the first
+// "::" (e.g. `abc123::system.example.com::1` -> `abc123`).
+const versionedObjectUid = computed(() => compositionUid.value.split("::")[0]);
 
 // Search state
 const showPanelSearch = ref(false);
@@ -113,114 +141,99 @@ watch(activeTab, (tab) => {
 
 watch(compositionUid, () => {
   closePanelSearch();
+  // Version history is scoped to the composition being viewed — drop any
+  // stale data from the previous one so switching compositions doesn't
+  // briefly show the wrong history.
+  versions.value = [];
+  versionsError.value = null;
+  contributionLookupError.value = null;
 });
 
-// Helper functions
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+// Lazily fetch version history the first time the Versions tab is opened.
+watch(activeTab, async (tab) => {
+  if (tab !== "versions" || !serverStore.activeServerId || versions.value.length > 0) return;
+  versionsLoading.value = true;
+  versionsError.value = null;
+  try {
+    versions.value = await invoke<CompositionVersion[]>("get_composition_versions", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionedObjectUid: versionedObjectUid.value,
+    });
+  } catch (e) {
+    versionsError.value = String(e);
+  } finally {
+    versionsLoading.value = false;
+  }
+});
 
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Resolve the CONTRIBUTION a given version was committed as part of, then
+// navigate to the Contribution viewer (OEH-28).
+async function viewContribution(versionId: string) {
+  if (!serverStore.activeServerId) return;
+  contributionLookupError.value = null;
+  try {
+    const contributionUid = await invoke<string | null>("get_composition_version_contribution", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionedObjectUid: versionedObjectUid.value,
+      versionUid: versionId,
+    });
+    if (!contributionUid) {
+      contributionLookupError.value =
+        "This server did not report a contribution reference for this version.";
+      return;
+    }
+    router.push({
+      name: "contribution",
+      params: { ehrId: ehrId.value, contributionUid },
+    });
+  } catch (e) {
+    contributionLookupError.value = String(e);
+  }
 }
 
 function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
 
-async function copyJson() {
-  const json =
-    activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
-  if (json) {
-    await navigator.clipboard.writeText(JSON.stringify(json, null, 2));
-  }
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "composition" });
+  tourStore.start("composition");
 }
 
-const jsonDisplay = computed(() => {
-  const data =
-    activeTab.value === "flat" && flatComposition.value ? flatComposition.value : composition.value;
-  return data ? JSON.stringify(data, null, 2) : "";
+// Data shown in the JSON / FLAT tabs — JsonViewer takes the parsed value
+// directly rather than a pre-stringified, pre-highlighted string.
+const jsonViewerData = computed(() => {
+  return activeTab.value === "flat" && flatComposition.value
+    ? flatComposition.value
+    : composition.value;
 });
 
-// Syntax highlighting
-function highlightJson(json: string): string {
-  return json
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
-    .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
-    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-    .replace(/: (null)/g, ': <span class="json-null">$1</span>');
-}
+// Text for the header's "copy active tab" button — works regardless of
+// which tab is showing (unlike JsonViewer's own copy button, which only
+// exists once the JSON/FLAT tab is mounted).
+const headerCopyText = computed(() => JSON.stringify(jsonViewerData.value, null, 2));
 
-// Search highlighting in JSON/FLAT content
-function highlightSearchInContent(html: string, searchQuery: string): string {
-  if (!searchQuery) return html;
+// Match count comes from JsonViewer itself (see @total-matches below); this
+// just tracks the total so the SearchOverlay can show "X of Y" and so
+// next/previous navigation knows how far to wrap.
+const jsonMatches = ref(0);
 
-  // Escape HTML entities in search query to match the escaped content
-  const escapedQuery = escapeHtml(searchQuery);
-  const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
-
-  return html.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
-}
-
-const highlightedJson = computed(() => {
-  let highlighted = highlightJson(jsonDisplay.value);
-  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "flat")) {
-    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
-  }
-  return highlighted;
-});
-
-// Match counting for JSON/FLAT views
-const jsonMatches = computed(() => {
-  if (!panelSearchQuery.value || (activeTab.value !== "json" && activeTab.value !== "flat")) {
-    return 0;
-  }
-  const content = jsonDisplay.value;
-  const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
-  const matches = content.match(regex);
-  return matches ? matches.length : 0;
-});
-
-// Match navigation for JSON/FLAT views
 function goToNextMatch() {
   if (jsonMatches.value === 0) return;
   currentMatchIndex.value = (currentMatchIndex.value + 1) % jsonMatches.value;
-  scrollToMatch();
 }
 
 function goToPreviousMatch() {
   if (jsonMatches.value === 0) return;
   currentMatchIndex.value = (currentMatchIndex.value - 1 + jsonMatches.value) % jsonMatches.value;
-  scrollToMatch();
 }
 
-function scrollToMatch() {
-  nextTick(() => {
-    const matches = document.querySelectorAll(".search-match");
-    if (matches[currentMatchIndex.value]) {
-      // Remove current-match class from all
-      matches.forEach((el) => el.classList.remove("current-match"));
-
-      // Add to current
-      matches[currentMatchIndex.value].classList.add("current-match");
-      matches[currentMatchIndex.value].scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  });
-}
-
-// Trigger scroll when search query changes
+// Reset to the first match whenever the search query changes — JsonViewer
+// scrolls the (new) current match into view on its own.
 watch(panelSearchQuery, () => {
   currentMatchIndex.value = 0;
-  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "flat")) {
-    scrollToMatch();
-  }
 });
 
 // Extract flat paths from the flat composition or web template
@@ -275,7 +288,15 @@ onUnmounted(() => {
       <button class="btn btn-sm" @click="goBack">Back</button>
       <h2>Composition</h2>
       <div class="header-actions">
-        <div class="tab-bar">
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Composition Viewer"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
+        <div class="tab-bar" data-tour="composition-tabs">
           <button
             class="tab"
             :class="{ active: activeTab === 'pretty' }"
@@ -294,11 +315,30 @@ onUnmounted(() => {
           >
             FLAT
           </button>
+          <button
+            type="button"
+            class="tab"
+            :class="{ active: activeTab === 'versions' }"
+            @click="activeTab = 'versions'"
+          >
+            Versions
+          </button>
         </div>
-        <button class="btn btn-sm" @click="showFlatPaths = !showFlatPaths">
+        <button
+          type="button"
+          class="btn btn-sm"
+          data-tour="composition-paths"
+          @click="showFlatPaths = !showFlatPaths"
+        >
           {{ showFlatPaths ? "Hide" : "Show" }} Paths
         </button>
-        <button class="btn btn-sm" @click="copyJson">Copy JSON</button>
+        <CopyButton
+          :text="headerCopyText"
+          title="Copy JSON to clipboard"
+          size="md"
+          variant="bordered"
+          data-tour="composition-copy"
+        />
         <button class="btn btn-sm" @click="handleEdit">Edit</button>
         <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
       </div>
@@ -307,7 +347,13 @@ onUnmounted(() => {
     <div v-if="loading" class="loading">Loading composition...</div>
     <div v-else-if="error" class="error-msg">{{ error }}</div>
     <div v-else-if="composition" class="viewer-content">
-      <div class="main-content" :class="{ 'with-sidebar': showFlatPaths }">
+      <div
+        class="main-content"
+        :class="{
+          'with-sidebar': showFlatPaths,
+          'main-content--bounded': activeTab === 'json' || activeTab === 'flat',
+        }"
+      >
         <!-- Pretty View -->
         <div v-if="activeTab === 'pretty'" class="pretty-view">
           <SearchOverlay
@@ -341,7 +387,12 @@ onUnmounted(() => {
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
           />
-          <pre class="json-pre"><code v-html="highlightedJson"></code></pre>
+          <JsonViewer
+            :value="jsonViewerData"
+            :search-term="panelSearchQuery"
+            :current-match-index="currentMatchIndex"
+            @total-matches="jsonMatches = $event"
+          />
         </div>
 
         <!-- FLAT View -->
@@ -357,7 +408,46 @@ onUnmounted(() => {
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
           />
-          <pre class="json-pre"><code v-html="highlightedJson"></code></pre>
+          <JsonViewer
+            :value="jsonViewerData"
+            :search-term="panelSearchQuery"
+            :current-match-index="currentMatchIndex"
+            @total-matches="jsonMatches = $event"
+          />
+        </div>
+
+        <!-- Versions View (OEH-28) -->
+        <div v-if="activeTab === 'versions'" class="versions-view">
+          <div v-if="versionsLoading" class="loading">Loading version history...</div>
+          <div v-else-if="versionsError" class="error-msg">{{ versionsError }}</div>
+          <div v-else-if="versions.length === 0" class="empty-versions">
+            No version history available for this composition.
+          </div>
+          <template v-else>
+            <div v-if="contributionLookupError" class="contribution-lookup-error">
+              {{ contributionLookupError }}
+            </div>
+            <div v-for="v in versions" :key="v.version_id" class="version-row">
+              <div class="version-row-main">
+                <div class="version-row-id mono">{{ v.version_id }}</div>
+                <div class="version-row-meta">
+                  <span v-if="v.commit_audit?.change_type" class="badge">{{
+                    v.commit_audit.change_type
+                  }}</span>
+                  <span v-if="v.commit_audit?.committer_name">{{
+                    v.commit_audit.committer_name
+                  }}</span>
+                  <span v-if="v.time_committed">{{ v.time_committed }}</span>
+                </div>
+                <div v-if="v.commit_audit?.description" class="version-row-description">
+                  {{ v.commit_audit.description }}
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm" @click="viewContribution(v.version_id)">
+                View Contribution
+              </button>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -458,16 +548,86 @@ onUnmounted(() => {
   border-right: 1px solid var(--color-border);
 }
 
+/* The JSON and FLAT tabs need a real bounded height to virtualize against
+   (JsonViewer.vue fills whatever height it's given rather than guessing a
+   viewport-relative max-height — see ADR-0023) — so while either is
+   active, main-content itself stops scrolling and instead becomes a flex
+   column that hands `.json-view` the remaining space below the tab bar.
+   The Pretty/Versions tabs are untouched and keep scrolling normally. */
+.main-content.main-content--bounded {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .json-view {
   overflow: auto;
 }
-.json-pre {
-  font-family: var(--font-mono);
+.main-content--bounded .json-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.versions-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.empty-versions {
+  padding: 16px 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.contribution-lookup-error {
+  padding: 8px 12px;
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: var(--radius);
+  color: var(--color-error);
   font-size: 12px;
-  line-height: 1.6;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+.version-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.version-row-main {
+  min-width: 0;
+  flex: 1;
+}
+.version-row-id {
+  font-size: 12px;
+  word-break: break-all;
+}
+.version-row-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.version-row-description {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: var(--color-primary-dim);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .dialog-overlay {
@@ -518,39 +678,5 @@ onUnmounted(() => {
 
 .btn-danger:hover:not(:disabled) {
   background: rgba(255, 90, 90, 0.2);
-}
-
-/* JSON syntax highlighting */
-:deep(.json-key) {
-  color: #79c0ff;
-  font-weight: 500;
-}
-
-:deep(.json-string) {
-  color: #a5d6ff;
-}
-
-:deep(.json-number) {
-  color: #79c0ff;
-}
-
-:deep(.json-boolean) {
-  color: #ff7b72;
-}
-
-:deep(.json-null) {
-  color: #8b949e;
-}
-
-/* Search highlighting */
-:deep(.search-match) {
-  background: rgba(255, 215, 0, 0.3);
-  padding: 2px 0;
-  border-radius: 2px;
-}
-
-:deep(.search-match.current-match) {
-  background: rgba(255, 140, 0, 0.5);
-  outline: 1px solid rgba(255, 140, 0, 0.8);
 }
 </style>

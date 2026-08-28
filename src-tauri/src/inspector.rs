@@ -86,11 +86,16 @@ pub async fn send_instrumented(
         .await
         .map_err(|e| format!("Failed to read response body: {}", e))?;
 
+    // The full body is what command handlers parse as JSON — truncating it
+    // would hand them invalid JSON on large-but-legitimate responses (e.g. a
+    // big AQL result set). Truncation only applies to the copy kept for the
+    // Request Inspector log, which exists for human inspection.
     let body_truncated = body_bytes.len() > MAX_BODY_SIZE;
-    let body = if body_truncated {
+    let body = String::from_utf8_lossy(&body_bytes).to_string();
+    let log_body = if body_truncated {
         String::from_utf8_lossy(&body_bytes[..MAX_BODY_SIZE]).to_string()
     } else {
-        String::from_utf8_lossy(&body_bytes).to_string()
+        body.clone()
     };
 
     let timestamp_ms = SystemTime::now()
@@ -107,7 +112,7 @@ pub async fn send_instrumented(
         request_body,
         status,
         response_headers: redact_headers(&response_headers),
-        response_body: Some(body.clone()),
+        response_body: Some(log_body),
         duration_ms,
         body_truncated,
     };

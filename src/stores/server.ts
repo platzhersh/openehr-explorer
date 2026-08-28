@@ -1,13 +1,14 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /** Public profile returned from the backend — secrets are NOT included. */
 export interface ServerProfile {
   id: string;
   name: string;
   base_url: string;
-  server_type: "ehrbase" | "better_platform" | "generic";
+  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
   auth_method:
     | { type: "none" }
     | { type: "basic"; username: string; has_password: boolean }
@@ -19,6 +20,7 @@ export interface ServerProfile {
     | null;
   terminology_url?: string | null;
   credential_backend: string;
+  is_default: boolean;
 }
 
 /** Input profile sent to the backend during save — includes credential values. */
@@ -26,7 +28,7 @@ export interface ServerProfileInput {
   id: string;
   name: string;
   base_url: string;
-  server_type: "ehrbase" | "better_platform" | "generic";
+  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
   auth_method:
     | { type: "none" }
     | { type: "basic"; username: string; password: string }
@@ -62,7 +64,8 @@ export const useServerStore = defineStore("server", () => {
   async function loadProfiles() {
     profiles.value = await invoke<ServerProfile[]>("list_server_profiles");
     if (profiles.value.length > 0 && !activeServerId.value) {
-      activeServerId.value = profiles.value[0].id;
+      const defaultProfile = profiles.value.find((p) => p.is_default);
+      activeServerId.value = defaultProfile?.id ?? profiles.value[0].id;
     }
   }
 
@@ -113,6 +116,10 @@ export const useServerStore = defineStore("server", () => {
     activeServerId.value = id;
   }
 
+  async function setDefaultProfile(id: string) {
+    profiles.value = await invoke<ServerProfile[]>("set_default_server_profile", { id });
+  }
+
   async function fetchServerVersion(profileId: string): Promise<ServerVersionInfo | null> {
     try {
       const version = await invoke<ServerVersionInfo>("get_server_version", { profileId });
@@ -121,6 +128,61 @@ export const useServerStore = defineStore("server", () => {
     } catch (e) {
       console.error("Failed to fetch server version:", e);
       return null;
+    }
+  }
+
+  // Every backend HTTP call goes through `send_instrumented`, which emits a
+  // `cdr-inspector-entry` event (url + status) regardless of which command
+  // triggered it — see src-tauri/src/inspector.rs. We piggyback on that same
+  // event to keep the sidebar connection indicator live: any successful
+  // response marks its server "connected", any 4xx marks it "error", without
+  // requiring every command to separately report connection health.
+  function updateConnectionFromRequest(url: string, status: number) {
+    // Avoid a `+`-quantified regex here (flagged by static analysis as
+    // superlinear-backtracking-prone) — a simple loop strips the same
+    // trailing slashes in linear time.
+    const stripTrailingSlash = (s: string) => {
+      let end = s.length;
+      while (end > 0 && s[end - 1] === "/") end--;
+      return s.slice(0, end);
+    };
+
+    // Match against the longest base_url prefix so two profiles that share a
+    // host (but differ by path) resolve to the more specific one.
+    let matched: ServerProfile | null = null;
+    let matchedBaseLength = -1;
+    for (const profile of profiles.value) {
+      const base = stripTrailingSlash(profile.base_url);
+      if (base && url.startsWith(base) && base.length > matchedBaseLength) {
+        matched = profile;
+        matchedBaseLength = base.length;
+      }
+    }
+    if (!matched) return;
+
+    if (status >= 400 && status < 500) {
+      connectionStatus.value[matched.id] = "error";
+    } else if (status < 400) {
+      connectionStatus.value[matched.id] = "connected";
+    }
+  }
+
+  let unlistenRequests: UnlistenFn | null = null;
+
+  async function startTrackingRequests() {
+    if (unlistenRequests) return;
+    unlistenRequests = await listen<{ url: string; status: number }>(
+      "cdr-inspector-entry",
+      (event) => {
+        updateConnectionFromRequest(event.payload.url, event.payload.status);
+      },
+    );
+  }
+
+  function stopTrackingRequests() {
+    if (unlistenRequests) {
+      unlistenRequests();
+      unlistenRequests = null;
     }
   }
 
@@ -136,6 +198,9 @@ export const useServerStore = defineStore("server", () => {
     testConnection,
     testUnsavedConnection,
     setActiveServer,
+    setDefaultProfile,
     fetchServerVersion,
+    startTrackingRequests,
+    stopTrackingRequests,
   };
 });

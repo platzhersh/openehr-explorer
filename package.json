@@ -2,7 +2,7 @@
   "name": "openehr-explorer",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.5.2",
+  "version": "0.7.0",
   "type": "module",
   "homepage": "https://platzhersh.github.io/openehr-explorer/",
   "repository": {
@@ -21,7 +21,9 @@
     "fmt:check": "oxfmt --check src/",
     "test": "vitest run",
     "demo:screenshots": "node scripts/demo-assets/capture-screenshots.js",
-    "demo:video": "node scripts/demo-assets/record-video.js"
+    "demo:video": "node scripts/demo-assets/record-video.js",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.1",
@@ -30,7 +32,7 @@
     "@codemirror/language": "6.12.3",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.41.0",
-    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.6.0",
     "@tauri-apps/plugin-fs": "2.4.5",
     "@tauri-apps/plugin-opener": "2.5.3",
@@ -42,11 +44,15 @@
     "vue-router": "4.6.4"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.10.1",
+    "@storybook/addon-a11y": "10.5.10",
+    "@storybook/addon-docs": "10.5.10",
+    "@storybook/vue3-vite": "10.5.10",
+    "@tauri-apps/cli": "2.11.1",
     "@vitejs/plugin-vue": "5.2.4",
     "oxfmt": "0.43.0",
     "oxlint": "1.58.0",
     "playwright": "1.56.1",
+    "storybook": "10.5.10",
     "typescript": "5.6.3",
     "vite": "6.4.2",
     "vitest": "4.1.11",

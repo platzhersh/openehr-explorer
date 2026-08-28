@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { useServerStore } from "../stores/server";
-import { useQueryStore, type SavedQuery } from "../stores/query";
+import { useQueryStore, type SavedQuery, type StoredQuerySummary } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
+import { useVirtualList } from "../composables/useVirtualList";
 import AqlEditor from "../components/AqlEditor.vue";
+import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -34,12 +39,44 @@ const allTemplatePaths = ref<AqlPathEntry[]>([]);
 // Reference to AqlEditor component
 const editorRef = ref<InstanceType<typeof AqlEditor> | null>(null);
 
+// Both query lists are virtualized (src/composables/useVirtualList.ts) — a
+// server with hundreds/thousands of STORED_QUERY definitions used to render
+// one .saved-item row per entry up front, which made switching to the AQL
+// Runner (or to a server with many stored queries) slow and unresponsive.
+// ROW_HEIGHT must match `.saved-item`'s fixed CSS height below.
+const QUERY_ROW_HEIGHT = 34;
+const savedListEl = ref<HTMLElement | null>(null);
+const {
+  onScroll: onSavedScroll,
+  topPadding: savedTopPadding,
+  bottomPadding: savedBottomPadding,
+  visibleItems: visibleSavedQueries,
+} = useVirtualList(
+  computed(() => queryStore.savedQueries),
+  savedListEl,
+  { rowHeight: QUERY_ROW_HEIGHT },
+);
+const storedListEl = ref<HTMLElement | null>(null);
+const {
+  onScroll: onStoredScroll,
+  topPadding: storedTopPadding,
+  bottomPadding: storedBottomPadding,
+  visibleItems: visibleStoredQueries,
+} = useVirtualList(
+  computed(() => queryStore.storedQueries),
+  storedListEl,
+  { rowHeight: QUERY_ROW_HEIGHT },
+);
+
 // Load data after component is mounted to avoid blocking render
 onMounted(() => {
   if (!serverStore.activeServerId) return;
 
   // Load saved queries (local file read)
   queryStore.loadSavedQueries(serverStore.activeServerId).catch(console.error);
+
+  // Load stored queries (server-side STORED_QUERY definitions)
+  queryStore.loadStoredQueries(serverStore.activeServerId);
 
   // Load templates (network request for dropdown)
   templateStore.fetchTemplates(serverStore.activeServerId).catch(console.error);
@@ -51,10 +88,58 @@ watch(
   (serverId) => {
     if (serverId) {
       queryStore.loadSavedQueries(serverId).catch(console.error);
+      queryStore.loadStoredQueries(serverId);
       templateStore.fetchTemplates(serverId).catch(console.error);
+      queryStore.clearSelectedStoredQuery();
     }
   },
 );
+
+// Stored query (server-side) selection + execution
+const selectedStoredParams = ref<Record<string, string>>({});
+
+const storedQueryParamNames = computed(() => {
+  const q = queryStore.selectedStoredQuery?.q ?? "";
+  const names = new Set<string>();
+  const re = /\$([a-zA-Z_]\w*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(q))) names.add(m[1]);
+  return Array.from(names);
+});
+
+async function selectStoredQuery(sq: StoredQuerySummary) {
+  if (!serverStore.activeServerId) return;
+  const isSame =
+    queryStore.selectedStoredQuery?.qualified_query_name === sq.qualified_query_name &&
+    queryStore.selectedStoredQuery?.version === sq.version;
+  if (isSame) {
+    queryStore.clearSelectedStoredQuery();
+    return;
+  }
+  selectedStoredParams.value = {};
+  await queryStore.loadStoredQueryDefinition(
+    serverStore.activeServerId,
+    sq.qualified_query_name,
+    sq.version,
+  );
+  void analytics.track("aql_stored_query_viewed");
+}
+
+async function runStoredQuery() {
+  if (!serverStore.activeServerId || !queryStore.selectedStoredQuery) return;
+  const parameters: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(selectedStoredParams.value)) {
+    if (value.trim() !== "") parameters[key] = value;
+  }
+  await queryStore.executeStoredQuery(
+    serverStore.activeServerId,
+    queryStore.selectedStoredQuery.qualified_query_name,
+    queryStore.selectedStoredQuery.version,
+    parameters,
+  );
+  // Feature-adoption ping only — NEVER include the query name or parameters.
+  void analytics.track("aql_stored_query_executed");
+}
 
 // Build path index when context template changes
 watch(contextTemplateId, async (templateId) => {
@@ -108,6 +193,11 @@ async function runQuery() {
   await queryStore.executeAql(serverStore.activeServerId, queryText.value);
   // Feature-adoption ping only — NEVER include the query text itself.
   void analytics.track("aql_executed");
+}
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "aql" });
+  tourStore.start("aql");
 }
 
 function formatQuery() {
@@ -208,38 +298,170 @@ const editorStyle = computed(() => ({
   <div class="aql-runner">
     <div class="runner-layout">
       <!-- Left: Saved queries -->
-      <div class="saved-panel">
+      <div class="saved-panel" data-tour="aql-saved-queries">
         <div class="panel-header">
-          <h3>Saved Queries</h3>
+          <h3>Saved Queries <span class="panel-header-qualifier">(local)</span></h3>
         </div>
-        <div class="saved-list">
+        <div ref="savedListEl" class="saved-list" @scroll="onSavedScroll">
           <div
-            v-for="sq in queryStore.savedQueries"
-            :key="sq.id"
-            class="saved-item"
-            @click="loadQuery(sq)"
+            class="saved-list-inner"
+            :style="{
+              paddingTop: `${savedTopPadding}px`,
+              paddingBottom: `${savedBottomPadding}px`,
+            }"
           >
-            <div class="saved-name">{{ sq.name }}</div>
-            <button class="copy-btn" @click.stop="deleteSavedQuery(sq.id)" title="Delete">X</button>
+            <div
+              v-for="sq in visibleSavedQueries"
+              :key="sq.id"
+              class="saved-item"
+              @click="loadQuery(sq)"
+            >
+              <div class="saved-name">{{ sq.name }}</div>
+              <button
+                type="button"
+                class="icon-btn-ghost"
+                @click.stop="deleteSavedQuery(sq.id)"
+                title="Delete"
+              >
+                X
+              </button>
+            </div>
           </div>
           <div v-if="queryStore.savedQueries.length === 0" class="empty-state">
             <p>No saved queries yet.</p>
           </div>
         </div>
+
+        <div class="panel-header" data-tour="aql-stored-queries">
+          <h3>Stored Queries <span class="panel-header-qualifier">(server)</span></h3>
+        </div>
+        <div ref="storedListEl" class="saved-list" @scroll="onStoredScroll">
+          <div v-if="queryStore.storedQueriesLoading" class="empty-state">
+            <p>Loading…</p>
+          </div>
+          <div v-else-if="queryStore.storedQueriesError" class="empty-state">
+            <p>Not available on this server.</p>
+          </div>
+          <template v-else>
+            <div
+              class="saved-list-inner"
+              :style="{
+                paddingTop: `${storedTopPadding}px`,
+                paddingBottom: `${storedBottomPadding}px`,
+              }"
+            >
+              <div
+                v-for="sq in visibleStoredQueries"
+                :key="sq.qualified_query_name + (sq.version || '')"
+                class="saved-item"
+                :class="{
+                  active:
+                    queryStore.selectedStoredQuery?.qualified_query_name ===
+                      sq.qualified_query_name &&
+                    queryStore.selectedStoredQuery?.version === sq.version,
+                }"
+                @click="selectStoredQuery(sq)"
+              >
+                <div class="saved-name">
+                  {{ sq.qualified_query_name }}
+                  <span v-if="sq.version" class="stored-version">v{{ sq.version }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="queryStore.storedQueries.length === 0" class="empty-state">
+              <p>No stored queries on this server.</p>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- Main area -->
       <div class="main-area">
+        <!-- Stored query detail / execute panel -->
+        <div
+          v-if="
+            queryStore.selectedStoredQuery ||
+            queryStore.selectedStoredQueryLoading ||
+            queryStore.selectedStoredQueryError
+          "
+          class="stored-query-panel"
+        >
+          <div v-if="queryStore.selectedStoredQueryLoading" class="stored-query-status">
+            Loading definition…
+          </div>
+          <div v-else-if="queryStore.selectedStoredQueryError" class="stored-query-header">
+            <span class="error-msg">{{ queryStore.selectedStoredQueryError }}</span>
+            <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
+              Close
+            </button>
+          </div>
+          <template v-else-if="queryStore.selectedStoredQuery">
+            <div class="stored-query-header">
+              <h3>
+                {{ queryStore.selectedStoredQuery.qualified_query_name }}
+                <span v-if="queryStore.selectedStoredQuery.version" class="stored-version">
+                  v{{ queryStore.selectedStoredQuery.version }}
+                </span>
+              </h3>
+              <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
+                Close
+              </button>
+            </div>
+            <pre class="stored-query-aql">{{
+              queryStore.selectedStoredQuery.q || "(no AQL text returned by server)"
+            }}</pre>
+            <div v-if="storedQueryParamNames.length" class="stored-query-params">
+              <div v-for="p in storedQueryParamNames" :key="p" class="stored-query-param">
+                <label :for="`stored-param-${p}`">${{ p }}</label>
+                <input
+                  :id="`stored-param-${p}`"
+                  class="input"
+                  v-model="selectedStoredParams[p]"
+                  :placeholder="`Value for $${p}`"
+                />
+              </div>
+            </div>
+            <div class="stored-query-actions">
+              <button type="button" class="btn btn-sm btn-primary" @click="runStoredQuery">
+                Execute
+              </button>
+            </div>
+          </template>
+        </div>
+
         <!-- Editor -->
         <div class="editor-section">
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button class="btn btn-sm" @click="formatQuery" title="Format query (Shift+Alt+F)">
+              <button
+                type="button"
+                class="tour-trigger-btn"
+                title="Take a tour of the AQL Runner"
+                @click="replayTour"
+              >
+                <CompassIcon />
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm"
+                data-tour="aql-format"
+                @click="formatQuery"
+                title="Format query (Shift+Alt+F)"
+              >
                 Format
               </button>
-              <button class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">Save</button>
-              <button class="btn btn-sm btn-primary" @click="runQuery">Run (Ctrl+Enter)</button>
+              <button type="button" class="btn btn-sm" @click="showSaveDialog = !showSaveDialog">
+                Save
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                data-tour="aql-run"
+                @click="runQuery"
+              >
+                Run (Ctrl+Enter)
+              </button>
             </div>
           </div>
 
@@ -250,12 +472,14 @@ const editorStyle = computed(() => ({
               placeholder="Query name..."
               @keydown.enter="saveCurrentQuery"
             />
-            <button class="btn btn-sm btn-primary" @click="saveCurrentQuery">Save</button>
-            <button class="btn btn-sm" @click="showSaveDialog = false">Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" @click="saveCurrentQuery">
+              Save
+            </button>
+            <button type="button" class="btn btn-sm" @click="showSaveDialog = false">Cancel</button>
           </div>
 
           <!-- Context Template selector (Layer 3) -->
-          <div class="context-template-bar">
+          <div class="context-template-bar" data-tour="aql-context-template">
             <label class="context-template-label">Context Template</label>
             <div class="context-template-select-wrapper">
               <select
@@ -274,6 +498,7 @@ const editorStyle = computed(() => ({
               </select>
               <button
                 v-if="contextTemplateId"
+                type="button"
                 class="context-template-clear"
                 @click="clearContextTemplate"
                 title="Clear template context"
@@ -309,7 +534,7 @@ const editorStyle = computed(() => ({
                 {{ queryStore.result.total_count }} rows in
                 {{ queryStore.result.execution_time_ms }}ms
               </span>
-              <button class="btn btn-sm" @click="exportCsv">Export CSV</button>
+              <button type="button" class="btn btn-sm" @click="exportCsv">Export CSV</button>
             </div>
 
             <div class="results-table-wrapper">
@@ -330,7 +555,9 @@ const editorStyle = computed(() => ({
                         <summary class="cell-summary">
                           {{ JSON.stringify(cell).substring(0, 40) }}...
                         </summary>
-                        <pre class="cell-detail">{{ JSON.stringify(cell, null, 2) }}</pre>
+                        <div class="cell-detail">
+                          <JsonViewer :value="cell" :show-line-numbers="false" />
+                        </div>
                       </details>
                       <span v-else>{{ formatCellValue(cell) }}</span>
                     </td>
@@ -366,7 +593,7 @@ const editorStyle = computed(() => ({
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -377,16 +604,36 @@ const editorStyle = computed(() => ({
   font-size: 13px;
   font-weight: 600;
 }
+.panel-header-qualifier {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
 
+/* Each list gets an equal, independently-scrolling share of the panel
+   (rather than one shared panel-level scrollbar) so a long "Stored Queries"
+   list — potentially hundreds/thousands of server-defined queries — doesn't
+   push the "Saved Queries" section out of view above it. Virtualized via
+   useVirtualList, so `.saved-list-inner`'s padding stands in for rows
+   scrolled out of the rendered window. */
 .saved-list {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.saved-list-inner {
+  display: flex;
+  flex-direction: column;
 }
 
 .saved-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   transition: background 0.15s;
@@ -394,8 +641,78 @@ const editorStyle = computed(() => ({
 .saved-item:hover {
   background: var(--color-surface);
 }
+.saved-item.active {
+  background: var(--color-surface);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
 .saved-name {
   font-size: 13px;
+}
+.stored-version {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius);
+}
+
+/* Stored query (server-side) detail / execute panel */
+.stored-query-panel {
+  flex-shrink: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.stored-query-status {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.stored-query-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.stored-query-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.stored-query-aql {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.stored-query-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.stored-query-param {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+}
+.stored-query-param label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+.stored-query-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .main-area {
@@ -618,8 +935,6 @@ const editorStyle = computed(() => ({
 .cell-detail {
   margin-top: 8px;
   font-size: 11px;
-  white-space: pre-wrap;
-  word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
 }

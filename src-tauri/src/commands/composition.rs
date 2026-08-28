@@ -183,6 +183,58 @@ pub async fn get_composition_versions(
     Ok(versions)
 }
 
+/// Fetch a single composition VERSION (not just the composition content) and
+/// extract the CONTRIBUTION it was committed as part of, if the server
+/// includes that linkage.
+///
+/// Standard openEHR REST API endpoint:
+/// `GET /ehr/{ehr_id}/versioned_composition/{versioned_object_uid}/version/{version_uid}`,
+/// which returns an ORIGINAL_VERSION<COMPOSITION> containing a `contribution`
+/// OBJECT_REF. See PRD/OEH-28 — this is how the version history (and the
+/// composition Versions tab) links out to the CONTRIBUTION audit trail view.
+#[tauri::command]
+pub async fn get_composition_version_contribution(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    versioned_object_uid: String,
+    version_uid: String,
+) -> Result<Option<String>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/versioned_composition/{}/version/{}",
+        base, ehr_id, versioned_object_uid, version_uid
+    );
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
+    }
+
+    let body: Value =
+        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse version: {}", e))?;
+
+    Ok(body
+        .get("contribution")
+        .and_then(|c| c.get("id"))
+        .and_then(|i| i.get("value"))
+        .and_then(|v| v.as_str())
+        .map(String::from))
+}
+
 #[tauri::command]
 pub async fn create_composition(
     app: tauri::AppHandle,

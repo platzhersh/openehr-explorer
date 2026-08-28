@@ -67,6 +67,13 @@ npm run tauri build      # Build production app (creates DMG on macOS)
 npm run build            # Build frontend only (runs vue-tsc + vite build)
 ```
 
+### Storybook
+```bash
+npm run storybook        # Run Storybook dev server (http://localhost:6006)
+npm run build-storybook  # Build static Storybook (storybook-static/, gitignored)
+```
+Component stories live next to the component they document, e.g. `src/components/ToggleSwitch.vue` + `src/components/ToggleSwitch.stories.ts`. See ADR-0021 for scope and rationale.
+
 ### Type Checking
 ```bash
 npx vue-tsc --noEmit     # Type check Vue/TypeScript without emitting files
@@ -149,7 +156,7 @@ Vue Router defined in `src/main.ts`:
 
 ### Server Profile System
 Each server profile (`ServerProfile`) includes:
-- `server_type`: `"ehrbase" | "better_platform" | "generic"` — determines API path conventions
+- `server_type`: `"ehrbase" | "better_platform" | "ferro_ehr" | "generic"` — determines API path conventions
 - `auth_method`: `{ type: "none" | "basic" | "bearer", ... }` — discriminated union for auth
 
 When adding new API integrations, use the `server_type` to branch URL construction logic (see `src-tauri/src/commands/ehr.rs` for examples).

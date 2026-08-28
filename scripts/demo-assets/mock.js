@@ -60,6 +60,35 @@
     },
   };
 
+  // DIRECTORY (EHR_STATUS FOLDER hierarchy) for the primary EHR — a root
+  // folder with a couple of subfolders, each pointing back at one of the
+  // compositions above via an OBJECT_REF, so DirectoryTree.vue has real
+  // nested structure to render instead of an empty state.
+  const DIRECTORY_BY_EHR = {
+    [PRIMARY_EHR_ID]: {
+      name: { value: "Patient Record" },
+      uid: { value: `dir0001-0000-4a1b-9c3f-000000000000::${SYSTEM_ID}::1` },
+      items: [],
+      folders: [
+        {
+          name: { value: "Vitals" },
+          items: [
+            { id: { value: VITAL_SIGNS_COMPOSITION_UID }, namespace: SYSTEM_ID, type: "COMPOSITION" },
+          ],
+          folders: [],
+        },
+        {
+          name: { value: "Problems & Medications" },
+          items: [
+            { id: { value: `c1a2b3c4-0002-4a1b-9c3f-000000000002::${SYSTEM_ID}::1` }, namespace: SYSTEM_ID, type: "COMPOSITION" },
+            { id: { value: `c1a2b3c4-0003-4a1b-9c3f-000000000003::${SYSTEM_ID}::1` }, namespace: SYSTEM_ID, type: "COMPOSITION" },
+          ],
+          folders: [],
+        },
+      ],
+    },
+  };
+
   const TEMPLATES = [
     { template_id: VITAL_SIGNS_TEMPLATE_ID, concept: VITAL_SIGNS_NAME, archetype_id: "openEHR-EHR-COMPOSITION.encounter.v1", created_timestamp: ARCHETYPE_CREATED },
     { template_id: "IDCR - Problem List.v1", concept: "Problem List", archetype_id: "openEHR-EHR-COMPOSITION.problem_list.v1", created_timestamp: ARCHETYPE_CREATED },
@@ -205,6 +234,24 @@
     { id: "q2", name: "Compositions per EHR", query: "SELECT e/ehr_id/value, COUNT(c) FROM EHR e CONTAINS COMPOSITION c", server_id: null, created_at: VITAL_SIGNS_TIME },
   ];
 
+  // STORED_QUERY: query definitions registered server-side (distinct from
+  // SAVED_QUERIES above, which are persisted locally). Keyed by
+  // "qualified_query_name|version" for get_stored_query_definition lookups.
+  const STORED_QUERY_NAME = "org.openehr::vital_signs_report";
+  const STORED_QUERY_VERSION = "1.0.0";
+  const STORED_QUERIES = [
+    { qualified_query_name: STORED_QUERY_NAME, version: STORED_QUERY_VERSION, query_type: "AQL", saved_time: VITAL_SIGNS_TIME },
+  ];
+  const STORED_QUERY_DEFINITIONS = {
+    [`${STORED_QUERY_NAME}|${STORED_QUERY_VERSION}`]: {
+      qualified_query_name: STORED_QUERY_NAME,
+      version: STORED_QUERY_VERSION,
+      query_type: "AQL",
+      q: `SELECT c/uid/value, ${vsPath("at0004")}/magnitude AS systolic FROM EHR e[ehr_id/value=$ehrId] CONTAINS COMPOSITION c CONTAINS OBSERVATION o[${VITAL_SIGNS_ARCHETYPE}]`,
+      saved_time: VITAL_SIGNS_TIME,
+    },
+  };
+
   const AQL_RESULT = {
     columns: [
       { name: "ehr_id", path: "/ehr_id/value" },
@@ -328,6 +375,11 @@
       if (!detail) throw new Error("EHR not found");
       return detail;
     },
+    get_directory: function (args) {
+      // Real backend returns `null` (not a rejection) when the EHR has no
+      // DIRECTORY set — see the comment on useEhrStore().fetchDirectory().
+      return DIRECTORY_BY_EHR[args.ehrId] || null;
+    },
 
     // -- compositions --
     get_composition: function (args) {
@@ -362,6 +414,18 @@
       return SAVED_QUERIES.slice();
     },
     execute_aql: function () {
+      return AQL_RESULT;
+    },
+    list_stored_queries: function () {
+      return STORED_QUERIES.slice();
+    },
+    get_stored_query_definition: function (args) {
+      const key = `${args.qualifiedQueryName}|${args.version || STORED_QUERY_VERSION}`;
+      const def = STORED_QUERY_DEFINITIONS[key];
+      if (!def) throw new Error("Stored query not found: " + args.qualifiedQueryName);
+      return def;
+    },
+    execute_stored_query: function () {
       return AQL_RESULT;
     },
   };

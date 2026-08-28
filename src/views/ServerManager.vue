@@ -2,10 +2,13 @@
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const cardTestLoading = ref<Record<string, boolean>>({});
 const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
@@ -26,6 +29,11 @@ function newProfile() {
   dialogOpen.value = true;
 }
 
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "servers" });
+  tourStore.start("servers");
+}
+
 function editProfile(profile: ServerProfile) {
   dialogProfile.value = profile;
   dialogOpen.value = true;
@@ -39,6 +47,10 @@ function closeDialog() {
 async function remove(id: string) {
   await serverStore.deleteProfile(id);
   void analytics.track("server_profile_deleted");
+}
+
+async function toggleDefault(profile: ServerProfile) {
+  await serverStore.setDefaultProfile(profile.id);
 }
 
 async function testProfileConnection(profile: ServerProfile) {
@@ -91,7 +103,19 @@ function credentialBackendLabel(backend: string): string {
   <div class="server-manager">
     <div class="view-header">
       <h2>Server Profiles</h2>
-      <button class="btn btn-primary" @click="newProfile">+ Add Server</button>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Server Manager"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
+        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
+          + Add Server
+        </button>
+      </div>
     </div>
 
     <div class="content-area">
@@ -149,6 +173,15 @@ function credentialBackendLabel(backend: string): string {
             <button class="btn btn-sm" @click="serverStore.setActiveServer(profile.id)">
               {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
             </button>
+            <button
+              type="button"
+              class="btn btn-sm"
+              :class="{ 'btn-active-toggle': profile.is_default }"
+              title="Preselect this server on app start"
+              @click="toggleDefault(profile)"
+            >
+              {{ profile.is_default ? "★ Default" : "Set as Default" }}
+            </button>
             <button class="btn btn-sm" @click="editProfile(profile)">Edit</button>
             <button class="btn btn-sm btn-danger" @click="remove(profile.id)">Delete</button>
           </div>
@@ -176,6 +209,11 @@ function credentialBackendLabel(backend: string): string {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+}
+.view-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .view-header h2 {
   font-size: 20px;
@@ -226,6 +264,14 @@ function credentialBackendLabel(backend: string): string {
   background: var(--color-primary-dim);
   color: var(--color-primary);
   font-weight: 600;
+}
+.btn-active-toggle {
+  border-color: #eab308;
+  color: #eab308;
+}
+.btn-active-toggle:hover {
+  background: #eab308;
+  color: var(--color-bg);
 }
 .warning-badge {
   background: rgba(255, 193, 7, 0.15);
