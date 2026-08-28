@@ -24,11 +24,16 @@ pub async fn get_dashboard_counts(
     // three separate "unknown server" errors from the calls below.
     get_profile_by_id(&server_id)?;
 
-    let ehr_count = aql_count(&app, &server_id, "SELECT COUNT(e) FROM EHR e").await?;
+    // COUNT() on the whole RM object (`e`/`c`) isn't universally supported —
+    // EHRBase rejects it with "Not implemented: selecting the full EHR
+    // object" (HTTP 400). Counting a concrete leaf path instead is the
+    // portable form and works the same way `list_ehrs` already builds its
+    // AQL (see ehr.rs).
+    let ehr_count = aql_count(&app, &server_id, "SELECT COUNT(e/ehr_id/value) FROM EHR e").await?;
     let composition_count = aql_count(
         &app,
         &server_id,
-        "SELECT COUNT(c) FROM EHR e CONTAINS COMPOSITION c",
+        "SELECT COUNT(c/uid/value) FROM EHR e CONTAINS COMPOSITION c",
     )
     .await?;
     let template_count = list_templates(app.clone(), server_id.clone()).await?.len() as u64;
