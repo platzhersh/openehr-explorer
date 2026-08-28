@@ -46,6 +46,9 @@ const requestSummaryLine = ref<string>("");
 const requestPayload = ref<unknown>(null);
 const responseSummaryLine = ref<string>("");
 const responsePayload = ref<unknown>(null);
+// Template ID for edit mode is resolved from the existing composition since
+// the /edit/:ehrId/:compositionUid route carries no templateId param.
+const resolvedTemplateId = ref<string>("");
 
 // medblocks-ui form ref
 const mbFormRef = ref<HTMLElement | null>(null);
@@ -80,7 +83,27 @@ onMounted(async () => {
   }
 
   // Load template
-  const templateId = props.templateId || (route.params.templateId as string);
+  let templateId = props.templateId || (route.params.templateId as string);
+
+  // Edit mode: the route carries no templateId, so resolve it from the
+  // existing composition's archetype details before loading the template.
+  if (!templateId && props.compositionUid && props.ehrId) {
+    try {
+      const existingComposition = await invoke<Record<string, unknown>>("get_composition", {
+        serverId: serverStore.activeServerId,
+        ehrId: props.ehrId,
+        compositionUid: props.compositionUid,
+      });
+      templateId =
+        ((existingComposition as any)?.archetype_details?.template_id?.value as string) ||
+        ((existingComposition as any)?.archetype_node_id as string) ||
+        "";
+    } catch (e) {
+      console.error("Failed to resolve template ID from composition:", e);
+    }
+  }
+  resolvedTemplateId.value = templateId || "";
+
   if (templateId) {
     try {
       await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
@@ -112,7 +135,8 @@ onMounted(async () => {
       console.log("Web Template loaded (normalized):", normalized);
 
       // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
-      const templateId = props.templateId || (route.params.templateId as string);
+      const templateId =
+        resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
       if (templateId && serverStore.activeServerId) {
         try {
           const example = await invoke("get_template_example", {
@@ -311,7 +335,8 @@ async function handleSubmit() {
     }
 
     // Get template ID
-    const templateId = props.templateId || (route.params.templateId as string);
+    const templateId =
+      resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
     if (!templateId) {
       throw new Error("Template ID not found");
     }
@@ -410,7 +435,8 @@ function handleEhrCreated(newEhrId: string) {
 
 // Draft persistence
 const draftKey = computed(() => {
-  const templateId = props.templateId || (route.params.templateId as string);
+  const templateId =
+    resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
   return `composition_draft_${templateId}_${selectedEhrId.value}`;
 });
 
