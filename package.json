@@ -30,7 +30,7 @@
     "@codemirror/language": "6.12.3",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.41.0",
-    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.6.0",
     "@tauri-apps/plugin-fs": "2.4.5",
     "@tauri-apps/plugin-opener": "2.5.3",
@@ -42,7 +42,7 @@
     "vue-router": "4.6.4"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.10.1",
+    "@tauri-apps/cli": "2.11.1",
     "@vitejs/plugin-vue": "5.2.4",
     "oxfmt": "0.43.0",
     "oxlint": "1.58.0",
