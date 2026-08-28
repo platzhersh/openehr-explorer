@@ -4,11 +4,19 @@ import { useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useDashboardStore } from "../stores/dashboard";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
+import CompassIcon from "../components/CompassIcon.vue";
 
 const router = useRouter();
 const serverStore = useServerStore();
 const dashboardStore = useDashboardStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "dashboard" });
+  tourStore.start("dashboard");
+}
 
 // Timestamp of the last successful count fetch, shown next to the refresh
 // button so "live" doesn't silently mean "however stale this happens to be".
@@ -67,12 +75,21 @@ watch(
     <div class="view-header">
       <h2>Overview</h2>
       <div class="header-actions">
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Overview"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
         <span v-if="lastUpdated" class="last-updated">
           Updated {{ lastUpdated.toLocaleTimeString() }}
         </span>
         <button
           type="button"
           class="btn btn-sm"
+          data-tour="dashboard-refresh"
           :disabled="!serverStore.activeServerId || dashboardStore.loading"
           @click="refresh"
         >
@@ -81,12 +98,24 @@ watch(
       </div>
     </div>
 
-    <div v-if="!serverStore.activeServer" class="empty-state">
-      <h3>No server connected</h3>
-      <p>Add a server profile to see live EHR, composition, and template counts.</p>
-      <button type="button" class="btn btn-primary" @click="router.push('/servers')">
-        Add a Server
-      </button>
+    <div v-if="!serverStore.activeServer" class="onboarding-card">
+      <template v-if="serverStore.profiles.length === 0">
+        <h3>Welcome to openEHR Explorer</h3>
+        <p>
+          Connect your first openEHR CDR — EHRBase, Better Platform, FerroEHR, or any generic
+          openEHR REST server — to see live EHR, composition, and template counts here.
+        </p>
+        <button type="button" class="btn btn-primary" @click="router.push('/servers')">
+          + Add Your First Server
+        </button>
+      </template>
+      <template v-else>
+        <h3>No server selected</h3>
+        <p>Select a server profile to see its live EHR, composition, and template counts.</p>
+        <button type="button" class="btn btn-primary" @click="router.push('/servers')">
+          Go to Servers
+        </button>
+      </template>
     </div>
 
     <template v-else>
@@ -94,7 +123,7 @@ watch(
         Failed to load counts: {{ dashboardStore.error }}
       </div>
 
-      <div class="stat-grid">
+      <div class="stat-grid" data-tour="dashboard-stats">
         <router-link
           v-for="card in statCards"
           :key="card.label"
@@ -107,7 +136,7 @@ watch(
         </router-link>
       </div>
 
-      <router-link to="/servers" class="server-info-card">
+      <router-link to="/servers" class="server-info-card" data-tour="dashboard-server-info">
         <h3>Connected Server</h3>
         <dl class="server-info-grid">
           <dt>Name</dt>
@@ -147,9 +176,47 @@ watch(
   padding: 24px;
 }
 
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.view-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.view-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .last-updated {
   font-size: 12px;
   color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.onboarding-card {
+  max-width: 480px;
+  margin: 48px auto 0;
+  padding: 40px 32px;
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.onboarding-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text);
+}
+.onboarding-card p {
+  margin-bottom: 20px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
 }
 
 .stat-grid {

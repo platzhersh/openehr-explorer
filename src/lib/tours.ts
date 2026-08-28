@@ -96,6 +96,28 @@ export const TOURS: Tour[] = [
     ],
   },
   {
+    id: "dashboard",
+    routeNames: ["dashboard"],
+    label: "Overview",
+    steps: [
+      {
+        target: '[data-tour="dashboard-stats"]',
+        title: "Live counts, one glance",
+        body: "Total EHRs, compositions, and templates on the connected server — click any card to jump straight to its browser.",
+      },
+      {
+        target: '[data-tour="dashboard-refresh"]',
+        title: "Nothing is cached",
+        body: "Counts are fetched fresh every time you land here or switch servers. Click Refresh any time to re-run the queries.",
+      },
+      {
+        target: '[data-tour="dashboard-server-info"]',
+        title: "Your connected server, at a glance",
+        body: "Name, URL, type, connection status, and detected version — click through to the Server Manager to change any of it.",
+      },
+    ],
+  },
+  {
     id: "ehrs",
     routeNames: ["ehrs", "ehr-detail"],
     label: "EHR Browser",
