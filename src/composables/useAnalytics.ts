@@ -60,17 +60,25 @@ export type AnalyticsEvent =
   | "ehr_created"
   | "ehr_deleted"
   | "ehr_searched"
+  // --- DIRECTORY (OEH-27) ---
+  | "directory_created"
+  | "directory_updated"
+  | "directory_deleted"
   // --- composition ---
   | "composition_viewed"
   | "composition_created"
   | "composition_edited"
   | "composition_deleted"
+  // --- contribution ---
+  | "contribution_viewed"
   // --- AQL ---
   | "aql_executed"
   | "aql_query_saved"
   | "aql_query_loaded"
   | "aql_query_deleted"
   | "aql_results_exported"
+  | "aql_stored_query_viewed"
+  | "aql_stored_query_executed"
   // --- template ---
   | "template_inspected"
   | "template_uploaded"
@@ -78,7 +86,19 @@ export type AnalyticsEvent =
   | "settings_saved"
   | "documentation_opened"
   | "inspector_toggled"
-  | "update_check_triggered";
+  | "update_check_triggered"
+  // --- feature tours / What's New (PRD-0018) ---
+  /**
+   * `tour_skipped` includes a `step_index` prop (0-based) — a small
+   * bounded integer, not free text — so we can see how far into a tour
+   * people typically get before dismissing it.
+   */
+  | "tour_completed"
+  | "tour_skipped"
+  | "tour_replayed"
+  | "whats_new_shown"
+  | "whats_new_tour_link_clicked"
+  | "tours_reset";
 
 export function useAnalytics() {
   const settings = useSettingsStore();

@@ -4,6 +4,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useSettingsStore, type GlobalSettings } from "../stores/settings";
 import { useUpdateStore } from "../stores/update";
+import { useTourStore } from "../stores/tour";
+import { APP_INTRO_TOUR_ID } from "../lib/tours";
+import { useWhatsNewStore } from "../stores/whatsNew";
 import { useAnalytics } from "../composables/useAnalytics";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
 
@@ -11,6 +14,8 @@ const analytics = useAnalytics();
 
 const settingsStore = useSettingsStore();
 const updateStore = useUpdateStore();
+const tourStore = useTourStore();
+const whatsNewStore = useWhatsNewStore();
 
 const form = ref<GlobalSettings>({
   version: 1,
@@ -18,11 +23,15 @@ const form = ref<GlobalSettings>({
   check_updates_on_startup: true,
   analytics_enabled: false,
   analytics_consent_asked: false,
+  tours_enabled: true,
+  completed_tours: [],
+  last_seen_version: null,
 });
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
 const saveError = ref<string | null>(null);
 const configDir = ref<string | null>(null);
+const toursResetMessage = ref<string | null>(null);
 
 onMounted(async () => {
   await settingsStore.loadSettings();
@@ -66,6 +75,30 @@ async function openConfigDir() {
 async function checkForUpdatesNow() {
   void analytics.track("update_check_triggered", { source: "settings" });
   await updateStore.checkForUpdates();
+}
+
+async function replayAllTours() {
+  await tourStore.resetAllTours();
+  // Only sync the field this action actually changed — overwriting the
+  // whole form would silently discard any other edits the user hasn't
+  // clicked "Save" on yet.
+  form.value.completed_tours = [...settingsStore.settings.completed_tours];
+  toursResetMessage.value = "Tours will be shown again as you visit each screen.";
+  void analytics.track("tours_reset");
+}
+
+/** Manual replay for the app-wide intro tour — ignores completion state, like `replayAllTours`. */
+function replayAppTour() {
+  void analytics.track("tour_replayed", { tour_id: APP_INTRO_TOUR_ID });
+  tourStore.start(APP_INTRO_TOUR_ID);
+}
+
+function viewWhatsNew() {
+  whatsNewStore.showLatest();
+  void analytics.track("whats_new_shown", {
+    version: whatsNewStore.entries[0]?.version ?? "unknown",
+    source: "manual",
+  });
 }
 </script>
 
@@ -137,6 +170,34 @@ async function checkForUpdatesNow() {
       </div>
 
       <div class="settings-section">
+        <h3>Product Tours</h3>
+        <div class="section-divider"></div>
+
+        <div class="form-group">
+          <ToggleSwitch
+            v-model="form.tours_enabled"
+            label="Automatically show feature tours and What's New on updates"
+          />
+          <p class="form-help">
+            When enabled, a one-time app tour introduces the sidebar and Request Inspector on first
+            launch, each screen's tour is offered the first time you visit it, and a summary appears
+            after an update that changed something worth knowing about. You can always replay a tour
+            manually via the compass icon in a screen's header or in the Request Inspector header,
+            regardless of this setting.
+          </p>
+        </div>
+
+        <div class="form-group tour-actions-group">
+          <button type="button" class="btn btn-sm" @click="replayAppTour">Replay App Tour</button>
+          <button type="button" class="btn btn-sm" @click="replayAllTours">Replay All Tours</button>
+          <button type="button" class="btn btn-sm" @click="viewWhatsNew">View What's New</button>
+        </div>
+        <p v-if="toursResetMessage" class="form-help update-status success">
+          {{ toursResetMessage }}
+        </p>
+      </div>
+
+      <div class="settings-section">
         <h3>Analytics</h3>
         <div class="section-divider"></div>
 
@@ -151,7 +212,7 @@ async function checkForUpdatesNow() {
             privacy-first, GDPR-compliant analytics service). We collect: app version, OS and
             architecture, which features are used (e.g. <em>aql_executed</em>,
             <em>composition_viewed</em>), and the CDR platform type
-            (<em>ehrbase</em>/<em>better_platform</em>/<em>generic</em>).
+            (<em>ehrbase</em>/<em>better_platform</em>/<em>ferro_ehr</em>/<em>generic</em>).
           </p>
           <p class="form-help">
             We <strong>never</strong> collect server URLs, credentials, patient data, EHR IDs,
@@ -262,6 +323,11 @@ async function checkForUpdatesNow() {
 }
 .update-status.error {
   color: var(--color-error);
+}
+
+.tour-actions-group {
+  display: flex;
+  gap: 8px;
 }
 
 .form-actions {

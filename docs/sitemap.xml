@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://platzhersh.github.io/openehr-explorer/</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -14,9 +14,9 @@
   </url>
   <url>
     <loc>https://platzhersh.github.io/openehr-explorer/compare.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.7</priority>
   </url>
   <url>
     <loc>https://platzhersh.github.io/openehr-explorer/brand-kit.html</loc>

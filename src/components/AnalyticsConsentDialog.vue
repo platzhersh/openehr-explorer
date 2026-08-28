@@ -45,7 +45,8 @@ defineEmits<{
               Which features you use (e.g. <em>aql_executed</em>, <em>composition_viewed</em>)
             </li>
             <li>
-              The CDR platform type (<em>ehrbase</em> / <em>better_platform</em> / <em>generic</em>)
+              The CDR platform type (<em>ehrbase</em> / <em>better_platform</em> /
+              <em>ferro_ehr</em> / <em>generic</em>)
             </li>
           </ul>
         </div>

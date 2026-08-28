@@ -1,22 +1,48 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from "vue";
+import { ref, watch, computed, onMounted, provide } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore, type CompositionSummary, type EhrSearchCriteria } from "../stores/ehr";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import EhrFilterModal from "../components/EhrFilterModal.vue";
+import DirectoryTree from "../components/DirectoryTree.vue";
+import DirectoryTreeEditor from "../components/DirectoryTreeEditor.vue";
+import CompassIcon from "../components/CompassIcon.vue";
+import FilterIcon from "../components/FilterIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
+import CopyButton from "../components/CopyButton.vue";
+import {
+  addItem as addDirectoryItem,
+  addSubfolder as addDirectorySubfolder,
+  DIRECTORY_MUTATIONS_KEY,
+  emptyFolder,
+  fromWireFolder,
+  getFolderAtPath,
+  removeItem as removeDirectoryItem,
+  removeSubfolder as removeDirectorySubfolder,
+  toWireFolder,
+  type EditableFolder,
+} from "../lib/directoryEdit";
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const ehrStore = useEhrStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 onMounted(() => {
   // Track that the user opened the EHR browser. No IDs, URLs, or counts — just
   // a coarse feature-adoption ping so we know the view is actually being used.
   void analytics.track("ehr_browsed");
 });
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "ehrs" });
+  tourStore.start("ehrs");
+}
 const searchQuery = ref("");
 const currentPage = ref(0);
 const showCreateDialog = ref(false);
@@ -24,11 +50,64 @@ const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
-const activeTab = ref<"detail" | "json">("detail");
-const showHelpPopover = ref(false);
+const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
+
+// DIRECTORY create/update/delete (OEH-27 follow-up) — editing state for the
+// Directory tab. `editableDirectory` is a plain-field working copy (see
+// src/lib/directoryEdit.ts); it only replaces `ehrStore.directory` on save.
+const directoryEditMode = ref(false);
+const editableDirectory = ref<EditableFolder | null>(null);
+const directorySaving = ref(false);
+const directorySaveError = ref<string | null>(null);
+const showDeleteDirectoryDialog = ref(false);
+const deletingDirectory = ref(false);
+const deleteDirectoryError = ref<string | null>(null);
+
+// `DirectoryTreeEditor` (at any depth) injects this instead of mutating the
+// `EditableFolder` it receives as a prop — every write is applied here, to
+// the tree this view actually owns, addressed by `path` (see
+// DIRECTORY_MUTATIONS_KEY in src/lib/directoryEdit.ts for the full "why").
+provide(DIRECTORY_MUTATIONS_KEY, {
+  renameFolder(path, name) {
+    if (!editableDirectory.value) return;
+    getFolderAtPath(editableDirectory.value, path).name = name;
+  },
+  renameItemId(path, key, id) {
+    if (!editableDirectory.value) return;
+    const item = getFolderAtPath(editableDirectory.value, path).items.find((it) => it.key === key);
+    if (item) item.id = id;
+  },
+  addSubfolder(path) {
+    if (!editableDirectory.value) return;
+    addDirectorySubfolder(getFolderAtPath(editableDirectory.value, path));
+  },
+  addItem(path, compositionUid) {
+    if (!editableDirectory.value) return;
+    addDirectoryItem(getFolderAtPath(editableDirectory.value, path), compositionUid);
+  },
+  removeSubfolder(parentPath, key) {
+    if (!editableDirectory.value) return;
+    removeDirectorySubfolder(getFolderAtPath(editableDirectory.value, parentPath), key);
+  },
+  removeItem(parentPath, key) {
+    if (!editableDirectory.value) return;
+    removeDirectoryItem(getFolderAtPath(editableDirectory.value, parentPath), key);
+  },
+});
+
+const contributionLookupUid = ref("");
+const contributionLookupError = ref<string | null>(null);
+const showFilterModal = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
 const showHistory = ref(false);
+
+// The single source of truth for "what filters are currently applied" —
+// whether they came from typing colon-syntax into the search box or from
+// building them in the Filters modal. Drives the removable filter chips
+// below the search bar so either entry point stays visible/editable the
+// same way.
+const activeCriteria = ref<EhrSearchCriteria | null>(null);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -41,26 +120,112 @@ watch(
       ehrStore.fetchEhrs(id, 0);
       currentPage.value = 0;
     }
+
+    // The route's :ehrId doesn't change on a server switch, so without this
+    // the DIRECTORY tab would keep showing data fetched from the
+    // now-abandoned server for whatever EHR ID happens to still be selected.
+    ehrStore.clearDirectory();
+    cancelEditDirectory();
+    if (activeTab.value === "directory" && ehrId.value && id) {
+      ehrStore.fetchDirectory(id, ehrId.value);
+    }
   },
   { immediate: true },
 );
 
 watch(ehrId, (id) => {
   if (id && serverStore.activeServerId) {
-    // If we have search results and the selected EHR is in them, pre-populate from search data
-    if (ehrStore.searchActive) {
-      const searchResult = ehrStore.searchResults.find((r) => r.ehr_id === id);
-      if (searchResult) {
-        // Still fetch full detail for compositions, but we have metadata already
-        ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
-        return;
-      }
-    }
+    // If we have search results and the selected EHR is in them, pre-populate from search data.
+    // Either way we still fetch full detail for compositions.
     ehrStore.fetchEhrDetail(serverStore.activeServerId, id);
+  }
+
+  // The DIRECTORY tab's data is EHR-scoped — reset it whenever the selected
+  // EHR changes, and re-fetch for the new EHR if that tab is currently open.
+  ehrStore.clearDirectory();
+  cancelEditDirectory();
+  if (activeTab.value === "directory" && id && serverStore.activeServerId) {
+    ehrStore.fetchDirectory(serverStore.activeServerId, id);
   }
 });
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Parses a `true`/`false` token value for a boolean filter (modifiable:,
+ *  hasCompositions:, hasDirectory:), assigning it into `criteria[field]` on
+ *  success. Returns an error message on an invalid value, or null. Pulled
+ *  out of `applyToken`'s switch so each boolean case there is a single
+ *  return-call rather than its own nested if — see applyToken. */
+function applyBooleanToken(
+  criteria: EhrSearchCriteria,
+  field: "modifiable" | "has_compositions" | "has_directory",
+  prefix: string,
+  value: string,
+): string | null {
+  if (value !== "true" && value !== "false") {
+    return `${prefix}: expects 'true' or 'false'.`;
+  }
+  criteria[field] = value === "true";
+  return null;
+}
+
+/** Same shape as applyBooleanToken, for the YYYY-MM-DD date filters. */
+function applyDateToken(
+  criteria: EhrSearchCriteria,
+  field: "created_on" | "created_before" | "created_after",
+  prefix: string,
+  value: string,
+): string | null {
+  if (!DATE_RE.test(value)) {
+    return `${prefix}: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).`;
+  }
+  criteria[field] = value;
+  return null;
+}
+
+/** Applies one whitespace-separated token to `criteria`, mutating it in
+ *  place. Returns an error message on failure, or null on success —
+ *  including for a bare token (no colon) or an unrecognized prefix, both of
+ *  which fall back to extending `ehr_id_prefix`. */
+function applyToken(criteria: EhrSearchCriteria, token: string): string | null {
+  const colonIdx = token.indexOf(":");
+  if (colonIdx === -1) {
+    criteria.ehr_id_prefix = (criteria.ehr_id_prefix ?? "") + token;
+    return null;
+  }
+
+  const prefix = token.substring(0, colonIdx);
+  const value = token.substring(colonIdx + 1);
+  if (!value) return `${prefix}: value cannot be empty.`;
+
+  switch (prefix) {
+    case "subject":
+      criteria.subject_id = value;
+      return null;
+    case "namespace":
+      criteria.subject_namespace = value;
+      return null;
+    case "system":
+      criteria.system_id = value;
+      return null;
+    case "modifiable":
+      return applyBooleanToken(criteria, "modifiable", "modifiable", value);
+    case "hasCompositions":
+      return applyBooleanToken(criteria, "has_compositions", "hasCompositions", value);
+    case "hasDirectory":
+      return applyBooleanToken(criteria, "has_directory", "hasDirectory", value);
+    case "created-on":
+      return applyDateToken(criteria, "created_on", "created-on", value);
+    case "created-before":
+      return applyDateToken(criteria, "created_before", "created-before", value);
+    case "created-after":
+      return applyDateToken(criteria, "created_after", "created-after", value);
+    default:
+      // Unknown prefix — treat as EHR ID prefix (safe fallback)
+      criteria.ehr_id_prefix = (criteria.ehr_id_prefix ?? "") + token;
+      return null;
+  }
+}
 
 function parseSearchInput(raw: string): {
   criteria: EhrSearchCriteria | null;
@@ -71,96 +236,13 @@ function parseSearchInput(raw: string): {
   if (!trimmed) return { criteria: null, error: null, warning: null };
 
   const criteria: EhrSearchCriteria = {};
-  let warning: string | null = null;
-  const tokens = trimmed.split(/\s+/);
-
-  for (const token of tokens) {
-    const colonIdx = token.indexOf(":");
-    if (colonIdx === -1) {
-      // No colon — treat as EHR ID prefix
-      if (criteria.ehr_id_prefix) {
-        criteria.ehr_id_prefix += token; // append if multiple bare tokens
-      } else {
-        criteria.ehr_id_prefix = token;
-      }
-      continue;
-    }
-
-    const prefix = token.substring(0, colonIdx);
-    const value = token.substring(colonIdx + 1);
-
-    if (!value) {
-      return { criteria: null, error: `${prefix}: value cannot be empty.`, warning: null };
-    }
-
-    switch (prefix) {
-      case "subject":
-        criteria.subject_id = value;
-        break;
-      case "namespace":
-        criteria.subject_namespace = value;
-        break;
-      case "system":
-        criteria.system_id = value;
-        break;
-      case "modifiable":
-        if (value !== "true" && value !== "false") {
-          return { criteria: null, error: "modifiable: expects 'true' or 'false'.", warning: null };
-        }
-        criteria.modifiable = value === "true";
-        break;
-      case "hasCompositions":
-        if (value !== "true" && value !== "false") {
-          return {
-            criteria: null,
-            error: "hasCompositions: expects 'true' or 'false'.",
-            warning: null,
-          };
-        }
-        criteria.has_compositions = value === "true";
-        break;
-      case "created-on":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-on: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_on = value;
-        break;
-      case "created-before":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-before: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_before = value;
-        break;
-      case "created-after":
-        if (!DATE_RE.test(value)) {
-          return {
-            criteria: null,
-            error: "created-after: expects a date in YYYY-MM-DD format (e.g. 2026-03-12).",
-            warning: null,
-          };
-        }
-        criteria.created_after = value;
-        break;
-      default:
-        // Unknown prefix — treat as EHR ID prefix (safe fallback)
-        if (criteria.ehr_id_prefix) {
-          criteria.ehr_id_prefix += token;
-        } else {
-          criteria.ehr_id_prefix = token;
-        }
-        break;
-    }
+  for (const token of trimmed.split(/\s+/)) {
+    const error = applyToken(criteria, token);
+    if (error) return { criteria: null, error, warning: null };
   }
 
   // Conflict resolution: created_on overrides created_before/created_after
+  let warning: string | null = null;
   if (criteria.created_on && (criteria.created_before || criteria.created_after)) {
     warning = "created-on overrides created-before/created-after. Only created-on is used.";
     delete criteria.created_before;
@@ -200,12 +282,87 @@ function executeSearch() {
   }
 
   showHistory.value = false;
+  runSearch(criteria);
+}
+
+/** Shared tail of every search path (text box, Filters modal, chip removal):
+ *  records the applied criteria and fires the backend query. */
+function runSearch(criteria: EhrSearchCriteria) {
+  if (!serverStore.activeServerId) return;
+  activeCriteria.value = criteria;
   // Feature-adoption ping only — never the query text itself or the raw
   // criteria. Users construct search queries with patient identifiers
   // encoded in the input, so the text is treated as PII and stays local.
   void analytics.track("ehr_searched");
   ehrStore.searchEhrs(serverStore.activeServerId, criteria);
 }
+
+/** Applies the structured criteria built in the Filters modal. The text box
+ *  is cleared so it doesn't sit there showing a stale, out-of-sync string. */
+function handleFilterModalApply(criteria: EhrSearchCriteria) {
+  searchQuery.value = "";
+  validationError.value = null;
+  showFilterModal.value = false;
+  runSearch(criteria);
+}
+
+/** Removes a single active filter chip and re-runs the search with what's
+ *  left — or clears the search entirely if that was the last filter. */
+function removeFilterChip(key: keyof EhrSearchCriteria) {
+  if (!activeCriteria.value) return;
+  const next = { ...activeCriteria.value };
+  delete next[key];
+  searchQuery.value = "";
+  if (Object.keys(next).length === 0) {
+    clearSearch();
+  } else {
+    runSearch(next);
+  }
+}
+
+interface FilterChip {
+  key: keyof EhrSearchCriteria;
+  label: string;
+}
+
+/** `value ? "Yes" : "No"`, pulled out to a one-liner so filterChips' string
+ *  templates can call it instead of embedding the ternary — that keeps each
+ *  of filterChips' many `if` branches to a flat structural cost instead of
+ *  a nested one, which otherwise pushes its Cognitive Complexity over the
+ *  usual gate (SonarCloud flagged this at 17 for the original version). */
+function yesNo(value: boolean): string {
+  return value ? "Yes" : "No";
+}
+
+const filterChips = computed<FilterChip[]>(() => {
+  const c = activeCriteria.value;
+  if (!c) return [];
+  const chips: FilterChip[] = [];
+  if (c.ehr_id_prefix)
+    chips.push({ key: "ehr_id_prefix", label: `ID starts with "${c.ehr_id_prefix}"` });
+  if (c.subject_id) chips.push({ key: "subject_id", label: `Subject contains "${c.subject_id}"` });
+  if (c.subject_namespace)
+    chips.push({ key: "subject_namespace", label: `Namespace: ${c.subject_namespace}` });
+  if (c.system_id) chips.push({ key: "system_id", label: `System: ${c.system_id}` });
+  if (c.modifiable !== undefined)
+    chips.push({ key: "modifiable", label: `Modifiable: ${yesNo(c.modifiable)}` });
+  if (c.has_compositions !== undefined)
+    chips.push({
+      key: "has_compositions",
+      label: `Has compositions: ${yesNo(c.has_compositions)}`,
+    });
+  if (c.has_directory !== undefined)
+    chips.push({
+      key: "has_directory",
+      label: `Has directory entries: ${yesNo(c.has_directory)}`,
+    });
+  if (c.created_on) chips.push({ key: "created_on", label: `Created on ${c.created_on}` });
+  if (c.created_before)
+    chips.push({ key: "created_before", label: `Created before ${c.created_before}` });
+  if (c.created_after)
+    chips.push({ key: "created_after", label: `Created after ${c.created_after}` });
+  return chips;
+});
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (e.key === "Enter") {
@@ -229,6 +386,7 @@ function onSearchInput() {
 function clearSearch() {
   searchQuery.value = "";
   validationError.value = null;
+  activeCriteria.value = null;
   ehrStore.clearSearch();
   if (serverStore.activeServerId) {
     ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
@@ -258,6 +416,115 @@ function openComposition(comp: CompositionSummary) {
   }
 }
 
+function selectDirectoryTab() {
+  activeTab.value = "directory";
+  // `directoryLoaded` (not `!!directory`) is what guards re-fetching: a
+  // legitimate empty result ("no directory set") is a successful, stable
+  // outcome that shouldn't be re-requested on every reselect, but a prior
+  // failure leaves `directoryLoaded` false so the next reselect retries.
+  if (
+    ehrId.value &&
+    serverStore.activeServerId &&
+    !ehrStore.directoryLoaded &&
+    !ehrStore.directoryLoading
+  ) {
+    ehrStore.fetchDirectory(serverStore.activeServerId, ehrId.value);
+  }
+}
+
+function openCompositionRef(objectRef: { id?: { value?: string } }) {
+  if (ehrId.value && objectRef.id?.value) {
+    router.push({
+      name: "composition",
+      params: { ehrId: ehrId.value, compositionUid: objectRef.id.value },
+    });
+  }
+}
+
+// Compositions available to pick from in the "add item" dropdown while
+// editing the DIRECTORY — sourced from the same list shown on the Detail tab.
+const availableCompositionOptions = computed(() => {
+  if (!ehrStore.selectedEhr) return [];
+  return ehrStore.selectedEhr.compositions.map((comp) => ({
+    uid: comp.uid,
+    label: comp.name ?? comp.template_id ?? comp.uid,
+  }));
+});
+
+function directoryVersionUid(): string | undefined {
+  return (ehrStore.directory as { uid?: { value?: string } } | null)?.uid?.value;
+}
+
+function startCreateDirectory() {
+  editableDirectory.value = emptyFolder("Root");
+  directorySaveError.value = null;
+  directoryEditMode.value = true;
+}
+
+function startEditDirectory() {
+  if (!ehrStore.directory) return;
+  editableDirectory.value = fromWireFolder(ehrStore.directory);
+  directorySaveError.value = null;
+  directoryEditMode.value = true;
+}
+
+function cancelEditDirectory() {
+  directoryEditMode.value = false;
+  editableDirectory.value = null;
+  directorySaveError.value = null;
+}
+
+async function saveDirectory() {
+  if (!editableDirectory.value || !serverStore.activeServerId || !ehrId.value) return;
+
+  directorySaving.value = true;
+  directorySaveError.value = null;
+  const wireFolder = toWireFolder(editableDirectory.value);
+  const existingVersionUid = directoryVersionUid();
+  try {
+    if (existingVersionUid) {
+      await ehrStore.updateDirectory(
+        serverStore.activeServerId,
+        ehrId.value,
+        wireFolder,
+        existingVersionUid,
+      );
+      void analytics.track("directory_updated");
+    } else {
+      await ehrStore.createDirectory(serverStore.activeServerId, ehrId.value, wireFolder);
+      void analytics.track("directory_created");
+    }
+    directoryEditMode.value = false;
+    editableDirectory.value = null;
+  } catch (e) {
+    directorySaveError.value = String(e);
+  } finally {
+    directorySaving.value = false;
+  }
+}
+
+function openDeleteDirectoryDialog() {
+  deleteDirectoryError.value = null;
+  showDeleteDirectoryDialog.value = true;
+}
+
+async function handleDeleteDirectory() {
+  const existingVersionUid = directoryVersionUid();
+  if (!serverStore.activeServerId || !ehrId.value || !existingVersionUid) return;
+
+  deletingDirectory.value = true;
+  deleteDirectoryError.value = null;
+  try {
+    await ehrStore.deleteDirectory(serverStore.activeServerId, ehrId.value, existingVersionUid);
+    void analytics.track("directory_deleted");
+    showDeleteDirectoryDialog.value = false;
+  } catch (e) {
+    deleteDirectoryError.value = String(e);
+  } finally {
+    deletingDirectory.value = false;
+  }
+}
+
 function prevPage() {
   if (currentPage.value > 0 && serverStore.activeServerId) {
     currentPage.value--;
@@ -280,10 +547,6 @@ function refresh() {
       ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
     }
   }
-}
-
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
 }
 
 // Sort paginated EHRs by time_created descending (only when not searching)
@@ -353,15 +616,22 @@ const canDelete = computed(() => {
   return deleteConfirmText.value === ehrId.value;
 });
 
-const ehrJson = computed(() => {
-  if (!ehrStore.selectedEhr) return "";
-  return JSON.stringify(ehrStore.selectedEhr, null, 2);
-});
-
-async function copyEhrJson() {
-  if (ehrJson.value) {
-    await navigator.clipboard.writeText(ehrJson.value);
+// CONTRIBUTION lookup (OEH-28). openEHR has no "list contributions for an
+// EHR" endpoint — only GET-by-UID — so this is a manual lookup form. The
+// composition Versions tab is the other, more common entry point: it
+// resolves a version's contribution UID for you and jumps straight here.
+function lookupContribution() {
+  contributionLookupError.value = null;
+  const uid = contributionLookupUid.value.trim();
+  if (!uid) {
+    contributionLookupError.value = "Enter a contribution UID.";
+    return;
   }
+  if (!ehrId.value) return;
+  router.push({
+    name: "contribution",
+    params: { ehrId: ehrId.value, contributionUid: uid },
+  });
 }
 </script>
 
@@ -374,8 +644,23 @@ async function copyEhrJson() {
         </h2>
         <h2 v-else>EHRs</h2>
         <div class="header-actions">
-          <button class="btn btn-sm btn-primary" @click="showCreateDialog = true">+ New EHR</button>
-          <button class="btn btn-sm" @click="refresh">Refresh</button>
+          <button
+            type="button"
+            class="tour-trigger-btn"
+            title="Take a tour of the EHR Browser"
+            @click="replayTour"
+          >
+            <CompassIcon />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            data-tour="ehr-create"
+            @click="showCreateDialog = true"
+          >
+            + New EHR
+          </button>
+          <button type="button" class="btn btn-sm" @click="refresh">Refresh</button>
         </div>
       </div>
 
@@ -383,8 +668,9 @@ async function copyEhrJson() {
         <div class="search-input-wrapper">
           <input
             class="input search-input"
+            data-tour="ehr-search"
             v-model="searchQuery"
-            placeholder="EHR ID, or subject:...  namespace:...  system:...  modifiable:...  hasCompositions:true"
+            placeholder="Search by EHR ID, or click Filters for more options"
             autocapitalize="off"
             autocorrect="off"
             spellcheck="false"
@@ -393,15 +679,26 @@ async function copyEhrJson() {
             @focus="showHistory = searchHistory.length > 0 && !searchQuery"
             @blur="hideHistoryDelayed"
           />
-          <button v-if="searchQuery" class="clear-btn" @click="clearSearch" title="Clear search">
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="clear-btn"
+            @click="clearSearch"
+            title="Clear search"
+          >
             &times;
           </button>
           <button
-            class="help-btn"
-            @click="showHelpPopover = !showHelpPopover"
-            title="Search syntax help"
+            type="button"
+            class="filter-btn"
+            data-tour="ehr-search-filters"
+            @click="showFilterModal = true"
+            title="Build filters — includes a shortcut-syntax reference"
           >
-            ?
+            <FilterIcon />
+            <span v-if="filterChips.length" class="filter-count-badge">{{
+              filterChips.length
+            }}</span>
           </button>
         </div>
 
@@ -415,45 +712,22 @@ async function copyEhrJson() {
           Search failed: {{ ehrStore.searchError }}
         </div>
 
-        <!-- Help popover -->
-        <div v-if="showHelpPopover" class="help-popover">
-          <div class="help-popover-header">
-            <strong>Search Syntax</strong>
-            <button class="close-btn" @click="showHelpPopover = false">&times;</button>
-          </div>
-          <table class="help-table">
-            <tbody>
-              <tr>
-                <td class="help-example">fde80e0e...</td>
-                <td>EHR ID prefix match</td>
-              </tr>
-              <tr>
-                <td class="help-example">subject:value</td>
-                <td>Subject ID contains match</td>
-              </tr>
-              <tr>
-                <td class="help-example">namespace:value</td>
-                <td>Subject namespace exact match</td>
-              </tr>
-              <tr>
-                <td class="help-example">system:value</td>
-                <td>System ID exact match</td>
-              </tr>
-              <tr>
-                <td class="help-example">modifiable:true|false</td>
-                <td>EHR status is_modifiable</td>
-              </tr>
-              <tr>
-                <td class="help-example">hasCompositions:true</td>
-                <td>Has compositions (false not supported)</td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="help-note">Combine terms with spaces (implicit AND).</p>
-          <p class="help-note">
-            Press Enter or wait 600ms to search. All searches use AQL and appear in the Request
-            Inspector.
-          </p>
+        <!-- Active filter chips — works whether the filters came from the
+             Filters modal or from typing colon-syntax into the box, since
+             both write into the same `activeCriteria` state. -->
+        <div v-if="filterChips.length" class="filter-chips">
+          <span v-for="chip in filterChips" :key="chip.key" class="filter-chip">
+            {{ chip.label }}
+            <button
+              type="button"
+              class="chip-remove"
+              @click="removeFilterChip(chip.key)"
+              :title="`Remove filter: ${chip.label}`"
+            >
+              &times;
+            </button>
+          </span>
+          <button type="button" class="chip-clear-all" @click="clearSearch">Clear all</button>
         </div>
 
         <!-- Search history dropdown -->
@@ -510,13 +784,7 @@ async function copyEhrJson() {
           >
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
-              <button
-                class="copy-btn"
-                @click.stop="copyToClipboard(ehr.ehr_id)"
-                title="Copy full ID"
-              >
-                Copy
-              </button>
+              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
               <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
@@ -541,13 +809,7 @@ async function copyEhrJson() {
           >
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
-              <button
-                class="copy-btn"
-                @click.stop="copyToClipboard(ehr.ehr_id)"
-                title="Copy full ID"
-              >
-                Copy
-              </button>
+              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
               <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
@@ -557,11 +819,11 @@ async function copyEhrJson() {
         </div>
 
         <div class="pagination">
-          <button class="btn btn-sm" :disabled="currentPage === 0" @click="prevPage">
+          <button type="button" class="btn btn-sm" :disabled="currentPage === 0" @click="prevPage">
             Previous
           </button>
           <span class="page-info">Page {{ currentPage + 1 }}</span>
-          <button class="btn btn-sm" @click="nextPage">Next</button>
+          <button type="button" class="btn btn-sm" @click="nextPage">Next</button>
         </div>
       </div>
     </div>
@@ -574,6 +836,7 @@ async function copyEhrJson() {
           <div class="header-actions">
             <div class="tab-bar">
               <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'detail' }"
                 @click="activeTab = 'detail'"
@@ -581,17 +844,34 @@ async function copyEhrJson() {
                 Detail
               </button>
               <button
+                type="button"
+                class="tab"
+                data-tour="ehr-directory-tab"
+                :class="{ active: activeTab === 'directory' }"
+                @click="selectDirectoryTab"
+              >
+                Directory
+              </button>
+              <button
+                type="button"
                 class="tab"
                 :class="{ active: activeTab === 'json' }"
                 @click="activeTab = 'json'"
               >
                 JSON
               </button>
+              <button
+                type="button"
+                class="tab"
+                :class="{ active: activeTab === 'contributions' }"
+                @click="activeTab = 'contributions'"
+              >
+                Contributions
+              </button>
             </div>
-            <button class="btn btn-sm" v-if="activeTab === 'json'" @click="copyEhrJson">
-              Copy JSON
+            <button type="button" class="btn btn-sm btn-danger" @click="openDeleteDialog">
+              Delete EHR
             </button>
-            <button class="btn btn-sm btn-danger" @click="openDeleteDialog">Delete EHR</button>
           </div>
         </div>
 
@@ -600,9 +880,7 @@ async function copyEhrJson() {
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
               {{ ehrStore.selectedEhr.ehr_id }}
-              <button class="copy-btn" @click="copyToClipboard(ehrStore.selectedEhr!.ehr_id)">
-                Copy
-              </button>
+              <CopyButton :text="ehrStore.selectedEhr!.ehr_id" title="Copy EHR ID" />
             </span>
           </div>
           <div class="detail-row" v-if="ehrStore.selectedEhr.time_created">
@@ -633,7 +911,110 @@ async function copyEhrJson() {
 
         <!-- JSON View -->
         <div v-if="activeTab === 'json'" class="json-view">
-          <pre class="json-pre">{{ ehrJson }}</pre>
+          <JsonViewer v-if="ehrStore.selectedEhr" :value="ehrStore.selectedEhr" />
+        </div>
+
+        <!-- Directory View (OEH-27) -->
+        <div v-if="activeTab === 'directory'" class="directory-view">
+          <template v-if="directoryEditMode && editableDirectory">
+            <div v-if="directorySaveError" class="delete-error">{{ directorySaveError }}</div>
+            <DirectoryTreeEditor
+              :folder="editableDirectory"
+              :path="[]"
+              :depth="0"
+              :is-root="true"
+              :available-compositions="availableCompositionOptions"
+            />
+            <div class="directory-edit-actions">
+              <button
+                type="button"
+                class="btn btn-sm"
+                :disabled="directorySaving"
+                @click="cancelEditDirectory"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                :disabled="directorySaving"
+                @click="saveDirectory"
+              >
+                {{ directorySaving ? "Saving..." : "Save Directory" }}
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div v-if="!ehrStore.directoryLoading" class="directory-toolbar">
+              <button
+                v-if="ehrStore.directory"
+                type="button"
+                class="btn btn-sm"
+                @click="startEditDirectory"
+              >
+                Edit Directory
+              </button>
+              <button v-else type="button" class="btn btn-sm" @click="startCreateDirectory">
+                Create Directory
+              </button>
+              <button
+                v-if="ehrStore.directory"
+                type="button"
+                class="btn btn-sm btn-danger"
+                @click="openDeleteDirectoryDialog"
+              >
+                Delete Directory
+              </button>
+            </div>
+
+            <div v-if="ehrStore.directoryLoading" class="loading">
+              <span class="spinner"></span> Loading directory...
+            </div>
+            <div v-else-if="ehrStore.directoryError" class="empty-state">
+              <h3>Failed to load directory</h3>
+              <p class="error-detail">{{ ehrStore.directoryError }}</p>
+            </div>
+            <DirectoryTree
+              v-else-if="ehrStore.directory"
+              :folder="ehrStore.directory"
+              :depth="0"
+              @open-item="openCompositionRef"
+            />
+            <div v-else class="empty-state">
+              <h3>No directory set</h3>
+              <p>This EHR doesn't have a DIRECTORY folder structure.</p>
+            </div>
+          </template>
+        </div>
+
+        <!-- Contributions View (OEH-28) -->
+        <div v-if="activeTab === 'contributions'" class="contributions-view">
+          <p class="contributions-hint">
+            openEHR doesn't provide a way to list all contributions for an EHR — only to fetch one
+            by UID. Enter a known contribution UID below, or open a composition's
+            <strong>Versions</strong> tab and click <strong>View Contribution</strong> to jump
+            straight to the commit that created a specific version.
+          </p>
+          <div class="contribution-lookup">
+            <label for="contribution-lookup-uid" class="visually-hidden">Contribution UID</label>
+            <input
+              id="contribution-lookup-uid"
+              class="input"
+              v-model="contributionLookupUid"
+              placeholder="Contribution UID"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              @keydown.enter="lookupContribution"
+            />
+            <button type="button" class="btn btn-sm btn-primary" @click="lookupContribution">
+              View
+            </button>
+          </div>
+          <div v-if="contributionLookupError" class="search-validation-error">
+            {{ contributionLookupError }}
+          </div>
         </div>
 
         <h3 class="section-title" v-if="activeTab === 'detail'">
@@ -683,6 +1064,14 @@ async function copyEhrJson() {
       @created="handleEhrCreated"
     />
 
+    <!-- Filters Modal — structured filter builder, no syntax to remember -->
+    <EhrFilterModal
+      :open="showFilterModal"
+      :criteria="activeCriteria ?? {}"
+      @close="showFilterModal = false"
+      @apply="handleFilterModalApply"
+    />
+
     <!-- EHR Delete Confirmation Dialog -->
     <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
       <div class="dialog" @click.stop>
@@ -711,15 +1100,58 @@ async function copyEhrJson() {
           </div>
         </div>
         <div class="dialog-actions">
-          <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showDeleteDialog = false"
+            :disabled="deleting"
+          >
             Cancel
           </button>
           <button
+            type="button"
             class="btn btn-sm btn-danger"
             @click="handleDeleteEhr"
             :disabled="!canDelete || deleting"
           >
             {{ deleting ? "Deleting..." : "Delete EHR" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Directory Delete Confirmation Dialog -->
+    <div
+      v-if="showDeleteDirectoryDialog"
+      class="dialog-overlay"
+      @click="showDeleteDirectoryDialog = false"
+    >
+      <div class="dialog" @click.stop>
+        <h3>Delete Directory</h3>
+        <p>
+          This removes the entire DIRECTORY folder structure for this EHR. This action cannot be
+          undone. The compositions it references are not deleted.
+        </p>
+        <div v-if="deleteDirectoryError" class="delete-error">
+          <strong>Failed to delete directory</strong>
+          <p class="error-detail">{{ deleteDirectoryError }}</p>
+        </div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="btn btn-sm"
+            @click="showDeleteDirectoryDialog = false"
+            :disabled="deletingDirectory"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-danger"
+            @click="handleDeleteDirectory"
+            :disabled="deletingDirectory"
+          >
+            {{ deletingDirectory ? "Deleting..." : "Delete Directory" }}
           </button>
         </div>
       </div>
@@ -796,21 +1228,25 @@ async function copyEhrJson() {
   color: #fff;
 }
 
-.json-view {
+.json-view,
+.directory-view {
   margin-top: 16px;
   overflow: auto;
 }
-.json-pre {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: var(--color-surface);
-  padding: 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border);
+
+.directory-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.directory-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
 }
 
 .search-bar {
@@ -826,8 +1262,7 @@ async function copyEhrJson() {
   flex: 1;
   font-size: 12px;
 }
-.clear-btn,
-.help-btn {
+.clear-btn {
   width: 24px;
   height: 24px;
   border: 1px solid var(--color-border);
@@ -842,10 +1277,47 @@ async function copyEhrJson() {
   flex-shrink: 0;
   transition: all 0.15s;
 }
-.clear-btn:hover,
-.help-btn:hover {
+.clear-btn:hover {
   background: var(--color-border);
   color: var(--color-text);
+}
+
+.filter-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.filter-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+.filter-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--color-bg);
 }
 
 .search-validation-error {
@@ -858,55 +1330,53 @@ async function copyEhrJson() {
   font-size: 12px;
 }
 
-.help-popover {
-  position: absolute;
-  top: 100%;
-  left: 16px;
-  right: 16px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 12px;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.help-popover-header {
+.filter-chips {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-top: 8px;
 }
-.help-popover-header strong {
-  font-size: 13px;
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: var(--color-primary-dim);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
 }
-.close-btn {
+.chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.chip-remove:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.chip-clear-all {
   background: none;
   border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-}
-.help-table {
-  width: 100%;
-  font-size: 12px;
-  border-collapse: collapse;
-}
-.help-table td {
-  padding: 3px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-.help-example {
-  font-family: var(--font-mono);
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-.help-note {
+  padding: 0;
   font-size: 11px;
   color: var(--color-text-muted);
-  margin: 6px 0 0;
+  text-decoration: underline;
+  cursor: pointer;
 }
-.help-warning {
-  color: var(--color-warning, #e6a817);
+.chip-clear-all:hover {
+  color: var(--color-text);
 }
 
 .history-dropdown {
@@ -1077,6 +1547,39 @@ async function copyEhrJson() {
   font-weight: 600;
   margin-bottom: 12px;
   color: var(--color-text-secondary);
+}
+
+.contributions-view {
+  margin-bottom: 24px;
+}
+.contributions-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+.contribution-lookup {
+  display: flex;
+  gap: 8px;
+}
+.contribution-lookup .input {
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+/* Visually hidden but still reachable by screen readers — pairs the
+   contribution-UID input with an accessible label without duplicating the
+   visible "Contribution UID" placeholder text on screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .template-group {

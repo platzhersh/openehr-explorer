@@ -8,6 +8,7 @@ import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
 import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
 
 const analytics = useAnalytics();
@@ -37,8 +38,14 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const success = ref<string | null>(null);
 const flatData = ref<Record<string, unknown>>({});
-const requestDetails = ref<string>("");
-const responseDetails = ref<string>("");
+// The Request/Response debug panel shows a plain-text summary line (method
+// + URL, or HTTP status) alongside the actual JSON payload, rendered with
+// JsonViewer — see ADR-0021. `*Payload` is null until there's something to
+// show (or when the response was a bare error string with no JSON body).
+const requestSummaryLine = ref<string>("");
+const requestPayload = ref<unknown>(null);
+const responseSummaryLine = ref<string>("");
+const responsePayload = ref<unknown>(null);
 
 // medblocks-ui form ref
 const mbFormRef = ref<HTMLElement | null>(null);
@@ -176,10 +183,69 @@ function buildFlatPayload(): Record<string, unknown> {
   return payload;
 }
 
+// A medblocks-ui field we skip when transforming its export() output —
+// either owned by the ctx/* shortcuts we add ourselves, or metadata rather
+// than actual composition content.
+function shouldSkipMedblocksField(key: string): boolean {
+  if (key.startsWith("ctx/")) return true;
+  // Context-related fields medblocks exports alongside ctx/* (e.g.
+  // "minimal/language|code" or "minimal/minimal:0/language|code")
+  if (key.match(/\/(language|territory|composer|encoding)\|/)) return true;
+  // Name fields are metadata, not actual content — FLAT format omits them
+  if (key.endsWith("/name")) return true;
+  // Structural metadata at the event_series level
+  if (key.match(/event_series\/(duration|period)$/)) return true;
+  return false;
+}
+
+// Rewrites one medblocks-ui export() path into EHRBase FLAT format, per the
+// oehrpy validator's expectations: "arbol/text/value" -> "arbol/name|value",
+// and a trailing /attribute -> |attribute for known data-value attributes
+// only (not structural paths like /time in the middle).
+function transformMedblocksKey(key: string): string {
+  const transformedKey = key.replace(/\/text\/value$/, "/name|value");
+
+  const lastSlashIndex = transformedKey.lastIndexOf("/");
+  if (lastSlashIndex === -1) return transformedKey;
+
+  const lastSegment = transformedKey.substring(lastSlashIndex + 1);
+  const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
+  if (!pipeAttributes.includes(lastSegment)) return transformedKey;
+
+  return transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
+}
+
+// Transforms a raw medblocks-ui export() object into an EHRBase-compatible
+// FLAT payload (minus context fields — see withContextFields). Shared by
+// the live preview and the actual submit path so they can't drift apart.
+function transformMedblocksExport(rawData: Record<string, unknown>): Record<string, unknown> {
+  const formData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawData)) {
+    if (shouldSkipMedblocksField(key)) continue;
+    formData[transformMedblocksKey(key)] = value;
+  }
+  return formData;
+}
+
+// Merges the ctx/* shortcuts (which EHRBase expands automatically) onto a
+// transformed FLAT payload.
+function withContextFields(
+  formData: Record<string, unknown>,
+  isoTime: string,
+): Record<string, unknown> {
+  return {
+    ...formData,
+    "ctx/language": language.value,
+    "ctx/territory": territory.value,
+    "ctx/composer_name": composerName.value,
+    "ctx/time": isoTime,
+  };
+}
+
 // Trigger for manual refresh
 const previewRefreshTrigger = ref(0);
 
-const previewJson = computed(() => {
+const previewData = computed<unknown>(() => {
   // Access trigger to force re-computation
   void previewRefreshTrigger.value;
 
@@ -187,74 +253,18 @@ const previewJson = computed(() => {
   if (mbFormRef.value) {
     try {
       const rawData = (mbFormRef.value as any).export?.() || {};
-
-      // Transform paths (same logic as in handleSubmit)
-      const formData: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(rawData)) {
-        // Skip ctx/ fields - they're added separately
-        if (key.startsWith("ctx/")) {
-          continue;
-        }
-
-        // Skip context-related fields that medblocks exports
-        if (key.match(/\/(language|territory|composer|encoding)\|/)) {
-          continue;
-        }
-
-        // Skip name fields (these are metadata, not actual content)
-        if (key.endsWith("/name")) {
-          continue;
-        }
-
-        // Skip structural metadata fields
-        if (key.match(/event_series\/(duration|period)$/)) {
-          continue;
-        }
-
-        // Transform to match oehrpy validator expectations
-        let transformedKey = key;
-
-        // Step 1: Keep ":0" - EHRBase example shows it's needed
-
-        // Step 2: Handle special case for value paths
-        transformedKey = transformedKey.replace(/\/text\/value$/, "/name|value");
-
-        // Step 3: Convert /attribute to |attribute for data value attributes only
-        const lastSlashIndex = transformedKey.lastIndexOf("/");
-        if (lastSlashIndex !== -1) {
-          const lastSegment = transformedKey.substring(lastSlashIndex + 1);
-          const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
-          if (pipeAttributes.includes(lastSegment)) {
-            transformedKey = transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
-          }
-        }
-
-        formData[transformedKey] = value;
-      }
-
-      // Add context fields using ctx/ shortcuts
+      const formData = transformMedblocksExport(rawData);
       const isoTime = compositionTime.value
         ? new Date(compositionTime.value).toISOString()
         : new Date().toISOString();
-
-      const payload = {
-        ...formData,
-
-        // Context shortcuts - EHRBase expands these automatically
-        "ctx/language": language.value,
-        "ctx/territory": territory.value,
-        "ctx/composer_name": composerName.value,
-        "ctx/time": isoTime,
-      };
-
-      return JSON.stringify(payload, null, 2);
+      return withContextFields(formData, isoTime);
     } catch (e) {
       console.error("Failed to export form data:", e);
     }
   }
 
   // Fallback to buildFlatPayload
-  return JSON.stringify(buildFlatPayload(), null, 2);
+  return buildFlatPayload();
 });
 
 function refreshPreview() {
@@ -281,74 +291,15 @@ async function handleSubmit() {
   loading.value = true;
 
   try {
-    // Get form data using export() method
+    // Get form data using export() method. medblocks-ui paths follow the
+    // pattern "template_short/archetype:0/path/to/field" and need
+    // transforming to EHRBase FLAT format — see transformMedblocksExport.
     let formData: Record<string, unknown> = {};
     if (mbFormRef.value) {
       try {
         const rawData = (mbFormRef.value as any).export?.() || {};
         console.log("Raw exported data:", rawData);
-
-        // Transform medblocks-ui paths to EHRBase FLAT format
-        // EHRBase expects paths like: "template_id/content/field"
-        // medblocks-ui exports paths like: "template_short_name/archetype_name:0/field"
-
-        formData = {} as Record<string, unknown>;
-        for (const [key, value] of Object.entries(rawData)) {
-          // Skip ctx/ fields - they're added separately
-          if (key.startsWith("ctx/")) {
-            continue;
-          }
-
-          // Skip context-related fields that medblocks exports
-          // These are handled separately via ctx/* fields
-          // Match both "minimal/language|code" and "minimal/minimal:0/language|code"
-          if (key.match(/\/(language|territory|composer|encoding)\|/)) {
-            continue;
-          }
-
-          // Skip name fields (these are metadata, not actual content)
-          // FLAT format typically doesn't include name fields
-          if (key.endsWith("/name")) {
-            continue;
-          }
-
-          // Skip structural metadata fields like duration and period at event_series level
-          if (key.match(/event_series\/(duration|period)$/)) {
-            continue;
-          }
-
-          // medblocks-ui paths follow pattern: "template_short/archetype:0/path/to/field"
-          // We need to remove "template_short/archetype:0/" and replace with "template_id/"
-          // Example: "minimal/minimal:0/event_series/..." -> "minimal_observation.en.v1/event_series/..."
-
-          let transformedKey = key;
-
-          // Based on oehrpy validator, the correct format is:
-          // Input: "minimal/minimal:0/event_series/cualquier_evento/arbol/text/value"
-          // Output: "minimal/minimal/event_series/cualquier_evento/arbol/value|value"
-
-          // Step 1: Keep ":0" for archetype instances (EHRBase example shows minimal:0)
-          // Don't remove :0 - EHRBase needs it!
-
-          // Step 2: Handle the special case for value paths
-          // "arbol/text/value" should become "arbol/name|value"
-          transformedKey = transformedKey.replace(/\/text\/value$/, "/name|value");
-
-          // Step 3: Convert /attribute to |attribute for known attributes at the end
-          // But NOT for structural paths like /time in the middle
-          const lastSlashIndex = transformedKey.lastIndexOf("/");
-          if (lastSlashIndex !== -1) {
-            const lastSegment = transformedKey.substring(lastSlashIndex + 1);
-            // Only convert to pipe notation for data value attributes, not structural time
-            const pipeAttributes = ["value", "magnitude", "unit", "code", "terminology"];
-            if (pipeAttributes.includes(lastSegment)) {
-              transformedKey = transformedKey.substring(0, lastSlashIndex) + "|" + lastSegment;
-            }
-          }
-
-          formData[transformedKey] = value;
-        }
-
+        formData = transformMedblocksExport(rawData);
         console.log("Form data (transformed):", formData);
       } catch (e) {
         console.error("Failed to export form data:", e);
@@ -369,18 +320,7 @@ async function handleSubmit() {
     const isoTime = compositionTime.value
       ? new Date(compositionTime.value).toISOString()
       : new Date().toISOString();
-
-    // Build EHRBase-compatible FLAT payload using the transformed form data
-    const payload = {
-      // Add form data fields
-      ...formData,
-
-      // Context shortcuts - EHRBase expands these automatically
-      "ctx/language": language.value,
-      "ctx/territory": territory.value,
-      "ctx/composer_name": composerName.value,
-      "ctx/time": isoTime,
-    };
+    const payload = withContextFields(formData, isoTime);
 
     console.log("Final payload:", payload);
     console.log("Template ID:", templateId);
@@ -391,7 +331,8 @@ async function handleSubmit() {
       ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
       : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
 
-    requestDetails.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json\n\n${JSON.stringify(payload, null, 2)}`;
+    requestSummaryLine.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json`;
+    requestPayload.value = payload;
 
     console.log("Submitting composition...");
 
@@ -420,7 +361,8 @@ async function handleSubmit() {
       void analytics.track("composition_created");
     }
 
-    responseDetails.value = `HTTP 201 Created\n\n${JSON.stringify({ uid: { value: result } }, null, 2)}`;
+    responseSummaryLine.value = "HTTP 201 Created";
+    responsePayload.value = { uid: { value: result } };
 
     // Clear draft
     clearDraft();
@@ -435,7 +377,8 @@ async function handleSubmit() {
   } catch (e) {
     console.error("Composition submission error:", e);
     error.value = String(e);
-    responseDetails.value = `Error: ${e}`;
+    responseSummaryLine.value = `Error: ${e}`;
+    responsePayload.value = null;
   } finally {
     loading.value = false;
     console.log("handleSubmit completed");
@@ -509,10 +452,6 @@ function loadDraft() {
 
 function clearDraft() {
   localStorage.removeItem(draftKey.value);
-}
-
-async function copyPreviewJson() {
-  await navigator.clipboard.writeText(previewJson.value);
 }
 
 // Auto-save draft every 30 seconds
@@ -680,13 +619,15 @@ watch(
       </div>
 
       <!-- Request/Response Details -->
-      <div v-if="requestDetails" class="details-section">
+      <div v-if="requestSummaryLine" class="details-section">
         <h3>Request</h3>
-        <pre class="details-pre">{{ requestDetails }}</pre>
+        <pre class="details-summary-line">{{ requestSummaryLine }}</pre>
+        <JsonViewer v-if="requestPayload !== null" :value="requestPayload" />
       </div>
-      <div v-if="responseDetails" class="details-section">
+      <div v-if="responseSummaryLine" class="details-section">
         <h3>Response</h3>
-        <pre class="details-pre">{{ responseDetails }}</pre>
+        <pre class="details-summary-line">{{ responseSummaryLine }}</pre>
+        <JsonViewer v-if="responsePayload !== null" :value="responsePayload" />
       </div>
     </div>
 
@@ -696,10 +637,11 @@ watch(
         <h3>FLAT JSON Preview</h3>
         <div class="preview-actions">
           <button class="btn btn-sm" @click="refreshPreview" title="Refresh preview">↻</button>
-          <button class="btn btn-sm" @click="copyPreviewJson">Copy JSON</button>
         </div>
       </div>
-      <pre class="preview-json">{{ previewJson }}</pre>
+      <div class="preview-json">
+        <JsonViewer :value="previewData" />
+      </div>
     </div>
 
     <!-- EHR Create Dialog -->
@@ -825,18 +767,14 @@ watch(
   color: var(--color-text-secondary);
 }
 
-.details-pre {
+.details-summary-line {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--color-surface);
-  padding: 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border);
-  max-height: 300px;
-  overflow-y: auto;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
 }
 
 .preview-panel {
@@ -869,13 +807,7 @@ watch(
 .preview-json {
   flex: 1;
   overflow-y: auto;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
   padding: 16px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .loading {

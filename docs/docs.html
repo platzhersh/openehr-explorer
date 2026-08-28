@@ -473,10 +473,10 @@ scoop install openehr-explorer</div>
         <p>Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span><br>
-sudo apt install ./openEHR.Explorer_0.5.2_amd64.deb</div>
+sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openEHR.Explorer_0.5.2_amd64.AppImage<br>
-./openEHR.Explorer_0.5.2_amd64.AppImage</div>
+        <div class="code-block">chmod +x openEHR.Explorer_0.7.0_amd64.AppImage<br>
+./openEHR.Explorer_0.7.0_amd64.AppImage</div>
         <p>An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.</p>
       </section>
 
@@ -798,6 +798,24 @@ LIMIT 10</div>
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
+        <ul>
+          <li><strong>Contribution Audit Trail:</strong> A new Contribution viewer shows every version, deletion, and audit-trail entry behind a composition, with links from the EHR and composition views for tracing who changed what and when</li>
+          <li><strong>DIRECTORY Support:</strong> Browse and inspect the EHR's DIRECTORY (folder hierarchy) directly in the EHR browser, with a dedicated tree view</li>
+          <li><strong>Stored Query Execution:</strong> Run server-defined stored queries as a distinct capability in the AQL Runner, alongside ad-hoc AQL</li>
+          <li><strong>App-Wide Intro Tour:</strong> First launch now walks new users through the app with a guided tour, building on the existing route-aware feature tours and What's New modal</li>
+          <li><strong>Request Inspector curl Text:</strong> The Request Inspector now shows the equivalent curl command as copyable text for every logged request</li>
+          <li><strong>EHR Creation Fix:</strong> EHR creation now supplies <code>archetype_details</code> on the initial EHR_STATUS, fixing 422 errors against stricter CDRs like FerroEHR</li>
+          <li><strong>Sidebar Connection Status Fix:</strong> The server connection indicator now updates on every request instead of only after an explicit connection test</li>
+        </ul>
+
+        <h3>v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
+        <ul>
+          <li><strong>FerroEHR Support:</strong> Added <code>FerroEHR</code> as a recognized server type, including automatic version detection against its unauthenticated status endpoint</li>
+          <li><strong>Default Server Profile:</strong> Server profiles can now be marked as the default, so it's preselected automatically on app start instead of requiring a manual switch every time</li>
+          <li><strong>AQL Autocomplete Fix:</strong> Pressing Enter or Escape to accept or dismiss an AQL autocomplete suggestion now works correctly instead of inserting a newline or falling through to the editor</li>
+        </ul>
 
         <h3>v0.5.2 — AQL Editor Highlighting Fix</h3>
         <ul>

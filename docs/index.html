@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>openEHR Explorer — Browse, Query, and Inspect Any openEHR CDR</title>
-  <meta name="description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances. Built with Tauri and Vue 3.">
+  <meta name="description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances — a Postman alternative built for openEHR. Built with Tauri and Vue 3.">
+  <meta name="keywords" content="openEHR, openEHR Explorer, openEHR Postman, Postman alternative for openEHR, EHRBase, AQL, openEHR REST API, CDR browser">
   <link rel="canonical" href="https://platzhersh.github.io/openehr-explorer/">
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -18,7 +19,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="openEHR Explorer">
   <meta property="og:title" content="openEHR Explorer — Browse, Query, and Inspect Any openEHR CDR">
-  <meta property="og:description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances. Built with Tauri and Vue 3.">
+  <meta property="og:description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances — a Postman alternative built for openEHR. Built with Tauri and Vue 3.">
   <meta property="og:url" content="https://platzhersh.github.io/openehr-explorer/">
   <meta property="og:image" content="https://platzhersh.github.io/openehr-explorer/assets/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -28,7 +29,7 @@
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="openEHR Explorer — Browse, Query, and Inspect Any openEHR CDR">
-  <meta name="twitter:description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances. Built with Tauri and Vue 3.">
+  <meta name="twitter:description" content="A native desktop app for browsing, querying, and inspecting openEHR CDR instances — a Postman alternative built for openEHR. Built with Tauri and Vue 3.">
   <meta name="twitter:image" content="https://platzhersh.github.io/openehr-explorer/assets/og-image.png">
 
   <script type="application/ld+json">
@@ -37,7 +38,8 @@
     "@type": "SoftwareApplication",
     "name": "openEHR Explorer",
     "url": "https://platzhersh.github.io/openehr-explorer/",
-    "description": "A native desktop app for browsing, querying, and inspecting openEHR CDR instances. Built with Tauri and Vue 3.",
+    "description": "A native desktop app for browsing, querying, and inspecting openEHR CDR instances — a Postman alternative built for openEHR. Built with Tauri and Vue 3.",
+    "keywords": "openEHR, openEHR Explorer, openEHR Postman, Postman alternative for openEHR, EHRBase, AQL, openEHR REST API",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "macOS, Windows, Linux",
     "softwareVersion": "0.4.2",
@@ -270,6 +272,43 @@
     .version-badge {
       color: var(--text-muted);
       font-size: 0.9rem;
+    }
+
+    .downloads-badge {
+      margin-top: 10px;
+    }
+
+    .downloads-sparkline {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .downloads-sparkline svg {
+      width: 120px;
+      height: 28px;
+      display: block;
+      overflow: visible;
+    }
+
+    .downloads-sparkline-area {
+      fill: var(--primary);
+      opacity: 0.12;
+      stroke: none;
+    }
+
+    .downloads-sparkline-line {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 1.5;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    .downloads-sparkline-caption {
+      color: var(--text-muted);
+      font-size: 0.8rem;
     }
 
     /* ── UI Preview Strip ── */
@@ -769,12 +808,25 @@
         </svg>
       </div>
       <h1>openEHR Explorer</h1>
-      <p class="hero-tagline">Browse, query, and inspect any openEHR CDR &mdash; no curl required.</p>
+      <p class="hero-tagline">Browse, query, and inspect any openEHR CDR &mdash; no curl or Postman collection required.</p>
       <div class="cta-group">
         <a href="https://github.com/platzhersh/openehr-explorer/releases" id="download-btn" class="btn btn-primary">Download</a>
         <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
       </div>
-      <p class="version-badge">v0.5.2 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
+      <p class="version-badge">v0.7.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
+      <p class="downloads-badge">
+        <a href="https://github.com/platzhersh/openehr-explorer/releases"><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads"></a>
+      </p>
+      <!-- Hidden until the daily snapshot history has at least a week's
+           worth of points — see the downloads-sparkline script below. -->
+      <div class="downloads-sparkline" id="downloads-sparkline" hidden>
+        <svg id="downloads-sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-labelledby="downloads-sparkline-desc">
+          <desc id="downloads-sparkline-desc"></desc>
+          <path class="downloads-sparkline-area" d=""></path>
+          <path class="downloads-sparkline-line" d=""></path>
+        </svg>
+        <span class="downloads-sparkline-caption" id="downloads-sparkline-caption"></span>
+      </div>
     </section>
 
     <!-- ── UI Preview Strip ── -->
@@ -893,6 +945,7 @@
     <!-- ── Ecosystem Banner ── -->
     <section class="ecosystem">
       <p>Part of the openEHR developer tooling ecosystem &mdash; alongside <a href="https://platzhersh.github.io/oehrpy">oehrpy</a> (Python SDK) and <a href="https://github.com/platzhersh/open-cis">Open CIS</a> (reference clinical app). No runtime dependency between them &mdash; use any combination.</p>
+      <p style="margin-top: 12px;">Still reaching for Postman to poke at an openEHR CDR? See how openEHR Explorer compares as a <a href="compare.html">Postman alternative for openEHR</a>.</p>
     </section>
 
   </main>
@@ -1099,6 +1152,66 @@
     })();
 
     LightboxGallery.init('gallery-grid');
+
+    // Downloads-over-time sparkline: fetches the daily snapshot history
+    // recorded by .github/workflows/downloads-snapshot.yml. That workflow
+    // commits to the dedicated `data` branch (never `main`), so this reads
+    // it cross-origin straight off raw.githubusercontent.com — no backend
+    // needed, the docs site stays fully static. See OEH-25.
+    (function () {
+      var HISTORY_URL = 'https://raw.githubusercontent.com/platzhersh/openehr-explorer/data/docs/downloads-history.json';
+      // A couple of days of noisy, near-flat snapshots isn't a curve worth
+      // showing — wait for a full week before the sparkline appears.
+      var MIN_POINTS = 7;
+
+      function buildPaths(points, width, height) {
+        var totals = points.map(function (p) { return p.total; });
+        var min = Math.min.apply(null, totals);
+        var max = Math.max.apply(null, totals);
+        var range = max - min || 1; // avoid a divide-by-zero on a flat line
+
+        var coords = points.map(function (p, i) {
+          var x = (i / (points.length - 1)) * width;
+          var y = height - ((p.total - min) / range) * height;
+          return x.toFixed(1) + ',' + y.toFixed(1);
+        });
+
+        var line = 'M' + coords.join(' L');
+        var area = line + ' L' + width + ',' + height + ' L0,' + height + ' Z';
+        return { line: line, area: area };
+      }
+
+      function render(points) {
+        if (points.length < MIN_POINTS) return;
+
+        var container = document.getElementById('downloads-sparkline');
+        var svg = document.getElementById('downloads-sparkline-svg');
+        if (!container || !svg) return;
+
+        var viewBox = svg.viewBox.baseVal;
+        var paths = buildPaths(points, viewBox.width, viewBox.height);
+        svg.querySelector('.downloads-sparkline-line').setAttribute('d', paths.line);
+        svg.querySelector('.downloads-sparkline-area').setAttribute('d', paths.area);
+
+        var first = points[0];
+        var last = points[points.length - 1];
+        document.getElementById('downloads-sparkline-desc').textContent =
+          'Total downloads grew from ' + first.total + ' on ' + first.date + ' to ' + last.total + ' on ' + last.date + '.';
+        document.getElementById('downloads-sparkline-caption').textContent = 'since ' + first.date;
+
+        container.hidden = false;
+      }
+
+      fetch(HISTORY_URL)
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (Array.isArray(data)) render(data);
+        })
+        .catch(function () {
+          // No history yet (or offline) — the shields.io badge above
+          // still shows the live total, so just leave this hidden.
+        });
+    })();
   </script>
 
 </body>

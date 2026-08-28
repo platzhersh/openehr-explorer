@@ -10,12 +10,19 @@ import {
 } from "../stores/inspector";
 import type { RequestLogEntry } from "../stores/inspector";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useTourStore } from "../stores/tour";
 import JsonTreeNode from "./JsonTreeNode.vue";
+import JsonViewer from "./JsonViewer.vue";
+import XmlViewer from "./XmlViewer.vue";
+import BashViewer from "./BashViewer.vue";
+import CompassIcon from "./CompassIcon.vue";
+import CopyButton from "./CopyButton.vue";
 
 type DrawerState = "collapsed" | "half" | "expanded";
 
 const store = useInspectorStore();
 const analytics = useAnalytics();
+const tourStore = useTourStore();
 
 const drawerState = ref<DrawerState>(
   (localStorage.getItem("inspector-drawer-state") as DrawerState) || "collapsed",
@@ -70,6 +77,16 @@ function toggleDrawer() {
   else drawerState.value = "collapsed";
 }
 
+// The inspector tour (see `src/lib/tours.ts`) is manual-only, not route-aware
+// — the panel is global, not tied to one screen. Its later steps target
+// content that only renders while the drawer is open, so make sure it's
+// expanded before handing off to the tour overlay.
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "inspector" });
+  if (drawerState.value === "collapsed") drawerState.value = "half";
+  tourStore.start("inspector");
+}
+
 function cycleUp() {
   if (drawerState.value === "collapsed") drawerState.value = "half";
   else if (drawerState.value === "half") drawerState.value = "expanded";
@@ -95,13 +112,16 @@ const drawerHeight = computed(() => {
 
 const selected = computed(() => store.selectedEntry);
 
-// Parse body JSON
-function tryParseJson(body: string | null): unknown | null {
-  if (!body) return null;
+// Parse body JSON. Returns `undefined` on an empty/missing body or a parse
+// failure — distinct from a legitimately parsed `null`/`false`/`0`/`""`,
+// none of which JSON.parse can ever produce for those inputs, so callers can
+// tell "not JSON" apart from "JSON, and it happens to be falsy".
+function tryParseJson(body: string | null): unknown {
+  if (!body) return undefined;
   try {
     return JSON.parse(body);
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -112,65 +132,16 @@ function isXmlResponse(entry: RequestLogEntry | null): boolean {
   return contentType.includes("application/xml") || contentType.includes("text/xml");
 }
 
-// Format XML with syntax highlighting
-function formatXml(xml: string): string {
-  // Basic XML formatting with indentation
-  let formatted = "";
-  let indent = 0;
-  const lines = xml.split(/>\s*</);
-
-  lines.forEach((line, index) => {
-    if (index > 0) line = "<" + line;
-    if (index < lines.length - 1) line = line + ">";
-
-    // Detect closing tags
-    if (line.match(/^<\/\w/)) indent--;
-
-    // Add indentation
-    formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
-
-    // Detect opening tags (not self-closing)
-    if (line.match(/^<\w[^>]*[^/]>$/)) indent++;
-  });
-
-  return formatted.trim();
-}
-
-// Apply syntax highlighting to XML
-function highlightXml(xml: string): string {
-  return xml
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(
-      /(&lt;\/?)([\w-]+)([\s\S]*?)(&gt;)/g,
-      (_match, openBracket, tagName, content, closeBracket) => {
-        // Highlight tag names
-        const highlightedTag = `${openBracket}<span class="xml-tag">${tagName}</span>`;
-        // Highlight attributes
-        const highlightedContent = content.replace(
-          /([\w-]+)=(["'])(.*?)\2/g,
-          '<span class="xml-attr-name">$1</span>=<span class="xml-attr-value">$2$3$2</span>',
-        );
-        return `${highlightedTag}${highlightedContent}${closeBracket}`;
-      },
-    )
-    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
-    .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
-}
-
 const responseJson = computed(() =>
-  selected.value ? tryParseJson(selected.value.response_body) : null,
+  selected.value ? tryParseJson(selected.value.response_body) : undefined,
 );
 const requestJson = computed(() =>
-  selected.value ? tryParseJson(selected.value.request_body) : null,
+  selected.value ? tryParseJson(selected.value.request_body) : undefined,
 );
 
 const isResponseXml = computed(() => isXmlResponse(selected.value));
-const formattedXml = computed(() => {
-  if (!selected.value?.response_body || !isResponseXml.value) return "";
-  return formatXml(selected.value.response_body);
-});
+
+const curlCommand = computed(() => (selected.value ? generateCurl(selected.value) : ""));
 
 // Auto-switch to XML tab when XML response is detected
 watch(isResponseXml, (isXml) => {
@@ -225,15 +196,6 @@ function responseBodySize(entry: RequestLogEntry): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
-
-async function copyCurl() {
-  if (!selected.value) return;
-  await copyToClipboard(generateCurl(selected.value));
-}
-
 function confirmClear() {
   showClearConfirm.value = true;
 }
@@ -247,7 +209,7 @@ function doClear() {
 <template>
   <div class="inspector-drawer" :style="{ height: drawerHeight }">
     <!-- Header bar -->
-    <div class="inspector-header" @click="toggleDrawer">
+    <div class="inspector-header" data-tour="inspector-header" @click="toggleDrawer">
       <div class="header-left">
         <span class="drawer-icon">{{ drawerState === "collapsed" ? "\u25B2" : "\u25BC" }}</span>
         <span class="header-title">Request Inspector</span>
@@ -257,6 +219,14 @@ function doClear() {
         <span v-if="store.hasErrors && drawerState === 'collapsed'" class="error-dot" />
       </div>
       <div class="header-actions" @click.stop>
+        <button
+          type="button"
+          class="tour-trigger-btn"
+          title="Take a tour of the Request Inspector"
+          @click="replayTour"
+        >
+          <CompassIcon />
+        </button>
         <button v-if="store.entries.length > 0" class="btn btn-sm" @click="confirmClear">
           Clear
         </button>
@@ -273,7 +243,7 @@ function doClear() {
     <!-- Content (visible when not collapsed) -->
     <div v-if="drawerState !== 'collapsed'" class="inspector-content">
       <!-- Left: Log List -->
-      <div class="log-pane">
+      <div class="log-pane" data-tour="inspector-log-list">
         <div class="log-filters">
           <input
             v-model="store.filterText"
@@ -310,7 +280,7 @@ function doClear() {
       <div class="detail-pane">
         <template v-if="selected">
           <!-- Tabs: Request / Response -->
-          <div class="detail-tabs">
+          <div class="detail-tabs" data-tour="inspector-detail-tabs">
             <button
               :class="['tab-btn', { active: detailTab === 'request' }]"
               @click="detailTab = 'request'"
@@ -356,13 +326,7 @@ function doClear() {
                     <td class="header-key">{{ key }}</td>
                     <td class="header-value">
                       {{ val }}
-                      <button
-                        class="copy-btn"
-                        @click="copyToClipboard(`${key}: ${val}`)"
-                        title="Copy"
-                      >
-                        copy
-                      </button>
+                      <CopyButton :text="`${key}: ${val}`" title="Copy header" />
                     </td>
                   </tr>
                 </table>
@@ -384,14 +348,26 @@ function doClear() {
                     Raw
                   </button>
                 </div>
-                <div v-if="bodyViewTab === 'tree' && requestJson" class="tree-container">
+                <div
+                  v-if="bodyViewTab === 'tree' && requestJson !== undefined"
+                  class="tree-container"
+                >
                   <JsonTreeNode label="root" :value="requestJson" :depth="0" />
+                </div>
+                <div
+                  v-else-if="bodyViewTab === 'raw' && requestJson !== undefined"
+                  class="raw-container"
+                >
+                  <JsonViewer :value="requestJson" />
                 </div>
                 <pre v-else class="raw-body">{{ selected.request_body }}</pre>
               </div>
 
               <div class="detail-section">
-                <button class="btn btn-sm" @click="copyCurl">Copy as curl</button>
+                <div class="section-header">cURL Command</div>
+                <div class="curl-container">
+                  <BashViewer :code="curlCommand" copy-title="Copy as curl" />
+                </div>
               </div>
             </template>
 
@@ -428,13 +404,7 @@ function doClear() {
                     <td class="header-key">{{ key }}</td>
                     <td class="header-value">
                       {{ val }}
-                      <button
-                        class="copy-btn"
-                        @click="copyToClipboard(`${key}: ${val}`)"
-                        title="Copy"
-                      >
-                        copy
-                      </button>
+                      <CopyButton :text="`${key}: ${val}`" title="Copy header" />
                     </td>
                   </tr>
                 </table>
@@ -473,7 +443,10 @@ function doClear() {
                 </div>
 
                 <!-- Tree View -->
-                <div v-if="bodyViewTab === 'tree' && responseJson" class="tree-container">
+                <div
+                  v-if="bodyViewTab === 'tree' && responseJson !== undefined"
+                  class="tree-container"
+                >
                   <div class="tree-toolbar">
                     <input
                       v-model="treeSearch"
@@ -493,30 +466,23 @@ function doClear() {
 
                 <!-- XML View -->
                 <div v-else-if="bodyViewTab === 'xml'" class="xml-container">
-                  <div class="xml-toolbar">
-                    <button
-                      class="btn btn-sm"
-                      @click="copyToClipboard(selected.response_body || '')"
-                    >
-                      Copy All
-                    </button>
-                  </div>
-                  <pre class="xml-body" v-html="highlightXml(formattedXml)"></pre>
+                  <XmlViewer :xml="selected.response_body || ''" />
                 </div>
 
                 <!-- Raw View -->
                 <div v-else-if="bodyViewTab === 'raw'" class="raw-container">
-                  <div class="raw-toolbar">
-                    <button
-                      class="btn btn-sm"
-                      @click="copyToClipboard(selected.response_body || '')"
-                    >
-                      Copy All
-                    </button>
-                  </div>
-                  <pre class="raw-body">{{
-                    responseJson ? JSON.stringify(responseJson, null, 2) : selected.response_body
-                  }}</pre>
+                  <JsonViewer v-if="responseJson !== undefined" :value="responseJson" />
+                  <template v-else>
+                    <div class="raw-toolbar">
+                      <CopyButton
+                        :text="selected.response_body || ''"
+                        title="Copy response body"
+                        size="md"
+                        variant="bordered"
+                      />
+                    </div>
+                    <pre class="raw-body">{{ selected.response_body }}</pre>
+                  </template>
                 </div>
 
                 <!-- FLAT View -->
@@ -531,23 +497,11 @@ function doClear() {
                       <tr v-for="entry in flatEntries" :key="entry.path">
                         <td class="flat-path">
                           {{ entry.path }}
-                          <button
-                            class="copy-btn"
-                            @click="copyToClipboard(entry.path)"
-                            title="Copy path"
-                          >
-                            copy
-                          </button>
+                          <CopyButton :text="entry.path" title="Copy path" />
                         </td>
                         <td class="flat-value">
                           {{ entry.value }}
-                          <button
-                            class="copy-btn"
-                            @click="copyToClipboard(entry.value)"
-                            title="Copy value"
-                          >
-                            copy
-                          </button>
+                          <CopyButton :text="entry.value" title="Copy value" />
                         </td>
                       </tr>
                     </table>
@@ -940,7 +894,8 @@ function doClear() {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
-  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .raw-toolbar {
@@ -950,8 +905,6 @@ function doClear() {
 }
 
 .raw-body {
-  max-height: 400px;
-  overflow: auto;
   padding: 8px;
   margin: 0;
   font-family: var(--font-mono);
@@ -1022,53 +975,28 @@ function doClear() {
   font-size: 13px;
 }
 
-/* XML view */
+/* XML view — bounded like .tree-container/.tree-scroll above, but the
+   scrolling itself must happen on XmlViewer's own inner .xv-scroll (a flex
+   column handing it the box's real height) rather than here: XmlViewer
+   fills whatever height it's given instead of capping itself, so without
+   this the box would just grow to the full (possibly huge) document height
+   and defeat virtualization — see ADR-0023. */
 .xml-container {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
+  max-height: 400px;
   overflow: hidden;
 }
 
-.xml-toolbar {
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--color-border);
-  text-align: right;
-}
-
-.xml-body {
-  max-height: 400px;
-  overflow: auto;
-  padding: 8px;
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text);
-  white-space: pre;
+/* cURL command view */
+.curl-container {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
   background: var(--color-bg);
-  line-height: 1.5;
-}
-
-/* XML syntax highlighting */
-.xml-body :deep(.xml-tag) {
-  color: #6495ed;
-  font-weight: 600;
-}
-
-.xml-body :deep(.xml-attr-name) {
-  color: #ffd93d;
-}
-
-.xml-body :deep(.xml-attr-value) {
-  color: #6bff8e;
-}
-
-.xml-body :deep(.xml-comment) {
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-
-.xml-body :deep(.xml-declaration) {
-  color: #ff6b6b;
+  max-height: 400px;
+  overflow-y: auto;
 }
 </style>

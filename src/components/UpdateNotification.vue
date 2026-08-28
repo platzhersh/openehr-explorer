@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettingsStore } from "../stores/settings";
 import { useUpdateStore } from "../stores/update";
+
+const CHANGELOG_URL = "https://platzhersh.github.io/openehr-explorer/docs.html#changelog";
 
 const settingsStore = useSettingsStore();
 const updateStore = useUpdateStore();
@@ -28,6 +31,10 @@ const progressPercent = () => {
   if (updateStore.totalBytes === 0) return 0;
   return Math.round((updateStore.downloadedBytes / updateStore.totalBytes) * 100);
 };
+
+async function openChangelog() {
+  await openUrl(CHANGELOG_URL);
+}
 </script>
 
 <template>
@@ -38,6 +45,7 @@ const progressPercent = () => {
         <strong>Update available: v{{ updateStore.update.version }}</strong>
         <span class="update-current"> (current: v{{ updateStore.update.currentVersion }})</span>
       </div>
+      <button type="button" class="changelog-link" @click="openChangelog">What's new →</button>
     </div>
 
     <div v-if="updateStore.error" class="update-error" :title="updateStore.error">
@@ -88,6 +96,22 @@ const progressPercent = () => {
 
 .update-current {
   opacity: 0.8;
+}
+
+.changelog-link {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.changelog-link:hover {
+  opacity: 1;
 }
 
 .update-actions {

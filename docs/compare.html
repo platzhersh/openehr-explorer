@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tool Comparison — openEHR Explorer</title>
-  <meta name="description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, Better Studio, and ehr-ctrl for openEHR development.">
+  <title>openEHR Postman Alternative — Tool Comparison | openEHR Explorer</title>
+  <meta name="description" content="Looking for a Postman alternative for openEHR? Compare openEHR Explorer against Postman/curl, openEHRTool v2, Better Studio, and ehr-ctrl feature by feature.">
+  <meta name="keywords" content="openEHR Postman, Postman alternative for openEHR, openEHR Postman collection, openEHR REST API testing, EHRBase Postman">
   <link rel="canonical" href="https://platzhersh.github.io/openehr-explorer/compare.html">
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -17,8 +18,8 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="openEHR Explorer">
-  <meta property="og:title" content="Tool Comparison — openEHR Explorer">
-  <meta property="og:description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, Better Studio, and ehr-ctrl for openEHR development.">
+  <meta property="og:title" content="openEHR Postman Alternative — Tool Comparison | openEHR Explorer">
+  <meta property="og:description" content="Looking for a Postman alternative for openEHR? Compare openEHR Explorer against Postman/curl, openEHRTool v2, Better Studio, and ehr-ctrl feature by feature.">
   <meta property="og:url" content="https://platzhersh.github.io/openehr-explorer/compare.html">
   <meta property="og:image" content="https://platzhersh.github.io/openehr-explorer/assets/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -26,9 +27,50 @@
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Tool Comparison — openEHR Explorer">
-  <meta name="twitter:description" content="How openEHR Explorer compares to openEHRTool v2, Postman, curl, Better Studio, and ehr-ctrl for openEHR development.">
+  <meta name="twitter:title" content="openEHR Postman Alternative — Tool Comparison | openEHR Explorer">
+  <meta name="twitter:description" content="Looking for a Postman alternative for openEHR? Compare openEHR Explorer against Postman/curl, openEHRTool v2, Better Studio, and ehr-ctrl feature by feature.">
   <meta name="twitter:image" content="https://platzhersh.github.io/openehr-explorer/assets/og-image.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is there an official Postman collection for openEHR?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Not a universal one. Individual CDR vendors publish their own OpenAPI specs and sometimes example Postman collections, but there's no single canonical openEHR Postman collection — every CDR has slightly different endpoints, and Postman has no built-in concept of templates, FLAT paths, or archetype node IDs. openEHR Explorer replaces the collection-building step entirely: point it at a server and it discovers EHRs, templates, and compositions for you."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use Postman to test openEHR REST APIs?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes — Postman (or curl) works fine for raw openEHR REST calls against EHRBase, Better Platform, or any other openEHR CDR, since they're standard HTTP/JSON APIs. What Postman can't do is resolve archetype node IDs to readable labels, render a Web Template as a tree, or autocomplete FLAT/AQL paths — that's the gap openEHR Explorer fills."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What's a good Postman alternative for openEHR development?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "openEHR Explorer is a free, open-source desktop alternative to Postman built specifically for openEHR: it understands EHR status, compositions, templates, and AQL natively, so you don't hand-build requests or decode responses by hand."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does openEHR Explorer replace Postman entirely?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No — Postman is still a solid general-purpose REST client. openEHR Explorer is a focused tool for the openEHR-specific parts of the workflow: browsing EHRs, inspecting templates, building compositions, and running AQL. Many developers keep both installed and reach for whichever fits the task."
+        }
+      }
+    ]
+  }
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -401,6 +443,33 @@
     }
     .footnotes a { color: var(--text-secondary); }
 
+    /* ── FAQ ── */
+    .faq {
+      margin-top: 56px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+    .faq h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 20px;
+    }
+    .faq-item {
+      margin-bottom: 20px;
+    }
+    .faq-item h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+    .faq-item p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
     /* ── Footer ── */
     .footer {
       text-align: center;
@@ -526,7 +595,30 @@
     <!-- ── Hero ── -->
     <div class="page-hero">
       <h1>The Postman for openEHR</h1>
-      <p>How openEHR Explorer stacks up against every existing developer tool in the openEHR ecosystem. No dedicated developer GUI existed &mdash; until now.</p>
+      <p>A Postman alternative built specifically for openEHR, and how it stacks up against every other developer tool in the ecosystem. No dedicated openEHR GUI existed &mdash; until now.</p>
+    </div>
+
+    <!-- ── Why not Postman ── -->
+    <div class="summary" style="margin-top: 0; margin-bottom: 56px;">
+      <h2>Why not just use Postman for openEHR?</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <strong>No openEHR Postman collection ships by default</strong>
+          <p>Postman has no notion of EHRs, compositions, or templates &mdash; every request against an openEHR CDR is built and read by hand.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Node IDs stay raw</strong>
+          <p>Postman shows at0006, not &ldquo;Systolic&rdquo;. You still need the OPT or Web Template open in another tab to decode a response.</p>
+        </div>
+        <div class="summary-item">
+          <strong>No FLAT path autocomplete</strong>
+          <p>Building a FLAT composition body in Postman means hand-typing every archetype path from the template JSON.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Postman is still great for raw HTTP</strong>
+          <p>openEHR Explorer isn't trying to replace Postman for general API work &mdash; it's what to reach for once you're specifically working with openEHR CDR data. See the <a href="#comparison">full feature comparison</a> below.</p>
+        </div>
+      </div>
     </div>
 
     <!-- ── Legend ── -->
@@ -539,7 +631,7 @@
     </div>
 
     <!-- ── Column Headers ── -->
-    <div class="tool-headers">
+    <div class="tool-headers" id="comparison">
       <div class="empty-header"><span class="col-label">Feature</span></div>
 
       <div class="tool-card highlight">
@@ -884,8 +976,8 @@
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">DIRECTORY (folder hierarchy) operations &sup3;</div>
-      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="feat-label">DIRECTORY (folder hierarchy) operations</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">Browse tree (read-only)</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
@@ -893,8 +985,8 @@
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">CONTRIBUTION tracking / audit trail &sup3;</div>
-      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Not yet supported</span></div>
+      <div class="feat-label">CONTRIBUTION tracking / audit trail</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br><span class="note">View by UID + linked from version history &mdash; no list endpoint in the openEHR API</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
@@ -902,8 +994,8 @@
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">STORED_QUERY execution &sup3;</div>
-      <div class="cell ours" data-tool="Explorer"><span class="no">&#10007;</span><br><span class="note">Ad-hoc AQL only</span></div>
+      <div class="feat-label">STORED_QUERY execution</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br><span class="note">List, view &amp; execute with params</span></div>
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
@@ -924,7 +1016,7 @@
       <div class="score-row">
         <div class="score-label">Feature score</div>
         <div class="score-cell ours" data-tool="Explorer">
-          <span class="score-num primary">29.5</span>
+          <span class="score-num primary">31.5</span>
           <span class="score-denom">of 37</span>
         </div>
         <div class="score-cell" data-tool="openEHRTool">
@@ -973,10 +1065,31 @@
     <div class="footnotes">
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
-      <p>&sup3; openEHR Explorer does not yet have dedicated UI for the DIRECTORY, CONTRIBUTION, or STORED_QUERY resources &mdash; the underlying data is reachable via AQL and the Request Inspector, but there's no dedicated browsing/editing surface for them yet. Tracked as known gaps.</p>
+      <p>&sup3; DIRECTORY and CONTRIBUTION support are both partial. DIRECTORY has a read-only browsing tree in the EHR detail panel; creating, updating, or deleting a DIRECTORY isn't supported by the app yet (the Request Inspector only shows HTTP traffic &mdash; it doesn't send requests), so that still requires an external REST client. CONTRIBUTION can be viewed by UID &mdash; entered directly, or reached from a composition's Versions tab &mdash; but the openEHR REST API has no endpoint to list all contributions for an EHR, so there's no browsable list.</p>
       <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client, added to this comparison based on public information &mdash; most rows are marked "not yet evaluated" pending hands-on testing, so its overall score is withheld rather than computed from mostly-unknown data.</p>
-      <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.5.0.</p>
+      <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.6.0.</p>
     </div>
+
+    <!-- ─── FAQ ─── -->
+    <section class="faq">
+      <h2>Frequently asked questions</h2>
+      <div class="faq-item">
+        <h3>Is there an official Postman collection for openEHR?</h3>
+        <p>Not a universal one. Individual CDR vendors publish their own OpenAPI specs and sometimes example Postman collections, but there's no single canonical openEHR Postman collection &mdash; every CDR has slightly different endpoints, and Postman has no built-in concept of templates, FLAT paths, or archetype node IDs. openEHR Explorer replaces the collection-building step entirely: point it at a server and it discovers EHRs, templates, and compositions for you.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Can I use Postman to test openEHR REST APIs?</h3>
+        <p>Yes &mdash; Postman (or curl) works fine for raw openEHR REST calls against EHRBase, Better Platform, or any other openEHR CDR, since they're standard HTTP/JSON APIs. What Postman can't do is resolve archetype node IDs to readable labels, render a Web Template as a tree, or autocomplete FLAT/AQL paths &mdash; that's the gap openEHR Explorer fills.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What's a good Postman alternative for openEHR development?</h3>
+        <p>openEHR Explorer is a free, open-source desktop alternative to Postman built specifically for openEHR: it understands EHR status, compositions, templates, and AQL natively, so you don't hand-build requests or decode responses by hand.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Does openEHR Explorer replace Postman entirely?</h3>
+        <p>No &mdash; Postman is still a solid general-purpose REST client. openEHR Explorer is a focused tool for the openEHR-specific parts of the workflow: browsing EHRs, inspecting templates, building compositions, and running AQL. Many developers keep both installed and reach for whichever fits the task.</p>
+      </div>
+    </section>
 
   </main>
 

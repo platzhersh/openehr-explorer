@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useServerStore } from "./stores/server";
 import { useInspectorStore } from "./stores/inspector";
 import { useSettingsStore } from "./stores/settings";
 import { useUpdateStore } from "./stores/update";
+import { useTourStore } from "./stores/tour";
+import { useWhatsNewStore } from "./stores/whatsNew";
 import { useAnalytics } from "./composables/useAnalytics";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
 import UpdateNotification from "./components/UpdateNotification.vue";
 import AnalyticsConsentDialog from "./components/AnalyticsConsentDialog.vue";
+import FeatureTourOverlay from "./components/FeatureTourOverlay.vue";
+import WhatsNewModal from "./components/WhatsNewModal.vue";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 // First-run consent dialog visibility. Driven by the persisted
@@ -20,11 +24,18 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 // and the dialog never appears again.
 const showAnalyticsConsent = ref(false);
 
+// App version, fetched once on launch — feeds both the What's New gate and
+// the modal's "dismiss up to this version" call.
+const appVersion = ref<string | null>(null);
+
+const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const inspectorStore = useInspectorStore();
 const settingsStore = useSettingsStore();
 const updateStore = useUpdateStore();
+const tourStore = useTourStore();
+const whatsNewStore = useWhatsNewStore();
 const analytics = useAnalytics();
 
 // Unlisten handle for the native "Check for Updates…" menu item (see
@@ -111,15 +122,52 @@ async function handleConsentDecision(accepted: boolean) {
     analytics_consent_asked: true,
   });
   await emitLaunchEvents();
+  checkWhatsNewAndTours();
+}
+
+// What's New (version-gated) and the feature tours both hold off until the
+// consent dialog is resolved, so we never stack two modals — see PRD-0018.
+// If What's New has something to show, tours wait for it to be dismissed
+// (below) rather than starting behind/alongside it.
+function checkWhatsNewAndTours() {
+  if (appVersion.value) {
+    whatsNewStore.checkForUpdate(appVersion.value);
+  }
+  if (whatsNewStore.visible) {
+    void analytics.track("whats_new_shown", {
+      version: whatsNewStore.entries[0]?.version ?? "unknown",
+      source: "auto",
+    });
+  } else {
+    offerNextTour();
+  }
+}
+
+/**
+ * Try the app-wide intro tour first — it auto-starts once, ever, ahead of
+ * any route-aware tour. Once it's been seen/skipped (or is disabled), fall
+ * back to offering the current route's tour, same as before its existence.
+ */
+function offerNextTour() {
+  if (!tourStore.maybeAutoStartIntro()) {
+    tourStore.maybeAutoStart(route.name as string | undefined);
+  }
 }
 
 onMounted(async () => {
   serverStore.loadProfiles();
   inspectorStore.startListening();
+  serverStore.startTrackingRequests();
   // Settings must be loaded before the first analytics call so the consent
   // flag is accurate — otherwise the composable would gate on a stale default.
   await settingsStore.loadSettings();
   document.addEventListener("keydown", handleKeydown);
+
+  try {
+    appVersion.value = await invoke<string>("get_app_version");
+  } catch (e) {
+    console.error("Failed to get app version:", e);
+  }
 
   unlistenMenuCheckForUpdates = await listen("check-for-updates-requested", () => {
     void analytics.track("update_check_triggered", { source: "menu" });
@@ -134,12 +182,14 @@ onMounted(async () => {
     showAnalyticsConsent.value = true;
   } else {
     await emitLaunchEvents();
+    checkWhatsNewAndTours();
   }
 });
 
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
   unlistenMenuCheckForUpdates?.();
+  serverStore.stopTrackingRequests();
 });
 
 // Reset inspector when active server changes
@@ -147,6 +197,27 @@ watch(
   () => serverStore.activeServerId,
   () => {
     inspectorStore.reset();
+  },
+);
+
+// Route-aware tour: offer the destination route's tour every time the user
+// navigates somewhere new, unless it's already been seen/skipped or a
+// first-run dialog is currently occupying the screen.
+watch(
+  () => route.name,
+  async (name) => {
+    if (!settingsStore.loaded || showAnalyticsConsent.value || whatsNewStore.visible) return;
+    await nextTick();
+    tourStore.maybeAutoStart(name as string | undefined);
+  },
+);
+
+// Once the What's New modal is dismissed, offer the next tour — it was
+// held back while the modal was up (see checkWhatsNewAndTours).
+watch(
+  () => whatsNewStore.visible,
+  (visible) => {
+    if (!visible) offerNextTour();
   },
 );
 </script>
@@ -172,6 +243,8 @@ watch(
       @accept="handleConsentDecision(true)"
       @decline="handleConsentDecision(false)"
     />
+    <WhatsNewModal v-if="whatsNewStore.visible && appVersion" :current-version="appVersion" />
+    <FeatureTourOverlay />
   </div>
 </template>
 
@@ -299,6 +372,31 @@ body {
   color: #fff;
 }
 
+/* Manual "take a tour" trigger — used in view headers alongside the
+   feature-tour system (see PRD-0018). A circular icon button so it reads
+   as a secondary affordance next to primary header actions. */
+.tour-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.tour-trigger-btn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary-dim);
+  background: var(--color-surface-hover);
+}
+
 .input {
   padding: 6px 10px;
   border: 1px solid var(--color-border);
@@ -337,7 +435,10 @@ select.input {
   border-color: var(--color-primary);
 }
 
-.copy-btn {
+/* Minimal-chrome ghost icon button — e.g. a small "remove"/"×" control in a
+   list row. Not for copy-to-clipboard buttons; use CopyButton.vue for those
+   (see OEH-37) — this class only remains for non-copy icon buttons. */
+.icon-btn-ghost {
   background: none;
   border: none;
   color: var(--color-text-muted);
@@ -346,7 +447,7 @@ select.input {
   border-radius: 3px;
   font-size: 12px;
 }
-.copy-btn:hover {
+.icon-btn-ghost:hover {
   color: var(--color-primary);
   background: var(--color-surface);
 }

@@ -1,0 +1,97 @@
+name: Snapshot download totals
+
+# Runs daily: sums assets[].download_count across every GitHub Release and
+# appends {date, total} to docs/downloads-history.json — committed to the
+# dedicated `data` branch, never to `main`.
+#
+# GitHub's download_count is a live cumulative number with no history API
+# (see OEH-25), so this is the only way to build a downloads-over-time
+# curve: start recording daily snapshots ourselves. Keeping those daily
+# commits on their own orphan branch (instead of `main`) means the curve
+# grows for free without spamming this repo's real commit history — no
+# one browses `data`, so a commit a day there costs nothing.
+#
+# docs/index.html fetches this file cross-origin straight off the `data`
+# branch's raw.githubusercontent.com URL (which sends
+# Access-Control-Allow-Origin: *), so no backend or CORS proxy is needed —
+# the docs site stays fully static.
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily, 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# Serialize runs (e.g. a manual workflow_dispatch overlapping the daily
+# cron) instead of racing to push to `data` — two concurrent pushes would
+# otherwise fight over the same branch tip and one would fail outright.
+# Never cancel an in-progress run for this: it's already summing/writing
+# real data, not disposable build output.
+concurrency:
+  group: downloads-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Record today's download total
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sum download counts and commit today's snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          HISTORY_PATH="docs/downloads-history.json"
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # --paginate walks every page of /releases; --jq is applied per
+          # page and gh concatenates the results, so this prints one
+          # download_count per asset (across every release, every page) —
+          # summed with awk. An empty stream (no releases/assets yet)
+          # still prints 0 via awk's uninitialized `s`.
+          TOTAL=$(gh api "repos/${REPO}/releases" --paginate --jq '.[].assets[].download_count' \
+            | awk '{s+=$1} END {print s+0}')
+          echo "Total downloads across all releases: ${TOTAL}"
+
+          # Work in a throwaway clone of just the `data` branch — it holds
+          # nothing but this one JSON file, so there's no reason to touch
+          # the working tree this job actually checked out (none — we
+          # never check out `main` at all here).
+          rm -rf data-branch
+          if git clone --depth 1 --branch data "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" data-branch 2>/dev/null; then
+            cd data-branch
+          else
+            echo "No 'data' branch yet — creating it."
+            mkdir data-branch && cd data-branch
+            git init -q
+            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+            git checkout -q --orphan data
+          fi
+
+          mkdir -p docs
+          if [ ! -f "$HISTORY_PATH" ]; then
+            echo "[]" > "$HISTORY_PATH"
+          fi
+
+          # Upsert today's entry (re-running the same day, e.g. via
+          # workflow_dispatch, overwrites rather than duplicates) and keep
+          # the array sorted by date.
+          jq --arg date "$TODAY" --argjson total "$TOTAL" \
+            '(map(select(.date != $date))) + [{date: $date, total: $total}] | sort_by(.date)' \
+            "$HISTORY_PATH" > "${HISTORY_PATH}.tmp"
+          mv "${HISTORY_PATH}.tmp" "$HISTORY_PATH"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$HISTORY_PATH"
+
+          if git diff --cached --quiet; then
+            echo "No change for ${TODAY} — skipping commit."
+            exit 0
+          fi
+
+          git commit -q -m "chore(downloads): record snapshot for ${TODAY} (${TOTAL} total)"
+          git push -q origin HEAD:data
