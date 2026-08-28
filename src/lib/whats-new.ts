@@ -27,6 +27,40 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.8.0",
+    date: "2026-08-28",
+    highlights: [
+      {
+        title: "Manage the DIRECTORY",
+        description:
+          "Create, rename, and delete DIRECTORY folders directly from the EHR Browser, on top of last release's read-only folder view.",
+        tourId: "ehrs",
+        routePath: "/ehrs",
+      },
+      {
+        title: "Live dashboard",
+        description:
+          "The landing page now shows live EHR, composition, and template counts pulled straight from your connected server instead of a static welcome screen.",
+        tourId: "dashboard",
+        routePath: "/dashboard",
+      },
+      {
+        title: "Sort and filter the EHR list",
+        description:
+          "Sort EHRs by creation date (ascending or descending) and filter by DIRECTORY entries, right from the EHR Browser's filter builder.",
+        tourId: "ehrs",
+        routePath: "/ehrs",
+      },
+      {
+        title: "Template tools",
+        description:
+          "Download a template's OPT XML, upload new templates from the panel header, and collapse nodes in the OPT tree to focus on the part you care about.",
+        tourId: "templates",
+        routePath: "/templates",
+      },
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-08-27",
     highlights: [
