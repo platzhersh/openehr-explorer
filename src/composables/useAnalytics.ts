@@ -55,6 +55,9 @@ export type AnalyticsEvent =
   | "server_profile_created"
   | "server_profile_updated"
   | "server_profile_deleted"
+  // --- dashboard (OEH-17) ---
+  | "dashboard_viewed"
+  | "dashboard_refreshed"
   // --- EHR ---
   | "ehr_browsed"
   | "ehr_created"

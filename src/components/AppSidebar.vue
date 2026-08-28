@@ -12,6 +12,7 @@ const whatsNewStore = useWhatsNewStore();
 const appVersion = ref<string>("");
 
 const navItems = [
+  { path: "/dashboard", label: "Overview", icon: "O" },
   { path: "/ehrs", label: "EHR Browser", icon: "H" },
   { path: "/templates", label: "Templates", icon: "T" },
   { path: "/aql", label: "AQL Runner", icon: "Q" },
