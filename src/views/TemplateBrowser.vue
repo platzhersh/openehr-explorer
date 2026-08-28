@@ -433,12 +433,35 @@ onUnmounted(() => {
             </div>
             <button
               type="button"
-              class="btn btn-sm"
+              class="btn btn-sm icon-btn"
               :disabled="!templateStore.selectedOpt"
-              title="Download the operational template as a .opt (XML) file"
+              title="Download OPT"
+              aria-label="Download OPT"
               @click="downloadOpt"
             >
-              Download OPT
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -1003,6 +1026,15 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Icon-only variant of .btn — same footprint as a tab so it sits flush
+   next to the tab bar without widening the header. */
+.icon-btn {
+  padding: 4px;
+  width: 26px;
+  height: 26px;
+  justify-content: center;
 }
 
 .tab-bar {
