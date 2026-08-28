@@ -130,29 +130,9 @@ onMounted(async () => {
   // Load draft if exists
   loadDraft();
 
-  // Ensure webTemplate is set on the mb-auto-form element when it becomes available
-  setTimeout(async () => {
-    if (mbFormRef.value && templateStore.selectedWebTemplate) {
-      const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
-      (mbFormRef.value as any).webTemplate = normalized;
-      console.log("Web Template loaded (normalized):", normalized);
-
-      // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
-      const templateId =
-        resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
-      if (templateId && serverStore.activeServerId) {
-        try {
-          const example = await invoke("get_template_example", {
-            serverId: serverStore.activeServerId,
-            templateId,
-          });
-          console.log("EHRBase FLAT example (source of truth):", example);
-        } catch (e) {
-          console.warn("Could not fetch template example:", e);
-        }
-      }
-    }
-  }, 100);
+  // Push the web template — and, in edit mode, the composition's existing
+  // FLAT data — into the mb-auto-form element once it has mounted.
+  hydrateMbForm();
 });
 
 async function loadCompositionForEdit(existingComposition: Record<string, unknown> | null) {
@@ -184,11 +164,9 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
     });
 
     if (!flatComp) return;
+    // hydrateMbForm() pushes this into the mb-auto-form once it has mounted
+    // — after its webTemplate, so it knows what to do with these paths.
     flatData.value = flatComp;
-
-    // Push the FLAT data into the medblocks-ui form once its element has
-    // mounted, retrying briefly since that happens on a later render pass.
-    applyFlatDataToForm(flatComp);
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
   } finally {
@@ -196,16 +174,45 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
   }
 }
 
-function applyFlatDataToForm(flatComp: Record<string, unknown>, attempt = 0) {
-  if (mbFormRef.value) {
-    (mbFormRef.value as any).value = flatComp;
+// Pushes the web template — and, in edit mode, the composition's existing
+// FLAT data (via `flatData`, set by loadCompositionForEdit) — into the
+// mb-auto-form element. Order matters: the form can't make sense of a
+// `.value` assignment until it knows the archetype paths from `.webTemplate`,
+// so both are set together here rather than on separate, potentially
+// racing timers. Retries briefly since the element only mounts once
+// `isReady` has flowed through a render pass.
+async function hydrateMbForm(attempt = 0) {
+  if (!mbFormRef.value || !templateStore.selectedWebTemplate) {
+    if (attempt >= 20) {
+      console.warn("mb-auto-form did not mount in time; could not initialize the form");
+      return;
+    }
+    setTimeout(() => hydrateMbForm(attempt + 1), 100);
     return;
   }
-  if (attempt >= 20) {
-    console.warn("mb-auto-form did not mount in time; could not pre-populate composition data");
-    return;
+
+  const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+  (mbFormRef.value as any).webTemplate = normalized;
+  console.log("Web Template loaded (normalized):", normalized);
+
+  if (isEditMode.value && Object.keys(flatData.value).length > 0) {
+    (mbFormRef.value as any).value = flatData.value;
   }
-  setTimeout(() => applyFlatDataToForm(flatComp, attempt + 1), 100);
+
+  // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
+  const templateId =
+    resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
+  if (templateId && serverStore.activeServerId) {
+    try {
+      const example = await invoke("get_template_example", {
+        serverId: serverStore.activeServerId,
+        templateId,
+      });
+      console.log("EHRBase FLAT example (source of truth):", example);
+    } catch (e) {
+      console.warn("Could not fetch template example:", e);
+    }
+  }
 }
 
 function handleMbSubmit(event: Event) {
