@@ -160,6 +160,22 @@ function createComposition(templateId: string) {
   router.push({ name: "compose", params: { templateId } });
 }
 
+function downloadOpt() {
+  const opt = templateStore.selectedOpt;
+  const templateId = selectedTemplateId.value;
+  if (!opt || !templateId) return;
+
+  void analytics.track("template_opt_exported");
+
+  const blob = new Blob([opt], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${templateId}.opt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Search functionality
 function handleKeydown(e: KeyboardEvent) {
   if (!selectedTemplateId.value) return;
@@ -383,35 +399,46 @@ onUnmounted(() => {
       <template v-if="selectedTemplateId && templateStore.selectedWebTemplate">
         <div class="panel-header">
           <h2>{{ selectedTemplateId }}</h2>
-          <div class="tab-bar">
+          <div class="panel-header-actions">
+            <div class="tab-bar">
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'tree' }"
+                @click="activeTab = 'tree'"
+              >
+                OPT Tree
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'opt' }"
+                @click="activeTab = 'opt'"
+                :disabled="!templateStore.selectedOpt"
+              >
+                OPT XML
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'json' }"
+                @click="activeTab = 'json'"
+              >
+                Web Template
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'flat' }"
+                @click="activeTab = 'flat'"
+              >
+                FLAT Paths
+              </button>
+            </div>
             <button
-              class="tab"
-              :class="{ active: activeTab === 'tree' }"
-              @click="activeTab = 'tree'"
-            >
-              OPT Tree
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'opt' }"
-              @click="activeTab = 'opt'"
+              type="button"
+              class="btn btn-sm"
               :disabled="!templateStore.selectedOpt"
+              title="Download the operational template as a .opt (XML) file"
+              @click="downloadOpt"
             >
-              OPT XML
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'json' }"
-              @click="activeTab = 'json'"
-            >
-              Web Template
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'flat' }"
-              @click="activeTab = 'flat'"
-            >
-              FLAT Paths
+              Download OPT
             </button>
           </div>
         </div>
@@ -970,6 +997,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-size: 13px;
   color: var(--color-text-muted);
   text-align: center;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tab-bar {
