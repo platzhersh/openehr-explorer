@@ -61,6 +61,13 @@ fn sort_field_path(field: &str) -> Option<&'static str> {
 /// for the given sort field/direction. Both default to `time_created DESC`
 /// (newest first) when omitted, matching the app's historical default
 /// ordering (see PRD-0001).
+///
+/// Always appends `e/ehr_id/value ASC` as a secondary sort key (unless
+/// `ehr_id` is itself the primary field) so ties on the primary field — e.g.
+/// several EHRs created in the same instant — get a total, stable order.
+/// Without one, a CDR is free to return tied rows in a different relative
+/// order across separate paginated queries, which could duplicate or skip
+/// rows across page boundaries.
 fn build_ehr_list_aql(
     offset: usize,
     limit: usize,
@@ -77,10 +84,16 @@ fn build_ehr_list_aql(
         other => return Err(format!("Unsupported sort direction: {}", other)),
     };
 
+    let tiebreaker = if field == "ehr_id" {
+        String::new()
+    } else {
+        ", e/ehr_id/value ASC".to_string()
+    };
+
     Ok(format!(
         "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e \
-         ORDER BY {} {} LIMIT {} OFFSET {}",
-        path, dir, limit, offset
+         ORDER BY {} {}{} LIMIT {} OFFSET {}",
+        path, dir, tiebreaker, limit, offset
     ))
 }
 
@@ -1167,6 +1180,27 @@ mod tests {
     fn test_build_ehr_list_aql_sort_by_system_id() {
         let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
         assert!(aql.contains("ORDER BY e/system_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_appends_ehr_id_tiebreaker_for_other_fields() {
+        // A secondary sort key on the unique ehr_id gives ties on the
+        // primary field (e.g. several EHRs created in the same instant) a
+        // stable, total order across separate paginated queries.
+        let aql = build_ehr_list_aql(0, 20, Some("time_created"), Some("desc")).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value DESC, e/ehr_id/value ASC LIMIT"));
+
+        let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/system_id/value ASC, e/ehr_id/value ASC LIMIT"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_no_duplicate_tiebreaker_when_sorting_by_ehr_id() {
+        // ehr_id is already the (unique) primary key here, so appending it
+        // again as a tiebreaker would be redundant.
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value ASC LIMIT"));
+        assert_eq!(aql.matches("e/ehr_id/value").count(), 2); // SELECT column + ORDER BY, no third occurrence
     }
 
     #[test]

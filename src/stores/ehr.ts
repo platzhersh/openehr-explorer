@@ -108,7 +108,15 @@ export const useEhrStore = defineStore("ehr", () => {
   const searchError = ref<string | null>(null);
   const searchLimitReached = ref(false);
 
+  // Bumped on every fetchEhrs call so a slow response for a since-superseded
+  // request (the user changed page, sort field, or sort direction again
+  // before the previous request came back) can't land after a newer one and
+  // overwrite the list with stale — e.g. wrongly ordered — data. Same
+  // pattern as searchRequestId/directoryRequestId below.
+  let fetchRequestId = 0;
+
   async function fetchEhrs(serverId: string, page = 0) {
+    const requestId = ++fetchRequestId;
     loading.value = true;
     error.value = null;
     try {
@@ -119,13 +127,15 @@ export const useEhrStore = defineStore("ehr", () => {
         sortBy: sortBy.value,
         sortDir: sortDir.value,
       });
+      if (requestId !== fetchRequestId) return; // superseded by a newer request
       ehrs.value = result.ehrs;
       total.value = result.total;
       offset.value = result.offset;
     } catch (e) {
+      if (requestId !== fetchRequestId) return;
       error.value = String(e);
     } finally {
-      loading.value = false;
+      if (requestId === fetchRequestId) loading.value = false;
     }
   }
 
