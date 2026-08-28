@@ -85,13 +85,13 @@ describe("toWireFolder", () => {
     ]);
   });
 
-  it("omits archetype_details on nested folders", () => {
+  it("omits archetype_details on nested folders but still sets archetype_node_id", () => {
     const folder = emptyFolder("Root");
     addSubfolder(folder, "2026");
     const wire = toWireFolder(folder);
     const subWire = (wire.folders as Record<string, unknown>[])[0];
     expect(subWire.archetype_details).toBeUndefined();
-    expect(subWire.archetype_node_id).toBeUndefined();
+    expect(subWire.archetype_node_id).toBe("openEHR-EHR-FOLDER.generic.v1");
     expect(subWire.name).toEqual({ value: "2026" });
   });
 

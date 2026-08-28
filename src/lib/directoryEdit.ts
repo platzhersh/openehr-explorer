@@ -96,17 +96,21 @@ export function fromWireFolder(folder: Record<string, unknown>): EditableFolder 
  * no `id` isn't valid RM data, and a half-filled "add item" row shouldn't
  * block saving the rest of the tree.
  *
- * Only the root FOLDER gets `archetype_details`: it's the archetype root of
- * the DIRECTORY structure (per the RM's `Archetyped_valid` invariant), the
- * same reasoning `build_ehr_status_json` documents on the Rust side for
- * EHR_STATUS. Nested FOLDERs share that archetype and aren't roots, so
- * stricter CDRs don't require it on them.
+ * `archetype_node_id` is mandatory (existence 1..1) on every FOLDER — it's
+ * a plain `LOCATABLE` attribute, not something reserved for archetype
+ * roots, and CDRs like EHRBase reject a nested FOLDER that omits it (400
+ * "Attribute archetype_node_id of class FOLDER does not match existence
+ * 1..1"). `archetype_details` is different: only the root FOLDER gets it,
+ * since it marks the archetype root of the DIRECTORY structure (per the
+ * RM's `Archetyped_valid` invariant) — the same reasoning
+ * `build_ehr_status_json` documents on the Rust side for EHR_STATUS.
  */
 const FOLDER_ARCHETYPE_ID = "openEHR-EHR-FOLDER.generic.v1";
 
 export function toWireFolder(folder: EditableFolder, isRoot = true): Record<string, unknown> {
   const wire: Record<string, unknown> = {
     _type: "FOLDER",
+    archetype_node_id: FOLDER_ARCHETYPE_ID,
     name: { value: folder.name.trim() || "(unnamed folder)" },
     items: folder.items
       .filter((item) => item.id.trim().length > 0)
@@ -120,7 +124,6 @@ export function toWireFolder(folder: EditableFolder, isRoot = true): Record<stri
   };
 
   if (isRoot) {
-    wire.archetype_node_id = FOLDER_ARCHETYPE_ID;
     wire.archetype_details = {
       _type: "ARCHETYPED",
       archetype_id: {
