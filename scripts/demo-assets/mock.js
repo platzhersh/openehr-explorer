@@ -428,6 +428,18 @@
     execute_stored_query: function () {
       return AQL_RESULT;
     },
+
+    // -- dashboard (OEH-17) --
+    get_dashboard_counts: function () {
+      const compositionCount = Object.keys(EHR_DETAILS).reduce(function (sum, ehrId) {
+        return sum + EHR_DETAILS[ehrId].compositions.length;
+      }, 0);
+      return {
+        ehr_count: EHRS.length,
+        composition_count: compositionCount,
+        template_count: TEMPLATES.length,
+      };
+    },
   };
 
   function invoke(cmd, args) {
