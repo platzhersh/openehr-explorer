@@ -163,25 +163,37 @@ async function loadCompositionForEdit() {
       compositionUid: props.compositionUid,
     });
 
-    // Pre-populate form with FLAT data
-    if (mbFormRef.value && flatComp) {
-      // Extract context fields
-      composerName.value = (flatComp["ctx/composer_name"] as string) || "";
-      language.value = (flatComp["ctx/language"] as string) || "en";
-      territory.value = (flatComp["ctx/territory"] as string) || "US";
+    if (!flatComp) return;
 
-      // Set form value
-      setTimeout(() => {
-        if (mbFormRef.value) {
-          (mbFormRef.value as any).value = flatComp;
-        }
-      }, 100);
-    }
+    // Extract context fields. These are plain refs, independent of whether
+    // the mb-auto-form element has mounted yet — it hasn't at this point,
+    // since it only renders once `isReady` (the web template load above)
+    // has flowed through a render pass, which is still pending here.
+    composerName.value = (flatComp["ctx/composer_name"] as string) || "";
+    language.value = (flatComp["ctx/language"] as string) || "en";
+    territory.value = (flatComp["ctx/territory"] as string) || "US";
+    flatData.value = flatComp;
+
+    // Push the FLAT data into the medblocks-ui form once its element has
+    // mounted, retrying briefly since that happens on a later render pass.
+    applyFlatDataToForm(flatComp);
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
   } finally {
     loading.value = false;
   }
+}
+
+function applyFlatDataToForm(flatComp: Record<string, unknown>, attempt = 0) {
+  if (mbFormRef.value) {
+    (mbFormRef.value as any).value = flatComp;
+    return;
+  }
+  if (attempt >= 20) {
+    console.warn("mb-auto-form did not mount in time; could not pre-populate composition data");
+    return;
+  }
+  setTimeout(() => applyFlatDataToForm(flatComp, attempt + 1), 100);
 }
 
 function handleMbSubmit(event: Event) {
@@ -548,6 +560,7 @@ watch(
             {{ showPreview ? "Hide" : "Show" }} FLAT Preview
           </button>
           <button class="btn btn-sm" @click="handleReset">Reset</button>
+          <button class="btn btn-sm" @click="router.back()">Cancel</button>
         </div>
       </div>
 
