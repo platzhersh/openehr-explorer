@@ -42,6 +42,89 @@ pub struct EhrListResponse {
     pub total: usize,
     pub offset: usize,
     pub limit: usize,
+    /// False when the requested sort couldn't actually be applied — the CDR
+    /// rejected `ORDER BY` on the sort field and `list_ehrs` fell back to an
+    /// unsorted query (see `is_order_by_unsupported`). The frontend uses
+    /// this to tell the user sorting isn't supported rather than implying
+    /// the shown order matches what they asked for.
+    pub sort_applied: bool,
+}
+
+/// Whitelisted EHR-list sort fields, mapped to their AQL path expressions.
+/// A whitelist (rather than interpolating the caller-supplied field name
+/// straight into the query) is what makes it safe to build the `ORDER BY`
+/// clause via string formatting in `build_ehr_list_aql` below.
+fn sort_field_path(field: &str) -> Option<&'static str> {
+    match field {
+        "time_created" => Some("e/time_created/value"),
+        "ehr_id" => Some("e/ehr_id/value"),
+        "system_id" => Some("e/system_id/value"),
+        _ => None,
+    }
+}
+
+/// Builds the AQL query used by `list_ehrs`, including an `ORDER BY` clause
+/// for the given sort field/direction. Both default to `time_created DESC`
+/// (newest first) when omitted, matching the app's historical default
+/// ordering (see PRD-0001).
+///
+/// Always appends `e/ehr_id/value ASC` as a secondary sort key (unless
+/// `ehr_id` is itself the primary field) so ties on the primary field — e.g.
+/// several EHRs created in the same instant — get a total, stable order.
+/// Without one, a CDR is free to return tied rows in a different relative
+/// order across separate paginated queries, which could duplicate or skip
+/// rows across page boundaries.
+fn build_ehr_list_aql(
+    offset: usize,
+    limit: usize,
+    sort_by: Option<&str>,
+    sort_dir: Option<&str>,
+) -> Result<String, String> {
+    let field = sort_by.unwrap_or("time_created");
+    let path =
+        sort_field_path(field).ok_or_else(|| format!("Unsupported sort field: {}", field))?;
+
+    let dir = match sort_dir.unwrap_or("desc").to_ascii_lowercase().as_str() {
+        "asc" => "ASC",
+        "desc" => "DESC",
+        other => return Err(format!("Unsupported sort direction: {}", other)),
+    };
+
+    let tiebreaker = if field == "ehr_id" {
+        String::new()
+    } else {
+        ", e/ehr_id/value ASC".to_string()
+    };
+
+    Ok(format!(
+        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e \
+         ORDER BY {} {}{} LIMIT {} OFFSET {}",
+        path, dir, tiebreaker, limit, offset
+    ))
+}
+
+/// Same `SELECT`/`FROM`/`LIMIT`/`OFFSET` as `build_ehr_list_aql`, but with no
+/// `ORDER BY` at all — the fallback used when the CDR rejects sorting on
+/// EHR-level attributes (see `list_ehrs`).
+fn build_ehr_list_aql_unsorted(offset: usize, limit: usize) -> String {
+    format!(
+        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {} OFFSET {}",
+        limit, offset
+    )
+}
+
+/// Detects the specific "`ORDER BY` on an EHR-level attribute isn't
+/// implemented" error some CDRs return for this query shape — confirmed
+/// against a real EHRBase instance, which rejects `ORDER BY e/time_created/value`
+/// the same way it's documented (in `build_ehr_search_aql` above) to reject
+/// `WHERE` on EHR-level paths, even though the AQL spec allows both. Kept
+/// narrow (requires `order_by` plus a not-implemented/not-supported phrase)
+/// so it doesn't swallow unrelated 400s from `list_ehrs`'s query — those
+/// still surface as a normal error.
+fn is_order_by_unsupported(response_body: &str) -> bool {
+    let lower = response_body.to_ascii_lowercase();
+    lower.contains("order_by")
+        && (lower.contains("not implemented") || lower.contains("not supported"))
 }
 
 #[tauri::command]
@@ -50,18 +133,16 @@ pub async fn list_ehrs(
     server_id: String,
     offset: usize,
     limit: usize,
+    sort_by: Option<String>,
+    sort_dir: Option<String>,
 ) -> Result<EhrListResponse, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
+    let url = format!("{}/rest/openehr/v1/query/aql", base);
 
     // Use AQL to list EHRs since the REST API list endpoint varies by implementation
-    let aql = format!(
-        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {} OFFSET {}",
-        limit, offset
-    );
-
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
+    let aql = build_ehr_list_aql(offset, limit, sort_by.as_deref(), sort_dir.as_deref())?;
     let resp = send_instrumented(
         &app,
         &client,
@@ -70,6 +151,27 @@ pub async fn list_ehrs(
             .json(&serde_json::json!({ "q": aql })),
     )
     .await?;
+
+    // Some CDRs (confirmed: EHRBase) don't implement `ORDER BY` on EHR-level
+    // attributes. Rather than surfacing a hard error and leaving the EHR
+    // Browser unusable on those servers, retry once without the ORDER BY
+    // clause; `sort_applied: false` in the response tells the frontend the
+    // requested order wasn't actually honored, so it can say so instead of
+    // silently showing unsorted results as if they were sorted.
+    let (resp, sort_applied) = if !resp.is_success && is_order_by_unsupported(&resp.body) {
+        let fallback_aql = build_ehr_list_aql_unsorted(offset, limit);
+        let fallback_resp = send_instrumented(
+            &app,
+            &client,
+            make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({ "q": fallback_aql })),
+        )
+        .await?;
+        (fallback_resp, false)
+    } else {
+        (resp, true)
+    };
 
     if !resp.is_success {
         return Err(format!(
@@ -107,6 +209,7 @@ pub async fn list_ehrs(
         offset,
         limit,
         ehrs,
+        sort_applied,
     })
 }
 
@@ -1097,6 +1200,98 @@ pub async fn search_ehrs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_build_ehr_list_aql_defaults_to_time_created_desc() {
+        let aql = build_ehr_list_aql(0, 20, None, None).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value DESC"));
+        assert!(aql.contains("LIMIT 20 OFFSET 0"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_asc() {
+        let aql = build_ehr_list_aql(40, 20, Some("time_created"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value ASC"));
+        assert!(aql.contains("LIMIT 20 OFFSET 40"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_direction_is_case_insensitive() {
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("ASC")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_sort_by_ehr_id() {
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("desc")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value DESC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_sort_by_system_id() {
+        let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/system_id/value ASC"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_appends_ehr_id_tiebreaker_for_other_fields() {
+        // A secondary sort key on the unique ehr_id gives ties on the
+        // primary field (e.g. several EHRs created in the same instant) a
+        // stable, total order across separate paginated queries.
+        let aql = build_ehr_list_aql(0, 20, Some("time_created"), Some("desc")).unwrap();
+        assert!(aql.contains("ORDER BY e/time_created/value DESC, e/ehr_id/value ASC LIMIT"));
+
+        let aql = build_ehr_list_aql(0, 20, Some("system_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/system_id/value ASC, e/ehr_id/value ASC LIMIT"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_no_duplicate_tiebreaker_when_sorting_by_ehr_id() {
+        // ehr_id is already the (unique) primary key here, so appending it
+        // again as a tiebreaker would be redundant.
+        let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("asc")).unwrap();
+        assert!(aql.contains("ORDER BY e/ehr_id/value ASC LIMIT"));
+        assert_eq!(aql.matches("e/ehr_id/value").count(), 2); // SELECT column + ORDER BY, no third occurrence
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_unsorted_has_no_order_by() {
+        let aql = build_ehr_list_aql_unsorted(40, 20);
+        assert!(!aql.to_ascii_uppercase().contains("ORDER BY"));
+        assert!(aql.contains("LIMIT 20 OFFSET 40"));
+        assert!(aql.contains("SELECT e/ehr_id/value, e/time_created/value, e/system_id/value"));
+    }
+
+    #[test]
+    fn test_is_order_by_unsupported_matches_confirmed_ehrbase_error() {
+        // Actual error body observed from a real EHRBase instance.
+        let body = r#"{"error":"Bad Request","message":"Not implemented: ORDER_BY: identified path 'time_created/value' for type EHR not supported"}"#;
+        assert!(is_order_by_unsupported(body));
+    }
+
+    #[test]
+    fn test_is_order_by_unsupported_ignores_unrelated_errors() {
+        assert!(!is_order_by_unsupported(
+            r#"{"error":"Unauthorized","message":"Invalid credentials"}"#
+        ));
+        assert!(!is_order_by_unsupported(
+            r#"{"error":"Bad Request","message":"malformed AQL query"}"#
+        ));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_rejects_unknown_field() {
+        let result = build_ehr_list_aql(0, 20, Some("subject_id"), Some("asc"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported sort field"));
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_rejects_unknown_direction() {
+        let result = build_ehr_list_aql(0, 20, Some("time_created"), Some("sideways"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported sort direction"));
+    }
 
     fn empty_criteria() -> EhrSearchCriteria {
         EhrSearchCriteria {

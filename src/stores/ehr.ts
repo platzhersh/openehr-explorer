@@ -33,7 +33,17 @@ export interface EhrListResponse {
   total: number;
   offset: number;
   limit: number;
+  // False when the CDR rejected the requested sort (e.g. EHRBase doesn't
+  // implement ORDER BY on EHR-level attributes) and list_ehrs fell back to
+  // an unsorted query. See sort_field_path/is_order_by_unsupported in
+  // src-tauri/src/commands/ehr.rs.
+  sort_applied: boolean;
 }
+
+// Whitelisted server-side (AQL ORDER BY) sort fields for the EHR list — must
+// match the fields accepted by `sort_field_path` in src-tauri/src/commands/ehr.rs.
+export type EhrSortField = "time_created" | "ehr_id" | "system_id";
+export type SortDir = "asc" | "desc";
 
 export interface EhrSearchCriteria {
   ehr_id_prefix?: string;
@@ -77,6 +87,17 @@ export const useEhrStore = defineStore("ehr", () => {
   const error = ref<string | null>(null);
   const selectedEhr = ref<EhrDetail | null>(null);
 
+  // Sort state for the paginated (non-search) EHR list — sorted server-side
+  // via AQL ORDER BY (see list_ehrs in src-tauri/src/commands/ehr.rs).
+  // Defaults match the app's historical default ordering: newest first.
+  const sortBy = ref<EhrSortField>("time_created");
+  const sortDir = ref<SortDir>("desc");
+  // False when the server most recently rejected the requested sort (e.g.
+  // EHRBase doesn't implement ORDER BY on EHR-level attributes) and the
+  // list shown is actually unsorted. Starts true so no banner flashes
+  // before the first fetch resolves.
+  const sortApplied = ref(true);
+
   // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
   // and data-driven, so it's kept as raw JSON rather than a typed interface,
   // matching how `composition.ts` handles the composition body.
@@ -97,7 +118,15 @@ export const useEhrStore = defineStore("ehr", () => {
   const searchError = ref<string | null>(null);
   const searchLimitReached = ref(false);
 
+  // Bumped on every fetchEhrs call so a slow response for a since-superseded
+  // request (the user changed page, sort field, or sort direction again
+  // before the previous request came back) can't land after a newer one and
+  // overwrite the list with stale — e.g. wrongly ordered — data. Same
+  // pattern as searchRequestId/directoryRequestId below.
+  let fetchRequestId = 0;
+
   async function fetchEhrs(serverId: string, page = 0) {
+    const requestId = ++fetchRequestId;
     loading.value = true;
     error.value = null;
     try {
@@ -105,15 +134,34 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         offset: page * limit.value,
         limit: limit.value,
+        sortBy: sortBy.value,
+        sortDir: sortDir.value,
       });
+      if (requestId !== fetchRequestId) return; // superseded by a newer request
       ehrs.value = result.ehrs;
       total.value = result.total;
       offset.value = result.offset;
+      sortApplied.value = result.sort_applied;
     } catch (e) {
+      if (requestId !== fetchRequestId) return;
       error.value = String(e);
     } finally {
-      loading.value = false;
+      if (requestId === fetchRequestId) loading.value = false;
     }
+  }
+
+  /** Changes the sort field for the paginated EHR list and re-fetches page 0.
+   *  Direction is left as-is — changing field doesn't guess a "natural"
+   *  default direction per field, it just re-sorts the same way. */
+  async function setSortBy(serverId: string, field: EhrSortField) {
+    sortBy.value = field;
+    await fetchEhrs(serverId, 0);
+  }
+
+  /** Flips asc/desc for the current sort field and re-fetches page 0. */
+  async function toggleSortDir(serverId: string) {
+    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+    await fetchEhrs(serverId, 0);
   }
 
   async function fetchEhrDetail(serverId: string, ehrId: string) {
@@ -354,6 +402,9 @@ export const useEhrStore = defineStore("ehr", () => {
     total,
     offset,
     limit,
+    sortBy,
+    sortDir,
+    sortApplied,
     loading,
     error,
     selectedEhr,
@@ -367,6 +418,8 @@ export const useEhrStore = defineStore("ehr", () => {
     searchError,
     searchLimitReached,
     fetchEhrs,
+    setSortBy,
+    toggleSortDir,
     fetchEhrDetail,
     fetchDirectory,
     clearDirectory,
