@@ -1,10 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { onUnmounted } from "vue";
-import { createPinia, setActivePinia } from "pinia";
-import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import Dashboard from "./Dashboard.vue";
 import { useServerStore, type ServerProfile, type ServerVersionInfo } from "../stores/server";
 import type { DashboardCounts } from "../stores/dashboard";
+import { mockTauriStores } from "../lib/storybook-tauri";
 
 const PROFILE: ServerProfile = {
   id: "profile-1",
@@ -51,39 +49,38 @@ interface StoryState {
 // Dashboard.vue reads everything from the `server`/`dashboard` Pinia stores
 // and fetches live via Tauri `invoke()` in its own onMounted/watch hooks —
 // there's nothing to pass as component props. Each story instead mocks the
-// Tauri IPC boundary (same helper UpdateNotification.stories.ts uses) so
-// those real invoke() calls resolve to canned data, and seeds the bits of
-// store state (profiles, connection status) that aren't themselves the
-// result of an invoke() call the component makes.
+// Tauri IPC boundary so those real invoke() calls resolve to canned data,
+// and seeds the bits of store state (profiles, connection status) that
+// aren't themselves the result of an invoke() call the component makes.
 function withStores(state: StoryState = {}) {
   return () => ({
     components: { Dashboard },
     setup() {
-      setActivePinia(createPinia());
-
-      mockIPC((cmd) => {
-        if (cmd === "get_dashboard_counts") {
-          if (state.countsError) return Promise.reject(state.countsError);
-          if (state.stayLoading) return new Promise(() => {}); // never resolves
-          return COUNTS;
-        }
-        if (cmd === "get_server_version") {
-          return VERSION_INFO;
-        }
-        if (cmd === "list_server_profiles") {
-          return [];
-        }
-      });
-      onUnmounted(() => clearMocks());
-
-      if (!state.empty) {
-        const serverStore = useServerStore();
-        serverStore.profiles = [PROFILE];
-        if (!state.noActiveServer) {
-          serverStore.activeServerId = PROFILE.id;
-          serverStore.connectionStatus[PROFILE.id] = "connected";
-        }
-      }
+      mockTauriStores(
+        (cmd) => {
+          if (cmd === "get_dashboard_counts") {
+            if (state.countsError) throw new Error(state.countsError);
+            if (state.stayLoading) return new Promise(() => {}); // never resolves
+            return COUNTS;
+          }
+          if (cmd === "get_server_version") {
+            return VERSION_INFO;
+          }
+          if (cmd === "list_server_profiles") {
+            return [];
+          }
+        },
+        () => {
+          if (!state.empty) {
+            const serverStore = useServerStore();
+            serverStore.profiles = [PROFILE];
+            if (!state.noActiveServer) {
+              serverStore.activeServerId = PROFILE.id;
+              serverStore.connectionStatus[PROFILE.id] = "connected";
+            }
+          }
+        },
+      );
 
       return {};
     },

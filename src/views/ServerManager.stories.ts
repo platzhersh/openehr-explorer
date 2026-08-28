@@ -1,10 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { onUnmounted } from "vue";
-import { createPinia, setActivePinia } from "pinia";
-import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { expect, userEvent, within } from "storybook/test";
 import ServerManager from "./ServerManager.vue";
 import type { ServerProfile, ServerVersionInfo } from "../stores/server";
+import { mockTauriStores } from "../lib/storybook-tauri";
 
 const EHRBASE_PROFILE: ServerProfile = {
   id: "profile-ehrbase",
@@ -73,17 +71,14 @@ interface StoryState {
 
 // ServerManager.vue loads everything itself in onMounted (list_server_profiles,
 // then get_server_version per profile) rather than reading from props, so
-// each story mocks the Tauri IPC boundary — same helper Dashboard.stories.ts
-// and UpdateNotification.stories.ts use — instead of pre-seeding the store
+// each story mocks the Tauri IPC boundary instead of pre-seeding the store
 // directly (which loadProfiles() would just overwrite on mount anyway).
 function withStores(state: StoryState = {}) {
   const profiles = state.profiles ?? [];
   return () => ({
     components: { ServerManager },
     setup() {
-      setActivePinia(createPinia());
-
-      mockIPC((cmd, payload) => {
+      mockTauriStores((cmd, payload) => {
         if (cmd === "list_server_profiles") return profiles;
         if (cmd === "get_server_version") {
           const profileId = (payload as { profileId?: string } | undefined)?.profileId;
@@ -91,12 +86,11 @@ function withStores(state: StoryState = {}) {
         }
         if (cmd === "test_server_connection") {
           if (state.testConnectionFails) {
-            return Promise.reject("Connection failed: 401 Unauthorized");
+            throw new Error("Connection failed: 401 Unauthorized");
           }
           return "Connected successfully (HTTP 200)";
         }
       });
-      onUnmounted(() => clearMocks());
 
       return {};
     },
