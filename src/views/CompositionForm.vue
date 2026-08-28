@@ -46,6 +46,20 @@ const requestSummaryLine = ref<string>("");
 const requestPayload = ref<unknown>(null);
 const responseSummaryLine = ref<string>("");
 const responsePayload = ref<unknown>(null);
+// Template ID for edit mode is resolved from the existing composition since
+// the /edit/:ehrId/:compositionUid route carries no templateId param.
+const resolvedTemplateId = ref<string>("");
+// Snapshot of the composition as originally loaded for editing, captured
+// once by loadCompositionForEdit. `composerName`/`language`/`territory`/
+// `flatData` above track live (possibly user-edited) form state, so Reset
+// needs this separate copy to revert to the last-saved composition instead
+// of wiping the form blank (see handleReset).
+const originalEditState = ref<{
+  composerName: string;
+  language: string;
+  territory: string;
+  flatData: Record<string, unknown>;
+} | null>(null);
 
 // medblocks-ui form ref
 const mbFormRef = ref<HTMLElement | null>(null);
@@ -80,7 +94,30 @@ onMounted(async () => {
   }
 
   // Load template
-  const templateId = props.templateId || (route.params.templateId as string);
+  let templateId = props.templateId || (route.params.templateId as string);
+
+  // Edit mode: the route carries no templateId, so resolve it from the
+  // existing composition's archetype details before loading the template.
+  // Keep the fetched (structured) composition around — loadCompositionForEdit
+  // needs it too, for composer/language/territory (see there for why).
+  let existingComposition: Record<string, unknown> | null = null;
+  if (!templateId && props.compositionUid && props.ehrId) {
+    try {
+      existingComposition = await invoke<Record<string, unknown>>("get_composition", {
+        serverId: serverStore.activeServerId,
+        ehrId: props.ehrId,
+        compositionUid: props.compositionUid,
+      });
+      templateId =
+        ((existingComposition as any)?.archetype_details?.template_id?.value as string) ||
+        ((existingComposition as any)?.archetype_node_id as string) ||
+        "";
+    } catch (e) {
+      console.error("Failed to resolve template ID from composition:", e);
+    }
+  }
+  resolvedTemplateId.value = templateId || "";
+
   if (templateId) {
     try {
       await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
@@ -95,7 +132,7 @@ onMounted(async () => {
   // Edit mode: load existing composition
   if (props.compositionUid && props.ehrId) {
     isEditMode.value = true;
-    await loadCompositionForEdit();
+    await loadCompositionForEdit(existingComposition);
   }
 
   // Set default time
@@ -104,59 +141,110 @@ onMounted(async () => {
   // Load draft if exists
   loadDraft();
 
-  // Ensure webTemplate is set on the mb-auto-form element when it becomes available
-  setTimeout(async () => {
-    if (mbFormRef.value && templateStore.selectedWebTemplate) {
-      const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
-      (mbFormRef.value as any).webTemplate = normalized;
-      console.log("Web Template loaded (normalized):", normalized);
-
-      // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
-      const templateId = props.templateId || (route.params.templateId as string);
-      if (templateId && serverStore.activeServerId) {
-        try {
-          const example = await invoke("get_template_example", {
-            serverId: serverStore.activeServerId,
-            templateId,
-          });
-          console.log("EHRBase FLAT example (source of truth):", example);
-        } catch (e) {
-          console.warn("Could not fetch template example:", e);
-        }
-      }
-    }
-  }, 100);
+  // Push the web template — and, in edit mode, the composition's existing
+  // FLAT data — into the mb-auto-form element once it has mounted.
+  hydrateMbForm();
 });
 
-async function loadCompositionForEdit() {
+async function loadCompositionForEdit(existingComposition: Record<string, unknown> | null) {
   if (!props.ehrId || !props.compositionUid || !serverStore.activeServerId) return;
 
   try {
     loading.value = true;
+
+    // composer/language/territory are RM attributes on the composition
+    // itself, not archetype content — EHRbase's FLAT representation (fetched
+    // below) omits them entirely, so they have to come from the structured
+    // composition instead. Reuse the one already fetched for template-ID
+    // resolution when we have it; otherwise fetch it fresh.
+    const composition =
+      existingComposition ??
+      (await invoke<Record<string, unknown>>("get_composition", {
+        serverId: serverStore.activeServerId,
+        ehrId: props.ehrId,
+        compositionUid: props.compositionUid,
+      }));
+    composerName.value = ((composition as any)?.composer?.name as string) || "";
+    language.value = ((composition as any)?.language?.code_string as string) || "en";
+    territory.value = ((composition as any)?.territory?.code_string as string) || "US";
+
     const flatComp = await invoke<Record<string, unknown>>("get_composition_flat", {
       serverId: serverStore.activeServerId,
       ehrId: props.ehrId,
       compositionUid: props.compositionUid,
     });
 
-    // Pre-populate form with FLAT data
-    if (mbFormRef.value && flatComp) {
-      // Extract context fields
-      composerName.value = (flatComp["ctx/composer_name"] as string) || "";
-      language.value = (flatComp["ctx/language"] as string) || "en";
-      territory.value = (flatComp["ctx/territory"] as string) || "US";
-
-      // Set form value
-      setTimeout(() => {
-        if (mbFormRef.value) {
-          (mbFormRef.value as any).value = flatComp;
-        }
-      }, 100);
-    }
+    if (!flatComp) return;
+    // hydrateMbForm() pushes this into the mb-auto-form once it has mounted
+    // — after its webTemplate, so it knows what to do with these paths.
+    flatData.value = flatComp;
+    originalEditState.value = {
+      composerName: composerName.value,
+      language: language.value,
+      territory: territory.value,
+      flatData: flatComp,
+    };
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
   } finally {
     loading.value = false;
+  }
+}
+
+// Pushes the web template — and, in edit mode, the composition's existing
+// FLAT data (via `flatData`, set by loadCompositionForEdit) — into the
+// mb-auto-form element.
+//
+// mb-auto-form (medblocks-ui) has no settable `value`/`data` property —
+// only `templateId`, `ctx`, `config`, `webTemplate`, `variant`, and
+// `addContext` are reactive properties. Pre-population instead goes through
+// its `import(composition)` method, which rebuilds its internal form DOM
+// (including repeatable groups) from `webTemplate` before binding values
+// into it. That DOM rebuild happens on a Lit update cycle triggered by
+// setting `.webTemplate`, so `import()` has to wait for `updateComplete`
+// or it binds against a form that isn't there yet.
+//
+// Retries briefly since the element itself only mounts once `isReady` has
+// flowed through a render pass.
+async function hydrateMbForm(attempt = 0) {
+  if (!mbFormRef.value || !templateStore.selectedWebTemplate) {
+    if (attempt >= 20) {
+      console.warn("mb-auto-form did not mount in time; could not initialize the form");
+      return;
+    }
+    setTimeout(() => hydrateMbForm(attempt + 1), 100);
+    return;
+  }
+
+  const formEl = mbFormRef.value as any;
+  const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+  formEl.webTemplate = normalized;
+  console.log("Web Template loaded (normalized):", normalized);
+
+  if (isEditMode.value && Object.keys(flatData.value).length > 0) {
+    if (typeof formEl.updateComplete?.then === "function") {
+      await formEl.updateComplete;
+    }
+    if (typeof formEl.import === "function") {
+      formEl.import(flatData.value);
+    } else {
+      console.warn("mb-auto-form has no import() method; could not pre-populate composition data");
+    }
+  }
+
+  // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
+  const templateId =
+    resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
+  if (templateId && serverStore.activeServerId) {
+    try {
+      const example = await invoke("get_template_example", {
+        serverId: serverStore.activeServerId,
+        templateId,
+      });
+      console.log("EHRBase FLAT example (source of truth):", example);
+    } catch (e) {
+      console.warn("Could not fetch template example:", e);
+    }
   }
 }
 
@@ -311,7 +399,8 @@ async function handleSubmit() {
     }
 
     // Get template ID
-    const templateId = props.templateId || (route.params.templateId as string);
+    const templateId =
+      resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
     if (!templateId) {
       throw new Error("Template ID not found");
     }
@@ -386,14 +475,27 @@ async function handleSubmit() {
 }
 
 function handleReset() {
-  if (mbFormRef.value) {
-    (mbFormRef.value as any).reset?.();
+  // Editing an existing composition: revert to the composition as loaded,
+  // not a blank form — the user is undoing their in-progress edits, not
+  // starting a new composition.
+  if (isEditMode.value && originalEditState.value) {
+    const original = originalEditState.value;
+    composerName.value = original.composerName;
+    language.value = original.language;
+    territory.value = original.territory;
+    flatData.value = original.flatData;
+    // mb-auto-form has no reset()/value setter — import() is how its data
+    // is (re-)populated (see hydrateMbForm for why .value isn't real here).
+    (mbFormRef.value as any)?.import?.(original.flatData);
+  } else {
+    // New composition: clear() is mb-auto-form's equivalent of reset().
+    (mbFormRef.value as any)?.clear?.();
+    composerName.value = "";
+    language.value = "en";
+    territory.value = "US";
+    flatData.value = {};
   }
-  composerName.value = "";
-  language.value = "en";
-  territory.value = "US";
   compositionTime.value = new Date().toISOString().slice(0, 16);
-  flatData.value = {};
   error.value = null;
   success.value = null;
   clearDraft();
@@ -410,7 +512,8 @@ function handleEhrCreated(newEhrId: string) {
 
 // Draft persistence
 const draftKey = computed(() => {
-  const templateId = props.templateId || (route.params.templateId as string);
+  const templateId =
+    resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
   return `composition_draft_${templateId}_${selectedEhrId.value}`;
 });
 
@@ -481,9 +584,9 @@ watch(
       success.value = null;
       compositionTime.value = new Date().toISOString().slice(0, 16);
 
-      // Reset medblocks form
+      // Reset medblocks form (mb-auto-form's method is clear(), not reset())
       if (mbFormRef.value) {
-        (mbFormRef.value as any).reset?.();
+        (mbFormRef.value as any).clear?.();
       }
 
       // Load new template
@@ -522,6 +625,7 @@ watch(
             {{ showPreview ? "Hide" : "Show" }} FLAT Preview
           </button>
           <button class="btn btn-sm" @click="handleReset">Reset</button>
+          <button class="btn btn-sm" @click="router.back()">Cancel</button>
         </div>
       </div>
 
