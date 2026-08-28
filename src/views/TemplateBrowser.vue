@@ -63,6 +63,11 @@ watch(
 
 watch(selectedTemplateId, async (id) => {
   if (id && serverStore.activeServerId) {
+    // Clear the previous template's data immediately rather than leaving it
+    // on screen (and, via the OPT download button, downloadable) under the
+    // new template's header while its own fetch is still in flight.
+    templateStore.selectedWebTemplate = null;
+    templateStore.selectedOpt = null;
     templateStore.fetchWebTemplate(serverStore.activeServerId, id);
     templateStore.fetchOpt(serverStore.activeServerId, id);
     // Fetch term bindings from OPT
