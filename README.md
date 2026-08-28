@@ -18,6 +18,7 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 ## Features
 
 - **Server Connection Manager** — Save and switch between multiple CDR instances with auto version detection
+- **Overview Dashboard** — Landing view with live, refreshable EHR/composition/template counts and connected server info
 - **EHR Browser** — Paginated list with server-side AQL search (subject, namespace, system, modifiable, hasCompositions)
 - **Composition Viewer** — Template-aware "pretty" view with human-readable labels, raw JSON, and FLAT format
 - **FLAT Path Panel** — One-click copy of FLAT paths for SDK development

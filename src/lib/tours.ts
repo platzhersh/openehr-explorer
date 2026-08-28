@@ -61,6 +61,12 @@ export interface Tour {
  */
 export const APP_INTRO_TOUR_ID = "app-intro";
 
+/** Shorthand for a `TourStep` literal — trims the repetition of naming all
+ * three fields at every step (this file is nothing but arrays of them). */
+function step(target: string, title: string, body: string): TourStep {
+  return { target, title, body };
+}
+
 export const TOURS: Tour[] = [
   {
     id: APP_INTRO_TOUR_ID,
@@ -93,6 +99,28 @@ export const TOURS: Tour[] = [
         title: "See every request",
         body: "The Request Inspector at the bottom of the window logs every HTTP call the app makes to the connected CDR. It's always available; toggle it with Ctrl/Cmd+Shift+I.",
       },
+    ],
+  },
+  {
+    id: "dashboard",
+    routeNames: ["dashboard"],
+    label: "Overview",
+    steps: [
+      step(
+        '[data-tour="dashboard-stats"]',
+        "Live counts, one glance",
+        "Total EHRs, compositions, and templates on the connected server — click any card to jump straight to its browser.",
+      ),
+      step(
+        '[data-tour="dashboard-refresh"]',
+        "Nothing is cached",
+        "Counts are fetched fresh every time you land here or switch servers. Click Refresh any time to re-run the queries.",
+      ),
+      step(
+        '[data-tour="dashboard-server-info"]',
+        "Your connected server, at a glance",
+        "Name, URL, type, connection status, and detected version — click through to the Server Manager to change any of it.",
+      ),
     ],
   },
   {

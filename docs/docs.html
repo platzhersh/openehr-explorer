@@ -95,9 +95,9 @@
     }
     .logo:hover { text-decoration: none; }
     .wordmark {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
-      color: var(--primary);
+      letter-spacing: -0.01em;
     }
     .nav-links {
       display: flex;
@@ -107,7 +107,7 @@
     }
     .nav-links a {
       color: var(--text-secondary);
-      font-size: 15px;
+      font-size: 14px;
       text-decoration: none;
       transition: color 0.2s;
     }
@@ -122,7 +122,7 @@
       border: 1px solid var(--border);
       border-radius: 20px;
       color: var(--text-secondary);
-      font-size: 14px;
+      font-size: 13px;
       transition: border-color 0.2s, color 0.2s;
     }
     .github-btn:hover { border-color: var(--primary); color: var(--text); text-decoration: none; }
@@ -355,7 +355,6 @@
       .docs-layout { flex-direction: column; }
       .docs-content { padding: 24px 16px; }
       .header-inner { padding: 0 16px; }
-      .wordmark { font-size: 16px; }
       .nav-links { gap: 12px; }
     }
   </style>
@@ -407,6 +406,7 @@
       <a href="#first-connection" class="sidebar-link">First Connection</a>
 
       <div class="sidebar-group-title">Features</div>
+      <a href="#overview-dashboard" class="sidebar-link">Overview Dashboard</a>
       <a href="#server-manager" class="sidebar-link">Server Manager</a>
       <a href="#ehr-browser" class="sidebar-link">EHR Browser</a>
       <a href="#composition-viewer" class="sidebar-link">Composition Viewer</a>
@@ -503,6 +503,17 @@ sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
       </section>
 
       <!-- Features -->
+      <section id="overview-dashboard">
+        <h2>Overview Dashboard</h2>
+        <p>The Overview tab is the app's landing view — it's where you land after connecting to a server, before diving into the EHR Browser, Templates, or AQL Runner.</p>
+        <ul>
+          <li><strong>Live counts:</strong> total EHRs, compositions, and templates on the connected server, computed with AQL <code>COUNT</code> queries (visible in the Request Inspector).</li>
+          <li><strong>Connected server info:</strong> name, base URL, server type, connection status, and detected CDR version — the same information surfaced on the Server Manager card, consolidated here too.</li>
+          <li><strong>Refresh:</strong> counts are fetched fresh, not cached — click "Refresh" (or switch servers) to re-run the queries and see a "last updated" timestamp.</li>
+          <li>Click any stat card to jump straight to the EHR Browser or Template Browser.</li>
+        </ul>
+      </section>
+
       <section id="server-manager">
         <h2>Server Manager</h2>
         <p>The Server Manager lets you create, edit, and delete server profiles. Each profile stores a connection configuration for a specific openEHR CDR instance.</p>

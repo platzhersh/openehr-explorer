@@ -2,7 +2,15 @@
  * Subset of the app's theme tokens (see src/App.vue's global <style> block),
  * so components render with their real colors instead of unstyled defaults.
  * Keep this in sync if the source palette changes.
+ *
+ * Shared utility classes (.btn, .badge, .error-msg, …) live in
+ * shared-utilities.css — the same file src/App.vue imports — rather than
+ * being duplicated here. Any component/view story that uses them (buttons,
+ * badges, error banners, empty states) would otherwise render unstyled,
+ * since App.vue itself is never mounted in Storybook.
  */
+@import "../src/styles/shared-utilities.css";
+
 *,
 *::before,
 *::after {
