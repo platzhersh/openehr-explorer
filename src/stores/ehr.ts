@@ -33,6 +33,11 @@ export interface EhrListResponse {
   total: number;
   offset: number;
   limit: number;
+  // False when the CDR rejected the requested sort (e.g. EHRBase doesn't
+  // implement ORDER BY on EHR-level attributes) and list_ehrs fell back to
+  // an unsorted query. See sort_field_path/is_order_by_unsupported in
+  // src-tauri/src/commands/ehr.rs.
+  sort_applied: boolean;
 }
 
 // Whitelisted server-side (AQL ORDER BY) sort fields for the EHR list — must
@@ -87,6 +92,11 @@ export const useEhrStore = defineStore("ehr", () => {
   // Defaults match the app's historical default ordering: newest first.
   const sortBy = ref<EhrSortField>("time_created");
   const sortDir = ref<SortDir>("desc");
+  // False when the server most recently rejected the requested sort (e.g.
+  // EHRBase doesn't implement ORDER BY on EHR-level attributes) and the
+  // list shown is actually unsorted. Starts true so no banner flashes
+  // before the first fetch resolves.
+  const sortApplied = ref(true);
 
   // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
   // and data-driven, so it's kept as raw JSON rather than a typed interface,
@@ -131,6 +141,7 @@ export const useEhrStore = defineStore("ehr", () => {
       ehrs.value = result.ehrs;
       total.value = result.total;
       offset.value = result.offset;
+      sortApplied.value = result.sort_applied;
     } catch (e) {
       if (requestId !== fetchRequestId) return;
       error.value = String(e);
@@ -393,6 +404,7 @@ export const useEhrStore = defineStore("ehr", () => {
     limit,
     sortBy,
     sortDir,
+    sortApplied,
     loading,
     error,
     selectedEhr,

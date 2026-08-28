@@ -42,6 +42,12 @@ pub struct EhrListResponse {
     pub total: usize,
     pub offset: usize,
     pub limit: usize,
+    /// False when the requested sort couldn't actually be applied — the CDR
+    /// rejected `ORDER BY` on the sort field and `list_ehrs` fell back to an
+    /// unsorted query (see `is_order_by_unsupported`). The frontend uses
+    /// this to tell the user sorting isn't supported rather than implying
+    /// the shown order matches what they asked for.
+    pub sort_applied: bool,
 }
 
 /// Whitelisted EHR-list sort fields, mapped to their AQL path expressions.
@@ -97,6 +103,30 @@ fn build_ehr_list_aql(
     ))
 }
 
+/// Same `SELECT`/`FROM`/`LIMIT`/`OFFSET` as `build_ehr_list_aql`, but with no
+/// `ORDER BY` at all — the fallback used when the CDR rejects sorting on
+/// EHR-level attributes (see `list_ehrs`).
+fn build_ehr_list_aql_unsorted(offset: usize, limit: usize) -> String {
+    format!(
+        "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {} OFFSET {}",
+        limit, offset
+    )
+}
+
+/// Detects the specific "`ORDER BY` on an EHR-level attribute isn't
+/// implemented" error some CDRs return for this query shape — confirmed
+/// against a real EHRBase instance, which rejects `ORDER BY e/time_created/value`
+/// the same way it's documented (in `build_ehr_search_aql` above) to reject
+/// `WHERE` on EHR-level paths, even though the AQL spec allows both. Kept
+/// narrow (requires `order_by` plus a not-implemented/not-supported phrase)
+/// so it doesn't swallow unrelated 400s from `list_ehrs`'s query — those
+/// still surface as a normal error.
+fn is_order_by_unsupported(response_body: &str) -> bool {
+    let lower = response_body.to_ascii_lowercase();
+    lower.contains("order_by")
+        && (lower.contains("not implemented") || lower.contains("not supported"))
+}
+
 #[tauri::command]
 pub async fn list_ehrs(
     app: tauri::AppHandle,
@@ -109,11 +139,10 @@ pub async fn list_ehrs(
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
+    let url = format!("{}/rest/openehr/v1/query/aql", base);
 
     // Use AQL to list EHRs since the REST API list endpoint varies by implementation
     let aql = build_ehr_list_aql(offset, limit, sort_by.as_deref(), sort_dir.as_deref())?;
-
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
     let resp = send_instrumented(
         &app,
         &client,
@@ -122,6 +151,27 @@ pub async fn list_ehrs(
             .json(&serde_json::json!({ "q": aql })),
     )
     .await?;
+
+    // Some CDRs (confirmed: EHRBase) don't implement `ORDER BY` on EHR-level
+    // attributes. Rather than surfacing a hard error and leaving the EHR
+    // Browser unusable on those servers, retry once without the ORDER BY
+    // clause; `sort_applied: false` in the response tells the frontend the
+    // requested order wasn't actually honored, so it can say so instead of
+    // silently showing unsorted results as if they were sorted.
+    let (resp, sort_applied) = if !resp.is_success && is_order_by_unsupported(&resp.body) {
+        let fallback_aql = build_ehr_list_aql_unsorted(offset, limit);
+        let fallback_resp = send_instrumented(
+            &app,
+            &client,
+            make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({ "q": fallback_aql })),
+        )
+        .await?;
+        (fallback_resp, false)
+    } else {
+        (resp, true)
+    };
 
     if !resp.is_success {
         return Err(format!(
@@ -159,6 +209,7 @@ pub async fn list_ehrs(
         offset,
         limit,
         ehrs,
+        sort_applied,
     })
 }
 
@@ -1201,6 +1252,31 @@ mod tests {
         let aql = build_ehr_list_aql(0, 20, Some("ehr_id"), Some("asc")).unwrap();
         assert!(aql.contains("ORDER BY e/ehr_id/value ASC LIMIT"));
         assert_eq!(aql.matches("e/ehr_id/value").count(), 2); // SELECT column + ORDER BY, no third occurrence
+    }
+
+    #[test]
+    fn test_build_ehr_list_aql_unsorted_has_no_order_by() {
+        let aql = build_ehr_list_aql_unsorted(40, 20);
+        assert!(!aql.to_ascii_uppercase().contains("ORDER BY"));
+        assert!(aql.contains("LIMIT 20 OFFSET 40"));
+        assert!(aql.contains("SELECT e/ehr_id/value, e/time_created/value, e/system_id/value"));
+    }
+
+    #[test]
+    fn test_is_order_by_unsupported_matches_confirmed_ehrbase_error() {
+        // Actual error body observed from a real EHRBase instance.
+        let body = r#"{"error":"Bad Request","message":"Not implemented: ORDER_BY: identified path 'time_created/value' for type EHR not supported"}"#;
+        assert!(is_order_by_unsupported(body));
+    }
+
+    #[test]
+    fn test_is_order_by_unsupported_ignores_unrelated_errors() {
+        assert!(!is_order_by_unsupported(
+            r#"{"error":"Unauthorized","message":"Invalid credentials"}"#
+        ));
+        assert!(!is_order_by_unsupported(
+            r#"{"error":"Bad Request","message":"malformed AQL query"}"#
+        ));
     }
 
     #[test]

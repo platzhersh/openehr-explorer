@@ -840,6 +840,10 @@ function lookupContribution() {
           </button>
         </div>
 
+        <div v-if="!ehrStore.sortApplied" class="limit-banner">
+          Sorting isn't supported by this server — showing default order.
+        </div>
+
         <div class="ehr-list">
           <div
             v-for="ehr in ehrStore.ehrs"
