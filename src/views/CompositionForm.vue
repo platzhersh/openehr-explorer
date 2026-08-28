@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useEhrStore } from "../stores/ehr";
@@ -92,40 +92,44 @@ onMounted(async () => {
     error.value = "No template ID provided";
   }
 
-  // Edit mode: load existing composition
-  if (props.compositionUid && props.ehrId) {
-    isEditMode.value = true;
-    await loadCompositionForEdit();
-  }
-
   // Set default time
   compositionTime.value = new Date().toISOString().slice(0, 16);
 
   // Load draft if exists
   loadDraft();
 
-  // Ensure webTemplate is set on the mb-auto-form element when it becomes available
-  setTimeout(async () => {
-    if (mbFormRef.value && templateStore.selectedWebTemplate) {
-      const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
-      (mbFormRef.value as any).webTemplate = normalized;
-      console.log("Web Template loaded (normalized):", normalized);
+  // Wait for `isReady` to flip and Vue to mount <mb-auto-form>, then hand it
+  // the Web Template. mb-auto-form builds its form DOM synchronously off of
+  // its `webTemplate` property (a Lit `@watch` handler), so we await its
+  // `updateComplete` before touching it any further — in particular before
+  // pre-populating an existing composition below, which needs that DOM.
+  await nextTick();
+  if (mbFormRef.value && templateStore.selectedWebTemplate) {
+    const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+    (mbFormRef.value as any).webTemplate = normalized;
+    console.log("Web Template loaded (normalized):", normalized);
+    await (mbFormRef.value as any).updateComplete;
 
-      // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
-      const templateId = props.templateId || (route.params.templateId as string);
-      if (templateId && serverStore.activeServerId) {
-        try {
-          const example = await invoke("get_template_example", {
-            serverId: serverStore.activeServerId,
-            templateId,
-          });
-          console.log("EHRBase FLAT example (source of truth):", example);
-        } catch (e) {
-          console.warn("Could not fetch template example:", e);
-        }
+    // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
+    const templateId = props.templateId || (route.params.templateId as string);
+    if (templateId && serverStore.activeServerId) {
+      try {
+        const example = await invoke("get_template_example", {
+          serverId: serverStore.activeServerId,
+          templateId,
+        });
+        console.log("EHRBase FLAT example (source of truth):", example);
+      } catch (e) {
+        console.warn("Could not fetch template example:", e);
       }
     }
-  }, 100);
+  }
+
+  // Edit mode: load existing composition — the form DOM above is ready now
+  if (props.compositionUid && props.ehrId) {
+    isEditMode.value = true;
+    await loadCompositionForEdit();
+  }
 });
 
 async function loadCompositionForEdit() {
@@ -146,12 +150,11 @@ async function loadCompositionForEdit() {
       language.value = (flatComp["ctx/language"] as string) || "en";
       territory.value = (flatComp["ctx/territory"] as string) || "US";
 
-      // Set form value
-      setTimeout(() => {
-        if (mbFormRef.value) {
-          (mbFormRef.value as any).value = flatComp;
-        }
-      }, 100);
+      // mb-auto-form has no `value` prop — it exposes an import() method
+      // that pushes FLAT data into the form it already built from
+      // webTemplate (see the mb-auto-form assignment above, which this
+      // call is ordered after).
+      (mbFormRef.value as any).import?.(flatComp);
     }
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
