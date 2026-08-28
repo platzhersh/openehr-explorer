@@ -46,3 +46,25 @@ Add a new changelog entry for `$1` in `docs/docs.html`:
   ```
 
 - Do NOT push or open a PR unless the user explicitly asks.
+
+## Step 3: What's New entry
+
+Add a matching entry for `$1` to `src/lib/whats-new.ts` (the in-app "What's New" panel — see PRD-0018):
+
+1. Reuse the same review of `git log <previous-tag>..HEAD` from Step 2 rather than re-deriving it.
+2. Add a new object as the **first** entry in the `WHATS_NEW` array (newest first) with `version: "$1"`, today's date, and 3-5 `highlights`. This is a short, hand-curated highlight reel, not a full changelog — pick the handful of changes a user would actually notice, phrased for them (not commit-message paraphrases). Skip pure bugfixes/chores unless user-visible.
+3. Where a highlight matches an existing feature tour, wire up its `tourId` and `routePath` (see `src/lib/tours.ts` for available tour IDs and `src/main.ts` for route paths) so the panel can offer to walk the user through it. Leave both fields off when no tour fits.
+4. Commit separately with this message:
+
+  ```
+  feat(whats-new): add v$1 highlights
+  ```
+
+- Do NOT push or open a PR unless the user explicitly asks.
+
+## Step 4: Demo assets
+
+Regenerate the landing page screenshots and hero video/gif so they reflect the app as it looks in `$1`, since the UI has likely changed since these were last captured:
+
+1. Run the `/generate-demo-assets` command (`both`) — it covers prerequisites (ffmpeg, gifsicle, Playwright's Chromium, a running `npm run dev`), regenerates `docs/assets/screenshots/*.webp`, `demo.mp4`, `demo.gif`, and `demo.vtt`, and commits the result itself.
+2. Skip this step only if the user explicitly says not to regenerate assets for this bump.
