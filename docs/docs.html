@@ -810,6 +810,19 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.8.0 — DIRECTORY CRUD, Live Dashboard &amp; Template Tools</h3>
+        <ul>
+          <li><strong>DIRECTORY CRUD:</strong> Create, update, and delete DIRECTORY folder entries directly from the EHR browser, building on the read-only DIRECTORY viewer introduced in v0.7.0</li>
+          <li><strong>Live Dashboard:</strong> A new landing dashboard shows live EHR, composition, and template counts pulled straight from the connected server</li>
+          <li><strong>EHR List Sorting:</strong> The EHR browser now supports server-side sorting (ascending/descending) instead of only the server's default order</li>
+          <li><strong>Directory-Aware Filter Builder:</strong> The EHR browser's modal filter builder can now filter by DIRECTORY entries alongside its existing filters</li>
+          <li><strong>Template Tools:</strong> Templates now support an OPT XML download/export button, an upload button in the panel header, and collapsible nodes in the OPT tree view</li>
+          <li><strong>Brand Kit:</strong> Downloadable logo assets are now available from the landing page for anyone writing about or integrating with the app</li>
+          <li><strong>Rendering Performance:</strong> OPT XML, Web Template JSON, and stored-query results now render virtualized, keeping large templates and result sets smooth to scroll</li>
+          <li><strong>Composition Editing Fix:</strong> Fixed a bug that broke editing of existing compositions</li>
+          <li><strong>DIRECTORY Fix:</strong> Fixed <code>archetype_node_id</code> only being set on the root FOLDER instead of every FOLDER in the hierarchy</li>
+        </ul>
+
         <h3>v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
         <ul>
           <li><strong>Contribution Audit Trail:</strong> A new Contribution viewer shows every version, deletion, and audit-trail entry behind a composition, with links from the EHR and composition views for tracing who changed what and when</li>
