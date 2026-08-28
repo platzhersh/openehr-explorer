@@ -28,21 +28,36 @@ export const useTemplateStore = defineStore("template", () => {
   let webTemplateRequestId = 0;
   let optRequestId = 0;
 
-  async function fetchTemplates(serverId: string) {
+  // fetchWebTemplate and fetchOpt run concurrently for a single template
+  // selection. Each used to set the shared `loading` flag to false in its
+  // own `finally`, so whichever of the two finished first flipped loading
+  // off while the other was still in flight. Counting in-flight requests
+  // instead means `loading` only goes false once every fetch has settled.
+  let pendingRequests = 0;
+  function beginLoading() {
+    pendingRequests++;
     loading.value = true;
+  }
+  function endLoading() {
+    pendingRequests = Math.max(0, pendingRequests - 1);
+    loading.value = pendingRequests > 0;
+  }
+
+  async function fetchTemplates(serverId: string) {
+    beginLoading();
     error.value = null;
     try {
       templates.value = await invoke<TemplateSummary[]>("list_templates", { serverId });
     } catch (e) {
       error.value = String(e);
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function fetchWebTemplate(serverId: string, templateId: string) {
     const requestId = ++webTemplateRequestId;
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       const result = await invoke<Record<string, unknown>>("get_web_template", {
@@ -57,15 +72,13 @@ export const useTemplateStore = defineStore("template", () => {
         error.value = String(e);
       }
     } finally {
-      if (requestId === webTemplateRequestId) {
-        loading.value = false;
-      }
+      endLoading();
     }
   }
 
   async function fetchOpt(serverId: string, templateId: string) {
     const requestId = ++optRequestId;
-    loading.value = true;
+    beginLoading();
     try {
       const result = await invoke<string>("get_template_opt", {
         serverId,
@@ -79,9 +92,7 @@ export const useTemplateStore = defineStore("template", () => {
         error.value = String(e);
       }
     } finally {
-      if (requestId === optRequestId) {
-        loading.value = false;
-      }
+      endLoading();
     }
   }
 
