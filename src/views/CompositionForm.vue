@@ -176,11 +176,19 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
 
 // Pushes the web template — and, in edit mode, the composition's existing
 // FLAT data (via `flatData`, set by loadCompositionForEdit) — into the
-// mb-auto-form element. Order matters: the form can't make sense of a
-// `.value` assignment until it knows the archetype paths from `.webTemplate`,
-// so both are set together here rather than on separate, potentially
-// racing timers. Retries briefly since the element only mounts once
-// `isReady` has flowed through a render pass.
+// mb-auto-form element.
+//
+// mb-auto-form (medblocks-ui) has no settable `value`/`data` property —
+// only `templateId`, `ctx`, `config`, `webTemplate`, `variant`, and
+// `addContext` are reactive properties. Pre-population instead goes through
+// its `import(composition)` method, which rebuilds its internal form DOM
+// (including repeatable groups) from `webTemplate` before binding values
+// into it. That DOM rebuild happens on a Lit update cycle triggered by
+// setting `.webTemplate`, so `import()` has to wait for `updateComplete`
+// or it binds against a form that isn't there yet.
+//
+// Retries briefly since the element itself only mounts once `isReady` has
+// flowed through a render pass.
 async function hydrateMbForm(attempt = 0) {
   if (!mbFormRef.value || !templateStore.selectedWebTemplate) {
     if (attempt >= 20) {
@@ -191,12 +199,20 @@ async function hydrateMbForm(attempt = 0) {
     return;
   }
 
+  const formEl = mbFormRef.value as any;
   const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
-  (mbFormRef.value as any).webTemplate = normalized;
+  formEl.webTemplate = normalized;
   console.log("Web Template loaded (normalized):", normalized);
 
   if (isEditMode.value && Object.keys(flatData.value).length > 0) {
-    (mbFormRef.value as any).value = flatData.value;
+    if (typeof formEl.updateComplete?.then === "function") {
+      await formEl.updateComplete;
+    }
+    if (typeof formEl.import === "function") {
+      formEl.import(flatData.value);
+    } else {
+      console.warn("mb-auto-form has no import() method; could not pre-populate composition data");
+    }
   }
 
   // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
@@ -442,8 +458,10 @@ async function handleSubmit() {
 }
 
 function handleReset() {
+  // mb-auto-form has no reset() method — clear() is its equivalent (see
+  // hydrateMbForm for why .value/.reset aren't real properties/methods here).
   if (mbFormRef.value) {
-    (mbFormRef.value as any).reset?.();
+    (mbFormRef.value as any).clear?.();
   }
   composerName.value = "";
   language.value = "en";
@@ -538,9 +556,9 @@ watch(
       success.value = null;
       compositionTime.value = new Date().toISOString().slice(0, 16);
 
-      // Reset medblocks form
+      // Reset medblocks form (mb-auto-form's method is clear(), not reset())
       if (mbFormRef.value) {
-        (mbFormRef.value as any).reset?.();
+        (mbFormRef.value as any).clear?.();
       }
 
       // Load new template
