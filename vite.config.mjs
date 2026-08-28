@@ -19,8 +19,14 @@ export default defineConfig(async () => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'codemirror': ['codemirror', '@codemirror/view', '@codemirror/state'],
+        manualChunks(id) {
+          if (
+            id.includes("node_modules/codemirror/") ||
+            id.includes("node_modules/@codemirror/view/") ||
+            id.includes("node_modules/@codemirror/state/")
+          ) {
+            return "codemirror";
+          }
         },
       },
     },
