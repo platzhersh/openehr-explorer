@@ -85,6 +85,7 @@ export type AnalyticsEvent =
   // --- template ---
   | "template_inspected"
   | "template_uploaded"
+  | "template_opt_exported"
   // --- settings / engagement ---
   | "settings_saved"
   | "documentation_opened"

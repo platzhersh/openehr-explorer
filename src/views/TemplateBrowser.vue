@@ -53,43 +53,75 @@ const selectedTemplateId = computed(() => route.params.templateId as string | un
 const termBindings = ref<TermBinding[]>([]);
 const resolvedBindingTerms = ref<Record<string, string>>({});
 
+// Guards the get_term_bindings/lookupCode chain in loadTemplateDetail below
+// against responses for a template/server the user has since navigated away
+// from — mirrors the request-id guard in the template store for
+// selectedWebTemplate/selectedOpt (see stores/template.ts).
+let bindingsRequestId = 0;
+
+function clearTemplateDetail() {
+  templateStore.selectedWebTemplate = null;
+  templateStore.selectedOpt = null;
+  termBindings.value = [];
+  resolvedBindingTerms.value = {};
+  // Otherwise a disabled OPT XML tab can stay active with nothing to show.
+  if (activeTab.value === "opt") activeTab.value = "tree";
+}
+
+async function loadTemplateDetail(serverId: string, templateId: string) {
+  const requestId = ++bindingsRequestId;
+  // Clear the previous template's data immediately rather than leaving it
+  // on screen (and, via the OPT download button, downloadable) under the
+  // new template's header while its own fetch is still in flight.
+  clearTemplateDetail();
+  templateStore.fetchWebTemplate(serverId, templateId);
+  templateStore.fetchOpt(serverId, templateId);
+  try {
+    const bindings = await invoke<TermBinding[]>("get_term_bindings", {
+      serverId,
+      templateId,
+    });
+    if (requestId !== bindingsRequestId) return;
+    termBindings.value = bindings;
+    resolvedBindingTerms.value = {};
+    for (const binding of bindings) {
+      lookupCode(serverId, binding.terminology, binding.code).then((display) => {
+        if (display && requestId === bindingsRequestId) {
+          resolvedBindingTerms.value = {
+            ...resolvedBindingTerms.value,
+            [`${binding.terminology}|${binding.code}`]: display,
+          };
+        }
+      });
+    }
+  } catch {
+    if (requestId === bindingsRequestId) {
+      termBindings.value = [];
+    }
+  }
+}
+
 watch(
   () => serverStore.activeServerId,
   (id) => {
-    if (id) templateStore.fetchTemplates(id);
+    if (!id) return;
+    templateStore.fetchTemplates(id);
+    // The currently selected template (if any) belongs to whichever server
+    // it was last loaded from — switching servers without also refetching
+    // leaves that server's web template/OPT/bindings displayed (and, via
+    // the download button, exportable) under the new server.
+    if (selectedTemplateId.value) {
+      loadTemplateDetail(id, selectedTemplateId.value);
+    }
   },
   { immediate: true },
 );
 
-watch(selectedTemplateId, async (id) => {
+watch(selectedTemplateId, (id) => {
   if (id && serverStore.activeServerId) {
-    templateStore.fetchWebTemplate(serverStore.activeServerId, id);
-    templateStore.fetchOpt(serverStore.activeServerId, id);
-    // Fetch term bindings from OPT
-    try {
-      termBindings.value = await invoke<TermBinding[]>("get_term_bindings", {
-        serverId: serverStore.activeServerId,
-        templateId: id,
-      });
-      // Resolve display names for bound concepts
-      resolvedBindingTerms.value = {};
-      const servId = serverStore.activeServerId;
-      for (const binding of termBindings.value) {
-        lookupCode(servId, binding.terminology, binding.code).then((display) => {
-          if (display) {
-            resolvedBindingTerms.value = {
-              ...resolvedBindingTerms.value,
-              [`${binding.terminology}|${binding.code}`]: display,
-            };
-          }
-        });
-      }
-    } catch {
-      termBindings.value = [];
-    }
+    loadTemplateDetail(serverStore.activeServerId, id);
   } else {
-    termBindings.value = [];
-    resolvedBindingTerms.value = {};
+    clearTemplateDetail();
   }
 });
 
@@ -158,6 +190,22 @@ const wtTree = computed(() => {
 
 function createComposition(templateId: string) {
   router.push({ name: "compose", params: { templateId } });
+}
+
+function downloadOpt() {
+  const opt = templateStore.selectedOpt;
+  const templateId = selectedTemplateId.value;
+  if (!opt || !templateId) return;
+
+  void analytics.track("template_opt_exported");
+
+  const blob = new Blob([opt], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${templateId}.opt`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // Search functionality
@@ -383,35 +431,69 @@ onUnmounted(() => {
       <template v-if="selectedTemplateId && templateStore.selectedWebTemplate">
         <div class="panel-header">
           <h2>{{ selectedTemplateId }}</h2>
-          <div class="tab-bar">
+          <div class="panel-header-actions">
+            <div class="tab-bar">
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'tree' }"
+                @click="activeTab = 'tree'"
+              >
+                OPT Tree
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'opt' }"
+                @click="activeTab = 'opt'"
+                :disabled="!templateStore.selectedOpt"
+              >
+                OPT XML
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'json' }"
+                @click="activeTab = 'json'"
+              >
+                Web Template
+              </button>
+              <button
+                class="tab"
+                :class="{ active: activeTab === 'flat' }"
+                @click="activeTab = 'flat'"
+              >
+                FLAT Paths
+              </button>
+            </div>
             <button
-              class="tab"
-              :class="{ active: activeTab === 'tree' }"
-              @click="activeTab = 'tree'"
-            >
-              OPT Tree
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'opt' }"
-              @click="activeTab = 'opt'"
+              type="button"
+              class="btn btn-sm icon-btn"
               :disabled="!templateStore.selectedOpt"
+              title="Download OPT"
+              aria-label="Download OPT"
+              @click="downloadOpt"
             >
-              OPT XML
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'json' }"
-              @click="activeTab = 'json'"
-            >
-              Web Template
-            </button>
-            <button
-              class="tab"
-              :class="{ active: activeTab === 'flat' }"
-              @click="activeTab = 'flat'"
-            >
-              FLAT Paths
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -970,6 +1052,21 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-size: 13px;
   color: var(--color-text-muted);
   text-align: center;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Icon-only variant of .btn — same footprint as a tab so it sits flush
+   next to the tab bar without widening the header. */
+.icon-btn {
+  padding: 4px;
+  width: 26px;
+  height: 26px;
+  justify-content: center;
 }
 
 .tab-bar {
