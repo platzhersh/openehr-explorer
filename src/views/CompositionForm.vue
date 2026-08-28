@@ -433,7 +433,7 @@ async function handleSubmit() {
       ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
       : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
 
-    requestSummaryLine.value = `${method} ${url}\nContent-Type: ${flatCompositionContentType()}`;
+    requestSummaryLine.value = `${method} ${url}\nContent-Type: ${flatCompositionContentType()}\nopenehr-template-id: ${templateId}`;
     requestPayload.value = payload;
 
     console.log("Submitting composition...");
@@ -445,6 +445,7 @@ async function handleSubmit() {
         serverStore.activeServerId,
         selectedEhrId.value,
         props.compositionUid,
+        templateId,
         payload,
       );
       success.value = `Composition updated successfully! New version: ${result}`;

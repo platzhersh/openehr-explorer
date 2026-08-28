@@ -286,6 +286,12 @@ pub async fn create_composition(
                 flat_composition_content_type(&profile.server_type),
             )
             .header("Accept", "application/json")
+            // The openEHR REST spec requires the target template for a
+            // Simplified-Format (FLAT) COMPOSITION commit to be named in
+            // this header; FerroEHR enforces that and rejects the request
+            // with a 422 otherwise. EHRBase accepts it fine alongside the
+            // `templateId` query parameter it additionally expects.
+            .header("openehr-template-id", &template_id)
             .json(&composition_data),
     )
     .await?;
@@ -336,6 +342,7 @@ pub async fn update_composition(
     server_id: String,
     ehr_id: String,
     composition_uid: String,
+    template_id: String,
     composition_data: Value,
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
@@ -356,6 +363,8 @@ pub async fn update_composition(
                 flat_composition_content_type(&profile.server_type),
             )
             .header("Accept", "application/json")
+            // See create_composition — same Simplified-Format requirement.
+            .header("openehr-template-id", &template_id)
             .json(&composition_data),
     )
     .await?;

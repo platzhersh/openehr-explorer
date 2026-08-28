@@ -34,6 +34,7 @@ export const useCompositionStore = defineStore("composition", () => {
     serverId: string,
     ehrId: string,
     compositionUid: string,
+    templateId: string,
     compositionData: Record<string, unknown>,
   ) {
     loading.value = true;
@@ -43,6 +44,7 @@ export const useCompositionStore = defineStore("composition", () => {
         serverId,
         ehrId,
         compositionUid,
+        templateId,
         compositionData,
       });
       return newUid;
