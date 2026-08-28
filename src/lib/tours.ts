@@ -61,6 +61,12 @@ export interface Tour {
  */
 export const APP_INTRO_TOUR_ID = "app-intro";
 
+/** Shorthand for a `TourStep` literal — trims the repetition of naming all
+ * three fields at every step (this file is nothing but arrays of them). */
+function step(target: string, title: string, body: string): TourStep {
+  return { target, title, body };
+}
+
 export const TOURS: Tour[] = [
   {
     id: APP_INTRO_TOUR_ID,
@@ -100,21 +106,21 @@ export const TOURS: Tour[] = [
     routeNames: ["dashboard"],
     label: "Overview",
     steps: [
-      {
-        target: '[data-tour="dashboard-stats"]',
-        title: "Live counts, one glance",
-        body: "Total EHRs, compositions, and templates on the connected server — click any card to jump straight to its browser.",
-      },
-      {
-        target: '[data-tour="dashboard-refresh"]',
-        title: "Nothing is cached",
-        body: "Counts are fetched fresh every time you land here or switch servers. Click Refresh any time to re-run the queries.",
-      },
-      {
-        target: '[data-tour="dashboard-server-info"]',
-        title: "Your connected server, at a glance",
-        body: "Name, URL, type, connection status, and detected version — click through to the Server Manager to change any of it.",
-      },
+      step(
+        '[data-tour="dashboard-stats"]',
+        "Live counts, one glance",
+        "Total EHRs, compositions, and templates on the connected server — click any card to jump straight to its browser.",
+      ),
+      step(
+        '[data-tour="dashboard-refresh"]',
+        "Nothing is cached",
+        "Counts are fetched fresh every time you land here or switch servers. Click Refresh any time to re-run the queries.",
+      ),
+      step(
+        '[data-tour="dashboard-server-info"]',
+        "Your connected server, at a glance",
+        "Name, URL, type, connection status, and detected version — click through to the Server Manager to change any of it.",
+      ),
     ],
   },
   {

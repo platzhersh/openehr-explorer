@@ -2,7 +2,15 @@
  * Subset of the app's theme tokens (see src/App.vue's global <style> block),
  * so components render with their real colors instead of unstyled defaults.
  * Keep this in sync if the source palette changes.
+ *
+ * Shared utility classes (.btn, .badge, .error-msg, …) live in
+ * shared-utilities.css — the same file src/App.vue imports — rather than
+ * being duplicated here. Any component/view story that uses them (buttons,
+ * badges, error banners, empty states) would otherwise render unstyled,
+ * since App.vue itself is never mounted in Storybook.
  */
+@import "../src/styles/shared-utilities.css";
+
 *,
 *::before,
 *::after {
@@ -38,147 +46,4 @@ body {
   color: var(--color-text);
   background: var(--color-bg);
   line-height: 1.5;
-}
-
-/* Shared utility classes (.btn, .badge, .error-msg, …) — kept in sync with
-   the "Shared utility styles" block in src/App.vue's global <style>. Any
-   component/view story that uses them (buttons, badges, error banners,
-   empty states) would otherwise render unstyled, since App.vue itself is
-   never mounted in Storybook. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-primary-dim);
-}
-.btn-primary {
-  background: var(--color-primary-dim);
-  border-color: var(--color-primary);
-  color: #fff;
-}
-.btn-primary:hover {
-  background: var(--color-primary);
-  color: var(--color-bg);
-}
-.btn-sm {
-  padding: 3px 8px;
-  font-size: 12px;
-}
-.btn-danger {
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-.btn-danger:hover {
-  background: var(--color-error);
-  color: #fff;
-}
-
-.tour-trigger-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.tour-trigger-btn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary-dim);
-  background: var(--color-surface-hover);
-}
-
-.input {
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.input:focus {
-  border-color: var(--color-primary-dim);
-}
-.input::placeholder {
-  color: var(--color-text-muted);
-}
-
-select.input {
-  cursor: pointer;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-}
-.badge-primary {
-  background: var(--color-primary-dim);
-  color: #fff;
-  border-color: var(--color-primary);
-}
-
-.icon-btn-ghost {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 12px;
-}
-.icon-btn-ghost:hover {
-  color: var(--color-primary);
-  background: var(--color-surface);
-}
-
-.error-msg {
-  padding: 12px;
-  background: rgba(255, 107, 107, 0.1);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius);
-  color: var(--color-error);
-  font-size: 13px;
-}
-
-.loading {
-  padding: 24px;
-  text-align: center;
-  color: var(--color-text-muted);
-}
-
-.empty-state {
-  padding: 48px 24px;
-  text-align: center;
-  color: var(--color-text-muted);
-}
-.empty-state h3 {
-  margin-bottom: 8px;
-  color: var(--color-text-secondary);
 }
