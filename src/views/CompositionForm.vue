@@ -99,31 +99,11 @@ onMounted(async () => {
   loadDraft();
 
   // Wait for `isReady` to flip and Vue to mount <mb-auto-form>, then hand it
-  // the Web Template. mb-auto-form builds its form DOM synchronously off of
-  // its `webTemplate` property (a Lit `@watch` handler), so we await its
-  // `updateComplete` before touching it any further — in particular before
-  // pre-populating an existing composition below, which needs that DOM.
+  // the Web Template and wait for its form DOM to be built — see
+  // assignWebTemplateToForm — before pre-populating an existing composition
+  // below, which needs that DOM.
   await nextTick();
-  if (mbFormRef.value && templateStore.selectedWebTemplate) {
-    const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
-    (mbFormRef.value as any).webTemplate = normalized;
-    console.log("Web Template loaded (normalized):", normalized);
-    await (mbFormRef.value as any).updateComplete;
-
-    // Fetch example FLAT composition from EHRBase (source of truth per Medium article)
-    const templateId = props.templateId || (route.params.templateId as string);
-    if (templateId && serverStore.activeServerId) {
-      try {
-        const example = await invoke("get_template_example", {
-          serverId: serverStore.activeServerId,
-          templateId,
-        });
-        console.log("EHRBase FLAT example (source of truth):", example);
-      } catch (e) {
-        console.warn("Could not fetch template example:", e);
-      }
-    }
-  }
+  await assignWebTemplateToForm();
 
   // Edit mode: load existing composition — the form DOM above is ready now
   if (props.compositionUid && props.ehrId) {
@@ -131,6 +111,39 @@ onMounted(async () => {
     await loadCompositionForEdit();
   }
 });
+
+// Hands the currently-loaded Web Template to the mb-auto-form element and
+// waits for it to finish building its form DOM. mb-auto-form builds that
+// DOM synchronously off of its `webTemplate` property (a Lit `@watch`
+// handler), so callers that need the DOM to exist — pre-populating an
+// existing composition, in particular — must await this first.
+async function assignWebTemplateToForm() {
+  if (!mbFormRef.value || !templateStore.selectedWebTemplate) return;
+
+  const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+  (mbFormRef.value as any).webTemplate = normalized;
+  console.log("Web Template loaded (normalized):", normalized);
+  await (mbFormRef.value as any).updateComplete;
+
+  await logTemplateExample();
+}
+
+// Dev-only: fetch and log the example FLAT composition EHRBase derives from
+// the template, as a source-of-truth reference when debugging FLAT paths.
+async function logTemplateExample() {
+  const templateId = props.templateId || (route.params.templateId as string);
+  if (!templateId || !serverStore.activeServerId) return;
+
+  try {
+    const example = await invoke("get_template_example", {
+      serverId: serverStore.activeServerId,
+      templateId,
+    });
+    console.log("EHRBase FLAT example (source of truth):", example);
+  } catch (e) {
+    console.warn("Could not fetch template example:", e);
+  }
+}
 
 async function loadCompositionForEdit() {
   if (!props.ehrId || !props.compositionUid || !serverStore.activeServerId) return;
