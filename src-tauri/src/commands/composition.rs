@@ -259,7 +259,7 @@ pub async fn create_composition(
         &app,
         &client,
         make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-            .header("Content-Type", "application/openehr.wt.flat.schema+json")
+            .header("Content-Type", "application/openehr.wt.flat+json")
             .header("Accept", "application/json")
             .json(&composition_data),
     )
@@ -326,7 +326,7 @@ pub async fn update_composition(
         &app,
         &client,
         make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
-            .header("Content-Type", "application/openehr.wt.flat.schema+json")
+            .header("Content-Type", "application/openehr.wt.flat+json")
             .header("Accept", "application/json")
             .json(&composition_data),
     )

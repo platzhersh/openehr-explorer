@@ -420,7 +420,7 @@ async function handleSubmit() {
       ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
       : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
 
-    requestSummaryLine.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json`;
+    requestSummaryLine.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat+json`;
     requestPayload.value = payload;
 
     console.log("Submitting composition...");
