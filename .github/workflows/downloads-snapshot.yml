@@ -23,6 +23,15 @@ on:
 permissions:
   contents: write
 
+# Serialize runs (e.g. a manual workflow_dispatch overlapping the daily
+# cron) instead of racing to push to `data` — two concurrent pushes would
+# otherwise fight over the same branch tip and one would fail outright.
+# Never cancel an in-progress run for this: it's already summing/writing
+# real data, not disposable build output.
+concurrency:
+  group: downloads-snapshot
+  cancel-in-progress: false
+
 jobs:
   snapshot:
     name: Record today's download total
