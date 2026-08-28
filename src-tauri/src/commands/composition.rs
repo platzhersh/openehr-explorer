@@ -4,19 +4,20 @@ use serde_json::Value;
 use super::server::{create_client, get_profile_by_id, make_request, ServerType};
 use crate::inspector::send_instrumented;
 
-/// The `Content-Type` to use when committing a FLAT-format composition body.
+/// The FLAT-format media type to use for a composition, as either a
+/// `Content-Type` (POST/PUT) or an `Accept` (GET) header.
 ///
 /// The openEHR REST API spec's current media type for this is
 /// `application/openehr.wt.flat+json` — and that's exactly what FerroEHR's
-/// own 415 error message names as accepted. EHRBase's actual deployed REST
-/// endpoint (verified directly against sandbox.ehrbase.org), however, only
-/// recognizes the older/draft `application/openehr.wt.flat.schema+json`
-/// variant on its composition write endpoint: sending the spec-current
-/// media type gets rejected before it even reaches EHRBase's own
-/// validation logic (a generic framework-level 415), while the `.schema`
-/// variant is parsed and validated as expected. Better Platform and
-/// unspecified/generic servers keep the same `.schema` value this app has
-/// always sent them (unconfirmed either way, but unbroken until reported).
+/// own 415/406 error messages name as accepted. EHRBase's actual deployed
+/// REST endpoint (verified directly against sandbox.ehrbase.org), however,
+/// only recognizes the older/draft `application/openehr.wt.flat.schema+json`
+/// variant: sending the spec-current media type gets rejected before it
+/// even reaches EHRBase's own validation logic (a generic framework-level
+/// 415), while the `.schema` variant is parsed and validated as expected.
+/// Better Platform and unspecified/generic servers keep the same `.schema`
+/// value this app has always sent them (unconfirmed either way, but
+/// unbroken until reported).
 fn flat_composition_content_type(server_type: &ServerType) -> &'static str {
     match server_type {
         ServerType::FerroEhr => "application/openehr.wt.flat+json",
@@ -96,8 +97,10 @@ pub async fn get_composition_flat(
     let resp = send_instrumented(
         &app,
         &client,
-        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/openehr.wt.flat.schema+json"),
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method).header(
+            "Accept",
+            flat_composition_content_type(&profile.server_type),
+        ),
     )
     .await?;
 
