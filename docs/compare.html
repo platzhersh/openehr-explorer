@@ -801,7 +801,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Details panel: id, version, localized name &sup5;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Details panel: id, version, localized name &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -810,7 +810,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">3 scoped trees, archetype/data badges, cardinality &sup5;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">3 scoped trees, archetype/data badges, cardinality &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -828,7 +828,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br><span class="note">Raw path values shown in tree, copy unclear &sup5;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br><span class="note">Raw path values shown in tree, copy unclear &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -858,7 +858,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Raw body only</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Full editor w/ autocomplete (v1.4.0) &sup5;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Full editor w/ autocomplete (v1.4.0) &sup4;</span></div>
     </div>
 
     <div class="feature-row">
@@ -894,7 +894,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Template-aware, 3-level autocomplete &sup5;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br><span class="note">Template-aware, 3-level autocomplete &sup4;</span></div>
     </div>
 
     <!-- ─── DEVELOPER DX ─── -->
@@ -924,7 +924,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br><span class="note">Apache 2.0</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Freemium</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br><span class="note">Proprietary</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br><span class="note">Closed-source &sup4;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br><span class="note">Closed-source</span></div>
     </div>
 
     <div class="feature-row">
@@ -981,7 +981,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br><span class="note">Not seen in hands-on test &sup4;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br><span class="note">Not seen in hands-on test</span></div>
     </div>
 
     <div class="feature-row">
@@ -990,7 +990,7 @@
       <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br><span class="note">Not seen in hands-on test &sup4;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br><span class="note">Not seen in hands-on test</span></div>
     </div>
 
     <div class="feature-row">
@@ -1066,9 +1066,8 @@
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
       <p>&sup3; DIRECTORY and CONTRIBUTION support are both partial. DIRECTORY has a read-only browsing tree in the EHR detail panel; creating, updating, or deleting a DIRECTORY isn't supported by the app yet (the Request Inspector only shows HTTP traffic &mdash; it doesn't send requests), so that still requires an external REST client. CONTRIBUTION can be viewed by UID &mdash; entered directly, or reached from a composition's Versions tab &mdash; but the openEHR REST API has no endpoint to list all contributions for an EHR, so there's no browsable list.</p>
-      <p>&sup4; Hands-on verified (Aug 26, 2026 install/test pass) against the ehr-ctrl app itself, superseding the marketing-site-only assumptions below for these rows: STORED_QUERY and EHR_STATUS are confirmed in-app; DIRECTORY and CONTRIBUTION were not visible in the sidebar sections reached during testing (the sidebar could scroll further than was captured, so this is "not confirmed present" rather than "confirmed absent" &mdash; scored as unevaluated pending a closer look). Distribution is no longer registration-gated: direct download links were added to ehr-ctrl.info/downloads on Aug 20, 2026; the app remains closed-source (no public repository found).</p>
-      <p>&sup5; Per ehr-ctrl's v1.4.0 release notes (Aug 27, 2026, openEHR Discourse): the Template Viewer gained three scoped tree views (context/content/everything-else) with per-node localized names, an archetype-id badge, a data-element badge, a cardinality column, and a toggle to show raw path values &mdash; counted as a Web Template tree inspector, and as partial credit toward a FLAT path panel since the raw-path toggle wasn't described as copyable. The AQL editor gained bracket matching, undo/redo, and live autocomplete in multiple levels (keywords/types, then alias-bound record paths, then template-specific archetype paths once a template id is entered) &mdash; counted as AQL path autocomplete. Not yet independently verified hands-on; scored from the release notes themselves rather than the marketing site.</p>
-      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client (ClaroTech, v1.4.0) &mdash; most rows scored from its public marketing site (home + features pages) only, not hands-on testing; see &sup4; for the rows hands-on verified against v1.3.1, and &sup5; for the v1.4.0 rows scored from its release notes. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable, multi-server profiles) remain unconfirmed absences rather than verified ones.</p>
+      <p>&sup4; Per ehr-ctrl's v1.4.0 release notes (Aug 27, 2026, openEHR Discourse): the Template Viewer gained three scoped tree views (context/content/everything-else) with per-node localized names, an archetype-id badge, a data-element badge, a cardinality column, and a toggle to show raw path values &mdash; counted as a Web Template tree inspector, and as partial credit toward a FLAT path panel since the raw-path toggle wasn't described as copyable. The AQL editor gained bracket matching, undo/redo, and live autocomplete in multiple levels (keywords/types, then alias-bound record paths, then template-specific archetype paths once a template id is entered) &mdash; counted as AQL path autocomplete. Not yet independently verified hands-on; scored from the release notes themselves rather than the marketing site.</p>
+      <p>Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot; openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary, Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client (ClaroTech, v1.4.0) &mdash; most rows scored from its public marketing site (home + features pages) only, not hands-on testing; see &sup4; for the v1.4.0 rows scored from its release notes. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable, multi-server profiles) remain unconfirmed absences rather than verified ones.</p>
       <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.6.0.</p>
     </div>
 
