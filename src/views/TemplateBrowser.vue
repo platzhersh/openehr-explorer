@@ -7,11 +7,15 @@ import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
 import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
-import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
+import CopyButton from "../components/CopyButton.vue";
+import XmlViewer from "../components/XmlViewer.vue";
+import TemplateUploadModal from "../components/TemplateUploadModal.vue";
+import TemplateUploadZone from "../components/TemplateUploadZone.vue";
+import { useTemplateUpload } from "../composables/useTemplateUpload";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -37,10 +41,13 @@ const showPanelSearch = ref(false);
 const activeTab = ref<"tree" | "json" | "opt" | "flat">("tree");
 const currentMatchIndex = ref(0);
 const searchOverlayRef = ref<InstanceType<typeof SearchOverlay> | null>(null);
-const uploadDragOver = ref(false);
 const showBoundConceptsHelp = ref(false);
-const uploadStatus = ref<string | null>(null);
-const uploadError = ref<string | null>(null);
+const showUploadModal = ref(false);
+
+// Independent instance from the one inside TemplateUploadModal — this one
+// backs the inline drop zone shown when the server has no templates yet
+// (see the empty-state markup below), so the two never need to share state.
+const inlineUpload = useTemplateUpload();
 
 const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
 const termBindings = ref<TermBinding[]>([]);
@@ -104,12 +111,6 @@ const filteredTemplates = computed(() => {
   return templateStore.templates.filter((t) => t.template_id.toLowerCase().includes(q));
 });
 
-const webTemplateJson = computed(() => {
-  return templateStore.selectedWebTemplate
-    ? JSON.stringify(templateStore.selectedWebTemplate, null, 2)
-    : "";
-});
-
 const flatPaths = computed(() => {
   if (!templateStore.selectedWebTemplate) return [];
   return extractFlatPaths(templateStore.selectedWebTemplate);
@@ -123,17 +124,29 @@ interface WtNode {
   aqlPath: string;
   children: WtNode[];
   terminologyType: string | null;
+  /**
+   * Stable structural identity for this node — the id chain from the root,
+   * with each segment's sibling index folded in so repeated archetype ids
+   * (or empty ids) at different positions never collide. Search filtering
+   * rebuilds the node objects on every keystroke, so this (not array
+   * position) is what per-node UI state like collapse must key off of —
+   * see `wtTreeCollapsedByPath` below.
+   */
+  path: string;
 }
 
-function buildWtTree(node: Record<string, unknown>): WtNode {
+function buildWtTree(node: Record<string, unknown>, parentPath = ""): WtNode {
   const children = (node.children as Record<string, unknown>[]) ?? [];
+  const id = (node.id as string) ?? "";
+  const path = parentPath ? `${parentPath}/${id}` : id;
   return {
-    id: (node.id as string) ?? "",
+    id,
     name: (node.name as string) ?? (node.localizedName as string) ?? "",
     rmType: (node.rmType as string) ?? "",
     aqlPath: (node.aqlPath as string) ?? "",
-    children: children.map(buildWtTree),
+    children: children.map((child, index) => buildWtTree(child, `${path}[${index}]`)),
     terminologyType: classifyCodedTextNode(node),
+    path,
   };
 }
 
@@ -142,131 +155,6 @@ const wtTree = computed(() => {
   const tree = templateStore.selectedWebTemplate.tree as Record<string, unknown> | undefined;
   return tree ? buildWtTree(tree) : null;
 });
-
-async function uploadFile(file: File) {
-  if (!serverStore.activeServerId) return;
-
-  uploadStatus.value = null;
-  uploadError.value = null;
-
-  const text = await file.text();
-  try {
-    const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
-    uploadStatus.value = result;
-    void analytics.track("template_uploaded");
-    templateStore.fetchTemplates(serverStore.activeServerId);
-  } catch (e) {
-    uploadError.value = String(e);
-  }
-}
-
-// Syntax highlighting functions
-function highlightJson(json: string): string {
-  return json
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
-    .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
-    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-    .replace(/: (null)/g, ': <span class="json-null">$1</span>');
-}
-
-// Pretty-print XML with indentation so long OPT documents wrap readably.
-// Mirrors the formatter used in RequestInspector.vue.
-function formatXml(xml: string): string {
-  let formatted = "";
-  let indent = 0;
-  const lines = xml.split(/>\s*</);
-
-  lines.forEach((line, index) => {
-    if (index > 0) line = "<" + line;
-    if (index < lines.length - 1) line = line + ">";
-
-    if (line.match(/^<\/\w/)) indent--;
-
-    formatted += "  ".repeat(Math.max(0, indent)) + line + "\n";
-
-    if (line.match(/^<\w[^>]*[^/]>$/)) indent++;
-  });
-
-  return formatted.trim();
-}
-
-function highlightXml(xml: string): string {
-  return xml
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(
-      /(&lt;\/?)([\w-:]+)([\s\S]*?)(&gt;)/g,
-      (_match, openBracket, tagName, content, closeBracket) => {
-        const highlightedTag = `${openBracket}<span class="xml-tag">${tagName}</span>`;
-        const highlightedContent = content.replace(
-          /([\w-:]+)=(["'])(.*?)\2/g,
-          '<span class="xml-attr-name">$1</span>=<span class="xml-attr-value">$2$3$2</span>',
-        );
-        return `${highlightedTag}${highlightedContent}${closeBracket}`;
-      },
-    )
-    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="xml-comment">$1</span>')
-    .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="xml-declaration">$1</span>');
-}
-
-// Unused - replaced by highlightedWebTemplateWithSearch and highlightedOptWithSearch
-// const highlightedWebTemplate = computed(() => highlightJson(webTemplateJson.value));
-// const highlightedOpt = computed(() =>
-//   templateStore.selectedOpt ? highlightXml(templateStore.selectedOpt) : "",
-// );
-
-async function handleDrop(event: DragEvent) {
-  event.preventDefault();
-  uploadDragOver.value = false;
-  const file = event.dataTransfer?.files[0];
-  if (!file) return;
-
-  await uploadFile(file);
-}
-
-async function handleFileSelect() {
-  try {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "OPT Files",
-          extensions: ["opt", "xml"],
-        },
-      ],
-    });
-
-    if (selected && typeof selected === "string") {
-      if (!serverStore.activeServerId) return;
-
-      uploadStatus.value = null;
-      uploadError.value = null;
-
-      try {
-        // Read file using Tauri's FS plugin
-        const text = await readTextFile(selected);
-
-        const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
-        uploadStatus.value = result;
-        void analytics.track("template_uploaded");
-        templateStore.fetchTemplates(serverStore.activeServerId);
-      } catch (e) {
-        uploadError.value = String(e);
-      }
-    }
-  } catch (e) {
-    uploadError.value = String(e);
-  }
-}
-
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
 
 function createComposition(templateId: string) {
   router.push({ name: "compose", params: { templateId } });
@@ -369,106 +257,28 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function highlightSearchInContent(html: string, searchQuery: string): string {
-  if (!searchQuery) return html;
-
-  // We need to search in the text content, not the HTML
-  // Strategy: find matches in plain text positions, then inject marks in HTML
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
-  const plainText = tempDiv.textContent || "";
-
-  const regex = new RegExp(escapeRegex(searchQuery), "gi");
-  const matches: Array<{ start: number; end: number }> = [];
-  let match;
-
-  while ((match = regex.exec(plainText)) !== null) {
-    matches.push({ start: match.index, end: match.index + match[0].length });
-  }
-
-  if (matches.length === 0) return html;
-
-  // Rebuild HTML with <mark> tags
-  // This is complex because we need to preserve HTML structure
-  // Simplified approach: wrap matches in the final HTML string
-  // This may not be perfect but works for most cases
-  let result = html;
-  const escapedQuery = escapeHtml(searchQuery);
-  const searchRegex = new RegExp(`(${escapeRegex(escapedQuery)})`, "gi");
-
-  result = result.replace(searchRegex, `<mark class="search-match" data-match>$1</mark>`);
-
-  return result;
-}
-
-const highlightedWebTemplateWithSearch = computed(() => {
-  let highlighted = highlightJson(webTemplateJson.value);
-  if (panelSearchQuery.value) {
-    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
-  }
-  return highlighted;
-});
-
-const formattedOptXml = computed(() => {
-  return templateStore.selectedOpt ? formatXml(templateStore.selectedOpt) : "";
-});
-
-const highlightedOptWithSearch = computed(() => {
-  if (!formattedOptXml.value) return "";
-  let highlighted = highlightXml(formattedOptXml.value);
-  if (panelSearchQuery.value) {
-    highlighted = highlightSearchInContent(highlighted, panelSearchQuery.value);
-  }
-  return highlighted;
-});
-
-const jsonXmlMatches = computed(() => {
-  if (!panelSearchQuery.value) return 0;
-  const content = activeTab.value === "json" ? webTemplateJson.value : formattedOptXml.value;
-  const regex = new RegExp(escapeRegex(panelSearchQuery.value), "gi");
-  const matches = content.match(regex);
-  return matches ? matches.length : 0;
-});
+// Both match counts come from their respective viewer component (see
+// @total-matches on the JsonViewer/XmlViewer instances below) — each viewer
+// owns its own highlighting, current-match tracking, and scroll-into-view.
+const jsonViewerMatches = ref(0);
+const xmlViewerMatches = ref(0);
+const activeTabMatches = computed(() =>
+  activeTab.value === "json" ? jsonViewerMatches.value : xmlViewerMatches.value,
+);
 
 function goToNextMatch() {
-  if (jsonXmlMatches.value === 0) return;
-  currentMatchIndex.value = (currentMatchIndex.value + 1) % jsonXmlMatches.value;
-  scrollToMatch();
+  if (activeTabMatches.value === 0) return;
+  currentMatchIndex.value = (currentMatchIndex.value + 1) % activeTabMatches.value;
 }
 
 function goToPreviousMatch() {
-  if (jsonXmlMatches.value === 0) return;
+  if (activeTabMatches.value === 0) return;
   currentMatchIndex.value =
-    (currentMatchIndex.value - 1 + jsonXmlMatches.value) % jsonXmlMatches.value;
-  scrollToMatch();
-}
-
-function scrollToMatch() {
-  nextTick(() => {
-    const matches = document.querySelectorAll(".search-match");
-    if (matches[currentMatchIndex.value]) {
-      // Remove current-match class from all
-      matches.forEach((el) => el.classList.remove("current-match"));
-
-      // Add to current
-      matches[currentMatchIndex.value].classList.add("current-match");
-      matches[currentMatchIndex.value].scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  });
+    (currentMatchIndex.value - 1 + activeTabMatches.value) % activeTabMatches.value;
 }
 
 watch(panelSearchQuery, () => {
   currentMatchIndex.value = 0;
-  if (panelSearchQuery.value && (activeTab.value === "json" || activeTab.value === "opt")) {
-    scrollToMatch();
-  }
 });
 
 onMounted(() => {
@@ -486,14 +296,24 @@ onUnmounted(() => {
     <div class="panel-left">
       <div class="panel-header">
         <h2>Templates</h2>
-        <button
-          type="button"
-          class="tour-trigger-btn"
-          title="Take a tour of the Template Browser"
-          @click="replayTour"
-        >
-          <CompassIcon />
-        </button>
+        <div class="header-actions">
+          <button
+            type="button"
+            class="tour-trigger-btn"
+            title="Take a tour of the Template Browser"
+            @click="replayTour"
+          >
+            <CompassIcon />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            data-tour="template-upload"
+            @click="showUploadModal = true"
+          >
+            + Upload Template
+          </button>
+        </div>
       </div>
 
       <div class="search-bar">
@@ -536,25 +356,30 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Upload zone -->
-        <div
-          class="upload-zone"
-          data-tour="template-upload"
-          :class="{ 'drag-over': uploadDragOver }"
-          @dragover.prevent="uploadDragOver = true"
-          @dragleave="uploadDragOver = false"
-          @drop="handleDrop"
-        >
-          <p>Drop OPT file here to upload</p>
-          <button class="btn btn-sm" @click="handleFileSelect">Or choose file...</button>
+        <!-- Inline drop zone for the empty-server case — with no templates
+             to scroll past, this stays visible without needing the header
+             button, which is the only entry point once the list fills up. -->
+        <div v-if="templateStore.templates.length === 0" class="empty-upload-state">
+          <p class="empty-upload-hint">No templates on this server yet.</p>
+          <TemplateUploadZone
+            :drag-over="inlineUpload.dragOver.value"
+            :uploading="inlineUpload.uploading.value"
+            :upload-status="inlineUpload.uploadStatus.value"
+            :upload-error="inlineUpload.uploadError.value"
+            @dragover="inlineUpload.dragOver.value = true"
+            @dragleave="inlineUpload.dragOver.value = false"
+            @drop="inlineUpload.handleDrop"
+            @choose-file="inlineUpload.handleFileSelect"
+          />
         </div>
-        <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
-        <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
       </div>
     </div>
 
     <!-- Right: Template detail -->
-    <div class="panel-right">
+    <div
+      class="panel-right"
+      :class="{ 'panel-right--bounded': activeTab === 'opt' || activeTab === 'json' }"
+    >
       <template v-if="selectedTemplateId && templateStore.selectedWebTemplate">
         <div class="panel-header">
           <h2>{{ selectedTemplateId }}</h2>
@@ -663,10 +488,10 @@ onUnmounted(() => {
 
           <div v-if="filteredWtTree" class="wt-tree">
             <WtTreeNodeFiltered
+              :key="filteredWtTree.path"
               :node="filteredWtTree"
               :depth="0"
               :search-query="panelSearchQuery"
-              @copy="copyToClipboard"
             />
           </div>
           <div v-else-if="panelSearchQuery" class="empty-search">
@@ -682,15 +507,17 @@ onUnmounted(() => {
             v-model="panelSearchQuery"
             placeholder="Search JSON..."
             :match-count="currentMatchIndex"
-            :total-matches="jsonXmlMatches"
+            :total-matches="jsonViewerMatches"
             @close="closePanelSearch"
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
           />
-          <div class="json-actions">
-            <button class="btn btn-sm" @click="copyToClipboard(webTemplateJson)">Copy JSON</button>
-          </div>
-          <pre class="json-pre"><code v-html="highlightedWebTemplateWithSearch"></code></pre>
+          <JsonViewer
+            :value="templateStore.selectedWebTemplate"
+            :search-term="panelSearchQuery"
+            :current-match-index="currentMatchIndex"
+            @total-matches="jsonViewerMatches = $event"
+          />
         </div>
 
         <!-- OPT XML -->
@@ -701,15 +528,17 @@ onUnmounted(() => {
             v-model="panelSearchQuery"
             placeholder="Search XML..."
             :match-count="currentMatchIndex"
-            :total-matches="jsonXmlMatches"
+            :total-matches="xmlViewerMatches"
             @close="closePanelSearch"
             @next="goToNextMatch"
             @previous="goToPreviousMatch"
           />
-          <div class="xml-actions">
-            <button class="btn btn-sm" @click="copyToClipboard(formattedOptXml)">Copy XML</button>
-          </div>
-          <pre class="xml-pre"><code v-html="highlightedOptWithSearch"></code></pre>
+          <XmlViewer
+            :xml="templateStore.selectedOpt ?? ''"
+            :search-term="panelSearchQuery"
+            :current-match-index="currentMatchIndex"
+            @total-matches="xmlViewerMatches = $event"
+          />
         </div>
 
         <!-- FLAT Paths -->
@@ -732,7 +561,7 @@ onUnmounted(() => {
             <div class="flat-paths-list">
               <div v-for="path in filteredFlatPaths" :key="path" class="flat-path-item">
                 <span class="path-text" v-html="highlightPathMatch(path, panelSearchQuery)"></span>
-                <button class="copy-btn" @click="copyToClipboard(path)">Copy</button>
+                <CopyButton :text="path" title="Copy path" />
               </div>
             </div>
           </div>
@@ -747,11 +576,13 @@ onUnmounted(() => {
         <p>Click on a template to view its structure and FLAT paths.</p>
       </div>
     </div>
+
+    <TemplateUploadModal :open="showUploadModal" @close="showUploadModal = false" />
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, h, ref as vueRef, type PropType, type VNode } from "vue";
+import { defineComponent, h, reactive, ref as vueRef, type PropType, type VNode } from "vue";
 
 interface WtNodeType {
   id: string;
@@ -760,6 +591,22 @@ interface WtNodeType {
   aqlPath: string;
   children: WtNodeType[];
   terminologyType: string | null;
+  path: string;
+}
+
+/**
+ * Collapse state for the OPT tree, keyed by each node's structural `path`
+ * rather than held as local per-instance state. `filterTreeNode` rebuilds
+ * the filtered node objects (and their VNodes) on every search keystroke,
+ * so instance-local state would get reused across — or dropped for —
+ * whichever node happens to land in the same position, silently losing or
+ * misapplying a manual expand/collapse once the search is cleared. Keying
+ * by path instead makes a node's collapse state survive filtering intact.
+ */
+const wtTreeCollapsedByPath = reactive<Record<string, boolean>>({});
+
+function isCollapsedByDefault(depth: number): boolean {
+  return depth > 2;
 }
 
 const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
@@ -768,8 +615,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
     node: { type: Object as PropType<WtNodeType>, required: true },
     depth: { type: Number, default: 0 },
   },
-  emits: ["copy"],
-  setup(props, { emit }): () => VNode {
+  setup(props): () => VNode {
     const collapsed = vueRef(props.depth > 2);
 
     return (): VNode => {
@@ -825,16 +671,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
 
       if (node.aqlPath) {
         headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(
-          h(
-            "button",
-            {
-              class: "copy-btn",
-              onClick: () => emit("copy", node.aqlPath),
-            },
-            "Copy",
-          ),
-        );
+        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
       }
 
       elements.push(
@@ -854,7 +691,6 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
             h(WtTreeNode, {
               node: child,
               depth: props.depth + 1,
-              onCopy: (v: string) => emit("copy", v),
             }),
           ),
         );
@@ -877,8 +713,13 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
     depth: { type: Number, default: 0 },
     searchQuery: { type: String, default: "" },
   },
-  emits: ["copy"],
-  setup(props, { emit }): () => VNode {
+  setup(props): () => VNode {
+    const toggle = () => {
+      const path = props.node.path;
+      const current = wtTreeCollapsedByPath[path] ?? isCollapsedByDefault(props.depth);
+      wtTreeCollapsedByPath[path] = !current;
+    };
+
     function highlightMatch(text: string, query: string): VNode[] {
       if (!query) return [h("span", text)];
 
@@ -893,12 +734,25 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
     return (): VNode => {
       const node = props.node;
       const hasChildren = node.children.length > 0;
+      const collapsed = wtTreeCollapsedByPath[node.path] ?? isCollapsedByDefault(props.depth);
 
       const elements = [];
       const headerChildren = [];
 
       if (hasChildren) {
-        headerChildren.push(h("span", { class: "toggle-expanded" }, "\u25BC"));
+        headerChildren.push(
+          h(
+            "button",
+            {
+              type: "button",
+              class: "toggle",
+              "aria-expanded": !collapsed,
+              "aria-label": `${collapsed ? "Expand" : "Collapse"} ${node.name || node.id}`,
+              onClick: toggle,
+            },
+            collapsed ? "\u25B6" : "\u25BC",
+          ),
+        );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
       }
@@ -939,16 +793,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
       if (node.aqlPath) {
         headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(
-          h(
-            "button",
-            {
-              class: "copy-btn",
-              onClick: () => emit("copy", node.aqlPath),
-            },
-            "Copy",
-          ),
-        );
+        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
       }
 
       elements.push(
@@ -962,14 +807,15 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
         ),
       );
 
-      if (hasChildren) {
+      const shouldShowChildren = hasChildren && (!collapsed || props.searchQuery);
+      if (shouldShowChildren) {
         elements.push(
           ...node.children.map((child) =>
             h(WtTreeNodeFiltered, {
+              key: child.path,
               node: child,
               depth: props.depth + 1,
               searchQuery: props.searchQuery,
-              onCopy: (v: string) => emit("copy", v),
             }),
           ),
         );
@@ -1017,6 +863,19 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   padding: 0 24px 24px;
 }
 
+/* The OPT XML and Web Template JSON tabs need a real bounded height to
+   virtualize against (XmlViewer.vue/JsonViewer.vue fill whatever height
+   they're given rather than guessing a viewport-relative max-height — see
+   ADR-0023) — so while either is active, panel-right itself stops
+   scrolling and instead becomes a flex column that hands the active tab's
+   content div the remaining space below the header. Other tabs are
+   untouched and keep scrolling the whole panel as before. */
+.panel-right.panel-right--bounded {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -1034,6 +893,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 .panel-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .search-bar {
@@ -1096,39 +961,15 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-family: var(--font-mono);
 }
 
-.upload-zone {
-  margin: 16px;
-  padding: 24px;
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius);
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: 13px;
-  transition: all 0.15s;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-}
-.upload-zone.drag-over {
-  border-color: var(--color-primary);
-  background: rgba(100, 255, 218, 0.05);
-}
-.upload-zone p {
-  margin: 0;
+.empty-upload-state {
+  padding: 0 16px 16px;
 }
 
-.upload-msg {
-  margin: 0 16px;
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  font-size: 12px;
-}
-.upload-msg.success {
-  color: var(--color-success);
-}
-.upload-msg.error {
-  color: var(--color-error);
+.empty-upload-hint {
+  margin: 16px 0 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .tab-bar {
@@ -1217,6 +1058,10 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-size: 10px;
   color: var(--color-text-muted);
   user-select: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
 }
 :deep(.toggle-spacer) {
   width: 16px;
@@ -1391,67 +1236,23 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 .json-view {
   padding-top: 16px;
 }
-.json-actions {
-  margin-bottom: 12px;
-}
-.json-pre {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* JSON syntax highlighting */
-.json-pre :deep(.json-key) {
-  color: #6495ed;
-  font-weight: 600;
-}
-.json-pre :deep(.json-string) {
-  color: #6bff8e;
-}
-.json-pre :deep(.json-number) {
-  color: #ffa500;
-}
-.json-pre :deep(.json-boolean) {
-  color: #ff6b6b;
-}
-.json-pre :deep(.json-null) {
-  color: var(--color-text-muted);
-}
 
 /* XML view */
 .xml-view {
   padding-top: 16px;
 }
-.xml-actions {
-  margin-bottom: 12px;
-}
-.xml-pre {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
 
-/* XML syntax highlighting */
-.xml-pre :deep(.xml-tag) {
-  color: #6495ed;
-  font-weight: 600;
-}
-.xml-pre :deep(.xml-attr-name) {
-  color: #ffd93d;
-}
-.xml-pre :deep(.xml-attr-value) {
-  color: #6bff8e;
-}
-.xml-pre :deep(.xml-comment) {
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-.xml-pre :deep(.xml-declaration) {
-  color: #ff6b6b;
+/* Fills the remaining height panel-right--bounded hands it (see above), so
+   XmlViewer's/JsonViewer's own flex:1 sizing has a real height to fill
+   instead of shrinking to its content (which would just push the page
+   taller). */
+.panel-right--bounded .xml-view,
+.panel-right--bounded .json-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Search highlighting */
@@ -1486,14 +1287,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
 :deep(.wt-name.ancestor) {
   color: var(--color-text-muted);
-}
-
-:deep(.toggle-expanded) {
-  width: 16px;
-  text-align: center;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  user-select: none;
 }
 
 .empty-search {

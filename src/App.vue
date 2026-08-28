@@ -125,10 +125,10 @@ async function handleConsentDecision(accepted: boolean) {
   checkWhatsNewAndTours();
 }
 
-// What's New (version-gated) and the route-aware feature tour both hold off
-// until the consent dialog is resolved, so we never stack two modals — see
-// PRD-0018. If What's New has something to show, the tour waits for it to
-// be dismissed (below) rather than starting behind/alongside it.
+// What's New (version-gated) and the feature tours both hold off until the
+// consent dialog is resolved, so we never stack two modals — see PRD-0018.
+// If What's New has something to show, tours wait for it to be dismissed
+// (below) rather than starting behind/alongside it.
 function checkWhatsNewAndTours() {
   if (appVersion.value) {
     whatsNewStore.checkForUpdate(appVersion.value);
@@ -139,6 +139,17 @@ function checkWhatsNewAndTours() {
       source: "auto",
     });
   } else {
+    offerNextTour();
+  }
+}
+
+/**
+ * Try the app-wide intro tour first — it auto-starts once, ever, ahead of
+ * any route-aware tour. Once it's been seen/skipped (or is disabled), fall
+ * back to offering the current route's tour, same as before its existence.
+ */
+function offerNextTour() {
+  if (!tourStore.maybeAutoStartIntro()) {
     tourStore.maybeAutoStart(route.name as string | undefined);
   }
 }
@@ -201,12 +212,12 @@ watch(
   },
 );
 
-// Once the What's New modal is dismissed, offer the current route's tour —
-// it was held back while the modal was up (see checkWhatsNewAndTours).
+// Once the What's New modal is dismissed, offer the next tour — it was
+// held back while the modal was up (see checkWhatsNewAndTours).
 watch(
   () => whatsNewStore.visible,
   (visible) => {
-    if (!visible) tourStore.maybeAutoStart(route.name as string | undefined);
+    if (!visible) offerNextTour();
   },
 );
 </script>
@@ -424,7 +435,10 @@ select.input {
   border-color: var(--color-primary);
 }
 
-.copy-btn {
+/* Minimal-chrome ghost icon button — e.g. a small "remove"/"×" control in a
+   list row. Not for copy-to-clipboard buttons; use CopyButton.vue for those
+   (see OEH-37) — this class only remains for non-copy icon buttons. */
+.icon-btn-ghost {
   background: none;
   border: none;
   color: var(--color-text-muted);
@@ -433,7 +447,7 @@ select.input {
   border-radius: 3px;
   font-size: 12px;
 }
-.copy-btn:hover {
+.icon-btn-ghost:hover {
   color: var(--color-primary);
   background: var(--color-surface);
 }

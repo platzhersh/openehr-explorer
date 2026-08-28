@@ -60,6 +60,10 @@ export type AnalyticsEvent =
   | "ehr_created"
   | "ehr_deleted"
   | "ehr_searched"
+  // --- DIRECTORY (OEH-27) ---
+  | "directory_created"
+  | "directory_updated"
+  | "directory_deleted"
   // --- composition ---
   | "composition_viewed"
   | "composition_created"

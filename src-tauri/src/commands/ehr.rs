@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::Semaphore;
 
 use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
 use crate::inspector::{send_instrumented, InstrumentedResponse};
@@ -637,6 +640,144 @@ pub async fn get_directory_version(
     fetch_directory(&app, &client, &url, &profile.auth_method).await
 }
 
+/// Creates the DIRECTORY for an EHR that doesn't have one yet.
+///
+/// POSTs `folder` (a full FOLDER structure: `_type`, `name`, and optional
+/// `items`/`folders`) to the DIRECTORY resource, then re-fetches it via GET
+/// rather than trusting the POST response body — servers vary in whether
+/// that body is present at all (some return 201 with an empty body and only
+/// a `Location`/`ETag`), so re-fetching is the one path that always yields
+/// the server's canonical stored representation (assigned `uid`, any
+/// server-side normalization).
+#[tauri::command]
+pub async fn create_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    folder: Value,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_url(base, &ehr_id, None, None);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&folder),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    fetch_directory(&app, &client, &url, &profile.auth_method)
+        .await?
+        .ok_or_else(|| "Directory was created but could not be re-fetched".to_string())
+}
+
+/// Replaces the DIRECTORY's FOLDER hierarchy in place.
+///
+/// `preceding_version_uid` must be the `uid.value` of the directory version
+/// currently on screen (from a prior `get_directory`/`create_directory`
+/// call) — sent as `If-Match` so the server rejects the write with a 409/412
+/// if the DIRECTORY changed underneath the client since it was loaded,
+/// rather than silently clobbering that change. See `update_ehr_status` for
+/// the same optimistic-concurrency pattern.
+#[tauri::command]
+pub async fn update_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    folder: Value,
+    preceding_version_uid: String,
+) -> Result<Value, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_url(base, &ehr_id, None, None);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .header("If-Match", preceding_version_uid)
+            .json(&folder),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    fetch_directory(&app, &client, &url, &profile.auth_method)
+        .await?
+        .ok_or_else(|| "Directory was updated but could not be re-fetched".to_string())
+}
+
+/// Builds the URL for deleting the DIRECTORY: the base DIRECTORY resource
+/// URL plus a `version_uid` query parameter identifying the version being
+/// deleted (the openEHR REST API's optimistic-concurrency guard for this
+/// endpoint — unlike composition/EHR deletion, DIRECTORY has no per-version
+/// path segment to address instead).
+fn build_directory_delete_url(base: &str, ehr_id: &str, preceding_version_uid: &str) -> String {
+    let directory_url = build_directory_url(base, ehr_id, None, None);
+
+    match reqwest::Url::parse(&directory_url) {
+        Ok(mut u) => {
+            u.query_pairs_mut()
+                .append_pair("version_uid", preceding_version_uid);
+            u.to_string()
+        }
+        // Malformed base URL — fall back to manual interpolation; the
+        // request will fail downstream with a clearer connection error.
+        Err(_) => format!(
+            "{}?version_uid={}",
+            directory_url,
+            urlencoding::encode(preceding_version_uid)
+        ),
+    }
+}
+
+/// Deletes the DIRECTORY entirely.
+///
+/// `preceding_version_uid` is the same optimistic-concurrency guard as
+/// `update_directory`, but unlike composition/EHR deletion (which address
+/// the resource by path segment) the openEHR REST API takes it as a
+/// `version_uid` query parameter on DELETE — the DIRECTORY resource itself
+/// has no per-version path.
+#[tauri::command]
+pub async fn delete_directory(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    preceding_version_uid: String,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = build_directory_delete_url(base, &ehr_id, &preceding_version_uid);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::DELETE, &url, &profile.auth_method),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    Ok(format!("Directory for EHR {} deleted successfully", ehr_id))
+}
+
 // --- AQL-backed EHR search (PRD-0013) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -650,6 +791,13 @@ pub struct EhrSearchCriteria {
     pub created_on: Option<String>,     // YYYY-MM-DD
     pub created_before: Option<String>, // YYYY-MM-DD
     pub created_after: Option<String>,  // YYYY-MM-DD
+    /// Whether the EHR has a DIRECTORY (FOLDER structure) set. Unlike the
+    /// other criteria, this can't be expressed as an AQL predicate — the
+    /// DIRECTORY is only reachable via its own REST resource — so it's
+    /// applied as a post-filter in `search_ehrs` after the AQL results come
+    /// back (see `filter_by_directory_presence`). Both `true` and `false`
+    /// are supported, since the post-filter just checks presence either way.
+    pub has_directory: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -782,8 +930,10 @@ FROM EHR e CONTAINS EHR_STATUS s"
         );
     }
 
-    // Check if any criteria was provided (either predicates or has_compositions:true)
-    if predicates.is_empty() && !has_compositions_filter {
+    // Check if any criteria was provided (either predicates, has_compositions:true,
+    // or has_directory — the latter never adds a predicate since it's applied as a
+    // post-filter in `search_ehrs`, but it's still a real criterion the user asked for).
+    if predicates.is_empty() && !has_compositions_filter && criteria.has_directory.is_none() {
         return Err("At least one search criterion must be provided".to_string());
     }
 
@@ -795,6 +945,70 @@ FROM EHR e CONTAINS EHR_STATUS s"
         let where_clause = predicates.join(" AND ");
         Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
     }
+}
+
+/// Filters `results` down to only the EHRs whose DIRECTORY presence matches
+/// `want` (`true` keeps EHRs that have one, `false` keeps EHRs that don't).
+///
+/// AQL has no path for this — the DIRECTORY is only reachable via its own
+/// `GET /ehr/{id}/directory` resource, not a queryable attribute — so this
+/// issues one directory fetch per candidate EHR instead, bounded to a modest
+/// concurrency so a 200-row result set doesn't fire 200 requests at once.
+/// Original ordering is preserved even though the requests complete out of
+/// order, so results don't visibly reshuffle between identical searches.
+///
+/// A fetch failure (auth, transport, a non-404 HTTP error, bad JSON, ...) is
+/// *not* treated as "no directory" — that would silently misclassify an EHR
+/// we simply couldn't check. Only a confirmed 404 (which `fetch_directory`
+/// itself maps to `Ok(None)`) counts as absence; anything else drops that
+/// EHR from the result entirely, matching this function's existing
+/// best-effort handling of a panicked task below.
+async fn filter_by_directory_presence(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    base: &str,
+    auth: &AuthMethod,
+    results: Vec<EhrSearchResult>,
+    want: bool,
+) -> Vec<EhrSearchResult> {
+    const CONCURRENCY: usize = 8;
+    let semaphore = Arc::new(Semaphore::new(CONCURRENCY));
+    let mut set = tokio::task::JoinSet::new();
+
+    for (index, result) in results.into_iter().enumerate() {
+        let semaphore = semaphore.clone();
+        let app = app.clone();
+        let client = client.clone();
+        let auth = auth.clone();
+        let url = build_directory_url(base, &result.ehr_id, None, None);
+        set.spawn(async move {
+            // Permit is held for the duration of the request; dropped (and the
+            // slot freed) when this task completes.
+            let _permit = semaphore.acquire_owned().await;
+            let directory_result = fetch_directory(&app, &client, &url, &auth).await;
+            (index, result, directory_result)
+        });
+    }
+
+    let mut kept: Vec<(usize, EhrSearchResult)> = Vec::new();
+    while let Some(joined) = set.join_next().await {
+        // Only a *confirmed* answer counts: Ok(Some(_)) means the EHR has a
+        // directory, Ok(None) means fetch_directory saw a real 404 (its own
+        // documented way of reporting "no directory set" — not an error).
+        // An Err (auth failure, transport error, a non-404 HTTP error, bad
+        // JSON, ...) means we genuinely don't know, so that EHR is left out
+        // of the filtered list entirely rather than being silently
+        // miscounted as "no directory" either way. Likewise, a panicked
+        // task is dropped rather than surfaced — its EHR is simply left out
+        // of the (already best-effort) filtered list.
+        if let Ok((index, result, Ok(directory))) = joined {
+            if directory.is_some() == want {
+                kept.push((index, result));
+            }
+        }
+    }
+    kept.sort_by_key(|(index, _)| *index);
+    kept.into_iter().map(|(_, result)| result).collect()
 }
 
 #[tauri::command]
@@ -851,8 +1065,27 @@ pub async fn search_ehrs(
         })
         .collect();
 
+    // `limit_reached` reflects the raw AQL result set (capped at 200 rows by
+    // the query's own LIMIT) — computed before the directory post-filter so
+    // "showing first 200, refine your search" still means what it says even
+    // when has_directory then narrows the displayed count further.
+    let limit_reached = results.len() >= 200;
+
+    let results = if let Some(want_directory) = criteria.has_directory {
+        filter_by_directory_presence(
+            &app,
+            &client,
+            base,
+            &profile.auth_method,
+            results,
+            want_directory,
+        )
+        .await
+    } else {
+        results
+    };
+
     let total = results.len();
-    let limit_reached = total >= 200;
 
     Ok(EhrSearchResponse {
         results,
@@ -876,6 +1109,7 @@ mod tests {
             created_on: None,
             created_before: None,
             created_after: None,
+            has_directory: None,
         }
     }
 
@@ -1009,6 +1243,49 @@ mod tests {
     }
 
     #[test]
+    fn test_has_directory_true_alone_is_a_valid_criterion() {
+        // has_directory can't become an AQL predicate (it's applied as a
+        // post-filter in search_ehrs), but it must still count as "a
+        // criterion was provided" so the query isn't rejected.
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("FROM EHR e CONTAINS EHR_STATUS s"));
+        assert!(!aql.contains("WHERE"));
+        assert!(aql.contains("LIMIT 200"));
+    }
+
+    #[test]
+    fn test_has_directory_false_alone_is_also_valid() {
+        // Unlike has_compositions:false, has_directory:false is supported —
+        // the post-filter checks presence either way — so it shouldn't error.
+        let mut c = empty_criteria();
+        c.has_directory = Some(false);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(!aql.contains("WHERE"));
+    }
+
+    #[test]
+    fn test_has_directory_combines_with_other_predicates() {
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+        // has_directory itself never appears as a predicate.
+        assert!(!aql.to_lowercase().contains("directory"));
+    }
+
+    #[test]
+    fn test_has_directory_combines_with_has_compositions() {
+        let mut c = empty_criteria();
+        c.has_directory = Some(true);
+        c.has_compositions = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("FROM EHR e CONTAINS COMPOSITION c"));
+    }
+
+    #[test]
     fn test_multi_criteria_and() {
         let mut c = empty_criteria();
         c.subject_namespace = Some("patnr".to_string());
@@ -1058,6 +1335,16 @@ mod tests {
         assert_eq!(
             url,
             "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory/uid::system::1"
+        );
+    }
+
+    #[test]
+    fn test_build_directory_delete_url() {
+        let url =
+            build_directory_delete_url("https://cdr.example.com", "ehr-123", "uid::system::1");
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory?version_uid=uid%3A%3Asystem%3A%3A1"
         );
     }
 

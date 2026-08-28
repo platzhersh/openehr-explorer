@@ -5,8 +5,10 @@ import { useQueryStore, type SavedQuery, type StoredQuerySummary } from "../stor
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
+import { useVirtualList } from "../composables/useVirtualList";
 import AqlEditor from "../components/AqlEditor.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import JsonViewer from "../components/JsonViewer.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
@@ -36,6 +38,35 @@ const allTemplatePaths = ref<AqlPathEntry[]>([]);
 
 // Reference to AqlEditor component
 const editorRef = ref<InstanceType<typeof AqlEditor> | null>(null);
+
+// Both query lists are virtualized (src/composables/useVirtualList.ts) — a
+// server with hundreds/thousands of STORED_QUERY definitions used to render
+// one .saved-item row per entry up front, which made switching to the AQL
+// Runner (or to a server with many stored queries) slow and unresponsive.
+// ROW_HEIGHT must match `.saved-item`'s fixed CSS height below.
+const QUERY_ROW_HEIGHT = 34;
+const savedListEl = ref<HTMLElement | null>(null);
+const {
+  onScroll: onSavedScroll,
+  topPadding: savedTopPadding,
+  bottomPadding: savedBottomPadding,
+  visibleItems: visibleSavedQueries,
+} = useVirtualList(
+  computed(() => queryStore.savedQueries),
+  savedListEl,
+  { rowHeight: QUERY_ROW_HEIGHT },
+);
+const storedListEl = ref<HTMLElement | null>(null);
+const {
+  onScroll: onStoredScroll,
+  topPadding: storedTopPadding,
+  bottomPadding: storedBottomPadding,
+  visibleItems: visibleStoredQueries,
+} = useVirtualList(
+  computed(() => queryStore.storedQueries),
+  storedListEl,
+  { rowHeight: QUERY_ROW_HEIGHT },
+);
 
 // Load data after component is mounted to avoid blocking render
 onMounted(() => {
@@ -271,22 +302,30 @@ const editorStyle = computed(() => ({
         <div class="panel-header">
           <h3>Saved Queries <span class="panel-header-qualifier">(local)</span></h3>
         </div>
-        <div class="saved-list">
+        <div ref="savedListEl" class="saved-list" @scroll="onSavedScroll">
           <div
-            v-for="sq in queryStore.savedQueries"
-            :key="sq.id"
-            class="saved-item"
-            @click="loadQuery(sq)"
+            class="saved-list-inner"
+            :style="{
+              paddingTop: `${savedTopPadding}px`,
+              paddingBottom: `${savedBottomPadding}px`,
+            }"
           >
-            <div class="saved-name">{{ sq.name }}</div>
-            <button
-              type="button"
-              class="copy-btn"
-              @click.stop="deleteSavedQuery(sq.id)"
-              title="Delete"
+            <div
+              v-for="sq in visibleSavedQueries"
+              :key="sq.id"
+              class="saved-item"
+              @click="loadQuery(sq)"
             >
-              X
-            </button>
+              <div class="saved-name">{{ sq.name }}</div>
+              <button
+                type="button"
+                class="icon-btn-ghost"
+                @click.stop="deleteSavedQuery(sq.id)"
+                title="Delete"
+              >
+                X
+              </button>
+            </div>
           </div>
           <div v-if="queryStore.savedQueries.length === 0" class="empty-state">
             <p>No saved queries yet.</p>
@@ -296,7 +335,7 @@ const editorStyle = computed(() => ({
         <div class="panel-header" data-tour="aql-stored-queries">
           <h3>Stored Queries <span class="panel-header-qualifier">(server)</span></h3>
         </div>
-        <div class="saved-list">
+        <div ref="storedListEl" class="saved-list" @scroll="onStoredScroll">
           <div v-if="queryStore.storedQueriesLoading" class="empty-state">
             <p>Loading…</p>
           </div>
@@ -305,20 +344,28 @@ const editorStyle = computed(() => ({
           </div>
           <template v-else>
             <div
-              v-for="sq in queryStore.storedQueries"
-              :key="sq.qualified_query_name + (sq.version || '')"
-              class="saved-item"
-              :class="{
-                active:
-                  queryStore.selectedStoredQuery?.qualified_query_name ===
-                    sq.qualified_query_name &&
-                  queryStore.selectedStoredQuery?.version === sq.version,
+              class="saved-list-inner"
+              :style="{
+                paddingTop: `${storedTopPadding}px`,
+                paddingBottom: `${storedBottomPadding}px`,
               }"
-              @click="selectStoredQuery(sq)"
             >
-              <div class="saved-name">
-                {{ sq.qualified_query_name }}
-                <span v-if="sq.version" class="stored-version">v{{ sq.version }}</span>
+              <div
+                v-for="sq in visibleStoredQueries"
+                :key="sq.qualified_query_name + (sq.version || '')"
+                class="saved-item"
+                :class="{
+                  active:
+                    queryStore.selectedStoredQuery?.qualified_query_name ===
+                      sq.qualified_query_name &&
+                    queryStore.selectedStoredQuery?.version === sq.version,
+                }"
+                @click="selectStoredQuery(sq)"
+              >
+                <div class="saved-name">
+                  {{ sq.qualified_query_name }}
+                  <span v-if="sq.version" class="stored-version">v{{ sq.version }}</span>
+                </div>
               </div>
             </div>
             <div v-if="queryStore.storedQueries.length === 0" class="empty-state">
@@ -508,7 +555,9 @@ const editorStyle = computed(() => ({
                         <summary class="cell-summary">
                           {{ JSON.stringify(cell).substring(0, 40) }}...
                         </summary>
-                        <pre class="cell-detail">{{ JSON.stringify(cell, null, 2) }}</pre>
+                        <div class="cell-detail">
+                          <JsonViewer :value="cell" :show-line-numbers="false" />
+                        </div>
                       </details>
                       <span v-else>{{ formatCellValue(cell) }}</span>
                     </td>
@@ -544,7 +593,7 @@ const editorStyle = computed(() => ({
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -561,15 +610,30 @@ const editorStyle = computed(() => ({
   color: var(--color-text-muted);
 }
 
+/* Each list gets an equal, independently-scrolling share of the panel
+   (rather than one shared panel-level scrollbar) so a long "Stored Queries"
+   list — potentially hundreds/thousands of server-defined queries — doesn't
+   push the "Saved Queries" section out of view above it. Virtualized via
+   useVirtualList, so `.saved-list-inner`'s padding stands in for rows
+   scrolled out of the rendered window. */
 .saved-list {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.saved-list-inner {
+  display: flex;
+  flex-direction: column;
 }
 
 .saved-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   transition: background 0.15s;
@@ -871,8 +935,6 @@ const editorStyle = computed(() => ({
 .cell-detail {
   margin-top: 8px;
   font-size: 11px;
-  white-space: pre-wrap;
-  word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
 }

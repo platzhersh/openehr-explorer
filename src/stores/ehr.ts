@@ -45,6 +45,11 @@ export interface EhrSearchCriteria {
   created_on?: string;
   created_before?: string;
   created_after?: string;
+  // Whether the EHR has a DIRECTORY (FOLDER structure) set. Applied as a
+  // post-filter server-side (AQL has no path for it) — see build_ehr_search_aql
+  // / filter_by_directory_presence in src-tauri/src/commands/ehr.rs. Unlike
+  // has_compositions, both true and false are supported.
+  has_directory?: boolean;
 }
 
 export interface EhrSearchResult {
@@ -198,7 +203,14 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearSearch() so a slow response for a since-superseded search
+  // (the user applied different filters, or removed a chip, before the
+  // previous request came back) can't land after a newer one and overwrite
+  // results that no longer match what's shown as the active criteria.
+  let searchRequestId = 0;
+
   async function searchEhrs(serverId: string, criteria: EhrSearchCriteria) {
+    const requestId = ++searchRequestId;
     searchLoading.value = true;
     searchError.value = null;
     searchActive.value = true;
@@ -207,12 +219,14 @@ export const useEhrStore = defineStore("ehr", () => {
         serverId,
         criteria,
       });
+      if (requestId !== searchRequestId) return; // superseded by a newer search
       searchResults.value = result.results;
       searchLimitReached.value = result.limit_reached;
     } catch (e) {
+      if (requestId !== searchRequestId) return;
       searchError.value = String(e);
     } finally {
-      searchLoading.value = false;
+      if (requestId === searchRequestId) searchLoading.value = false;
     }
   }
 
@@ -254,7 +268,81 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryLoaded.value = false;
   }
 
+  /** Creates the DIRECTORY for an EHR that doesn't have one yet. `folder` is
+   *  DIRECTORY FOLDER RM JSON (see `toWireFolder` in `src/lib/directoryEdit.ts`).
+   *  The backend re-fetches after writing, so `directory` ends up holding the
+   *  server's canonical stored representation rather than what was sent. */
+  async function createDirectory(serverId: string, ehrId: string, folder: Record<string, unknown>) {
+    directoryRequestId++; // invalidate any in-flight fetchDirectory call
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("create_directory", {
+        serverId,
+        ehrId,
+        folder,
+      });
+      directoryLoaded.value = true;
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  /** Replaces the DIRECTORY's FOLDER hierarchy. `precedingVersionUid` must be
+   *  the `uid.value` of the version currently loaded (sent as `If-Match` so a
+   *  concurrent change elsewhere isn't silently clobbered). */
+  async function updateDirectory(
+    serverId: string,
+    ehrId: string,
+    folder: Record<string, unknown>,
+    precedingVersionUid: string,
+  ) {
+    directoryRequestId++;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      directory.value = await invoke<Record<string, unknown>>("update_directory", {
+        serverId,
+        ehrId,
+        folder,
+        precedingVersionUid,
+      });
+      directoryLoaded.value = true;
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
+  /** Deletes the DIRECTORY entirely. Same `precedingVersionUid` guard as
+   *  `updateDirectory`. */
+  async function deleteDirectory(serverId: string, ehrId: string, precedingVersionUid: string) {
+    directoryRequestId++;
+    directoryLoading.value = true;
+    directoryError.value = null;
+    try {
+      await invoke<string>("delete_directory", {
+        serverId,
+        ehrId,
+        precedingVersionUid,
+      });
+      directory.value = null;
+      directoryLoaded.value = true; // "no directory" is now the confirmed, stable state
+    } catch (e) {
+      directoryError.value = String(e);
+      throw e;
+    } finally {
+      directoryLoading.value = false;
+    }
+  }
+
   function clearSearch() {
+    searchRequestId++; // invalidate any in-flight searchEhrs call
     searchResults.value = [];
     searchActive.value = false;
     searchError.value = null;
@@ -282,6 +370,9 @@ export const useEhrStore = defineStore("ehr", () => {
     fetchEhrDetail,
     fetchDirectory,
     clearDirectory,
+    createDirectory,
+    updateDirectory,
+    deleteDirectory,
     searchEhrs,
     clearSearch,
     createEhr,

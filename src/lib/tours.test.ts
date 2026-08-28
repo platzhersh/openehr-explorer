@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOURS, getTourById, getTourForRoute } from "./tours";
+import { APP_INTRO_TOUR_ID, TOURS, getTourById, getTourForRoute } from "./tours";
 
 describe("tours", () => {
   it("every tour has a unique id", () => {
@@ -62,5 +62,12 @@ describe("tours", () => {
     expect(inspector?.global).toBe(true);
     expect(inspector?.routeNames).toEqual([]);
     expect(getTourForRoute("inspector")).toBeUndefined();
+  });
+
+  it("the app intro tour is global and not offered via any route", () => {
+    const intro = getTourById(APP_INTRO_TOUR_ID);
+    expect(intro?.global).toBe(true);
+    expect(intro?.routeNames).toEqual([]);
+    expect(getTourForRoute(APP_INTRO_TOUR_ID)).toBeUndefined();
   });
 });

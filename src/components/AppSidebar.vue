@@ -4,9 +4,11 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useWhatsNewStore } from "../stores/whatsNew";
 
 const route = useRoute();
 const analytics = useAnalytics();
+const whatsNewStore = useWhatsNewStore();
 const appVersion = ref<string>("");
 
 const navItems = [
@@ -25,6 +27,14 @@ async function openDocumentation() {
   void analytics.track("documentation_opened");
 }
 
+function openWhatsNew() {
+  whatsNewStore.showLatest();
+  void analytics.track("whats_new_shown", {
+    version: whatsNewStore.entries[0]?.version ?? "unknown",
+    source: "sidebar",
+  });
+}
+
 onMounted(async () => {
   try {
     appVersion.value = await invoke<string>("get_app_version");
@@ -36,7 +46,7 @@ onMounted(async () => {
 
 <template>
   <nav class="sidebar-nav">
-    <div class="nav-main">
+    <div class="nav-main" data-tour="nav-tabs">
       <router-link
         v-for="item in navItems"
         :key="item.path"
@@ -49,9 +59,23 @@ onMounted(async () => {
       </router-link>
     </div>
     <div class="nav-bottom">
-      <div v-if="appVersion" class="version-display">v{{ appVersion }}</div>
+      <button
+        v-if="appVersion"
+        type="button"
+        @click="openWhatsNew"
+        class="version-display"
+        title="View What's New"
+      >
+        v{{ appVersion }}
+      </button>
       <div class="nav-divider"></div>
-      <a @click="openDocumentation" class="nav-item external-link" role="button" tabindex="0">
+      <a
+        @click="openDocumentation"
+        class="nav-item external-link"
+        role="button"
+        tabindex="0"
+        data-tour="nav-docs"
+      >
         <span class="nav-icon doc-icon">
           <svg
             width="14"
@@ -83,7 +107,12 @@ onMounted(async () => {
           />
         </svg>
       </a>
-      <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
+      <router-link
+        to="/settings"
+        class="nav-item"
+        :class="{ active: isActive('/settings') }"
+        data-tour="nav-settings"
+      >
         <span class="nav-icon gear-icon">
           <svg
             width="14"
@@ -189,12 +218,24 @@ onMounted(async () => {
 }
 
 .version-display {
+  display: block;
+  width: 100%;
   padding: 8px 12px;
   text-align: left;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--color-text-muted);
   letter-spacing: 0.3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all 0.15s;
+}
+.version-display:hover,
+.version-display:focus-visible {
+  color: var(--color-primary);
+  background: var(--color-surface);
 }
 
 .nav-divider {

@@ -1,16 +1,18 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { useSettingsStore } from "./settings";
-import { getTourById, getTourForRoute, type Tour } from "../lib/tours";
+import { APP_INTRO_TOUR_ID, getTourById, getTourForRoute, type Tour } from "../lib/tours";
 
 /**
  * Drives the route-aware feature tour overlay (`FeatureTourOverlay.vue`).
  * See PRD-0018.
  *
- * A tour is either auto-started once per route (via `maybeAutoStart`, gated
- * on the `tours_enabled` setting and the tour not already being in
- * `completed_tours`) or replayed on demand (via `start`, which ignores that
- * gate — a deliberate replay should always work).
+ * A tour is auto-started once per route (via `maybeAutoStart`), once at
+ * launch for the app-wide intro (via `maybeAutoStartIntro`), or replayed on
+ * demand (via `start`, which ignores the completion gate — a deliberate
+ * replay should always work). Both auto-start paths are gated on the
+ * `tours_enabled` setting and the tour not already being in
+ * `completed_tours`.
  */
 export const useTourStore = defineStore("tour", () => {
   const settingsStore = useSettingsStore();
@@ -45,6 +47,24 @@ export const useTourStore = defineStore("tour", () => {
     if (!getTourById(tourId)) return;
     activeTourId.value = tourId;
     stepIndex.value = 0;
+  }
+
+  /**
+   * Auto-start entry point for the app-wide intro tour — called once at
+   * launch, before any route-aware tour gets a turn. Unlike `maybeAutoStart`,
+   * this isn't triggered by navigation: the intro's steps target sidebar/
+   * inspector chrome that's mounted globally regardless of route, so there's
+   * no per-screen "arrived here" event to hang it off of.
+   *
+   * Returns true if the intro tour is (now, or already) occupying the
+   * overlay, so `App.vue` knows to skip trying to also start a route tour.
+   */
+  function maybeAutoStartIntro(): boolean {
+    if (activeTourId.value) return true; // never interrupt an in-progress tour
+    if (!settingsStore.settings.tours_enabled) return false;
+    if (isCompleted(APP_INTRO_TOUR_ID)) return false;
+    start(APP_INTRO_TOUR_ID);
+    return true;
   }
 
   function next() {
@@ -111,6 +131,7 @@ export const useTourStore = defineStore("tour", () => {
     isLastStep,
     isCompleted,
     maybeAutoStart,
+    maybeAutoStartIntro,
     start,
     next,
     prev,

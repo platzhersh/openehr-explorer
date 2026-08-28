@@ -4,8 +4,10 @@ pub mod inspector;
 pub mod settings;
 
 use commands::{composition, contribution, ehr, query, server, template, terminology};
+#[cfg(not(target_os = "macos"))]
+use tauri::menu::HELP_SUBMENU_ID;
 use tauri::{
-    menu::{Menu, MenuItem, MenuItemKind, HELP_SUBMENU_ID},
+    menu::{Menu, MenuItem, MenuItemKind},
     Emitter,
 };
 use tauri_plugin_aptabase::EventTracker;
@@ -126,6 +128,9 @@ pub fn run() {
             ehr::search_ehrs,
             ehr::get_directory,
             ehr::get_directory_version,
+            ehr::create_directory,
+            ehr::update_directory,
+            ehr::delete_directory,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,
