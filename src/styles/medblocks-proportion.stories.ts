@@ -17,6 +17,7 @@ interface ProportionArgs {
 
 const meta: Meta<ProportionArgs> = {
   title: "Medblocks/Proportion",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

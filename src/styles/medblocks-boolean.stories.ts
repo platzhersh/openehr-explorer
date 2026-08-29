@@ -17,6 +17,7 @@ interface BooleanArgs {
 
 const meta: Meta<BooleanArgs> = {
   title: "Medblocks/Boolean",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

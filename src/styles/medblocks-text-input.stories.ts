@@ -21,6 +21,7 @@ interface TextInputArgs {
 
 const meta: Meta<TextInputArgs> = {
   title: "Medblocks/Text Input",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

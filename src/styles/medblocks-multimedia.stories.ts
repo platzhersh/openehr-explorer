@@ -32,6 +32,7 @@ interface MultimediaArgs {
 
 const meta: Meta<MultimediaArgs> = {
   title: "Medblocks/Multimedia",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

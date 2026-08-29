@@ -15,6 +15,7 @@ interface DurationArgs {
 
 const meta: Meta<DurationArgs> = {
   title: "Medblocks/Duration",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

@@ -24,6 +24,7 @@ const UNITS = [
 
 const meta: Meta<QuantityArgs> = {
   title: "Medblocks/Quantity",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

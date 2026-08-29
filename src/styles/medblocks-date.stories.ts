@@ -13,6 +13,7 @@ interface DateArgs {
 
 const meta: Meta<DateArgs> = {
   title: "Medblocks/Date",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

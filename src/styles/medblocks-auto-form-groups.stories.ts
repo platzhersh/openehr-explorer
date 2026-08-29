@@ -88,6 +88,7 @@ const WEB_TEMPLATE = {
 
 const meta: Meta = {
   title: "Medblocks/Auto-Form Group Headings",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {

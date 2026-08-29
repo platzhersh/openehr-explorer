@@ -11,6 +11,7 @@ interface CountArgs {
 
 const meta: Meta<CountArgs> = {
   title: "Medblocks/Count",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {
