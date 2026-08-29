@@ -368,6 +368,12 @@ pub async fn update_composition(
             .header("Accept", "application/json")
             // See create_composition — same Simplified-Format requirement.
             .header("openehr-template-id", &template_id)
+            // Per the openEHR REST API spec, updating a COMPOSITION is an
+            // optimistic-concurrency operation: the server requires If-Match
+            // to name the preceding version being updated from (quoted, like
+            // the ETag it returns on GET), and rejects the request outright
+            // without it — confirmed against both EHRBase and FerroEHR.
+            .header("If-Match", format!("\"{}\"", composition_uid))
             .json(&composition_data),
     )
     .await?;
