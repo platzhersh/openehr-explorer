@@ -1,0 +1,21 @@
+<!--
+  medblocks-ui and Shoelace are loaded from a CDN via plain <script>/<link>
+  tags in index.html, not as npm dependencies (see ADR-0008) — Vite/Storybook
+  never bundles them, so they're invisible to the app's own module graph.
+  Storybook's preview renders in its own iframe.html, not index.html, so the
+  same tags have to be repeated here to register the `mb-*` custom elements
+  and load Shoelace's base theme for any story that uses them (see
+  medblocks-overrides.stories.ts). Keep these two tags byte-for-byte in sync
+  with index.html — same version pins, same SRI hashes.
+-->
+<script
+  src="https://unpkg.com/medblocks-ui@0.0.217/dist/bundle.js"
+  integrity="sha384-H4SYE1KsPJnS4esadGvZV2VIq9Rtmy5Zb39ILRBb1eqaexhmBV6ABVUy7h9MASS1"
+  crossorigin="anonymous"
+></script>
+<link
+  href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.0.0-beta.71/dist/themes/light.min.css"
+  rel="stylesheet"
+  integrity="sha384-RodHeMB0XA09ppAQj0NDBTrs/79kIa2sIvNi50zryT5IHaIvrgojStWdclAtTLez"
+  crossorigin="anonymous"
+/>

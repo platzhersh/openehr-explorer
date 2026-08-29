@@ -2,6 +2,9 @@ import type { Preview } from "@storybook/vue3-vite";
 import { setup } from "@storybook/vue3";
 import { createMemoryHistory, createRouter } from "vue-router";
 import "./preview.css";
+// The real production override file (see medblocks-overrides.stories.ts) —
+// not a Storybook-only copy, so it can't drift from what the app ships.
+import "../src/styles/medblocks-overrides.css";
 
 // Installed globally (rather than per-story) so any view/feature story that
 // uses `<router-link>` / `useRouter()` — e.g. Dashboard.vue — just works

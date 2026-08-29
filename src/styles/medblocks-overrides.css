@@ -20,48 +20,76 @@
   --sl-color-primary-900: #ccfbf1;
   --sl-color-primary-950: #f0fdfa;
 
-  /* Neutral colors - inverted for dark theme */
-  --sl-color-neutral-0: #ffffff;
-  --sl-color-neutral-50: #f7fafc;
-  --sl-color-neutral-100: #edf2f7;
-  --sl-color-neutral-200: #e2e8f0;
-  --sl-color-neutral-300: #cbd5e0;
-  --sl-color-neutral-400: #a0aec0;
-  --sl-color-neutral-500: #718096;
-  --sl-color-neutral-600: #4a5568;
-  --sl-color-neutral-700: #2d3748;
-  --sl-color-neutral-800: #1e2936;
-  --sl-color-neutral-900: #1a202c;
-  --sl-color-neutral-950: #0f1419;
+  /* Neutral colors - inverted for dark theme.
+   *
+   * We load Shoelace's *light* theme stylesheet (see index.html) and
+   * reskin it for dark mode purely through these custom properties, per
+   * ADR-0002 ("no ::part() or shadow-DOM piercing"). Shoelace's own
+   * internal component styles (menu items/options inside an sl-select
+   * dropdown, tags, tooltips, ...) reference these raw --sl-color-neutral-*
+   * slots directly, assuming the light-theme convention that low numbers
+   * are near-white (for backgrounds) and high numbers are near-black (for
+   * text that needs to read on a light background).
+   *
+   * A dark theme has to *flip that convention*, not just point a few
+   * semantic aliases at the dark end of an otherwise-unchanged ramp: the
+   * previous version of this file did the latter, which left components
+   * that read the raw scale directly (e.g. medblocks-ui's coded-text
+   * dropdown options, rendered via Shoelace's sl-select/sl-menu-item)
+   * using a "dark text for light backgrounds" color (~700) right next to
+   * a dark panel background (~800/900) it had picked for itself elsewhere
+   * — text and background only one or two ramp steps apart, i.e.
+   * unreadable. This is the same technique Shoelace's own dark.css theme
+   * uses: literally mirror the ramp (0 <-> 950, 50 <-> 900, 100 <-> 800,
+   * 200 <-> 700, 300 <-> 600, 400 <-> 500) so every component that
+   * hardcodes a specific slot number keeps working, just with that slot
+   * now holding the opposite-lightness color.
+   */
+  --sl-color-neutral-0: #0f1419;
+  --sl-color-neutral-50: #1a202c;
+  --sl-color-neutral-100: #1e2936;
+  --sl-color-neutral-200: #2d3748;
+  --sl-color-neutral-300: #4a5568;
+  --sl-color-neutral-400: #718096;
+  --sl-color-neutral-500: #a0aec0;
+  --sl-color-neutral-600: #cbd5e0;
+  --sl-color-neutral-700: #e2e8f0;
+  --sl-color-neutral-800: #edf2f7;
+  --sl-color-neutral-900: #f7fafc;
+  --sl-color-neutral-950: #ffffff;
 
-  /* Input backgrounds and borders */
-  --sl-input-background-color: var(--sl-color-neutral-900);
-  --sl-input-background-color-hover: var(--sl-color-neutral-800);
-  --sl-input-background-color-focus: var(--sl-color-neutral-800);
-  --sl-input-background-color-disabled: var(--sl-color-neutral-950);
+  /* Input backgrounds and borders.
+   * References below are mirrored (relative to the pre-inversion file) so
+   * they keep resolving to the same literal colors as before: e.g.
+   * neutral-900 held the "dark surface" color pre-inversion, that color
+   * now lives at neutral-50. */
+  --sl-input-background-color: var(--sl-color-neutral-50);
+  --sl-input-background-color-hover: var(--sl-color-neutral-100);
+  --sl-input-background-color-focus: var(--sl-color-neutral-100);
+  --sl-input-background-color-disabled: var(--sl-color-neutral-0);
 
-  --sl-input-border-color: var(--sl-color-neutral-700);
+  --sl-input-border-color: var(--sl-color-neutral-200);
   --sl-input-border-color-hover: var(--sl-color-primary-500);
   --sl-input-border-color-focus: var(--sl-color-primary-500);
 
-  --sl-input-color: var(--sl-color-neutral-100);
-  --sl-input-color-hover: var(--sl-color-neutral-50);
-  --sl-input-color-focus: var(--sl-color-neutral-50);
+  --sl-input-color: var(--sl-color-neutral-800);
+  --sl-input-color-hover: var(--sl-color-neutral-900);
+  --sl-input-color-focus: var(--sl-color-neutral-900);
 
-  --sl-input-placeholder-color: var(--sl-color-neutral-500);
-  --sl-input-placeholder-color-disabled: var(--sl-color-neutral-600);
+  --sl-input-placeholder-color: var(--sl-color-neutral-400);
+  --sl-input-placeholder-color-disabled: var(--sl-color-neutral-300);
 
   --sl-input-border-width: 1px;
   --sl-input-focus-ring-color: rgba(20, 184, 166, 0.25);
 
   /* Panel/card backgrounds */
-  --sl-panel-background-color: var(--sl-color-neutral-800);
-  --sl-panel-border-color: var(--sl-color-neutral-700);
+  --sl-panel-background-color: var(--sl-color-neutral-100);
+  --sl-panel-border-color: var(--sl-color-neutral-200);
   --sl-panel-border-width: 1px;
 
   /* Overlay (dropdown menus, etc) */
-  --sl-overlay-background-color: var(--sl-color-neutral-900);
-  --sl-overlay-border-color: var(--sl-color-neutral-700);
+  --sl-overlay-background-color: var(--sl-color-neutral-50);
+  --sl-overlay-border-color: var(--sl-color-neutral-200);
 
   /* Spacing */
   --sl-spacing-3x-small: 0.125rem;
