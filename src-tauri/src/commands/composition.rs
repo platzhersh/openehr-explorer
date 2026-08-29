@@ -352,9 +352,20 @@ pub async fn update_composition(
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
+    // composition_uid is the full versioned uid ("<uuid>::<system>::<version>"),
+    // matching what If-Match needs — but the PUT path parameter is the plain
+    // VERSIONED_OBJECT uid. EHRBase enforces this strictly and 404s ("only
+    // UUID-type versionedObjectUids are supported") if the version/system
+    // suffix is left on; FerroEHR tolerates the full string here but still
+    // needs it, unabridged, in If-Match.
+    let versioned_object_uid = composition_uid
+        .split("::")
+        .next()
+        .unwrap_or(&composition_uid);
+
     let url = format!(
         "{}/rest/openehr/v1/ehr/{}/composition/{}",
-        base, ehr_id, composition_uid
+        base, ehr_id, versioned_object_uid
     );
 
     let resp = send_instrumented(

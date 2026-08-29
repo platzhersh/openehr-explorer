@@ -429,8 +429,12 @@ async function handleSubmit() {
 
     // Build request details
     const method = isEditMode.value ? "PUT" : "POST";
+    // The PUT path takes only the bare VERSIONED_OBJECT uid — EHRBase 404s
+    // ("only UUID-type versionedObjectUids are supported") if the
+    // ::system::version suffix is left on; that full string belongs in
+    // If-Match instead. Mirrors update_composition's versioned_object_uid.
     const url = isEditMode.value
-      ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
+      ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`
       : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
 
     const ifMatchLine = isEditMode.value ? `\nIf-Match: "${props.compositionUid}"` : "";
