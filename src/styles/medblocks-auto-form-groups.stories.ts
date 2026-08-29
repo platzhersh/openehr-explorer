@@ -111,4 +111,13 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-export const Default: Story = {};
+export const Default: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Requires the medblocks-ui/Shoelace `<script>`/`<link>` tags in `.storybook/preview-head.html` to actually load from `unpkg.com`/`cdn.jsdelivr.net`. If that network access is blocked (a restricted CI runner, a locked-down corporate network, offline dev), `<mb-auto-form>` never upgrades — `customElements.get('mb-auto-form')` stays `undefined`, so `firstUpdated()`/`generateAutoForm()` never run and the element renders as an empty, childless tag with no visible group headings, no console error. Confirm the CDN resources actually loaded (Storybook's Network tab, or the `customElements.get` check above) before treating a blank render here as a real regression.",
+      },
+    },
+  },
+};
