@@ -59,6 +59,7 @@ const originalEditState = ref<{
   language: string;
   territory: string;
   flatData: Record<string, unknown>;
+  compositionTime: string;
 } | null>(null);
 
 // medblocks-ui form ref
@@ -135,8 +136,11 @@ onMounted(async () => {
     await loadCompositionForEdit(existingComposition);
   }
 
-  // Set default time
-  compositionTime.value = new Date().toISOString().slice(0, 16);
+  // Set default time — edit mode already restored the composition's own
+  // context/start_time above; only a genuinely new composition wants "now".
+  if (!isEditMode.value) {
+    compositionTime.value = new Date().toISOString().slice(0, 16);
+  }
 
   // Load draft if exists
   loadDraft();
@@ -167,6 +171,18 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
     composerName.value = ((composition as any)?.composer?.name as string) || "";
     language.value = ((composition as any)?.language?.code_string as string) || "en";
     territory.value = ((composition as any)?.territory?.code_string as string) || "US";
+    // context/start_time is another RM attribute the FLAT representation
+    // omits — read it from the structured composition too. This also feeds
+    // any archetype paths the web template defaults from ctx/time (e.g. a
+    // HISTORY's origin): leaving compositionTime at its "now" default on
+    // edit would resubmit those paths as freshly "now" while paths carried
+    // through unchanged from the imported FLAT data (like an already-set
+    // history origin) stay at their original, much older time — a mismatch
+    // servers reject (e.g. EHRBase/FerroEHR's HISTORY.Events_valid check).
+    const startTime = (composition as any)?.context?.start_time?.value as string | undefined;
+    if (startTime) {
+      compositionTime.value = startTime.slice(0, 16);
+    }
 
     const flatComp = await invoke<Record<string, unknown>>("get_composition_flat", {
       serverId: serverStore.activeServerId,
@@ -183,6 +199,7 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
       language: language.value,
       territory: territory.value,
       flatData: flatComp,
+      compositionTime: compositionTime.value,
     };
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
@@ -503,6 +520,7 @@ function handleReset() {
     language.value = original.language;
     territory.value = original.territory;
     flatData.value = original.flatData;
+    compositionTime.value = original.compositionTime;
     // mb-auto-form has no reset()/value setter — import() is how its data
     // is (re-)populated (see hydrateMbForm for why .value isn't real here).
     (mbFormRef.value as any)?.import?.(original.flatData);
@@ -513,8 +531,8 @@ function handleReset() {
     language.value = "en";
     territory.value = "US";
     flatData.value = {};
+    compositionTime.value = new Date().toISOString().slice(0, 16);
   }
-  compositionTime.value = new Date().toISOString().slice(0, 16);
   error.value = null;
   success.value = null;
   clearDraft();
