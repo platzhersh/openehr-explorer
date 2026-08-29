@@ -37,6 +37,7 @@ const OPTIONS = [
 
 const meta: Meta<CodedTextArgs> = {
   title: "Medblocks/Coded Text Dropdown",
+  tags: ["autodocs"],
   parameters: {
     docs: {
       description: {
