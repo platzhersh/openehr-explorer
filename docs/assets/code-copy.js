@@ -28,11 +28,10 @@
     }, COPIED_LABEL_MS);
   }
 
-  function copyText(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text);
-    }
-    // Fallback for browsers without the async Clipboard API.
+  // Fallback for browsers without the async Clipboard API — and for a
+  // Clipboard API call that exists but rejects (e.g. permission denied
+  // in an insecure or embedded context).
+  function legacyCopy(text) {
     var textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.style.position = 'fixed';
@@ -47,13 +46,28 @@
     return Promise.resolve();
   }
 
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return legacyCopy(text);
+      });
+    }
+    return legacyCopy(text);
+  }
+
   document.querySelectorAll('.code-block[data-copy]').forEach(function (block) {
     var btn = buildButton();
     block.classList.add('has-copy');
     block.appendChild(btn);
     btn.addEventListener('click', function () {
       var text = block.dataset.copy.replaceAll('\\n', '\n');
-      copyText(text).then(function () { flashCopied(btn); });
+      copyText(text)
+        .then(function () { flashCopied(btn); })
+        .catch(function () {
+          // Both the Clipboard API and the execCommand fallback failed
+          // (e.g. clipboard permission denied with no execCommand
+          // support) — nothing more we can do here.
+        });
     });
   });
 })();
