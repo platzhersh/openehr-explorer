@@ -64,54 +64,70 @@ function highlightInSection(sectionEl: Element, q: string) {
   });
 }
 
+// Returns the set of sidebar-link hrefs whose own text or matching
+// section's text contains `q`.
+function findMatchingLinks(links: HTMLAnchorElement[], q: string): Set<string> {
+  const matching = new Set<string>();
+  for (const link of links) {
+    const href = link.getAttribute("href") || "";
+    const section = document.getElementById(href.slice(1));
+    const text = `${link.textContent} ${section ? section.textContent : ""}`.toLowerCase();
+    if (text.includes(q)) matching.add(href);
+  }
+  return matching;
+}
+
+// A group heading is hidden once none of the sidebar links following it
+// (up to the next heading) are still visible.
+function groupHasVisibleLink(group: Element, stillVisible: Set<string>): boolean {
+  let next = group.nextElementSibling;
+  while (next && !next.classList.contains("sidebar-group-title")) {
+    if (next.classList.contains("sidebar-link") && stillVisible.has(next.getAttribute("href") || "")) {
+      return true;
+    }
+    next = next.nextElementSibling;
+  }
+  return false;
+}
+
+function findHiddenGroups(stillVisible: Set<string>): Set<string> {
+  const hidden = new Set<string>();
+  for (const group of document.querySelectorAll(".sidebar-group-title")) {
+    if (!groupHasVisibleLink(group, stillVisible)) hidden.add(group.textContent || "");
+  }
+  return hidden;
+}
+
+function highlightMatchingSections(sections: Element[], q: string) {
+  for (const section of sections) {
+    if (section.textContent?.toLowerCase().includes(q)) highlightInSection(section, q);
+  }
+}
+
+function resetSearch() {
+  hiddenLinks.value = new Set();
+  hiddenGroups.value = new Set();
+  noResults.value = false;
+}
+
 function runSearch() {
   const q = query.value.trim().toLowerCase();
   clearHighlights();
-
-  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(".sidebar-link"));
-  const sections = Array.from(document.querySelectorAll(".docs-content section[id]"));
-
   if (!q) {
-    hiddenLinks.value = new Set();
-    hiddenGroups.value = new Set();
-    noResults.value = false;
+    resetSearch();
     return;
   }
 
-  const stillVisible = new Set<string>();
-  const nextHiddenLinks = new Set<string>();
-  links.forEach((link) => {
-    const href = link.getAttribute("href") || "";
-    const id = href.slice(1);
-    const section = document.getElementById(id);
-    const text = `${link.textContent} ${section ? section.textContent : ""}`.toLowerCase();
-    if (text.includes(q)) {
-      stillVisible.add(href);
-    } else {
-      nextHiddenLinks.add(href);
-    }
-  });
-  hiddenLinks.value = nextHiddenLinks;
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(".sidebar-link"));
+  const stillVisible = findMatchingLinks(links, q);
 
-  const nextHiddenGroups = new Set<string>();
-  for (const group of document.querySelectorAll(".sidebar-group-title")) {
-    let hasVisible = false;
-    let next = group.nextElementSibling;
-    while (next && !next.classList.contains("sidebar-group-title")) {
-      if (next.classList.contains("sidebar-link") && stillVisible.has(next.getAttribute("href") || "")) {
-        hasVisible = true;
-      }
-      next = next.nextElementSibling;
-    }
-    if (!hasVisible) nextHiddenGroups.add(group.textContent || "");
-  }
-  hiddenGroups.value = nextHiddenGroups;
+  hiddenLinks.value = new Set(links.map((l) => l.getAttribute("href") || "").filter((href) => !stillVisible.has(href)));
+  hiddenGroups.value = findHiddenGroups(stillVisible);
   noResults.value = stillVisible.size === 0;
 
   if (stillVisible.size > 0) {
-    sections.forEach((section) => {
-      if (section.textContent?.toLowerCase().includes(q)) highlightInSection(section, q);
-    });
+    const sections = Array.from(document.querySelectorAll(".docs-content section[id]"));
+    highlightMatchingSections(sections, q);
   }
 }
 
@@ -167,6 +183,7 @@ onBeforeUnmount(() => {
   <aside class="sidebar" role="navigation" aria-label="Documentation navigation">
     <div class="sidebar-search">
       <input
+        id="docs-search"
         ref="searchInput"
         v-model="query"
         @input="runSearch"
@@ -178,7 +195,7 @@ onBeforeUnmount(() => {
         autocomplete="off"
       />
     </div>
-    <p class="sidebar-no-results" v-show="noResults">No matching topics</p>
+    <p id="docs-search-no-results" class="sidebar-no-results" v-show="noResults">No matching topics</p>
 
     <template v-for="group in groups" :key="group.title">
       <div class="sidebar-group-title" v-show="!hiddenGroups.has(group.title)">{{ group.title }}</div>
