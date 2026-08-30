@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside class="sidebar" role="navigation" aria-label="Documentation navigation">
+  <nav class="sidebar" aria-label="Documentation navigation">
     <div class="sidebar-search">
       <input
         id="docs-search"
@@ -209,7 +209,7 @@ onBeforeUnmount(() => {
         >{{ link.label }}</a
       >
     </template>
-  </aside>
+  </nav>
 </template>
 
 <style>
