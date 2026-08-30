@@ -7,6 +7,7 @@ import FeatureCard from "../components/FeatureCard.astro";
 import DownloadButton from "../components/vue/DownloadButton.vue";
 import DownloadsSparkline from "../components/vue/DownloadsSparkline.vue";
 import ScreenshotGallery from "../components/vue/ScreenshotGallery.vue";
+import CodeBlock from "../components/vue/CodeBlock.vue";
 
 const features = [
   {
@@ -144,7 +145,7 @@ const screenshots = [
       <h2 class="section-heading">Get started in 30 seconds</h2>
       <div class="quickstart-inner">
         <h3>macOS (Homebrew)</h3>
-        <div class="code-block">brew install --cask platzhersh/openehr-explorer/openehr-explorer</div>
+        <CodeBlock client:load segments={[{ cmd: "brew install --cask platzhersh/openehr-explorer/openehr-explorer" }]} />
         <p class="quickstart-note">
           Not yet notarized by Apple &mdash; on first launch, run <code>xattr -cr "/Applications/openEHR Explorer.app"</code> if macOS reports
           the app as damaged.
@@ -158,23 +159,31 @@ const screenshots = [
         </p>
 
         <h3>Windows (Scoop)</h3>
-        <div class="code-block">
-          scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer<br />
-          scoop install openehr-explorer
-        </div>
+        <CodeBlock
+          client:load
+          segments={[
+            { cmd: "scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer" },
+            { cmd: "scoop install openehr-explorer" },
+          ]}
+        />
         <p class="quickstart-note">
           Not yet Authenticode-signed &mdash; Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr;
           &ldquo;Run anyway&rdquo;. winget support is planned.
         </p>
 
         <h3>Linux (apt)</h3>
-        <div class="code-block">
-          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o
-          /usr/share/keyrings/openehr-explorer.gpg<br />
-          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable
-          main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br />
-          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
-        </div>
+        <CodeBlock
+          client:load
+          segments={[
+            {
+              cmd: "curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg",
+            },
+            {
+              cmd: 'echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list',
+            },
+            { cmd: "sudo apt update && sudo apt install open-ehr-explorer" },
+          ]}
+        />
         <p class="quickstart-note">
           Debian/Ubuntu (amd64) &mdash; future releases arrive via <code>apt upgrade</code>. Prefer a one-off install or another distro? Grab the
           <code>.deb</code>/<code>.AppImage</code> directly &mdash; see <a href="docs.html#installation">Installation</a>.
