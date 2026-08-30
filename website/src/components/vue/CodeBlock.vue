@@ -67,10 +67,11 @@ function handleCopy() {
         copied.value = false;
       }, COPIED_LABEL_MS);
     })
-    .catch(() => {
+    .catch((err) => {
       // Both the Clipboard API and the execCommand fallback failed
       // (e.g. clipboard permission denied with no execCommand
       // support) — nothing more we can do here.
+      console.debug("code block: copy to clipboard failed", err);
     });
 }
 </script>
