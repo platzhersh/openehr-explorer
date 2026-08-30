@@ -1,0 +1,1005 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SimpleFooter from "../components/SimpleFooter.astro";
+---
+
+<Layout
+  title="openEHR Postman Alternative — Tool Comparison | openEHR Explorer"
+  description="Looking for a Postman alternative for openEHR? Compare openEHR Explorer against Postman/curl, openEHRTool v2, Better Studio, and ehr-ctrl feature by feature."
+  keywords="openEHR Postman, Postman alternative for openEHR, openEHR Postman collection, openEHR REST API testing, EHRBase Postman"
+  path="compare.html"
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" is:inline>
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is there an official Postman collection for openEHR?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Not a universal one. Individual CDR vendors publish their own OpenAPI specs and sometimes example Postman collections, but there's no single canonical openEHR Postman collection — every CDR has slightly different endpoints, and Postman has no built-in concept of templates, FLAT paths, or archetype node IDs. openEHR Explorer replaces the collection-building step entirely: point it at a server and it discovers EHRs, templates, and compositions for you."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I use Postman to test openEHR REST APIs?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes — Postman (or curl) works fine for raw openEHR REST calls against EHRBase, Better Platform, or any other openEHR CDR, since they're standard HTTP/JSON APIs. What Postman can't do is resolve archetype node IDs to readable labels, render a Web Template as a tree, or autocomplete FLAT/AQL paths — that's the gap openEHR Explorer fills."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What's a good Postman alternative for openEHR development?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "openEHR Explorer is a free, open-source desktop alternative to Postman built specifically for openEHR: it understands EHR status, compositions, templates, and AQL natively, so you don't hand-build requests or decode responses by hand."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does openEHR Explorer replace Postman entirely?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No — Postman is still a solid general-purpose REST client. openEHR Explorer is a focused tool for the openEHR-specific parts of the workflow: browsing EHRs, inspecting templates, building compositions, and running AQL. Many developers keep both installed and reach for whichever fits the task."
+            }
+          }
+        ]
+      }
+    </script>
+  </Fragment>
+
+  <SiteHeader current="compare" />
+
+  <main class="container">
+    <div class="page-hero">
+      <h1>The Postman for openEHR</h1>
+      <p>
+        A Postman alternative built specifically for openEHR, and how it stacks up against every other developer tool in the ecosystem. No
+        dedicated openEHR GUI existed &mdash; until now.
+      </p>
+    </div>
+
+    <div class="summary" style="margin-top: 0; margin-bottom: 56px;">
+      <h2>Why not just use Postman for openEHR?</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <strong>No openEHR Postman collection ships by default</strong>
+          <p>Postman has no notion of EHRs, compositions, or templates &mdash; every request against an openEHR CDR is built and read by hand.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Node IDs stay raw</strong>
+          <p>Postman shows at0006, not &ldquo;Systolic&rdquo;. You still need the OPT or Web Template open in another tab to decode a response.</p>
+        </div>
+        <div class="summary-item">
+          <strong>No FLAT path autocomplete</strong>
+          <p>Building a FLAT composition body in Postman means hand-typing every archetype path from the template JSON.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Postman is still great for raw HTTP</strong>
+          <p>
+            openEHR Explorer isn't trying to replace Postman for general API work &mdash; it's what to reach for once you're specifically working
+            with openEHR CDR data. See the <a href="#comparison">full feature comparison</a> below.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="yes">&#10003;</span> Full support</div>
+      <div class="legend-item"><span class="partial">&#9681;</span> Partial / limited</div>
+      <div class="legend-item"><span class="no">&#10007;</span> Not supported</div>
+      <div class="legend-item"><span class="planned">&#8224;</span> Planned (Phase 2)</div>
+      <div class="legend-item"><span class="unknown">?</span> Not yet evaluated</div>
+    </div>
+
+    <div class="tool-headers" id="comparison">
+      <div class="empty-header"><span class="col-label">Feature</span></div>
+
+      <div class="tool-card highlight">
+        <div class="tool-name primary">openEHR Explorer</div>
+        <div class="tool-type">Desktop app (Tauri)<br />macOS &middot; Win &middot; Linux</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">openEHRTool v2</div>
+        <div class="tool-type">Web app (Docker)<br />CRS4 / open-source</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">Postman / curl</div>
+        <div class="tool-type">Generic REST client<br />No openEHR awareness</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">Better Studio</div>
+        <div class="tool-type">Web app (proprietary)<br />Better Platform only</div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-name">ehr-ctrl</div>
+        <div class="tool-type">Desktop app (Windows)<br />Free, newly discovered</div>
+      </div>
+    </div>
+
+    <div class="cat-title">Setup &amp; Access</div>
+
+    <div class="feature-row">
+      <div class="feat-label">No Docker / backend required</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span><br /><span class="note">Docker Compose</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br /><span class="note">SaaS / hosted</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Native Windows app</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Installs in &lt; 2 min</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">dmg/exe/deb/AppImage, brew/scoop</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span><br /><span class="note">docker compose up</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br /><span class="note">Account required</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Direct download, no registration</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Works with local EHRBase</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Multi-server profiles with version detection</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Auto version detect</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Env vars / manual</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not evidenced on site</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Supports Better Platform</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br /><span class="note">Partial, CRUD in beta</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br /><span class="note">Native</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">CDR-agnostic (generic REST)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">EHRBase-focused</span></div>
+    </div>
+
+    <div class="cat-title">EHR &amp; Composition Browsing</div>
+
+    <div class="feature-row">
+      <div class="feat-label">Paginated EHR list</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Server-side EHR search (subject, namespace, system, etc.)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note primary">AQL-backed search</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Not detailed on site</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Compositions grouped by template</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Raw canonical JSON view</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Template-aware "pretty" view &sup1;</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note primary">Unique differentiator</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Raw node IDs, no label resolution</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">FLAT format view</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual only</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Composition version history</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Not detailed on site</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">One-click ID copy</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Every ID / path</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not evidenced on site</span></div>
+    </div>
+
+    <div class="cat-title">Template Tooling</div>
+
+    <div class="feature-row">
+      <div class="feat-label">Template list &amp; metadata</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Details panel: id, version, localized name &sup4;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Web Template tree inspector</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Visual node tree</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">3 scoped trees, archetype/data badges, cardinality &sup4;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">OPT drag-and-drop upload</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Upload supported, method unclear</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">FLAT path copy panel &sup2;</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note primary">Unique differentiator</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Raw path values shown in tree, copy unclear &sup4;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">FLAT path validator</div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br /><span class="note">Phase 2 (oehrpy)</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">OPT XML pretty-printed view</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Indented, syntax-highlighted</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br /><span class="note">Native response formatting</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Composition XML view, not OPT-specific</span></div>
+    </div>
+
+    <div class="cat-title">AQL Query Interface</div>
+
+    <div class="feature-row">
+      <div class="feat-label">AQL query editor</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Syntax highlighting</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Raw body only</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Full editor w/ autocomplete (v1.4.0) &sup4;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Tabular result view</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Auto-columns</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span><br /><span class="note">Raw JSON</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Saved query library</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br /><span class="note">Collections</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Export results to CSV</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">AQL path autocomplete</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note primary">3-layer CodeMirror</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Template-aware, 3-level autocomplete &sup4;</span></div>
+    </div>
+
+    <div class="cat-title">Developer Experience</div>
+
+    <div class="feature-row">
+      <div class="feat-label">Request Inspector (view all HTTP traffic)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note primary">Bottom drawer panel</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br /><span class="note">Native feature</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Request history/replay</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Keyboard shortcuts (navigation + actions)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Cmd+1-4, Cmd+Shift+I</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="partial">&#9681;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not evidenced on site</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Open-source / self-hostable</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Apache 2.0</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br /><span class="note">Apache 2.0</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Freemium</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br /><span class="note">Proprietary</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Closed-source</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Composition diff tool</div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br /><span class="note">Phase 2</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Synthetic data generation</div>
+      <div class="cell ours" data-tool="Explorer"><span class="planned">&#8224;</span><br /><span class="note">Phase 2 (MapEHR)</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Generated from templates</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Secure credential storage (OS keychain)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Keychain + encrypted-file fallback</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Vault variables, not OS keychain</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Not detailed on site</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Signed auto-update (in-place)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Checks GitHub Releases</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span><br /><span class="note">Manual docker pull</span></div>
+      <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br /><span class="note">Self-updates</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br /><span class="note">Hosted, always latest</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Not detailed on site</span></div>
+    </div>
+
+    <div class="cat-title">Advanced Resources &amp; Dashboard</div>
+
+    <div class="feature-row">
+      <div class="feat-label">EHR_STATUS view &amp; update</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Modifiable/queryable flags editable</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Explicit handling</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">DIRECTORY (folder hierarchy) operations</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br /><span class="note">Browse tree (read-only)</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br /><span class="note">Not seen in hands-on test</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">CONTRIBUTION tracking / audit trail</div>
+      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br /><span class="note">View by UID + linked from version history &mdash; no list endpoint in the openEHR API</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br /><span class="note">Not seen in hands-on test</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">STORED_QUERY execution</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">List, view &amp; execute with params</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Confirmed in-app, per-version granularity</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Landing dashboard (live EHR/composition/template counts)</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Overview tab &mdash; live counts + server info, refreshable</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
+    </div>
+
+    <div class="score-section">
+      <div class="score-row">
+        <div class="score-label">Feature score</div>
+        <div class="score-cell ours" data-tool="Explorer">
+          <span class="score-num primary">32.5</span>
+          <span class="score-denom">of 37</span>
+        </div>
+        <div class="score-cell" data-tool="openEHRTool">
+          <span class="score-num">12.5</span>
+          <span class="score-denom">of 37</span>
+        </div>
+        <div class="score-cell" data-tool="Postman">
+          <span class="score-num">15.5</span>
+          <span class="score-denom">of 37</span>
+        </div>
+        <div class="score-cell" data-tool="Better Studio">
+          <span class="score-num">15</span>
+          <span class="score-denom">of 37</span>
+        </div>
+        <div class="score-cell" data-tool="ehr-ctrl">
+          <span class="score-num">23</span>
+          <span class="score-denom">of 37</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <h2>Unique to openEHR Explorer</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <strong>Template-aware composition rendering</strong>
+          <p>at0006 becomes "Systolic". No other tool resolves node IDs to template labels.</p>
+        </div>
+        <div class="summary-item">
+          <strong>FLAT path panel</strong>
+          <p>Every Web Template path, one click to copy. Eliminates the most common source of EHRBase integration errors.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Zero-dependency install</strong>
+          <p>No Docker, no Python, no Node runtime. A native binary that opens in &lt; 2 seconds.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Multi-server profile switcher</strong>
+          <p>Local dev, staging, colleague's EHRBase &mdash; switch without restarting or editing config.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footnotes">
+      <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
+      <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
+      <p>
+        &sup3; DIRECTORY and CONTRIBUTION support are both partial. DIRECTORY has a read-only browsing tree in the EHR detail panel; creating,
+        updating, or deleting a DIRECTORY isn't supported by the app yet (the Request Inspector only shows HTTP traffic &mdash; it doesn't send
+        requests), so that still requires an external REST client. CONTRIBUTION can be viewed by UID &mdash; entered directly, or reached from a
+        composition's Versions tab &mdash; but the openEHR REST API has no endpoint to list all contributions for an EHR, so there's no browsable
+        list.
+      </p>
+      <p>
+        &sup4; Per ehr-ctrl's v1.4.0 release notes (Aug 27, 2026, openEHR Discourse): the Template Viewer gained three scoped tree views
+        (context/content/everything-else) with per-node localized names, an archetype-id badge, a data-element badge, a cardinality column, and a
+        toggle to show raw path values &mdash; counted as a Web Template tree inspector, and as partial credit toward a FLAT path panel since the
+        raw-path toggle wasn't described as copyable. The AQL editor gained bracket matching, undo/redo, and live autocomplete in multiple levels
+        (keywords/types, then alias-bound record paths, then template-specific archetype paths once a template id is entered) &mdash; counted as
+        AQL path autocomplete. Not yet independently verified hands-on; scored from the release notes themselves rather than the marketing site.
+      </p>
+      <p>
+        Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot;
+        openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary,
+        Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client (ClaroTech,
+        v1.4.0) &mdash; most rows scored from its public marketing site (home + features pages) only, not hands-on testing; see &sup4; for the
+        v1.4.0 rows scored from its release notes. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable,
+        multi-server profiles) remain unconfirmed absences rather than verified ones.
+      </p>
+      <p>Last updated August 2026 &middot; reflects openEHR Explorer v0.6.0.</p>
+    </div>
+
+    <section class="faq">
+      <h2>Frequently asked questions</h2>
+      <div class="faq-item">
+        <h3>Is there an official Postman collection for openEHR?</h3>
+        <p>
+          Not a universal one. Individual CDR vendors publish their own OpenAPI specs and sometimes example Postman collections, but there's no
+          single canonical openEHR Postman collection &mdash; every CDR has slightly different endpoints, and Postman has no built-in concept of
+          templates, FLAT paths, or archetype node IDs. openEHR Explorer replaces the collection-building step entirely: point it at a server and
+          it discovers EHRs, templates, and compositions for you.
+        </p>
+      </div>
+      <div class="faq-item">
+        <h3>Can I use Postman to test openEHR REST APIs?</h3>
+        <p>
+          Yes &mdash; Postman (or curl) works fine for raw openEHR REST calls against EHRBase, Better Platform, or any other openEHR CDR, since
+          they're standard HTTP/JSON APIs. What Postman can't do is resolve archetype node IDs to readable labels, render a Web Template as a
+          tree, or autocomplete FLAT/AQL paths &mdash; that's the gap openEHR Explorer fills.
+        </p>
+      </div>
+      <div class="faq-item">
+        <h3>What's a good Postman alternative for openEHR development?</h3>
+        <p>
+          openEHR Explorer is a free, open-source desktop alternative to Postman built specifically for openEHR: it understands EHR status,
+          compositions, templates, and AQL natively, so you don't hand-build requests or decode responses by hand.
+        </p>
+      </div>
+      <div class="faq-item">
+        <h3>Does openEHR Explorer replace Postman entirely?</h3>
+        <p>
+          No &mdash; Postman is still a solid general-purpose REST client. openEHR Explorer is a focused tool for the openEHR-specific parts of
+          the workflow: browsing EHRs, inspecting templates, building compositions, and running AQL. Many developers keep both installed and
+          reach for whichever fits the task.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <SimpleFooter />
+</Layout>
+
+<style>
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  .page-hero {
+    text-align: center;
+    padding: 64px 0 48px;
+  }
+  .page-hero h1 {
+    font-size: 48px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    background: var(--hero-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }
+  .page-hero p {
+    color: var(--text-secondary);
+    font-size: 17px;
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  .legend {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 48px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .tool-headers {
+    display: grid;
+    grid-template-columns: 200px repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .tool-card.highlight {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--primary-bg) 100%);
+  }
+  .tool-card.highlight::before {
+    content: "THIS APP";
+    position: absolute;
+    top: 8px;
+    right: -22px;
+    background: var(--primary);
+    color: var(--bg);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 2px 28px;
+    transform: rotate(35deg);
+  }
+  .tool-name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tool-name.primary {
+    color: var(--primary);
+  }
+  .tool-type {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .empty-header {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 6px;
+  }
+  .col-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .cat-title {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--primary);
+    padding: 20px 0 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+
+  .feature-row {
+    display: grid;
+    grid-template-columns: 200px repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 4px;
+    align-items: stretch;
+  }
+  .feature-row:hover .cell {
+    border-color: var(--surface-hover);
+  }
+  .feature-row:hover .cell.ours {
+    border-color: var(--primary-border);
+  }
+
+  .feat-label {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 10px 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.3;
+    transition: border-color 0.15s;
+    min-height: 44px;
+    gap: 3px;
+  }
+  .cell.ours {
+    background: var(--primary-bg);
+    border-color: var(--primary-border);
+  }
+
+  .yes {
+    color: var(--success);
+    font-size: 16px;
+  }
+  .no {
+    color: var(--error);
+    font-size: 14px;
+    opacity: 0.8;
+  }
+  .partial {
+    color: var(--warning);
+    font-size: 13px;
+  }
+  .planned {
+    color: var(--planned);
+    font-size: 12px;
+  }
+  .unknown {
+    color: var(--text-muted);
+    font-size: 13px;
+    opacity: 0.8;
+  }
+  .note {
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+  .note.primary {
+    color: var(--primary-dim);
+  }
+
+  .score-section {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .score-row {
+    display: grid;
+    grid-template-columns: 200px repeat(5, 1fr);
+    gap: 8px;
+  }
+  .score-label {
+    display: flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0 14px;
+  }
+  .score-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 8px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+  }
+  .score-cell.ours {
+    background: var(--primary-bg);
+    border: 1px solid var(--primary-border);
+  }
+  .score-num {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .score-num.primary {
+    color: var(--primary);
+  }
+  .score-denom {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .summary {
+    margin-top: 56px;
+    padding: 32px;
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .summary::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--primary-bg) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .summary h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    position: relative;
+  }
+  .summary-item strong {
+    display: block;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .summary-item p {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .footnotes {
+    margin-top: 40px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .footnotes a {
+    color: var(--text-secondary);
+  }
+
+  .faq {
+    margin-top: 56px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+  }
+  .faq h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+  .faq-item {
+    margin-bottom: 20px;
+  }
+  .faq-item h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 6px;
+  }
+  .faq-item p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 900px) {
+    .tool-headers,
+    .feature-row,
+    .score-row {
+      grid-template-columns: 150px repeat(5, 1fr);
+    }
+    .feat-label {
+      font-size: 12px;
+      padding: 8px 10px;
+    }
+    .cell {
+      font-size: 10px;
+      padding: 8px 4px;
+    }
+    .tool-name {
+      font-size: 11px;
+    }
+    .tool-type {
+      font-size: 9px;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .page-hero h1 {
+      font-size: 32px;
+    }
+    .page-hero p {
+      font-size: 15px;
+    }
+    .tool-headers,
+    .feature-row,
+    .score-row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+    .tool-headers {
+      display: none;
+    }
+    .empty-header {
+      display: none;
+    }
+    .feature-row {
+      grid-template-columns: repeat(5, 1fr);
+      margin-bottom: 16px;
+    }
+    .feat-label {
+      grid-column: 1 / -1;
+      padding: 6px 0;
+      font-weight: 500;
+    }
+    .cell[data-tool]::before {
+      content: attr(data-tool);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+      text-transform: uppercase;
+    }
+    .cell.ours[data-tool]::before {
+      color: var(--primary-dim);
+    }
+    .score-row {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .score-label {
+      grid-column: 1 / -1;
+      padding: 0;
+      margin-bottom: 4px;
+    }
+    .score-cell[data-tool]::before {
+      content: attr(data-tool);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+    .score-cell.ours[data-tool]::before {
+      color: var(--primary-dim);
+    }
+    .summary-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

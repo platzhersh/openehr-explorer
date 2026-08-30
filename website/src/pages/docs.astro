@@ -1,0 +1,686 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SimpleFooter from "../components/SimpleFooter.astro";
+import Callout from "../components/Callout.astro";
+import DocsSidebar from "../components/vue/DocsSidebar.vue";
+
+const navGroups = [
+  {
+    title: "Getting Started",
+    links: [
+      { href: "#prerequisites", label: "Prerequisites" },
+      { href: "#installation", label: "Installation" },
+      { href: "#first-connection", label: "First Connection" },
+    ],
+  },
+  {
+    title: "Features",
+    links: [
+      { href: "#overview-dashboard", label: "Overview Dashboard" },
+      { href: "#server-manager", label: "Server Manager" },
+      { href: "#ehr-browser", label: "EHR Browser" },
+      { href: "#composition-viewer", label: "Composition Viewer" },
+      { href: "#template-browser", label: "Template Browser" },
+      { href: "#aql-runner", label: "AQL Runner" },
+      { href: "#flat-path-panel", label: "FLAT Path Panel" },
+      { href: "#request-inspector", label: "Request Inspector" },
+    ],
+  },
+  {
+    title: "Configuration",
+    links: [
+      { href: "#server-profiles", label: "Server Profiles" },
+      { href: "#keyboard-shortcuts", label: "Keyboard Shortcuts" },
+    ],
+  },
+  {
+    title: "Reference",
+    links: [
+      { href: "#troubleshooting", label: "Troubleshooting" },
+      { href: "#changelog", label: "Changelog" },
+    ],
+  },
+];
+---
+
+<Layout
+  title="Documentation — openEHR Explorer"
+  description="Documentation for openEHR Explorer — a cross-platform desktop app for browsing, querying, and inspecting openEHR CDR instances."
+  path="docs.html"
+>
+  <SiteHeader current="docs" />
+
+  <div class="docs-layout">
+    <DocsSidebar client:load groups={navGroups} />
+
+    <main class="docs-content">
+      <!-- Getting Started -->
+      <section id="prerequisites">
+        <h2>Prerequisites</h2>
+        <p>
+          openEHR Explorer is a native desktop application. There are no runtime dependencies — you do not need Java, Docker, Node.js, or
+          any other runtime installed to use it.
+        </p>
+        <h3>System Requirements</h3>
+        <ul>
+          <li><strong>macOS:</strong> macOS 12 (Monterey) or later</li>
+          <li><strong>Windows:</strong> Windows 10 (version 1803) or later</li>
+          <li><strong>Linux:</strong> Ubuntu 22.04+, Fedora 37+, or equivalent (WebKit2GTK required)</li>
+          <li><strong>Disk space:</strong> ~10 MB</li>
+        </ul>
+        <p>
+          You will also need access to an openEHR CDR instance (such as <a href="https://ehrbase.org" target="_blank" rel="noopener">EHRBase</a>
+          or Better Platform) to connect to. The app does not include a built-in CDR.
+        </p>
+      </section>
+
+      <section id="installation">
+        <h2>Installation</h2>
+        <Callout title="Early Development">
+          openEHR Explorer is currently in early development. Check <a href="https://github.com/platzhersh/openehr-explorer/releases"
+            >GitHub Releases</a
+          > for the latest version.
+        </Callout>
+
+        <h3>macOS</h3>
+        <p>
+          Download the <code>.dmg</code> file from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Open the
+          DMG and drag openEHR Explorer to your Applications folder. Or install via Homebrew:
+        </p>
+        <div class="code-block">brew install --cask platzhersh/openehr-explorer/openehr-explorer</div>
+        <p>Not yet notarized by Apple — see <a href="#troubleshooting">Troubleshooting</a> if macOS reports the app as damaged on first launch.</p>
+
+        <h3>Windows</h3>
+        <p>
+          Download the <code>.exe</code> installer from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> and
+          run it. The app will be added to your Start menu. Or install via Scoop:
+        </p>
+        <div class="code-block">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer<br />scoop install openehr-explorer</div>
+        <p>
+          Not yet Authenticode-signed — Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run
+          anyway&rdquo;. winget support is planned.
+        </p>
+
+        <h3>Linux</h3>
+        <p>
+          <strong>apt (Debian/Ubuntu, recommended):</strong> a self-hosted apt repository is published at
+          <a href="https://github.com/platzhersh/apt-openehr-explorer">platzhersh/apt-openehr-explorer</a> and updated automatically on every
+          release, so once added, updates arrive via the normal <code>apt upgrade</code> flow.
+        </p>
+        <div class="code-block">
+          <span class="code-comment"># 1. Add the signing key</span><br />
+          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o
+          /usr/share/keyrings/openehr-explorer.gpg<br />
+          <br />
+          <span class="code-comment"># 2. Add the repository</span><br />
+          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable
+          main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br />
+          <br />
+          <span class="code-comment"># 3. Install</span><br />
+          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
+        </div>
+        <p>
+          Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>
+          for each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable
+          <code>.AppImage</code> (any distro).
+        </p>
+        <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
+        <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span><br />sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
+        <p><strong>AppImage (any distro):</strong></p>
+        <div class="code-block">chmod +x openEHR.Explorer_0.8.0_amd64.AppImage<br />./openEHR.Explorer_0.8.0_amd64.AppImage</div>
+        <p>
+          An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once
+          <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.
+        </p>
+      </section>
+
+      <section id="first-connection">
+        <h2>First Connection</h2>
+        <p>After installing and launching the app, follow these steps to connect to your first openEHR CDR:</p>
+        <ol>
+          <li>Click <strong>Servers</strong> in the sidebar to open the Server Manager.</li>
+          <li>Click <strong>"+ Add Server"</strong>.</li>
+          <li>Enter a display name (e.g., "Local EHRBase").</li>
+          <li>Enter the base URL of your CDR (e.g., <code>http://localhost:8080/ehrbase</code>).</li>
+          <li>Select the server type: <strong>EHRBase</strong>, <strong>Better Platform</strong>, or <strong>Generic</strong>.</li>
+          <li>
+            Choose an authentication method:
+            <ul>
+              <li><strong>None</strong> — for unauthenticated servers</li>
+              <li><strong>Basic</strong> — enter username and password</li>
+              <li><strong>Bearer</strong> — enter an access token</li>
+            </ul>
+          </li>
+          <li>Click <strong>"Test Connection"</strong> to verify.</li>
+          <li>Click <strong>"Save"</strong>.</li>
+        </ol>
+        <p>The server now appears in the sidebar switcher at the top. Select it to start browsing EHRs, templates, and running queries.</p>
+      </section>
+
+      <!-- Features -->
+      <section id="overview-dashboard">
+        <h2>Overview Dashboard</h2>
+        <p>
+          The Overview tab is the app's landing view — it's where you land after connecting to a server, before diving into the EHR Browser,
+          Templates, or AQL Runner.
+        </p>
+        <ul>
+          <li><strong>Live counts:</strong> total EHRs, compositions, and templates on the connected server, computed with AQL <code>COUNT</code> queries (visible in the Request Inspector).</li>
+          <li><strong>Connected server info:</strong> name, base URL, server type, connection status, and detected CDR version — the same information surfaced on the Server Manager card, consolidated here too.</li>
+          <li><strong>Refresh:</strong> counts are fetched fresh, not cached — click "Refresh" (or switch servers) to re-run the queries and see a "last updated" timestamp.</li>
+          <li>Click any stat card to jump straight to the EHR Browser or Template Browser.</li>
+        </ul>
+      </section>
+
+      <section id="server-manager">
+        <h2>Server Manager</h2>
+        <p>The Server Manager lets you create, edit, and delete server profiles. Each profile stores a connection configuration for a specific openEHR CDR instance.</p>
+        <ul>
+          <li>Supports <strong>EHRBase</strong>, <strong>Better Platform</strong>, and generic openEHR REST servers.</li>
+          <li>Each profile stores: display name, base URL, server type, and authentication method.</li>
+          <li><strong>Test Connection</strong> validates the configuration before saving.</li>
+          <li>Switch between servers instantly using the sidebar dropdown — no restart needed.</li>
+        </ul>
+        <p>Server profiles are stored locally and never sent to any external service. You can configure as many profiles as you need.</p>
+
+        <h3>Server Version Detection</h3>
+        <p>Each server profile displays the detected CDR version on the profile card. Version detection happens automatically when you test a connection or connect to a server.</p>
+        <ul>
+          <li><strong>EHRBase:</strong> Fetches version from <code>GET /rest/status</code> (displays <code>ehrbase_version</code>)</li>
+          <li><strong>Better Platform:</strong> Fetches version from <code>OPTIONS /rest/v1</code> (displays <code>solutionVersion</code>)</li>
+          <li><strong>Generic:</strong> Version detection not available — liveness check only</li>
+        </ul>
+        <p>Click the <strong>"Test"</strong> button on any profile card to verify connectivity and refresh the version number.</p>
+      </section>
+
+      <section id="ehr-browser">
+        <h2>EHR Browser</h2>
+        <p>The EHR Browser displays a paginated list of all Electronic Health Records from the connected CDR.</p>
+        <ul>
+          <li>Click any EHR to expand it and see its compositions grouped by template.</li>
+          <li>Click a composition to open it in the Composition Viewer.</li>
+          <li><strong>Create EHR:</strong> Click "+ New EHR" to create a new record with optional subject identity, external references, and custom EHR ID.</li>
+          <li><strong>Delete EHR:</strong> Open an EHR's detail view and click "Delete EHR". You must type the EHR ID to confirm — this prevents accidental deletion.</li>
+        </ul>
+        <p>The browser uses AQL-based listing for efficient pagination, even on CDRs with thousands of records.</p>
+
+        <h3>Search</h3>
+        <p>The EHR Browser supports powerful server-side search using typed attribute syntax. All searches execute AQL queries against the CDR and are visible in the Request Inspector.</p>
+
+        <h4>Search Syntax</h4>
+        <p>Enter search terms in the search bar using these attribute filters:</p>
+        <table>
+          <thead>
+            <tr><th>Syntax</th><th>Description</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>EHR ID</td><td>Prefix match (no keyword needed)</td><td><code>fde80e0e-04eb</code></td></tr>
+            <tr><td><code>subject:...</code></td><td>Subject ID contains</td><td><code>subject:6f4b5848</code></td></tr>
+            <tr><td><code>namespace:...</code></td><td>Subject namespace exact match</td><td><code>namespace:patnr</code></td></tr>
+            <tr><td><code>system:...</code></td><td>System ID exact match</td><td><code>system:dev.cistec.io</code></td></tr>
+            <tr><td><code>modifiable:true</code></td><td>EHR is modifiable</td><td><code>modifiable:true</code></td></tr>
+            <tr><td><code>modifiable:false</code></td><td>EHR is not modifiable</td><td><code>modifiable:false</code></td></tr>
+            <tr><td><code>hasCompositions:true</code></td><td>EHR has at least one composition</td><td><code>hasCompositions:true</code></td></tr>
+          </tbody>
+        </table>
+
+        <h4>Combining Search Terms</h4>
+        <p>Combine multiple terms with spaces (implicit AND logic):</p>
+        <div class="code-block">namespace:patnr modifiable:true<br />subject:6f4b5848 hasCompositions:true</div>
+
+        <h4>Search Help</h4>
+        <p>Click the <strong>?</strong> icon next to the search bar to view the full syntax reference and examples.</p>
+
+        <Callout title="Search Limitations">
+          The <code>hasCompositions:false</code> filter is not supported due to AQL limitations. Date filters (<code>created-on</code>,
+          <code>created-before</code>, <code>created-after</code>) are not supported due to EHRBase implementation constraints.
+        </Callout>
+      </section>
+
+      <section id="composition-viewer">
+        <h2>Composition Viewer</h2>
+        <p>The Composition Viewer provides three synchronized views of any composition:</p>
+        <ul>
+          <li><strong>Pretty view:</strong> A structured tree rendering with human-readable archetype labels. Archetype node IDs like <code>at0006</code> are replaced with their display names (e.g., "Any Event").</li>
+          <li><strong>JSON view:</strong> The raw canonical JSON representation as returned by the CDR.</li>
+          <li><strong>FLAT view:</strong> A key-value representation using FLAT paths — ideal for SDK developers building or debugging FLAT compositions.</li>
+        </ul>
+        <p>The <strong>Path Panel</strong> on the right shows all FLAT paths from the Web Template. Click any path to copy it to your clipboard.</p>
+        <p>You can also navigate between composition versions, edit compositions (opens the Composition Form), and delete compositions from this view.</p>
+      </section>
+
+      <section id="template-browser">
+        <h2>Template Browser</h2>
+        <p>The Template Browser lists all templates uploaded to the connected CDR.</p>
+        <ul>
+          <li>Click a template to inspect its <strong>Web Template</strong> tree structure interactively.</li>
+          <li>Expand nodes to explore archetypes, data types, constraints, and cardinalities.</li>
+          <li><strong>Upload OPT:</strong> Upload Operational Template XML files directly from the browser.</li>
+          <li><strong>New Composition:</strong> Click "New Composition" on any template to create a composition using that template's form.</li>
+          <li><strong>Lifecycle indicator:</strong> Each template shows a badge for its governance/publication state (e.g. Published, Draft). Click the <strong>?</strong> icon next to the badge for an explanation of each lifecycle state.</li>
+          <li><strong>OPT XML view:</strong> The raw Operational Template XML is pretty-printed with indentation so large templates stay readable.</li>
+        </ul>
+      </section>
+
+      <section id="aql-runner">
+        <h2>AQL Runner</h2>
+        <p>The AQL Runner is a query editor for the Archetype Query Language (AQL), the standard query language for openEHR data.</p>
+        <ul>
+          <li>Write AQL queries with <strong>syntax highlighting</strong> and intelligent autocomplete.</li>
+          <li>Execute queries against the connected CDR and see results in a sortable table.</li>
+          <li><strong>Save queries:</strong> Save frequently used queries with a name and description for quick access.</li>
+          <li><strong>Export CSV:</strong> Export query results as CSV files for further analysis.</li>
+          <li><strong>Format:</strong> Auto-format queries with the Format button or <code>Shift+Alt+F</code>.</li>
+          <li><strong>Execute:</strong> Run queries with <code>Ctrl/Cmd + Enter</code>.</li>
+        </ul>
+        <div class="code-block">SELECT<br />&nbsp;&nbsp;e/ehr_id/value as ehr_id,<br />&nbsp;&nbsp;c/uid/value as composition_id,<br />&nbsp;&nbsp;c/name/value as name<br />FROM EHR e<br />&nbsp;&nbsp;CONTAINS COMPOSITION c<br />ORDER BY c/name/value ASC<br />LIMIT 10</div>
+
+        <h3>Intelligent Autocomplete</h3>
+        <p>The AQL editor provides three layers of context-aware autocomplete powered by CodeMirror:</p>
+
+        <h4>Layer 1: Keywords &amp; RM Types</h4>
+        <p>Autocomplete for AQL keywords and openEHR Reference Model types:</p>
+        <ul>
+          <li><strong>Keywords:</strong> <code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, <code>CONTAINS</code>, <code>ORDER BY</code>, <code>LIMIT</code>, etc.</li>
+          <li><strong>RM Types:</strong> <code>EHR</code>, <code>COMPOSITION</code>, <code>OBSERVATION</code>, <code>EVALUATION</code>, <code>INSTRUCTION</code>, <code>ACTION</code>, etc.</li>
+          <li><strong>Functions:</strong> <code>COUNT(*)</code>, <code>MAX()</code>, <code>MIN()</code>, <code>SUM()</code>, <code>AVG()</code></li>
+        </ul>
+
+        <h4>Layer 2: Static RM Paths</h4>
+        <p>After typing an alias followed by <code>/</code> (e.g., <code>e/</code>, <code>c/</code>), autocomplete suggests standard RM paths:</p>
+        <ul>
+          <li><strong>EHR paths:</strong> <code>ehr_id/value</code>, <code>time_created/value</code>, <code>ehr_status/subject/external_ref/id/value</code>, etc.</li>
+          <li><strong>COMPOSITION paths:</strong> <code>uid/value</code>, <code>name/value</code>, <code>archetype_details/template_id/value</code>, <code>context/start_time/value</code>, etc.</li>
+        </ul>
+
+        <h4>Layer 3: Template-Aware Paths</h4>
+        <p>
+          Select a <strong>Context Template</strong> from the dropdown to enable template-specific path completions. When you type an
+          archetype-constrained alias (e.g., <code>obs/</code> for an OBSERVATION), autocomplete suggests actual data paths from the Web Template:
+        </p>
+        <ul>
+          <li>Paths are extracted from the selected template's Web Template definition</li>
+          <li>Completions show human-readable labels with RM type hints</li>
+          <li>Full AQL paths are inserted automatically</li>
+        </ul>
+        <p>
+          Example: With a vital signs template selected, typing <code>obs/</code> suggests paths like
+          <code>data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude</code> with the label "Systolic".
+        </p>
+
+        <Callout title="Pro Tip">Autocomplete activates as you type. Press <code>Ctrl+Space</code> to manually trigger suggestions at any time.</Callout>
+      </section>
+
+      <section id="flat-path-panel">
+        <h2>FLAT Path Panel</h2>
+        <p>The FLAT Path Panel is available in both the Composition Viewer and the Template Browser. It displays the full FLAT path for every node in the Web Template.</p>
+        <ul>
+          <li><strong>One-click copy:</strong> Click any path to copy it to your clipboard.</li>
+          <li>Paths follow the Web Template FLAT format — useful for building FLAT compositions programmatically with SDKs like <a href="https://platzhersh.github.io/oehrpy" target="_blank" rel="noopener">oehrpy</a>.</li>
+          <li>Search and filter paths by keyword.</li>
+        </ul>
+        <p>Example FLAT path:</p>
+        <div class="code-block">vital-signs/blood_pressure:0/any_event:0/systolic|magnitude</div>
+      </section>
+
+      <section id="request-inspector">
+        <h2>Request Inspector</h2>
+        <p>The Request Inspector is a bottom drawer panel that captures every HTTP request openEHR Explorer makes to the connected CDR. It provides full visibility into the API conversation for debugging and learning.</p>
+
+        <h3>Opening the Inspector</h3>
+        <ul>
+          <li>Keyboard shortcut: <code>Cmd+Shift+I</code> (macOS) / <code>Ctrl+Shift+I</code> (Windows/Linux)</li>
+          <li>Toggle between three height states: Collapsed (tab bar only), Half (default), Expanded (full window)</li>
+          <li>Red dot badge on collapsed tab indicates recent 4xx or 5xx errors</li>
+        </ul>
+
+        <h3>Request Log</h3>
+        <p>The left pane shows a reverse-chronological list of all CDR requests:</p>
+        <ul>
+          <li>Color-coded method badges: <code>GET</code> (blue), <code>POST</code> (green), <code>PUT</code> (amber), <code>DELETE</code> (red)</li>
+          <li>HTTP status color coding: 2xx (green), 3xx (blue), 4xx (orange), 5xx (red)</li>
+          <li>Request duration in milliseconds</li>
+          <li>Filter by method, status class, or URL path</li>
+          <li>Most recent entry is auto-selected</li>
+        </ul>
+
+        <h3>Request Detail Panel</h3>
+        <p>The right pane shows full details of the selected request, with two tabs:</p>
+
+        <h4>Request Tab</h4>
+        <ul>
+          <li><strong>Summary:</strong> Method, URL, duration, timestamp</li>
+          <li><strong>Request Headers:</strong> Key-value table with copy buttons</li>
+          <li><strong>Request Body:</strong> Shown for POST/PUT requests in Tree/Raw/FLAT views</li>
+          <li><strong>Copy as curl:</strong> One-click to copy a complete curl command that reproduces the exact request</li>
+        </ul>
+
+        <h4>Response Tab</h4>
+        <ul>
+          <li><strong>Summary:</strong> Status code, content type, response size</li>
+          <li><strong>Response Headers:</strong> Key-value table with copy buttons</li>
+          <li>
+            <strong>Response Body:</strong> Three view modes:
+            <ul>
+              <li><strong>Tree View (default):</strong> Interactive, collapsible JSON tree with openEHR-aware rendering (<code>_type</code> pills, archetype labels, DV type formatting)</li>
+              <li><strong>Raw JSON:</strong> Syntax-highlighted, read-only JSON editor with line numbers</li>
+              <li><strong>FLAT View:</strong> FLAT path → value table (available when response contains a composition)</li>
+            </ul>
+          </li>
+        </ul>
+
+        <h3>Use Cases</h3>
+        <ul>
+          <li><strong>Debugging:</strong> See exactly what was sent when a composition was rejected with 422</li>
+          <li><strong>Learning:</strong> Understand what a CREATE EHR request looks like (method, URL, body, response)</li>
+          <li><strong>Reproduction:</strong> Copy as curl to reproduce requests in CI or external tools</li>
+          <li><strong>Verification:</strong> Verify that stored compositions contain correct FLAT path values</li>
+        </ul>
+
+        <Callout title="Privacy Notice">
+          Sensitive headers (<code>Authorization</code>, <code>Cookie</code>) are redacted to <code>[REDACTED]</code> by default. Request history is
+          session-scoped and cleared when switching server profiles.
+        </Callout>
+      </section>
+
+      <!-- Configuration -->
+      <section id="server-profiles">
+        <h2>Server Profiles</h2>
+        <p>Server profiles are stored locally on your machine:</p>
+        <ul>
+          <li><strong>Linux/macOS:</strong> <code>~/.config/openehr-explorer/profiles.json</code></li>
+          <li><strong>Windows:</strong> <code>%APPDATA%\openehr-explorer\profiles.json</code></li>
+        </ul>
+        <h3>Server Types</h3>
+        <p>The server type determines how API URLs are constructed:</p>
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Base Path</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>EHRBase</td><td><code>/rest/openehr/v1/</code></td><td><code>http://localhost:8080/ehrbase/rest/openehr/v1/ehr</code></td></tr>
+            <tr><td>Better Platform</td><td><code>/rest/v1/</code></td><td><code>https://better.example.com/rest/v1/ehr</code></td></tr>
+            <tr><td>Generic</td><td>Configurable</td><td>Depends on CDR vendor</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Authentication Methods</h3>
+        <ul>
+          <li><strong>None:</strong> No authentication headers sent. Use for local development servers.</li>
+          <li><strong>Basic:</strong> HTTP Basic Authentication with username and password. Credentials are stored locally (not encrypted).</li>
+          <li><strong>Bearer:</strong> Authorization header with a Bearer token. Useful for OAuth2-based CDR deployments.</li>
+        </ul>
+      </section>
+
+      <section id="keyboard-shortcuts">
+        <h2>Keyboard Shortcuts</h2>
+        <table>
+          <thead>
+            <tr><th>Shortcut</th><th>Action</th><th>Context</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Ctrl/Cmd + 1</code></td><td>Switch to EHR Browser</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + 2</code></td><td>Switch to Template Browser</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + 3</code></td><td>Switch to AQL Runner</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + 4</code></td><td>Switch to Server Manager</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + ,</code></td><td>Open Settings</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + Enter</code></td><td>Execute AQL query</td><td>AQL Runner</td></tr>
+            <tr><td><code>Ctrl/Cmd + Shift + I</code></td><td>Toggle Request Inspector</td><td>Global</td></tr>
+            <tr><td><code>Ctrl/Cmd + Shift + D</code></td><td>Open Documentation</td><td>Global</td></tr>
+            <tr><td><code>Escape</code></td><td>Close dialog / panel</td><td>Global</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Reference -->
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+
+        <h3>"Connection refused"</h3>
+        <p>Verify that your CDR is running and that the base URL in your server profile is correct. If using EHRBase locally, ensure the Docker container is started:</p>
+        <div class="code-block">docker-compose up -d<br /><span class="code-comment"># Wait a few seconds, then retry the connection</span></div>
+
+        <h3>"401 Unauthorized"</h3>
+        <p>Check your authentication credentials in the server profile. For Basic auth, verify the username and password. For Bearer auth, ensure the token has not expired.</p>
+
+        <h3>"CORS errors"</h3>
+        <p>openEHR Explorer uses Tauri's native HTTP client, which does not go through a browser engine — CORS does not apply. If you see CORS-related errors, you may be running a development build via <code>npm run tauri dev</code> where the Vite dev server proxies requests.</p>
+
+        <h3>"Template not found" when creating a composition</h3>
+        <p>Ensure the template has been uploaded to the CDR. Go to Template Browser, verify the template appears in the list, and try again.</p>
+
+        <h3>macOS: "openEHR Explorer is damaged and can't be opened" (Gatekeeper)</h3>
+        <p>Release builds aren't code-signed and notarized by Apple yet, so Gatekeeper quarantines the app on first launch and reports it as damaged &mdash; it isn't actually corrupted. Clear the quarantine attribute and open it normally:</p>
+        <div class="code-block">xattr -cr "/Applications/openEHR Explorer.app"</div>
+        <p>This is a one-time step per install. <code>brew install --cask</code> prints this same instruction automatically as a caveat; direct downloads don't get a prompt, so you may need to run it yourself.</p>
+
+        <Callout kind="warning" title="Found a bug?">
+          Please report it on <a href="https://github.com/platzhersh/openehr-explorer/issues">GitHub Issues</a>. Include the steps to reproduce,
+          your OS version, and the CDR type you are connecting to.
+        </Callout>
+      </section>
+
+      <section id="changelog">
+        <h2>Changelog</h2>
+
+        <h3>v0.8.0 — DIRECTORY CRUD, Live Dashboard &amp; Template Tools</h3>
+        <ul>
+          <li><strong>DIRECTORY CRUD:</strong> Create, update, and delete DIRECTORY folder entries directly from the EHR browser, building on the read-only DIRECTORY viewer introduced in v0.7.0</li>
+          <li><strong>Live Dashboard:</strong> A new landing dashboard shows live EHR, composition, and template counts pulled straight from the connected server</li>
+          <li><strong>EHR List Sorting:</strong> The EHR browser now supports server-side sorting (ascending/descending) instead of only the server's default order</li>
+          <li><strong>Directory-Aware Filter Builder:</strong> The EHR browser's modal filter builder can now filter by DIRECTORY entries alongside its existing filters</li>
+          <li><strong>Template Tools:</strong> Templates now support an OPT XML download/export button, an upload button in the panel header, and collapsible nodes in the OPT tree view</li>
+          <li><strong>Brand Kit:</strong> Downloadable logo assets are now available from the landing page for anyone writing about or integrating with the app</li>
+          <li><strong>Rendering Performance:</strong> OPT XML, Web Template JSON, and stored-query results now render virtualized, keeping large templates and result sets smooth to scroll</li>
+          <li><strong>Composition Editing Fix:</strong> Fixed a bug that broke editing of existing compositions</li>
+          <li><strong>DIRECTORY Fix:</strong> Fixed <code>archetype_node_id</code> only being set on the root FOLDER instead of every FOLDER in the hierarchy</li>
+        </ul>
+
+        <h3>v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
+        <ul>
+          <li><strong>Contribution Audit Trail:</strong> A new Contribution viewer shows every version, deletion, and audit-trail entry behind a composition, with links from the EHR and composition views for tracing who changed what and when</li>
+          <li><strong>DIRECTORY Support:</strong> Browse and inspect the EHR's DIRECTORY (folder hierarchy) directly in the EHR browser, with a dedicated tree view</li>
+          <li><strong>Stored Query Execution:</strong> Run server-defined stored queries as a distinct capability in the AQL Runner, alongside ad-hoc AQL</li>
+          <li><strong>App-Wide Intro Tour:</strong> First launch now walks new users through the app with a guided tour, building on the existing route-aware feature tours and What's New modal</li>
+          <li><strong>Request Inspector curl Text:</strong> The Request Inspector now shows the equivalent curl command as copyable text for every logged request</li>
+          <li><strong>EHR Creation Fix:</strong> EHR creation now supplies <code>archetype_details</code> on the initial EHR_STATUS, fixing 422 errors against stricter CDRs like FerroEHR</li>
+          <li><strong>Sidebar Connection Status Fix:</strong> The server connection indicator now updates on every request instead of only after an explicit connection test</li>
+        </ul>
+
+        <h3>v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
+        <ul>
+          <li><strong>FerroEHR Support:</strong> Added <code>FerroEHR</code> as a recognized server type, including automatic version detection against its unauthenticated status endpoint</li>
+          <li><strong>Default Server Profile:</strong> Server profiles can now be marked as the default, so it's preselected automatically on app start instead of requiring a manual switch every time</li>
+          <li><strong>AQL Autocomplete Fix:</strong> Pressing Enter or Escape to accept or dismiss an AQL autocomplete suggestion now works correctly instead of inserting a newline or falling through to the editor</li>
+        </ul>
+
+        <h3>v0.5.2 — AQL Editor Highlighting Fix</h3>
+        <ul>
+          <li><strong>AQL Syntax Highlighting:</strong> Fixed a regression from the previous release where standard SQL keywords (<code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, and others) stopped being highlighted in the AQL editor while openEHR-specific keywords were added</li>
+        </ul>
+
+        <h3>v0.5.1 — Linux APT Repo &amp; AQL Editor Highlighting</h3>
+        <ul>
+          <li><strong>APT Repository:</strong> Debian/Ubuntu users can now install and update via a signed <code>apt</code> repository, published automatically on every release alongside the existing <code>.deb</code> download</li>
+          <li><strong>AQL Syntax Highlighting:</strong> The AQL editor now highlights openEHR-specific keywords (<code>CONTAINS</code>, <code>EHR</code>, <code>COMPOSITION</code>, <code>MATCHES</code>, <code>EXISTS</code>, and more) the same way it already highlighted standard SQL keywords</li>
+          <li><strong>Landing Page Refresh:</strong> Real product screenshots and a demo clip replace the old hero mockup, with a fullscreen lightbox for browsing the screenshot gallery and OS-aware download button text</li>
+        </ul>
+
+        <h3>v0.5.0 — Manual Update Checks</h3>
+        <ul>
+          <li><strong>Check for Updates:</strong> Added a &ldquo;Check for Updates&hellip;&rdquo; item to the native app menu (macOS app menu, Windows/Linux Help menu) that triggers the same check as the Settings page button</li>
+          <li><strong>Update Download Fix:</strong> Fixed a crash that could occur while downloading and installing an update</li>
+        </ul>
+
+        <h3>v0.4.3 — Windows Install &amp; Server Form Refresh</h3>
+        <ul>
+          <li><strong>Windows Install via Scoop:</strong> <code>scoop install openehr-explorer</code> now works against the published Scoop bucket, auto-published on every release (winget support still planned)</li>
+          <li><strong>Server Form Modal:</strong> Add/Edit Server now opens in a modal dialog instead of an inline panel, for a cleaner server management workflow</li>
+          <li><strong>Linux Install Docs:</strong> Install instructions now cover the <code>.deb</code> package alongside the AppImage</li>
+          <li><strong>Troubleshooting:</strong> Documented the macOS Gatekeeper &ldquo;damaged&rdquo; workaround for unnotarized builds</li>
+        </ul>
+
+        <h3>v0.4.2 — Signed Auto-Updates &amp; Homebrew</h3>
+        <ul>
+          <li><strong>Working Auto-Update:</strong> The updater now signs releases with a real Tauri signing key, so in-place updates actually verify and install (previous versions shipped the updater unsigned)</li>
+          <li><strong>Homebrew Cask:</strong> <code>brew install --cask platzhersh/openehr-explorer/openehr-explorer</code> is now published and auto-updated on every release</li>
+          <li><strong>SEO basics:</strong> Sitemap, Open Graph/Twitter metadata, and Google Search Console verification for the product website</li>
+        </ul>
+
+        <h3>v0.4.1 — Windows Icon Fix</h3>
+        <ul>
+          <li><strong>App icon:</strong> Replaced the single-size Windows <code>.ico</code> with a multi-resolution icon so the app looks correct in the Start menu, taskbar, and title bar at all sizes</li>
+        </ul>
+
+        <h3>v0.4.0 — Template Lifecycle &amp; OPT Readability</h3>
+        <ul>
+          <li><strong>Template Lifecycle Indicator:</strong> Templates now show a lifecycle badge (Published, Draft, etc.) with a contextual help popover explaining each state</li>
+          <li><strong>Pretty-Printed OPT XML:</strong> The raw Operational Template XML view is now indented for readability</li>
+          <li><strong>VirusTotal Scanning:</strong> Windows installers are automatically submitted to VirusTotal on tagged releases</li>
+        </ul>
+
+        <h3>v0.3.0 — Auto-Update, Analytics &amp; Security Hardening</h3>
+        <ul>
+          <li><strong>Auto-Update:</strong> Built-in updater checks GitHub Releases on startup and installs signed updates in-place (toggleable in Settings)</li>
+          <li><strong>Secure Credential Storage:</strong> Server profile credentials are stored in the OS keychain, with an encrypted-file fallback when no keychain is available</li>
+          <li><strong>Opt-in Usage Analytics:</strong> First-run consent dialog enables anonymous Aptabase telemetry to guide development — off by default and switchable any time from Settings</li>
+          <li><strong>Security Hardening:</strong> Strict Content Security Policy, Subresource Integrity for CDN assets, and URL validation for server profiles</li>
+          <li><strong>Settings Files Panel:</strong> View and open the app's config, profile, and log directories directly from Settings</li>
+          <li><strong>Documentation Shortcut:</strong> New Documentation link in the sidebar with a keyboard shortcut for quick access</li>
+        </ul>
+
+        <h3>v0.2.0 — EHR Browser Search &amp; Enhanced Features</h3>
+        <ul>
+          <li><strong>EHR Browser Search:</strong> Server-side AQL-backed search with attribute filters (subject, namespace, system, modifiable, hasCompositions)</li>
+          <li><strong>Server Version Detection:</strong> Auto-detect and display CDR version for EHRBase and Better Platform</li>
+          <li><strong>Global Keyboard Shortcuts:</strong> Navigate with Cmd+1-4, open settings with Cmd+,, toggle inspector with Cmd+Shift+I</li>
+        </ul>
+
+        <h3>v0.1.0 — Initial Release</h3>
+        <ul>
+          <li><strong>EHR Browser:</strong> Paginated listing, create, delete EHRs</li>
+          <li><strong>Composition Viewer:</strong> Pretty / JSON / FLAT views, path panel, version navigation</li>
+          <li><strong>Composition CRUD:</strong> Create, edit, delete compositions in FLAT format</li>
+          <li><strong>Template Browser:</strong> List templates, inspect Web Template tree, upload OPT</li>
+          <li><strong>AQL Runner:</strong> Execute queries with 3-layer autocomplete (keywords, RM paths, template-aware paths), sortable results table, saved queries, CSV export, auto-format</li>
+          <li><strong>Server Manager:</strong> Multi-server profiles with EHRBase and Better Platform support</li>
+          <li><strong>Request Inspector:</strong> View raw HTTP requests/responses for debugging with Tree/Raw/FLAT views, copy as curl</li>
+        </ul>
+
+        <Callout title="What's next?">
+          See the <a href="https://github.com/platzhersh/openehr-explorer">GitHub repository</a> for the roadmap. Planned features include
+          composition diff tool and synthetic data generation.
+        </Callout>
+      </section>
+    </main>
+  </div>
+
+  <SimpleFooter />
+</Layout>
+
+<style>
+  .docs-layout {
+    display: flex;
+    min-height: calc(100vh - 60px);
+  }
+
+  .docs-content {
+    flex: 1;
+    max-width: 900px;
+    padding: 40px 48px;
+  }
+  .docs-content h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    margin-top: 48px;
+    color: var(--text);
+  }
+  .docs-content h2:first-child {
+    margin-top: 0;
+  }
+  .docs-content h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 32px;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+  .docs-content p {
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .docs-content ul,
+  .docs-content ol {
+    margin-bottom: 16px;
+    padding-left: 24px;
+    color: var(--text-secondary);
+  }
+  .docs-content li {
+    margin-bottom: 6px;
+    line-height: 1.6;
+  }
+  .docs-content strong {
+    color: var(--text);
+  }
+  .docs-content :global(mark) {
+    background: rgba(100, 255, 218, 0.35);
+    color: inherit;
+    border-radius: 2px;
+  }
+
+  .docs-content :global(code) {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: var(--primary);
+  }
+  .docs-content :global(.code-block) {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--primary);
+    overflow-x: auto;
+    margin: 16px 0;
+    line-height: 1.6;
+  }
+  .docs-content :global(.code-comment) {
+    color: var(--text-muted);
+  }
+
+  .docs-content :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  .docs-content :global(th) {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 600;
+  }
+  .docs-content :global(td) {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  @media (max-width: 768px) {
+    .docs-layout {
+      flex-direction: column;
+    }
+    .docs-content {
+      padding: 24px 16px;
+    }
+  }
+</style>

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400">
+  <title>openEHR Explorer — Colour Palette</title>
+  <style>
+    text { font-family: 'Inter', -apple-system, sans-serif; }
+    .label { font-size: 11px; fill: #8892b0; }
+    .hex { font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .group-title { font-size: 13px; font-weight: 600; fill: #e0e0e0; }
+  </style>
+
+  <!-- Background -->
+  <rect width="720" height="400" rx="8" fill="#1a1a2e"/>
+
+  <!-- Row 1: Backgrounds -->
+  <text x="24" y="32" class="group-title">Backgrounds</text>
+  <rect x="24" y="44" width="100" height="70" rx="6" fill="#1a1a2e" stroke="#2a3a5c"/>
+  <text x="32" y="96" class="hex" fill="#e0e0e0">#1a1a2e</text>
+  <text x="24" y="130" class="label">App Background</text>
+
+  <rect x="140" y="44" width="100" height="70" rx="6" fill="#16213e" stroke="#2a3a5c"/>
+  <text x="148" y="96" class="hex" fill="#e0e0e0">#16213e</text>
+  <text x="140" y="130" class="label">Sidebar</text>
+
+  <rect x="256" y="44" width="100" height="70" rx="6" fill="#0f3460" stroke="#2a3a5c"/>
+  <text x="264" y="96" class="hex" fill="#e0e0e0">#0f3460</text>
+  <text x="256" y="130" class="label">Deep Accent</text>
+
+  <!-- Row 2: Surfaces & Text -->
+  <text x="24" y="168" class="group-title">Surfaces &amp; Text</text>
+  <rect x="24" y="180" width="100" height="70" rx="6" fill="#1e2a4a" stroke="#2a3a5c"/>
+  <text x="32" y="232" class="hex" fill="#e0e0e0">#1e2a4a</text>
+  <text x="24" y="266" class="label">Surface</text>
+
+  <rect x="140" y="180" width="100" height="70" rx="6" fill="#2a3a5c" stroke="#2a3a5c"/>
+  <text x="148" y="232" class="hex" fill="#e0e0e0">#2a3a5c</text>
+  <text x="140" y="266" class="label">Border</text>
+
+  <rect x="256" y="180" width="100" height="70" rx="6" fill="#e0e0e0"/>
+  <text x="264" y="232" class="hex" fill="#1a1a2e">#e0e0e0</text>
+  <text x="256" y="266" class="label">Text Primary</text>
+
+  <rect x="372" y="180" width="100" height="70" rx="6" fill="#8892b0"/>
+  <text x="380" y="232" class="hex" fill="#1a1a2e">#8892b0</text>
+  <text x="372" y="266" class="label">Text Secondary</text>
+
+  <!-- Row 3: Accents & Semantic -->
+  <text x="24" y="304" class="group-title">Accents &amp; Semantic</text>
+  <rect x="24" y="316" width="140" height="70" rx="6" fill="#64ffda"/>
+  <text x="32" y="368" class="hex" fill="#1a1a2e">#64ffda</text>
+  <text x="32" y="338" class="hex" fill="#1a1a2e" font-weight="600">★ Signature</text>
+
+  <rect x="180" y="316" width="100" height="70" rx="6" fill="#3d9e85"/>
+  <text x="188" y="368" class="hex" fill="#1a1a2e">#3d9e85</text>
+  <text x="180" y="402" class="label">Primary Dim</text>
+
+  <rect x="296" y="316" width="100" height="70" rx="6" fill="#6bff8e"/>
+  <text x="304" y="368" class="hex" fill="#1a1a2e">#6bff8e</text>
+  <text x="296" y="402" class="label">Success</text>
+
+  <rect x="412" y="316" width="100" height="70" rx="6" fill="#ffd93d"/>
+  <text x="420" y="368" class="hex" fill="#1a1a2e">#ffd93d</text>
+  <text x="412" y="402" class="label">Warning</text>
+
+  <rect x="528" y="316" width="100" height="70" rx="6" fill="#ff6b6b"/>
+  <text x="536" y="368" class="hex" fill="#1a1a2e">#ff6b6b</text>
+  <text x="528" y="402" class="label">Error</text>
+</svg>

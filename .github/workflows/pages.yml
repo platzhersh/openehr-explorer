@@ -1,0 +1,66 @@
+name: Pages (website)
+
+# Builds the Astro site in website/ on every change that touches it, and
+# (only on main) publishes the build to GitHub Pages via the Actions
+# deployment flow. See docs/adr/ADR-0024-astro-vue-marketing-site.md.
+#
+# NOTE: the "deploy" job below only takes effect once this repository's
+# Pages source is switched to "GitHub Actions" (Settings → Pages →
+# Source). Until that one-time switch happens, Pages keeps serving the
+# static docs/ folder exactly as before, and this workflow's "build" job
+# still runs on every PR to catch a broken site build before merge.
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', '.github/workflows/pages.yml']
+  pull_request:
+    branches: [main]
+    paths: ['website/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
