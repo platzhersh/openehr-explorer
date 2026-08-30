@@ -38,12 +38,13 @@
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.select();
+    var succeeded = false;
     try {
-      document.execCommand('copy');
+      succeeded = document.execCommand('copy');
     } finally {
       textarea.remove();
     }
-    return Promise.resolve();
+    return succeeded ? Promise.resolve() : Promise.reject(new Error('execCommand copy failed'));
   }
 
   function copyText(text) {
