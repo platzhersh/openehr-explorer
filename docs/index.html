@@ -594,7 +594,6 @@
     }
 
     .code-block {
-      position: relative;
       background: var(--code-bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -606,77 +605,12 @@
       line-height: 1.7;
     }
 
-    .code-block.has-copy {
-      padding-right: 48px;
-    }
-
     .code-block .comment {
       color: var(--text-muted);
     }
 
     .code-block a {
       color: var(--primary);
-    }
-
-    /* Each shell command gets its own line, prefixed with a "$" so it
-       reads as a distinct step rather than a wrapped continuation of the
-       line above — the ::before content is excluded from copy/selection
-       by every evergreen browser, so it never ends up in a paste. */
-    .code-line {
-      display: block;
-      overflow-wrap: anywhere;
-    }
-
-    .code-line::before {
-      content: '$ ';
-      color: var(--text-muted);
-    }
-
-    .code-line + .code-line {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--border);
-    }
-
-    .code-copy-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .code-copy-btn:hover {
-      color: var(--primary);
-      border-color: var(--primary-dim);
-      background: var(--surface-hover);
-    }
-
-    .code-copy-btn .icon-check {
-      display: none;
-      color: var(--success);
-    }
-
-    .code-copy-btn.copied {
-      border-color: var(--success);
-    }
-
-    .code-copy-btn.copied .icon-copy {
-      display: none;
-    }
-
-    .code-copy-btn.copied .icon-check {
-      display: block;
     }
 
     .quickstart-note {
@@ -837,6 +771,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="assets/code-copy.css">
 </head>
 <body>
 
@@ -1074,66 +1009,8 @@
     </div>
   </footer>
 
+  <script src="assets/code-copy.js"></script>
   <script>
-    // Copy-to-clipboard for install command snippets. Each opted-in
-    // .code-block carries the exact text to copy in data-copy (line
-    // breaks written as literal "\n", quotes/ampersands HTML-escaped —
-    // it's a plain attribute, not markup) so the button copies precisely
-    // what's shown regardless of how the block wraps or is styled.
-    (function () {
-      var COPIED_LABEL_MS = 1800;
-
-      function buildButton() {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'code-copy-btn';
-        btn.setAttribute('aria-label', 'Copy to clipboard');
-        btn.innerHTML =
-          '<svg class="icon-copy" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
-          '<svg class="icon-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-        return btn;
-      }
-
-      function flashCopied(btn) {
-        btn.classList.add('copied');
-        btn.setAttribute('aria-label', 'Copied!');
-        window.clearTimeout(btn._copyTimer);
-        btn._copyTimer = window.setTimeout(function () {
-          btn.classList.remove('copied');
-          btn.setAttribute('aria-label', 'Copy to clipboard');
-        }, COPIED_LABEL_MS);
-      }
-
-      function copyText(text) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          return navigator.clipboard.writeText(text);
-        }
-        // Fallback for browsers without the async Clipboard API.
-        var textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-          document.execCommand('copy');
-        } finally {
-          document.body.removeChild(textarea);
-        }
-        return Promise.resolve();
-      }
-
-      document.querySelectorAll('.code-block[data-copy]').forEach(function (block) {
-        var btn = buildButton();
-        block.classList.add('has-copy');
-        block.appendChild(btn);
-        btn.addEventListener('click', function () {
-          var text = block.getAttribute('data-copy').replace(/\\n/g, '\n');
-          copyText(text).then(function () { flashCopied(btn); });
-        });
-      });
-    })();
-
     // Detect the visitor's OS and adjust the primary download button to match.
     (function () {
       var downloadBtn = document.getElementById('download-btn');
