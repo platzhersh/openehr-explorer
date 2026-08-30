@@ -62,9 +62,10 @@ onMounted(() => {
     .then((data) => {
       if (Array.isArray(data)) render(data);
     })
-    .catch(() => {
+    .catch((err) => {
       // No history yet (or offline) — the shields.io badge above still
       // shows the live total, so just leave this hidden.
+      console.debug("downloads sparkline: history unavailable", err);
     });
 });
 </script>
