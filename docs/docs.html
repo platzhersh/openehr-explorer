@@ -266,7 +266,14 @@
       margin: 16px 0;
       line-height: 1.6;
     }
-    .code-comment { color: var(--text-muted); }
+    .code-comment {
+      display: block;
+      color: var(--text-muted);
+      margin-top: 12px;
+    }
+    .code-comment:first-child {
+      margin-top: 0;
+    }
 
     /* Callouts */
     .note {
@@ -358,6 +365,7 @@
       .nav-links { gap: 12px; }
     }
   </style>
+  <link rel="stylesheet" href="assets/code-copy.css">
 </head>
 <body>
 
@@ -449,34 +457,40 @@
 
         <h3>macOS</h3>
         <p>Download the <code>.dmg</code> file from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Open the DMG and drag openEHR Explorer to your Applications folder. Or install via Homebrew:</p>
-        <div class="code-block">brew install --cask platzhersh/openehr-explorer/openehr-explorer</div>
+        <div class="code-block" data-copy="brew install --cask platzhersh/openehr-explorer/openehr-explorer">
+          <span class="code-line">brew install --cask platzhersh/openehr-explorer/openehr-explorer</span>
+        </div>
         <p>Not yet notarized by Apple — see <a href="#troubleshooting">Troubleshooting</a> if macOS reports the app as damaged on first launch.</p>
 
         <h3>Windows</h3>
         <p>Download the <code>.exe</code> installer from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> and run it. The app will be added to your Start menu. Or install via Scoop:</p>
-        <div class="code-block">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer
-scoop install openehr-explorer</div>
+        <div class="code-block" data-copy="scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer\nscoop install openehr-explorer">
+          <span class="code-line">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer</span>
+          <span class="code-line">scoop install openehr-explorer</span>
+        </div>
         <p>Not yet Authenticode-signed — Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
         <h3>Linux</h3>
         <p><strong>apt (Debian/Ubuntu, recommended):</strong> a self-hosted apt repository is published at <a href="https://github.com/platzhersh/apt-openehr-explorer">platzhersh/apt-openehr-explorer</a> and updated automatically on every release, so once added, updates arrive via the normal <code>apt upgrade</code> flow.</p>
-        <div class="code-block">
-          <span class="code-comment"># 1. Add the signing key</span><br>
-          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg<br>
-          <br>
-          <span class="code-comment"># 2. Add the repository</span><br>
-          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br>
-          <br>
-          <span class="code-comment"># 3. Install</span><br>
-          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
+        <div class="code-block" data-copy="# 1. Add the signing key\ncurl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg\n\n# 2. Add the repository\necho &quot;deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main&quot; | sudo tee /etc/apt/sources.list.d/openehr-explorer.list\n\n# 3. Install\nsudo apt update &amp;&amp; sudo apt install open-ehr-explorer">
+          <span class="code-comment"># 1. Add the signing key</span>
+          <span class="code-line">curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg</span>
+          <span class="code-comment"># 2. Add the repository</span>
+          <span class="code-line">echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list</span>
+          <span class="code-comment"># 3. Install</span>
+          <span class="code-line">sudo apt update &amp;&amp; sudo apt install open-ehr-explorer</span>
         </div>
         <p>Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
-        <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span><br>
-sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
+        <div class="code-block" data-copy="# Download the .deb from GitHub Releases, then:\nsudo apt install ./openEHR.Explorer_0.6.0_amd64.deb">
+          <span class="code-comment"># Download the .deb from GitHub Releases, then:</span>
+          <span class="code-line">sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</span>
+        </div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openEHR.Explorer_0.8.0_amd64.AppImage<br>
-./openEHR.Explorer_0.8.0_amd64.AppImage</div>
+        <div class="code-block" data-copy="chmod +x openEHR.Explorer_0.8.0_amd64.AppImage\n./openEHR.Explorer_0.8.0_amd64.AppImage">
+          <span class="code-line">chmod +x openEHR.Explorer_0.8.0_amd64.AppImage</span>
+          <span class="code-line">./openEHR.Explorer_0.8.0_amd64.AppImage</span>
+        </div>
         <p>An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.</p>
       </section>
 
@@ -798,7 +812,9 @@ LIMIT 10</div>
 
         <h3>macOS: "openEHR Explorer is damaged and can't be opened" (Gatekeeper)</h3>
         <p>Release builds aren't code-signed and notarized by Apple yet, so Gatekeeper quarantines the app on first launch and reports it as damaged &mdash; it isn't actually corrupted. Clear the quarantine attribute and open it normally:</p>
-        <div class="code-block">xattr -cr "/Applications/openEHR Explorer.app"</div>
+        <div class="code-block" data-copy="xattr -cr &quot;/Applications/openEHR Explorer.app&quot;">
+          <span class="code-line">xattr -cr "/Applications/openEHR Explorer.app"</span>
+        </div>
         <p>This is a one-time step per install. <code>brew install --cask</code> prints this same instruction automatically as a caveat; direct downloads don't get a prompt, so you may need to run it yourself.</p>
 
         <div class="warning">
@@ -927,6 +943,7 @@ LIMIT 10</div>
     &copy; 2026 <a href="https://github.com/platzhersh" target="_blank">@platzhersh</a> &middot; Apache 2.0 License &middot; Not affiliated with openEHR International
   </footer>
 
+  <script src="assets/code-copy.js"></script>
   <script>
     // Active section tracking via IntersectionObserver
     (function() {
