@@ -255,6 +255,7 @@
       color: var(--primary);
     }
     .code-block {
+      position: relative;
       background: var(--code-bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -266,7 +267,71 @@
       margin: 16px 0;
       line-height: 1.6;
     }
-    .code-comment { color: var(--text-muted); }
+    .code-block.has-copy {
+      padding-right: 48px;
+    }
+    .code-comment {
+      display: block;
+      color: var(--text-muted);
+      margin-top: 12px;
+    }
+    .code-comment:first-child {
+      margin-top: 0;
+    }
+
+    /* Each shell command gets its own line, prefixed with a "$" so it
+       reads as a distinct step rather than a wrapped continuation of the
+       line above — the ::before content is excluded from copy/selection
+       by every evergreen browser, so it never ends up in a paste. */
+    .code-line {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .code-line::before {
+      content: '$ ';
+      color: var(--text-muted);
+    }
+    .code-line + .code-line {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .code-copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .code-copy-btn:hover {
+      color: var(--primary);
+      border-color: var(--primary-dim);
+      background: var(--surface-hover);
+    }
+    .code-copy-btn .icon-check {
+      display: none;
+      color: var(--success);
+    }
+    .code-copy-btn.copied {
+      border-color: var(--success);
+    }
+    .code-copy-btn.copied .icon-copy {
+      display: none;
+    }
+    .code-copy-btn.copied .icon-check {
+      display: block;
+    }
 
     /* Callouts */
     .note {
@@ -449,34 +514,40 @@
 
         <h3>macOS</h3>
         <p>Download the <code>.dmg</code> file from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>. Open the DMG and drag openEHR Explorer to your Applications folder. Or install via Homebrew:</p>
-        <div class="code-block">brew install --cask platzhersh/openehr-explorer/openehr-explorer</div>
+        <div class="code-block" data-copy="brew install --cask platzhersh/openehr-explorer/openehr-explorer">
+          <span class="code-line">brew install --cask platzhersh/openehr-explorer/openehr-explorer</span>
+        </div>
         <p>Not yet notarized by Apple — see <a href="#troubleshooting">Troubleshooting</a> if macOS reports the app as damaged on first launch.</p>
 
         <h3>Windows</h3>
         <p>Download the <code>.exe</code> installer from <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> and run it. The app will be added to your Start menu. Or install via Scoop:</p>
-        <div class="code-block">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer
-scoop install openehr-explorer</div>
+        <div class="code-block" data-copy="scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer\nscoop install openehr-explorer">
+          <span class="code-line">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer</span>
+          <span class="code-line">scoop install openehr-explorer</span>
+        </div>
         <p>Not yet Authenticode-signed — Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
         <h3>Linux</h3>
         <p><strong>apt (Debian/Ubuntu, recommended):</strong> a self-hosted apt repository is published at <a href="https://github.com/platzhersh/apt-openehr-explorer">platzhersh/apt-openehr-explorer</a> and updated automatically on every release, so once added, updates arrive via the normal <code>apt upgrade</code> flow.</p>
-        <div class="code-block">
-          <span class="code-comment"># 1. Add the signing key</span><br>
-          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg<br>
-          <br>
-          <span class="code-comment"># 2. Add the repository</span><br>
-          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br>
-          <br>
-          <span class="code-comment"># 3. Install</span><br>
-          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
+        <div class="code-block" data-copy="# 1. Add the signing key\ncurl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg\n\n# 2. Add the repository\necho &quot;deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main&quot; | sudo tee /etc/apt/sources.list.d/openehr-explorer.list\n\n# 3. Install\nsudo apt update &amp;&amp; sudo apt install open-ehr-explorer">
+          <span class="code-comment"># 1. Add the signing key</span>
+          <span class="code-line">curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg</span>
+          <span class="code-comment"># 2. Add the repository</span>
+          <span class="code-line">echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list</span>
+          <span class="code-comment"># 3. Install</span>
+          <span class="code-line">sudo apt update &amp;&amp; sudo apt install open-ehr-explorer</span>
         </div>
         <p>Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code>.AppImage</code> (any distro).</p>
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
-        <div class="code-block"><span class="code-comment"># Download the .deb from GitHub Releases, then:</span><br>
-sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</div>
+        <div class="code-block" data-copy="# Download the .deb from GitHub Releases, then:\nsudo apt install ./openEHR.Explorer_0.6.0_amd64.deb">
+          <span class="code-comment"># Download the .deb from GitHub Releases, then:</span>
+          <span class="code-line">sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb</span>
+        </div>
         <p><strong>AppImage (any distro):</strong></p>
-        <div class="code-block">chmod +x openEHR.Explorer_0.8.0_amd64.AppImage<br>
-./openEHR.Explorer_0.8.0_amd64.AppImage</div>
+        <div class="code-block" data-copy="chmod +x openEHR.Explorer_0.8.0_amd64.AppImage\n./openEHR.Explorer_0.8.0_amd64.AppImage">
+          <span class="code-line">chmod +x openEHR.Explorer_0.8.0_amd64.AppImage</span>
+          <span class="code-line">./openEHR.Explorer_0.8.0_amd64.AppImage</span>
+        </div>
         <p>An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.</p>
       </section>
 
@@ -798,7 +869,9 @@ LIMIT 10</div>
 
         <h3>macOS: "openEHR Explorer is damaged and can't be opened" (Gatekeeper)</h3>
         <p>Release builds aren't code-signed and notarized by Apple yet, so Gatekeeper quarantines the app on first launch and reports it as damaged &mdash; it isn't actually corrupted. Clear the quarantine attribute and open it normally:</p>
-        <div class="code-block">xattr -cr "/Applications/openEHR Explorer.app"</div>
+        <div class="code-block" data-copy="xattr -cr &quot;/Applications/openEHR Explorer.app&quot;">
+          <span class="code-line">xattr -cr "/Applications/openEHR Explorer.app"</span>
+        </div>
         <p>This is a one-time step per install. <code>brew install --cask</code> prints this same instruction automatically as a caveat; direct downloads don't get a prompt, so you may need to run it yourself.</p>
 
         <div class="warning">
@@ -928,6 +1001,65 @@ LIMIT 10</div>
   </footer>
 
   <script>
+    // Copy-to-clipboard for install command snippets. Each opted-in
+    // .code-block carries the exact text to copy in data-copy (line
+    // breaks written as literal "\n", quotes/ampersands HTML-escaped —
+    // it's a plain attribute, not markup) so the button copies precisely
+    // what's shown regardless of how the block wraps or is styled.
+    (function () {
+      var COPIED_LABEL_MS = 1800;
+
+      function buildButton() {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'code-copy-btn';
+        btn.setAttribute('aria-label', 'Copy to clipboard');
+        btn.innerHTML =
+          '<svg class="icon-copy" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+          '<svg class="icon-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        return btn;
+      }
+
+      function flashCopied(btn) {
+        btn.classList.add('copied');
+        btn.setAttribute('aria-label', 'Copied!');
+        window.clearTimeout(btn._copyTimer);
+        btn._copyTimer = window.setTimeout(function () {
+          btn.classList.remove('copied');
+          btn.setAttribute('aria-label', 'Copy to clipboard');
+        }, COPIED_LABEL_MS);
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(text);
+        }
+        // Fallback for browsers without the async Clipboard API.
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+        } finally {
+          document.body.removeChild(textarea);
+        }
+        return Promise.resolve();
+      }
+
+      document.querySelectorAll('.code-block[data-copy]').forEach(function (block) {
+        var btn = buildButton();
+        block.classList.add('has-copy');
+        block.appendChild(btn);
+        btn.addEventListener('click', function () {
+          var text = block.getAttribute('data-copy').replace(/\\n/g, '\n');
+          copyText(text).then(function () { flashCopied(btn); });
+        });
+      });
+    })();
+
     // Active section tracking via IntersectionObserver
     (function() {
       const links = document.querySelectorAll('.sidebar-link');
