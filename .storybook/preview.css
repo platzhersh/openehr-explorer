@@ -18,9 +18,15 @@
  * this shared Storybook (see ADR-0026's "Neutral" consequences). The
  * names don't collide, so both sets coexist here rather than one
  * component set rendering unstyled.
+ *
+ * Only tokens.css is imported, not website/'s base.css: every website
+ * Vue component already carries its own complete <style> (each is
+ * self-contained per ADR-0025), so none of them actually need base.css's
+ * reset/body/a/:focus-visible rules to render correctly — and importing
+ * those globally would leak website-specific `a`/`:focus-visible`
+ * styling into the app's own stories.
  */
 @import "../website/src/styles/tokens.css";
-@import "../website/src/styles/base.css";
 
 *,
 *::before,

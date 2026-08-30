@@ -43,3 +43,42 @@ onMounted(() => {
 <template>
   <a href="https://github.com/platzhersh/openehr-explorer/releases" class="btn btn-primary">{{ label }}</a>
 </template>
+
+<style scoped>
+/*
+ * .btn-primary's chrome is defined here rather than relied on from
+ * index.astro's page-level styles: Astro does stamp its scope
+ * attribute onto this component's SSR'd root element (this component
+ * has exactly one root, so Vue's attribute fallthrough carries it
+ * along), which is why the real page renders correctly today — but
+ * that's an incidental mechanism, not something to depend on, and it
+ * doesn't apply at all in Storybook (see ADR-0026), which never loads
+ * index.astro's CSS. Self-contained styling matches the other website
+ * Vue components (see ADR-0025).
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+.btn:hover {
+  text-decoration: none;
+}
+.btn-primary {
+  background: var(--primary-dim);
+  color: #fff;
+  border: none;
+}
+.btn-primary:hover {
+  background: var(--primary);
+  color: var(--bg);
+}
+</style>

@@ -138,7 +138,7 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.6.0_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.8.0_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
@@ -424,7 +424,7 @@ const navGroups = [
         <h3>Authentication Methods</h3>
         <ul>
           <li><strong>None:</strong> No authentication headers sent. Use for local development servers.</li>
-          <li><strong>Basic:</strong> HTTP Basic Authentication with username and password. Credentials are stored locally (not encrypted).</li>
+          <li><strong>Basic:</strong> HTTP Basic Authentication with username and password. Credentials are stored in the OS keychain, with an AES-256-GCM encrypted-file fallback when no keychain is available.</li>
           <li><strong>Bearer:</strong> Authorization header with a Bearer token. Useful for OAuth2-based CDR deployments.</li>
         </ul>
       </section>

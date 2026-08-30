@@ -268,15 +268,9 @@ const screenshots = [
   .btn:hover {
     text-decoration: none;
   }
-  .btn-primary {
-    background: var(--primary-dim);
-    color: #fff;
-    border: none;
-  }
-  .btn-primary:hover {
-    background: var(--primary);
-    color: var(--bg);
-  }
+  /* .btn-primary lives in DownloadButton.vue's own scoped style now
+     (see ADR-0025/ADR-0026) — this page only needs .btn's base for the
+     plain-Astro .btn-secondary link below. */
   .btn-secondary {
     background: transparent;
     color: var(--text);

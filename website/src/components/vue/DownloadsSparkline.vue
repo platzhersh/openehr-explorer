@@ -42,7 +42,17 @@ function buildPaths(points: Point[]) {
   return { line, area };
 }
 
-function render(points: Point[]) {
+// The history file comes from a cross-origin fetch, not a schema this
+// component controls — a malformed entry (missing/non-numeric `total`)
+// would otherwise flow into Math.min/max as NaN and silently draw
+// nothing while still marking the sparkline "visible".
+function isWellFormedPoint(value: unknown): value is Point {
+  const point = value as Partial<Point> | null;
+  return typeof point?.date === "string" && Number.isFinite(point?.total);
+}
+
+function render(rawPoints: unknown[]) {
+  const points = rawPoints.filter(isWellFormedPoint);
   if (points.length < MIN_POINTS) return;
 
   const paths = buildPaths(points);
