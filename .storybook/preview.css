@@ -11,6 +11,17 @@
  */
 @import "../src/styles/shared-utilities.css";
 
+/*
+ * website/'s Vue components (see ADR-0026) use their own, unprefixed
+ * token names (--bg, --primary, …) rather than the app's --color-*
+ * convention below — same palette, two naming schemes that predate
+ * this shared Storybook (see ADR-0026's "Neutral" consequences). The
+ * names don't collide, so both sets coexist here rather than one
+ * component set rendering unstyled.
+ */
+@import "../website/src/styles/tokens.css";
+@import "../website/src/styles/base.css";
+
 *,
 *::before,
 *::after {

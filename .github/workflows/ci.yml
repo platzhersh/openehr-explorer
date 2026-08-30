@@ -40,6 +40,16 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+
+      # Storybook (see ADR-0026) also renders website/'s Vue components
+      # directly off disk via this project's own Vite/Vue plugin — it
+      # never imports Astro itself. But Vite's TS transform still resolves
+      # the nearest tsconfig.json by directory walk for any file it
+      # touches, and website/tsconfig.json extends "astro/tsconfigs/strict",
+      # so that package has to be resolvable even though nothing in the
+      # shared Storybook build actually uses it.
+      - run: npm ci --ignore-scripts
+        working-directory: website
       - run: npm run build-storybook
 
   rust:
