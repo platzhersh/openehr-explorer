@@ -773,7 +773,7 @@ function lookupContribution() {
 
       <!-- Limit reached banner -->
       <div v-if="ehrStore.searchActive && ehrStore.searchLimitReached" class="limit-banner">
-        Showing first 200 results — refine your search to narrow down.
+        Showing the first page of results — refine your search to narrow down.
       </div>
 
       <!-- Loading state -->

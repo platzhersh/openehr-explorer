@@ -927,6 +927,27 @@ fn escape_aql_string(s: &str) -> String {
     s.replace('\'', "''")
 }
 
+/// The row cap for the AQL query's own `LIMIT` clause.
+///
+/// A `modifiable` criterion gets a higher cap than the default. The
+/// defensive post-filter in `search_ehrs` (see `filter_by_modifiable`)
+/// discards non-matching rows *after* the query returns, so on a CDR whose
+/// `= true` predicate doesn't reliably filter server-side (see that
+/// function's doc comment), the default cap can be mostly consumed by
+/// non-matching rows before the post-filter ever runs — silently truncating
+/// the matching set well below what the UI's "showing first N, refine your
+/// search" messaging implies. A higher cap doesn't make completeness
+/// guaranteed (a large enough EHR population can still exhaust it), but it
+/// substantially cuts how often that happens, without the cost of full
+/// pagination.
+fn ehr_search_limit(criteria: &EhrSearchCriteria) -> usize {
+    if criteria.modifiable.is_some() {
+        1000
+    } else {
+        200
+    }
+}
+
 /// Build an AQL query string from the given search criteria.
 /// Returns an error if no criteria are provided (to prevent full-table scans).
 pub fn build_ehr_search_aql(criteria: &EhrSearchCriteria) -> Result<String, String> {
@@ -1041,12 +1062,13 @@ FROM EHR e CONTAINS EHR_STATUS s"
     }
 
     // Build the final query
+    let limit = ehr_search_limit(criteria);
     if predicates.is_empty() {
         // Only has_compositions:true, no WHERE clause needed
-        Ok(format!("{} LIMIT 200", base))
+        Ok(format!("{} LIMIT {}", base, limit))
     } else {
         let where_clause = predicates.join(" AND ");
-        Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
+        Ok(format!("{} WHERE {} LIMIT {}", base, where_clause, limit))
     }
 }
 
@@ -1114,6 +1136,22 @@ async fn filter_by_directory_presence(
     kept.into_iter().map(|(_, result)| result).collect()
 }
 
+/// Defensive post-filter: some CDRs don't reliably evaluate a boolean
+/// `= true` predicate over `is_modifiable` (observed against EHRBase —
+/// `s/is_modifiable = true` in the WHERE clause matches EHRs whose value is
+/// actually false or unset, while `= false` filters correctly). The AQL
+/// already SELECTs the column (`is_modifiable` on each `EhrSearchResult`),
+/// so re-check the requested value client-side rather than trusting the
+/// server's WHERE clause. An EHR whose returned value is unknown (`None`)
+/// doesn't count as a match for either `true` or `false`, since it can't be
+/// confirmed either way.
+fn filter_by_modifiable(results: Vec<EhrSearchResult>, want: bool) -> Vec<EhrSearchResult> {
+    results
+        .into_iter()
+        .filter(|r| r.is_modifiable == Some(want))
+        .collect()
+}
+
 #[tauri::command]
 pub async fn search_ehrs(
     app: tauri::AppHandle,
@@ -1168,11 +1206,18 @@ pub async fn search_ehrs(
         })
         .collect();
 
-    // `limit_reached` reflects the raw AQL result set (capped at 200 rows by
-    // the query's own LIMIT) — computed before the directory post-filter so
-    // "showing first 200, refine your search" still means what it says even
-    // when has_directory then narrows the displayed count further.
-    let limit_reached = results.len() >= 200;
+    // `limit_reached` reflects the raw AQL result set (capped by the query's
+    // own LIMIT — see `ehr_search_limit`) — computed before the modifiable
+    // and directory post-filters so "showing first N, refine your search"
+    // still means what it says even when those then narrow the displayed
+    // count further.
+    let limit_reached = results.len() >= ehr_search_limit(&criteria);
+
+    let results = if let Some(want_modifiable) = criteria.modifiable {
+        filter_by_modifiable(results, want_modifiable)
+    } else {
+        results
+    };
 
     let results = if let Some(want_directory) = criteria.has_directory {
         filter_by_directory_presence(
@@ -1367,6 +1412,26 @@ mod tests {
     }
 
     #[test]
+    fn test_modifiable_criterion_raises_the_query_limit() {
+        // The modifiable post-filter (filter_by_modifiable) discards rows
+        // after the query returns, so a modifiable criterion needs a higher
+        // LIMIT than the default to leave it enough rows to work with.
+        let mut c = empty_criteria();
+        c.modifiable = Some(true);
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("LIMIT 1000"));
+        assert!(!aql.contains("LIMIT 200"));
+    }
+
+    #[test]
+    fn test_default_query_limit_is_unraised_without_modifiable() {
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("abc".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("LIMIT 200"));
+    }
+
+    #[test]
     fn test_has_compositions_true() {
         let mut c = empty_criteria();
         c.has_compositions = Some(true);
@@ -1489,6 +1554,42 @@ mod tests {
         assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
         assert!(aql.contains("s/is_modifiable = true"));
         assert!(aql.contains(" AND "));
+    }
+
+    fn search_result_with_modifiable(is_modifiable: Option<bool>) -> EhrSearchResult {
+        EhrSearchResult {
+            ehr_id: "some-ehr-id".to_string(),
+            time_created: None,
+            subject_id: None,
+            subject_namespace: None,
+            is_modifiable,
+            is_queryable: None,
+            system_id: None,
+        }
+    }
+
+    #[test]
+    fn test_filter_by_modifiable_true_excludes_false_and_unknown() {
+        let results = vec![
+            search_result_with_modifiable(Some(true)),
+            search_result_with_modifiable(Some(false)),
+            search_result_with_modifiable(None),
+        ];
+        let filtered = filter_by_modifiable(results, true);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].is_modifiable, Some(true));
+    }
+
+    #[test]
+    fn test_filter_by_modifiable_false_excludes_true_and_unknown() {
+        let results = vec![
+            search_result_with_modifiable(Some(true)),
+            search_result_with_modifiable(Some(false)),
+            search_result_with_modifiable(None),
+        ];
+        let filtered = filter_by_modifiable(results, false);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].is_modifiable, Some(false));
     }
 
     #[test]
