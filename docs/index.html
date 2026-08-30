@@ -771,6 +771,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="assets/code-copy.css">
 </head>
 <body>
 
@@ -919,8 +920,8 @@
       <h2 class="section-heading">Get started in 30 seconds</h2>
       <div class="quickstart-inner">
         <h3>macOS (Homebrew)</h3>
-        <div class="code-block">
-          brew install --cask platzhersh/openehr-explorer/openehr-explorer
+        <div class="code-block" data-copy="brew install --cask platzhersh/openehr-explorer/openehr-explorer">
+          <span class="code-line">brew install --cask platzhersh/openehr-explorer/openehr-explorer</span>
         </div>
         <p class="quickstart-note">Not yet notarized by Apple &mdash; on first launch, run <code>xattr -cr "/Applications/openEHR Explorer.app"</code> if macOS reports the app as damaged.</p>
 
@@ -931,17 +932,17 @@
         <p class="quickstart-note">macOS: not yet notarized by Apple &mdash; if Gatekeeper reports the app as damaged on first launch, see <a href="docs.html#troubleshooting">Troubleshooting</a>.</p>
 
         <h3>Windows (Scoop)</h3>
-        <div class="code-block">
-          scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer<br>
-          scoop install openehr-explorer
+        <div class="code-block" data-copy="scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer\nscoop install openehr-explorer">
+          <span class="code-line">scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer</span>
+          <span class="code-line">scoop install openehr-explorer</span>
         </div>
         <p class="quickstart-note">Not yet Authenticode-signed &mdash; Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr; &ldquo;Run anyway&rdquo;. winget support is planned.</p>
 
         <h3>Linux (apt)</h3>
-        <div class="code-block">
-          curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg<br>
-          echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list<br>
-          sudo apt update &amp;&amp; sudo apt install open-ehr-explorer
+        <div class="code-block" data-copy="curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg\necho &quot;deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main&quot; | sudo tee /etc/apt/sources.list.d/openehr-explorer.list\nsudo apt update &amp;&amp; sudo apt install open-ehr-explorer">
+          <span class="code-line">curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg</span>
+          <span class="code-line">echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list</span>
+          <span class="code-line">sudo apt update &amp;&amp; sudo apt install open-ehr-explorer</span>
         </div>
         <p class="quickstart-note">Debian/Ubuntu (amd64) &mdash; future releases arrive via <code>apt upgrade</code>. Prefer a one-off install or another distro? Grab the <code>.deb</code>/<code>.AppImage</code> directly &mdash; see <a href="docs.html#installation">Installation</a>.</p>
       </div>
@@ -1008,6 +1009,7 @@
     </div>
   </footer>
 
+  <script src="assets/code-copy.js"></script>
   <script>
     // Detect the visitor's OS and adjust the primary download button to match.
     (function () {
