@@ -9,6 +9,13 @@ import DownloadsSparkline from "../components/vue/DownloadsSparkline.vue";
 import ScreenshotGallery from "../components/vue/ScreenshotGallery.vue";
 import CodeBlock from "../components/vue/CodeBlock.vue";
 
+// Root-relative, base-prefixed — see SiteHeader.astro for why a plain
+// relative path like "assets/..." or "docs.html" isn't safe here.
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
+
 const features = [
   {
     icon: "🖥️",
@@ -44,21 +51,21 @@ const features = [
 
 const screenshots = [
   {
-    src: "assets/screenshots/01-ehr-browser.webp",
+    src: `${BASE}assets/screenshots/01-ehr-browser.webp`,
     alt: "EHR Browser showing a paginated list of EHRs on the left and a selected EHR's details plus grouped compositions on the right",
     caption: "Browse EHRs and drill into their compositions, grouped by template.",
     width: 1440,
     height: 860,
   },
   {
-    src: "assets/screenshots/04-templates.webp",
+    src: `${BASE}assets/screenshots/04-templates.webp`,
     alt: "Template Browser showing the list of templates on a server and an interactive OPT tree for the selected template",
     caption: "Inspect Web Templates as a readable tree, with FLAT paths and raw OPT XML alongside.",
     width: 1440,
     height: 610,
   },
   {
-    src: "assets/screenshots/06-aql-runner.webp",
+    src: `${BASE}assets/screenshots/06-aql-runner.webp`,
     alt: "AQL Runner showing a query editor with a SELECT query and a tabular result set below it",
     caption: "Write and run AQL queries with syntax highlighting, saved queries, and CSV export.",
     width: 1440,
@@ -106,7 +113,7 @@ const screenshots = [
         <DownloadButton client:load />
         <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
       </div>
-      <p class="version-badge">v0.8.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href="docs.html#installation">Installation guide</a></p>
+      <p class="version-badge">v0.8.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href={`${BASE}docs.html#installation`}>Installation guide</a></p>
       <p class="downloads-badge">
         <a href="https://github.com/platzhersh/openehr-explorer/releases"
           ><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads" /></a
@@ -122,11 +129,11 @@ const screenshots = [
           loop
           muted
           playsinline
-          poster="assets/screenshots/07-aql-autocomplete.webp"
+          poster={`${BASE}assets/screenshots/07-aql-autocomplete.webp`}
           aria-label="Screen recording of openEHR Explorer: adding a server profile and testing the connection, browsing EHRs, inspecting a Web Template, and writing an AQL query with template-aware autocomplete"
         >
-          <source src="assets/demo.mp4" type="video/mp4" />
-          <track kind="captions" src="assets/demo.vtt" srclang="en" label="English" default />
+          <source src={`${BASE}assets/demo.mp4`} type="video/mp4" />
+          <track kind="captions" src={`${BASE}assets/demo.vtt`} srclang="en" label="English" default />
         </video>
       </div>
       <p class="preview-caption">Connect a server &middot; browse EHRs &middot; inspect templates &middot; AQL with autocomplete</p>
@@ -155,7 +162,7 @@ const screenshots = [
         <div class="code-block"><a href="https://github.com/platzhersh/openehr-explorer/releases">Download from GitHub Releases</a></div>
         <p class="quickstart-note">
           macOS: not yet notarized by Apple &mdash; if Gatekeeper reports the app as damaged on first launch, see
-          <a href="docs.html#troubleshooting">Troubleshooting</a>.
+          <a href={`${BASE}docs.html#troubleshooting`}>Troubleshooting</a>.
         </p>
 
         <h3>Windows (Scoop)</h3>
@@ -186,7 +193,7 @@ const screenshots = [
         />
         <p class="quickstart-note">
           Debian/Ubuntu (amd64) &mdash; future releases arrive via <code>apt upgrade</code>. Prefer a one-off install or another distro? Grab the
-          <code>.deb</code>/<code>.AppImage</code> directly &mdash; see <a href="docs.html#installation">Installation</a>.
+          <code>.deb</code>/<code>.AppImage</code> directly &mdash; see <a href={`${BASE}docs.html#installation`}>Installation</a>.
         </p>
       </div>
     </section>
@@ -199,7 +206,7 @@ const screenshots = [
       </p>
       <p style="margin-top: 12px;">
         Still reaching for Postman to poke at an openEHR CDR? See how openEHR Explorer compares as a
-        <a href="compare.html">Postman alternative for openEHR</a>.
+        <a href={`${BASE}compare.html`}>Postman alternative for openEHR</a>.
       </p>
     </section>
   </main>

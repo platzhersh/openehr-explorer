@@ -1,6 +1,12 @@
 ---
 // Rich multi-column footer used only by the landing page (index.astro).
 import Logo from "./Logo.astro";
+
+// See SiteHeader.astro for why these need the base prefix.
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
 ---
 
 <footer class="site-footer">
@@ -15,9 +21,9 @@ import Logo from "./Logo.astro";
       </div>
       <div class="footer-col">
         <nav class="footer-links" aria-label="Footer navigation">
-          <a href="docs.html">Docs</a>
-          <a href="compare.html">Compare</a>
-          <a href="brand-kit.html">Brand Kit</a>
+          <a href={`${BASE}docs.html`}>Docs</a>
+          <a href={`${BASE}compare.html`}>Compare</a>
+          <a href={`${BASE}brand-kit.html`}>Brand Kit</a>
           <a href="https://github.com/platzhersh/openehr-explorer" target="_blank" rel="noopener noreferrer">GitHub</a>
           <a
             href="https://discourse.openehr.org/t/openehr-explorer-a-cross-platform-desktop-cdr-browser-macos-windows-linux/17229"

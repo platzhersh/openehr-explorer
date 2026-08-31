@@ -13,11 +13,20 @@ interface Props {
 const { current } = Astro.props;
 
 const isActive = (page: Props["current"]) => (current === page ? "active" : undefined);
+
+// Root-relative, base-prefixed — a plain relative href like "docs.html"
+// resolves against the browser's *current* URL, which breaks the moment
+// someone lands on the site root without a trailing slash (the browser
+// then treats the base-path segment as a filename, not a directory).
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
 ---
 
 <header class="header">
   <div class="header-inner">
-    <a href="index.html" class="header-brand">
+    <a href={`${BASE}index.html`} class="header-brand">
       <Logo size={32} />
       <span class="header-wordmark">openEHR Explorer</span>
     </a>
@@ -30,10 +39,10 @@ const isActive = (page: Props["current"]) => (current === page ? "active" : unde
           </>
         )
       }
-      {current !== "home" && <a href="index.html">Home</a>}
-      <a href="docs.html" class:list={[isActive("docs")]}>Docs</a>
-      <a href="compare.html" class:list={[isActive("compare")]}>Compare</a>
-      <a href="brand-kit.html" class:list={[isActive("brand-kit")]}>Brand Kit</a>
+      {current !== "home" && <a href={`${BASE}index.html`}>Home</a>}
+      <a href={`${BASE}docs.html`} class:list={[isActive("docs")]}>Docs</a>
+      <a href={`${BASE}compare.html`} class:list={[isActive("compare")]}>Compare</a>
+      <a href={`${BASE}brand-kit.html`} class:list={[isActive("brand-kit")]}>Brand Kit</a>
       <a href="https://github.com/platzhersh/openehr-explorer" class="github-pill" target="_blank" rel="noopener noreferrer">
         <GithubIcon size={16} />
         GitHub

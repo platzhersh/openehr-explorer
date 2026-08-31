@@ -3,6 +3,12 @@ import Layout from "../layouts/Layout.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SimpleFooter from "../components/SimpleFooter.astro";
 import Logo from "../components/Logo.astro";
+
+// See SiteHeader.astro for why these need the base prefix.
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
 ---
 
 <Layout
@@ -53,27 +59,27 @@ import Logo from "../components/Logo.astro";
           <tr>
             <td>Logo &mdash; dark background</td>
             <td>SVG</td>
-            <td class="status-available"><a href="assets/brand/logo-dark.svg">&#10003; Available</a></td>
+            <td class="status-available"><a href={`${BASE}assets/brand/logo-dark.svg`}>&#10003; Available</a></td>
           </tr>
           <tr>
             <td>Logo &mdash; light background</td>
             <td>SVG</td>
-            <td class="status-available"><a href="assets/brand/logo-light.svg">&#10003; Available</a></td>
+            <td class="status-available"><a href={`${BASE}assets/brand/logo-light.svg`}>&#10003; Available</a></td>
           </tr>
           <tr>
             <td>Logo icon only</td>
             <td>SVG</td>
-            <td class="status-available"><a href="assets/brand/logo-icon.svg">&#10003; Available</a></td>
+            <td class="status-available"><a href={`${BASE}assets/brand/logo-icon.svg`}>&#10003; Available</a></td>
           </tr>
           <tr>
             <td>Logo &mdash; dark background</td>
             <td>PNG 2&times;</td>
-            <td class="status-available"><a href="assets/brand/logo-dark@2x.png">&#10003; Available</a></td>
+            <td class="status-available"><a href={`${BASE}assets/brand/logo-dark@2x.png`}>&#10003; Available</a></td>
           </tr>
           <tr>
             <td>Colour palette reference</td>
             <td>SVG</td>
-            <td class="status-available"><a href="assets/brand/palette.svg">&#10003; Available</a></td>
+            <td class="status-available"><a href={`${BASE}assets/brand/palette.svg`}>&#10003; Available</a></td>
           </tr>
         </tbody>
       </table>
