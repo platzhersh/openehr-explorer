@@ -73,7 +73,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
           </tr>
           <tr>
             <td>Logo &mdash; dark background</td>
-            <td>PNG 2&times;</td>
+            <td>PNG (@2x resolution)</td>
             <td class="status-available"><a href={`${BASE}assets/brand/logo-dark@2x.png`}>&#10003; Available</a></td>
           </tr>
           <tr>
@@ -208,7 +208,15 @@ const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
 <style>
   .container {
     max-width: 1200px;
-    margin: 0 auto;
+    /* margin-left/right only (not the `margin: 0 auto` shorthand) — a
+       shorthand here would reset margin-bottom to 0 on any element that
+       is both `<section class="container">` and matched by the `section
+       { margin-bottom: 64px }` rule below: .container's class+attribute
+       selector outranks section's type+attribute selector, so the
+       shorthand's implicit margin-bottom: 0 would silently win and
+       collapse all inter-section spacing on this page. */
+    margin-left: auto;
+    margin-right: auto;
     padding: 0 24px;
   }
 
