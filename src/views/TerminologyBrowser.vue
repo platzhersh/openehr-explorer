@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
@@ -18,6 +18,7 @@ import {
 } from "../lib/terminology";
 
 const route = useRoute();
+const router = useRouter();
 const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
 const analytics = useAnalytics();
@@ -186,6 +187,22 @@ function applyRouteQuery() {
 
 watch(() => route.query, applyRouteQuery, { immediate: true });
 
+// The "Describe →" link from a template's Bound Concepts panel also carries
+// `fromTemplate` (the template that sent us here) — used to show a "Back to
+// template" link, so following a term binding out to the Terminology
+// Browser doesn't strand the user with no way back except re-navigating by
+// hand. Absent when Terminology was opened directly (e.g. from the sidebar),
+// so the link only appears when there's actually somewhere to go back to.
+const fromTemplateId = computed(() => {
+  const id = route.query.fromTemplate;
+  return typeof id === "string" && id ? id : null;
+});
+
+function goBackToTemplate() {
+  if (!fromTemplateId.value) return;
+  router.push({ name: "template-detail", params: { templateId: fromTemplateId.value } });
+}
+
 function useConceptInLookup(concept: TerminologyConcept) {
   // Every concept a `$expand` returns is required by the FHIR spec to carry
   // its own `system` — falling back to the value set's own URL here (as an
@@ -205,6 +222,14 @@ function useConceptInLookup(concept: TerminologyConcept) {
   <div class="terminology-browser">
     <div class="panel-header">
       <div>
+        <button
+          v-if="fromTemplateId"
+          type="button"
+          class="btn btn-sm back-to-template"
+          @click="goBackToTemplate"
+        >
+          ← Back to template
+        </button>
         <h2>Terminology</h2>
         <p class="subtitle">
           Query the FHIR terminology server configured for this connection: describe a code, expand
@@ -474,6 +499,10 @@ function useConceptInLookup(concept: TerminologyConcept) {
 .panel-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+.back-to-template {
+  display: block;
+  margin-bottom: 8px;
 }
 .subtitle {
   margin-top: 4px;
