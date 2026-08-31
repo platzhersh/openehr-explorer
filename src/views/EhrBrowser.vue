@@ -710,9 +710,13 @@ watch(
     // The route's :ehrId doesn't change on a server switch, so without this
     // the DIRECTORY tab would keep showing data fetched from the
     // now-abandoned server for whatever EHR ID happens to still be selected.
+    // Fetched unconditionally (not gated to the Directory tab being active)
+    // so the Detail tab's "Directory items" stat card has a real count
+    // without requiring a visit to the Directory tab first — it's a single
+    // cheap GET, unlike the Contributions reconstruction below.
     ehrStore.clearDirectory();
     cancelEditDirectory();
-    if (activeTab.value === "directory" && ehrId.value && id) {
+    if (ehrId.value && id) {
       ehrStore.fetchDirectory(id, ehrId.value);
     }
 
@@ -740,10 +744,11 @@ watch(ehrId, (id) => {
   }
 
   // The DIRECTORY tab's data is EHR-scoped — reset it whenever the selected
-  // EHR changes, and re-fetch for the new EHR if that tab is currently open.
+  // EHR changes, and re-fetch for the new EHR (see the server-switch watcher
+  // above for why this isn't gated to the Directory tab being active).
   ehrStore.clearDirectory();
   cancelEditDirectory();
-  if (activeTab.value === "directory" && id && serverStore.activeServerId) {
+  if (id && serverStore.activeServerId) {
     ehrStore.fetchDirectory(serverStore.activeServerId, id);
   }
 
@@ -1267,6 +1272,68 @@ function lookupContribution() {
     params: { ehrId: ehrId.value, contributionUid: uid },
   });
 }
+
+// --- Detail-tab overview cards (OEH-47) ---
+// Dashboard-style stat cards, scoped to the selected EHR: Compositions,
+// Directory, Contributions — each a live count linking straight to that
+// tab, mirroring Dashboard.vue's .stat-grid/.stat-card pattern.
+//
+// Compositions and Directory counts are cheap (already-fetched composition
+// list; a single DIRECTORY GET, eagerly fetched by the watchers above) so
+// they're always live. Contributions is deliberately NOT eagerly computed
+// here — reconstructing it resolves a CONTRIBUTION per version across every
+// composition/EHR_STATUS/DIRECTORY revision, which is the kind of N+1 cost
+// that shouldn't fire just from opening the Detail tab. Its card shows a
+// real count once the Contributions tab has been visited (and caches it,
+// same as the tab itself), and just "—" before that.
+const statNumberFormatter = new Intl.NumberFormat();
+function formatStatCount(n: number | undefined): string {
+  return n === undefined ? "—" : statNumberFormatter.format(n);
+}
+
+/** Recursively counts DIRECTORY items (composition references) across every
+ *  folder — the number shown on the "Directory" stat card. */
+function countDirectoryItems(folder: unknown): number {
+  if (!folder || typeof folder !== "object") return 0;
+  const f = folder as { items?: unknown[]; folders?: unknown[] };
+  const items = Array.isArray(f.items) ? f.items.length : 0;
+  const subfolders = Array.isArray(f.folders) ? f.folders : [];
+  return items + subfolders.reduce((sum: number, sub) => sum + countDirectoryItems(sub), 0);
+}
+
+const directoryItemCount = computed(() =>
+  ehrStore.directoryLoaded ? countDirectoryItems(ehrStore.directory) : undefined,
+);
+
+const contributionsCount = computed(() =>
+  contributionRowsLoaded.value ? contributionRows.value.length : undefined,
+);
+
+interface EhrStatCard {
+  label: string;
+  value: number | undefined;
+  onClick: () => void;
+}
+
+const ehrStatCards = computed<EhrStatCard[]>(() => [
+  {
+    label: "Compositions",
+    value: ehrStore.selectedEhr?.compositions.length,
+    onClick: () => {
+      activeTab.value = "compositions";
+    },
+  },
+  {
+    label: "Directory items",
+    value: directoryItemCount.value,
+    onClick: selectDirectoryTab,
+  },
+  {
+    label: "Contributions",
+    value: contributionsCount.value,
+    onClick: selectContributionsTab,
+  },
+]);
 </script>
 
 <template>
@@ -1561,6 +1628,19 @@ function lookupContribution() {
         </div>
 
         <div v-if="activeTab === 'detail'" class="detail-section">
+          <div class="stat-grid">
+            <button
+              v-for="card in ehrStatCards"
+              :key="card.label"
+              type="button"
+              class="stat-card"
+              @click="card.onClick"
+            >
+              <div class="stat-value">{{ formatStatCount(card.value) }}</div>
+              <div class="stat-label">{{ card.label }}</div>
+            </button>
+          </div>
+
           <div class="detail-row">
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
@@ -2433,6 +2513,46 @@ function lookupContribution() {
 .detail-section {
   margin-bottom: 24px;
 }
+
+/* Detail-tab overview cards (OEH-47) — same visual language as
+   Dashboard.vue's .stat-grid/.stat-card, but <button>s (they switch a local
+   activeTab, not a route) rather than router-links. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.stat-card:hover {
+  border-color: var(--color-primary-dim);
+  background: var(--color-surface-hover);
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+.stat-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
 .detail-row {
   display: flex;
   padding: 8px 0;
