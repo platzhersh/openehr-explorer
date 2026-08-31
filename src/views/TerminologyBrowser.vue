@@ -187,9 +187,15 @@ function applyRouteQuery() {
 watch(() => route.query, applyRouteQuery, { immediate: true });
 
 function useConceptInLookup(concept: TerminologyConcept) {
+  // Every concept a `$expand` returns is required by the FHIR spec to carry
+  // its own `system` — falling back to the value set's own URL here (as an
+  // earlier version of this code did) would send that URL to `$lookup` as
+  // if it were a code system, which is a different resource. If a
+  // non-conformant server ever omits it, better to leave the previously
+  // entered system in place than substitute something known-wrong.
   if (!concept.code) return;
   activeTab.value = "lookup";
-  lookupSystem.value = concept.system || expandUrl.value;
+  if (concept.system) lookupSystem.value = concept.system;
   lookupCodeInput.value = concept.code;
   void runLookup();
 }
