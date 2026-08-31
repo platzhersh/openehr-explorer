@@ -36,8 +36,8 @@ const withDirectoryMutations: Decorator<{ folder: EditableFolder }> = (story, { 
         if (item) item.id = id;
       },
       addSubfolder: (path) => addSubfolder(getFolderAtPath(args.folder, path)),
-      addItem: (path, compositionUid) =>
-        addItem(getFolderAtPath(args.folder, path), compositionUid),
+      addItem: (path, id, type, namespace, idScheme) =>
+        addItem(getFolderAtPath(args.folder, path), id, type, namespace, idScheme),
       removeSubfolder: (parentPath, key) =>
         removeSubfolder(getFolderAtPath(args.folder, parentPath), key),
       removeItem: (parentPath, key) => removeItem(getFolderAtPath(args.folder, parentPath), key),

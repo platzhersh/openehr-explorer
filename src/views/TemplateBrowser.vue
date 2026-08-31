@@ -559,7 +559,11 @@ onUnmounted(() => {
                   class="term-binding-describe"
                   :to="{
                     name: 'terminology',
-                    query: { system: binding.terminology, code: binding.code },
+                    query: {
+                      system: binding.terminology,
+                      code: binding.code,
+                      fromTemplate: selectedTemplateId,
+                    },
                   }"
                   title="Open in Terminology Browser"
                 >

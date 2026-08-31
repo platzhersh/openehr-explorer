@@ -51,7 +51,7 @@ describe("fromWireFolder", () => {
     expect(editable.folders).toEqual([]);
   });
 
-  it("defaults item type/namespace when the server omits them", () => {
+  it("defaults item type/namespace/idScheme when the server omits them", () => {
     const editable = fromWireFolder({
       name: { value: "Root" },
       items: [{ id: { value: "abc-123" } }],
@@ -60,6 +60,19 @@ describe("fromWireFolder", () => {
       id: "abc-123",
       type: "COMPOSITION",
       namespace: "local",
+      idScheme: "HIER_OBJECT_ID",
+    });
+  });
+
+  it("preserves a non-default id scheme (e.g. GENERIC_ID)", () => {
+    const editable = fromWireFolder({
+      name: { value: "Root" },
+      items: [{ id: { value: "external-ref-1", _type: "GENERIC_ID" }, type: "PERSON" }],
+    });
+    expect(editable.items[0]).toMatchObject({
+      id: "external-ref-1",
+      type: "PERSON",
+      idScheme: "GENERIC_ID",
     });
   });
 });
@@ -111,6 +124,20 @@ describe("toWireFolder", () => {
     const folder = emptyFolder("   ");
     const wire = toWireFolder(folder);
     expect(wire.name).toEqual({ value: "(unnamed folder)" });
+  });
+
+  it("uses a manually-set type/namespace/idScheme for a non-composition reference", () => {
+    const folder = emptyFolder("Root");
+    addItem(folder, "external-ref-1", "PERSON", "external.registry", "GENERIC_ID");
+    const wire = toWireFolder(folder);
+    expect(wire.items).toEqual([
+      {
+        _type: "OBJECT_REF",
+        id: { _type: "GENERIC_ID", value: "external-ref-1" },
+        namespace: "external.registry",
+        type: "PERSON",
+      },
+    ]);
   });
 
   it("round-trips through fromWireFolder", () => {
