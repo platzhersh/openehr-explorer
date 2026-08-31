@@ -2168,9 +2168,17 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
                   v-for="bucket in activityByDay"
                   :key="bucket.day"
                   class="activity-bar"
-                  :title="`${bucket.day}: ${bucket.count} commit(s)`"
+                  tabindex="0"
+                  role="img"
+                  :aria-label="`${bucket.day}: ${bucket.count} commit${bucket.count === 1 ? '' : 's'}`"
                 >
                   <div class="activity-bar-fill" :style="{ height: bucket.pct + '%' }"></div>
+                  <div class="activity-bar-tooltip" role="tooltip">
+                    <span class="activity-bar-tooltip-value"
+                      >{{ bucket.count }} commit{{ bucket.count === 1 ? "" : "s" }}</span
+                    >
+                    <span class="activity-bar-tooltip-day">{{ bucket.day }}</span>
+                  </div>
                 </div>
               </div>
               <div class="version-list">
@@ -3088,7 +3096,10 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
 }
 
 /* Simple per-day commit-count bars above the Contributions table — not a
-   substitute for the table, just a quick sense of activity over time. */
+   substitute for the table, just a quick sense of activity over time. Each
+   bar is its own hover/focus hit target (see interaction guidance in the
+   dataviz skill): no crosshair needed for a single-series bar chart, so the
+   mark itself carries the tooltip. */
 .activity-chart {
   display: flex;
   align-items: flex-end;
@@ -3100,17 +3111,93 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   border-radius: var(--radius);
 }
 .activity-bar {
+  position: relative;
   flex: 1;
+  max-width: 24px;
   height: 100%;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   min-width: 2px;
+  margin: 0 auto;
+  border-radius: 2px;
+  cursor: default;
+  transition: background-color 0.15s;
+}
+.activity-bar:hover,
+.activity-bar:focus-visible {
+  background: var(--color-surface-hover);
+  outline: none;
 }
 .activity-bar-fill {
   width: 100%;
   min-height: 2px;
   background: var(--color-primary-dim);
-  border-radius: 1px;
+  border-radius: 4px 4px 0 0;
+  transition:
+    background-color 0.15s,
+    box-shadow 0.15s;
+}
+.activity-bar:hover .activity-bar-fill,
+.activity-bar:focus-visible .activity-bar-fill {
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary-dim);
+}
+
+.activity-bar-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+.activity-bar-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--color-border);
+}
+.activity-bar-tooltip::before {
+  content: "";
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--color-bg);
+  z-index: 1;
+}
+.activity-bar:hover .activity-bar-tooltip,
+.activity-bar:focus-visible .activity-bar-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.activity-bar-tooltip-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.activity-bar-tooltip-day {
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 /* Visually hidden but still reachable by screen readers — pairs the
