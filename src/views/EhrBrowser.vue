@@ -140,7 +140,17 @@ const statusPreviewError = ref<string | null>(null);
 // `datetime-local` input value (no timezone) for the "at a point in time" picker.
 const statusAtTimeInput = ref("");
 
+// Bumped by clearStatusHistory() (called on every EHR/server switch — see
+// the watchers below) so a slow response for a since-abandoned EHR/server
+// can't land after a newer request and populate Status History (or its
+// preview panel) for the wrong EHR. Same pattern as ehr.ts's
+// fetchRequestId/directoryRequestId.
+let statusVersionsRequestId = 0;
+let statusPreviewRequestId = 0;
+
 function clearStatusHistory() {
+  statusVersionsRequestId++; // invalidate any in-flight fetchStatusVersions call
+  statusPreviewRequestId++; // invalidate any in-flight preview-panel load
   statusVersions.value = [];
   statusVersionsError.value = null;
   statusVersionsLoading.value = false;
@@ -153,18 +163,25 @@ function clearStatusHistory() {
 
 async function fetchStatusVersions() {
   if (!serverStore.activeServerId || !ehrId.value) return;
+  const requestId = ++statusVersionsRequestId;
   statusVersionsLoading.value = true;
   statusVersionsError.value = null;
   try {
-    statusVersions.value = await invoke<RevisionHistoryEntry[]>("get_ehr_status_versions", {
+    const result = await invoke<RevisionHistoryEntry[]>("get_ehr_status_versions", {
       serverId: serverStore.activeServerId,
       ehrId: ehrId.value,
     });
+    if (requestId !== statusVersionsRequestId) return; // superseded by a newer request
+    // The Rust command always returns a real (possibly empty) array — the
+    // fallback here is just defensive insurance against a malformed IPC
+    // response, not an expected case.
+    statusVersions.value = result ?? [];
     statusVersionsLoaded.value = true;
   } catch (e) {
+    if (requestId !== statusVersionsRequestId) return;
     statusVersionsError.value = String(e);
   } finally {
-    statusVersionsLoading.value = false;
+    if (requestId === statusVersionsRequestId) statusVersionsLoading.value = false;
   }
 }
 
@@ -183,19 +200,23 @@ function selectStatusHistoryTab() {
 /** Loads a specific historical EHR_STATUS version into the preview panel. */
 async function viewStatusVersion(versionId: string) {
   if (!serverStore.activeServerId || !ehrId.value) return;
+  const requestId = ++statusPreviewRequestId;
   statusPreviewLoading.value = true;
   statusPreviewError.value = null;
   try {
-    statusPreview.value = await invoke<Record<string, unknown> | null>("get_ehr_status_version", {
+    const result = await invoke<Record<string, unknown> | null>("get_ehr_status_version", {
       serverId: serverStore.activeServerId,
       ehrId: ehrId.value,
       versionUid: versionId,
     });
+    if (requestId !== statusPreviewRequestId) return; // superseded by a newer request
+    statusPreview.value = result;
     statusPreviewLabel.value = versionId;
   } catch (e) {
+    if (requestId !== statusPreviewRequestId) return;
     statusPreviewError.value = String(e);
   } finally {
-    statusPreviewLoading.value = false;
+    if (requestId === statusPreviewRequestId) statusPreviewLoading.value = false;
   }
 }
 
@@ -203,23 +224,27 @@ async function viewStatusVersion(versionId: string) {
  *  preview panel — the "at a point in time" view. */
 async function viewStatusAtTime() {
   if (!serverStore.activeServerId || !ehrId.value || !statusAtTimeInput.value) return;
+  const requestId = ++statusPreviewRequestId;
   statusPreviewLoading.value = true;
   statusPreviewError.value = null;
   const isoTime = new Date(statusAtTimeInput.value).toISOString();
   try {
-    statusPreview.value = await invoke<Record<string, unknown> | null>("get_ehr_status", {
+    const result = await invoke<Record<string, unknown> | null>("get_ehr_status", {
       serverId: serverStore.activeServerId,
       ehrId: ehrId.value,
       versionAtTime: isoTime,
     });
+    if (requestId !== statusPreviewRequestId) return; // superseded by a newer request
+    statusPreview.value = result;
     statusPreviewLabel.value = `At ${isoTime}`;
     if (statusPreview.value === null) {
       statusPreviewError.value = "No EHR_STATUS version was in effect at that time.";
     }
   } catch (e) {
+    if (requestId !== statusPreviewRequestId) return;
     statusPreviewError.value = String(e);
   } finally {
-    statusPreviewLoading.value = false;
+    if (requestId === statusPreviewRequestId) statusPreviewLoading.value = false;
   }
 }
 
@@ -253,14 +278,23 @@ async function viewStatusContribution(versionId: string) {
 // openEHR has no "list contributions for an EHR" endpoint — only GET-by-UID
 // (see the manual lookup form below) — so this reconstructs the table by
 // unioning the revision histories of every VERSIONED_OBJECT under the EHR:
-// every composition, EHR_STATUS, and DIRECTORY. Each entry carries a
-// committer and timestamp; the CONTRIBUTION UID itself is resolved lazily,
-// only when "View" is clicked, to avoid one extra request per row up front.
+// every composition, EHR_STATUS, and DIRECTORY. A single CONTRIBUTION can
+// bundle several VERSIONs (e.g. a composition create alongside an
+// EHR_STATUS update committed together), so rows are grouped by resolved
+// CONTRIBUTION UID rather than shown one-per-version — otherwise a bundled
+// contribution would appear duplicated, once per object it touched.
 type ContributionSource = "Composition" | "EHR_STATUS" | "DIRECTORY";
-interface ContributionRow {
+interface ContributionComponent {
   source: ContributionSource;
   sourceDetail: string | null;
   version_id: string;
+}
+interface ContributionRow {
+  /** Null when this server didn't report a contribution reference for any
+   *  of the row's version(s) — shown as its own unresolved row rather than
+   *  silently dropped. */
+  contribution_uid: string | null;
+  components: ContributionComponent[];
   change_type: string | null;
   committer_name: string | null;
   time_committed: string | null;
@@ -270,33 +304,24 @@ const contributionRowsLoading = ref(false);
 const contributionRowsError = ref<string | null>(null);
 const contributionRowsLoaded = ref(false);
 // Set when at least one (but not all) of the revision-history sources below
-// failed to load — the table still shows whatever succeeded, but the
-// missing source(s) are named so it's clear the table is incomplete rather
-// than genuinely empty for those sources.
+// failed to load, or when at least one version's contribution reference
+// couldn't be resolved — the table still shows whatever succeeded, with a
+// note on what's incomplete rather than looking like a genuinely short list.
 const contributionRowsPartialWarning = ref<string | null>(null);
 
+// Bumped by clearContributions() (called on every EHR/server switch — see
+// the watchers below) so a slow response for a since-abandoned EHR/server
+// can't land after a newer request and populate this tab for the wrong EHR.
+let contributionsRequestId = 0;
+
 function clearContributions() {
+  contributionsRequestId++; // invalidate any in-flight loadContributions call
   contributionRows.value = [];
   contributionRowsError.value = null;
   contributionRowsPartialWarning.value = null;
   contributionRowsLoading.value = false;
   contributionRowsLoaded.value = false;
   contributionLookupError.value = null;
-}
-
-function toContributionRow(
-  source: ContributionSource,
-  sourceDetail: string | null,
-  entry: RevisionHistoryEntry,
-): ContributionRow {
-  return {
-    source,
-    sourceDetail,
-    version_id: entry.version_id,
-    change_type: entry.commit_audit?.change_type ?? null,
-    committer_name: entry.commit_audit?.committer_name ?? null,
-    time_committed: entry.time_committed,
-  };
 }
 
 interface RevisionHistorySource {
@@ -308,8 +333,112 @@ interface RevisionHistorySource {
   promise: Promise<RevisionHistoryEntry[]>;
 }
 
+/** One revision-history entry, still tagged with which VERSIONED_OBJECT it
+ *  came from — the unit `loadContributions` resolves a CONTRIBUTION UID for
+ *  and then groups by that UID. */
+interface SourcedVersionEntry {
+  source: ContributionSource;
+  sourceDetail: string | null;
+  entry: RevisionHistoryEntry;
+}
+
+/** Resolves the CONTRIBUTION a single version belongs to, dispatching to
+ *  whichever resolver command matches its source VERSIONED_OBJECT. Shared
+ *  by loadContributions (eager, for grouping) — previously this dispatch
+ *  lived inline in a per-click handler; it's now purely a lookup. */
+function resolveVersionContribution(
+  serverId: string,
+  ehrId: string,
+  sv: SourcedVersionEntry,
+): Promise<string | null> {
+  if (sv.source === "EHR_STATUS") {
+    return invoke<string | null>("get_ehr_status_version_contribution", {
+      serverId,
+      ehrId,
+      versionUid: sv.entry.version_id,
+    });
+  }
+  if (sv.source === "DIRECTORY") {
+    return invoke<string | null>("get_directory_version_contribution", {
+      serverId,
+      ehrId,
+      versionUid: sv.entry.version_id,
+    });
+  }
+  return invoke<string | null>("get_composition_version_contribution", {
+    serverId,
+    ehrId,
+    versionedObjectUid: sv.entry.version_id.split("::")[0],
+    versionUid: sv.entry.version_id,
+  });
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight at once. Resolving
+ *  a CONTRIBUTION UID per version could otherwise fire one request per
+ *  composition version all at once for an EHR with a long history — mirrors
+ *  the CONCURRENCY cap in filter_by_directory_presence
+ *  (src-tauri/src/commands/ehr.rs). */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = Array.from({ length: items.length });
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      try {
+        results[index] = { status: "fulfilled", value: await fn(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** Groups resolved (version, contributionUid) pairs into one row per
+ *  CONTRIBUTION — versions that share a UID become one row's `components`;
+ *  a version with no resolvable UID becomes its own row (contribution_uid:
+ *  null) rather than being dropped. change_type/committer/time_committed
+ *  are taken from the first version in the group — they're expected to
+ *  match across every version committed as part of the same CONTRIBUTION. */
+function groupByContribution(
+  entries: { sv: SourcedVersionEntry; contributionUid: string | null }[],
+): ContributionRow[] {
+  const groups = new Map<string, ContributionRow>();
+  const ungrouped: ContributionRow[] = [];
+
+  for (const { sv, contributionUid } of entries) {
+    const component: ContributionComponent = {
+      source: sv.source,
+      sourceDetail: sv.sourceDetail,
+      version_id: sv.entry.version_id,
+    };
+    const existing = contributionUid ? groups.get(contributionUid) : undefined;
+    if (existing) {
+      existing.components.push(component);
+      continue;
+    }
+    const row: ContributionRow = {
+      contribution_uid: contributionUid,
+      components: [component],
+      change_type: sv.entry.commit_audit?.change_type ?? null,
+      committer_name: sv.entry.commit_audit?.committer_name ?? null,
+      time_committed: sv.entry.time_committed,
+    };
+    if (contributionUid) groups.set(contributionUid, row);
+    else ungrouped.push(row);
+  }
+
+  return [...groups.values(), ...ungrouped];
+}
+
 async function loadContributions() {
   if (!serverStore.activeServerId || !ehrId.value || !ehrStore.selectedEhr) return;
+  const requestId = ++contributionsRequestId;
   const serverId = serverStore.activeServerId;
   const id = ehrId.value;
   const compositions = ehrStore.selectedEhr.compositions;
@@ -350,36 +479,65 @@ async function loadContributions() {
   ];
 
   const settled = await Promise.allSettled(sources.map((s) => s.promise));
+  if (requestId !== contributionsRequestId) return; // superseded by a newer request
 
-  const rows: ContributionRow[] = [];
-  const failed: { label: string; reason: unknown }[] = [];
+  const sourcedVersions: SourcedVersionEntry[] = [];
+  const failedSources: string[] = [];
   settled.forEach((result, i) => {
     const { source, sourceDetail, label } = sources[i];
     if (result.status === "fulfilled") {
-      for (const v of result.value) rows.push(toContributionRow(source, sourceDetail, v));
+      // Same defensive fallback as fetchStatusVersions — the Rust commands
+      // always return a real array, this only guards a malformed response.
+      for (const entry of result.value ?? []) sourcedVersions.push({ source, sourceDetail, entry });
     } else {
-      failed.push({ label, reason: result.reason });
+      failedSources.push(label);
     }
   });
+
+  if (failedSources.length === sources.length) {
+    // Every source failed — this isn't "no contributions", it's a real
+    // failure, so report it as one (and leave contributionRowsLoaded false
+    // so reselecting the tab retries, matching directoryLoaded's convention).
+    contributionRowsLoading.value = false;
+    contributionRowsError.value = "Failed to load revision history for this EHR.";
+    return;
+  }
+
+  const resolved = await mapWithConcurrency(sourcedVersions, 8, (sv) =>
+    resolveVersionContribution(serverId, id, sv),
+  );
+  if (requestId !== contributionsRequestId) return; // superseded by a newer request
+
+  const entries = sourcedVersions.map((sv, i) => {
+    const r = resolved[i];
+    return { sv, contributionUid: r.status === "fulfilled" ? r.value : null };
+  });
+  // Covers both a rejected request and a request that resolved but simply
+  // didn't carry a contribution reference (a real, common CDR answer, not
+  // an error) — either way the row couldn't be grouped by contribution.
+  const unresolvedCount = entries.filter((e) => e.contributionUid === null).length;
+
+  const rows = groupByContribution(entries);
   // Newest first — entries without a committed timestamp (shouldn't
   // normally happen) sort to the end rather than the top.
   rows.sort((a, b) => (b.time_committed ?? "").localeCompare(a.time_committed ?? ""));
 
-  contributionRowsLoading.value = false;
-
-  if (failed.length === sources.length) {
-    // Every source failed — this isn't "no contributions", it's a real
-    // failure, so report it as one (and leave contributionRowsLoaded false
-    // so reselecting the tab retries, matching directoryLoaded's convention).
-    contributionRowsError.value = String(failed[0].reason);
-    return;
-  }
-
   contributionRows.value = rows;
   contributionRowsLoaded.value = true;
-  if (failed.length > 0) {
-    contributionRowsPartialWarning.value = `Some sources failed to load and are missing from this table: ${failed.map((f) => f.label).join(", ")}.`;
+  contributionRowsLoading.value = false;
+
+  const warnings: string[] = [];
+  if (failedSources.length > 0) {
+    warnings.push(
+      `Some sources failed to load and are missing from this table: ${failedSources.join(", ")}.`,
+    );
   }
+  if (unresolvedCount > 0) {
+    warnings.push(
+      `${unresolvedCount} version(s) could not be matched to a contribution and are shown individually.`,
+    );
+  }
+  if (warnings.length > 0) contributionRowsPartialWarning.value = warnings.join(" ");
 }
 
 function selectContributionsTab() {
@@ -394,45 +552,22 @@ function selectContributionsTab() {
   }
 }
 
-/** Resolves and opens the CONTRIBUTION for one reconstructed row, using the
- *  version-contribution resolver that matches its source VERSIONED_OBJECT. */
-async function viewContributionForRow(row: ContributionRow) {
-  if (!serverStore.activeServerId || !ehrId.value) return;
+/** Opens the Contribution viewer for one reconstructed row. The
+ *  contribution UID is already resolved (during loadContributions, for
+ *  grouping) — this just navigates, or reports the "not resolved" case for
+ *  a row whose version(s) had no contribution reference. */
+function viewContributionForRow(row: ContributionRow) {
+  if (!ehrId.value) return;
   contributionRowsError.value = null;
-  try {
-    let contributionUid: string | null;
-    if (row.source === "EHR_STATUS") {
-      contributionUid = await invoke<string | null>("get_ehr_status_version_contribution", {
-        serverId: serverStore.activeServerId,
-        ehrId: ehrId.value,
-        versionUid: row.version_id,
-      });
-    } else if (row.source === "DIRECTORY") {
-      contributionUid = await invoke<string | null>("get_directory_version_contribution", {
-        serverId: serverStore.activeServerId,
-        ehrId: ehrId.value,
-        versionUid: row.version_id,
-      });
-    } else {
-      contributionUid = await invoke<string | null>("get_composition_version_contribution", {
-        serverId: serverStore.activeServerId,
-        ehrId: ehrId.value,
-        versionedObjectUid: row.version_id.split("::")[0],
-        versionUid: row.version_id,
-      });
-    }
-    if (!contributionUid) {
-      contributionRowsError.value =
-        "This server did not report a contribution reference for this version.";
-      return;
-    }
-    router.push({
-      name: "contribution",
-      params: { ehrId: ehrId.value, contributionUid },
-    });
-  } catch (e) {
-    contributionRowsError.value = String(e);
+  if (!row.contribution_uid) {
+    contributionRowsError.value =
+      "This server did not report a contribution reference for this version.";
+    return;
   }
+  router.push({
+    name: "contribution",
+    params: { ehrId: ehrId.value, contributionUid: row.contribution_uid },
+  });
 }
 
 /** Rows bucketed by calendar day (UTC date portion of the ISO timestamp) for
@@ -449,6 +584,104 @@ const activityByDay = computed(() => {
   const max = Math.max(1, ...days.map(([, count]) => count));
   return days.map(([day, count]) => ({ day, count, pct: Math.round((count / max) * 100) }));
 });
+
+// --- Compositions tab (OEH-47) ---
+// FerroEHR gives Compositions its own tab, filterable by template/composer/
+// date range, separate from the EHR-metadata "Status" (our "Detail") tab.
+// All filtering is client-side over the composition list get_ehr_detail
+// already fetches in full — no new backend command, since that AQL query
+// has no LIMIT to page around in the first place.
+//
+// Declared here (before the immediate-fire watchers below, which call
+// clearCompositionFilters()) rather than down near compositionsByTemplate's
+// other usages — a `const` referenced by an `{ immediate: true }` watcher
+// must already be initialized by the time that watcher's callback runs
+// synchronously during setup, or it's a temporal-dead-zone crash.
+const compositionFilterTemplate = ref("");
+const compositionFilterComposer = ref("");
+const compositionFilterFrom = ref(""); // date input value, "YYYY-MM-DD"
+const compositionFilterTo = ref("");
+
+const compositionFiltersActive = computed(
+  () =>
+    !!(
+      compositionFilterTemplate.value ||
+      compositionFilterComposer.value ||
+      compositionFilterFrom.value ||
+      compositionFilterTo.value
+    ),
+);
+
+function clearCompositionFilters() {
+  compositionFilterTemplate.value = "";
+  compositionFilterComposer.value = "";
+  compositionFilterFrom.value = "";
+  compositionFilterTo.value = "";
+}
+
+// Filtered compositions, grouped by template_id — the Compositions tab's
+// list. Date filtering compares just the YYYY-MM-DD portion of
+// time_committed against the (inclusive) from/to bounds, so a composition
+// committed at any time during the "to" day is still included.
+/** Whether `timeCommitted`'s date portion falls within the inclusive
+ *  [from, to] bound — either side empty means unbounded on that side. A
+ *  composition with no time_committed can never match a non-empty range. */
+function compositionMatchesDateRange(
+  timeCommitted: string | null,
+  from: string,
+  to: string,
+): boolean {
+  if (!from && !to) return true;
+  const day = timeCommitted?.slice(0, 10);
+  if (!day) return false;
+  if (from && day < from) return false;
+  return !(to && day > to);
+}
+
+/** All three Compositions-tab filters as a single predicate, pulled out of
+ *  compositionsByTemplate's loop so that computed stays a flat filter+group
+ *  instead of a nest of per-field conditionals (SonarCloud flagged the
+ *  latter's Cognitive Complexity). */
+function compositionMatchesFilters(
+  comp: CompositionSummary,
+  templateQuery: string,
+  composerQuery: string,
+  from: string,
+  to: string,
+): boolean {
+  if (templateQuery && !(comp.template_id ?? "").toLowerCase().includes(templateQuery)) {
+    return false;
+  }
+  if (composerQuery && !(comp.composer ?? "").toLowerCase().includes(composerQuery)) {
+    return false;
+  }
+  return compositionMatchesDateRange(comp.time_committed, from, to);
+}
+
+const compositionsByTemplate = computed(() => {
+  if (!ehrStore.selectedEhr) return {};
+  const templateQuery = compositionFilterTemplate.value.trim().toLowerCase();
+  const composerQuery = compositionFilterComposer.value.trim().toLowerCase();
+  const from = compositionFilterFrom.value;
+  const to = compositionFilterTo.value;
+
+  const groups: Record<string, CompositionSummary[]> = {};
+  for (const comp of ehrStore.selectedEhr.compositions) {
+    if (!compositionMatchesFilters(comp, templateQuery, composerQuery, from, to)) continue;
+    const key = comp.template_id ?? "(no template)";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(comp);
+  }
+  return groups;
+});
+
+// Total row count across all template groups — separate from
+// compositionsByTemplate's own per-group counts, for the "Compositions (N)"
+// header, which shows the filtered count (not the EHR's unfiltered total)
+// once a filter narrows the list.
+const filteredCompositionCount = computed(() =>
+  Object.values(compositionsByTemplate.value).reduce((sum, comps) => sum + comps.length, 0),
+);
 
 const showFilterModal = ref(false);
 const validationError = ref<string | null>(null);
@@ -971,98 +1204,6 @@ function onToggleSortDir() {
   currentPage.value = 0;
   void ehrStore.toggleSortDir(serverStore.activeServerId);
 }
-
-// --- Compositions tab (OEH-47) ---
-// FerroEHR gives Compositions its own tab, filterable by template/composer/
-// date range, separate from the EHR-metadata "Status" (our "Detail") tab.
-// All filtering is client-side over the composition list get_ehr_detail
-// already fetches in full — no new backend command, since that AQL query
-// has no LIMIT to page around in the first place.
-const compositionFilterTemplate = ref("");
-const compositionFilterComposer = ref("");
-const compositionFilterFrom = ref(""); // date input value, "YYYY-MM-DD"
-const compositionFilterTo = ref("");
-
-const compositionFiltersActive = computed(
-  () =>
-    !!(
-      compositionFilterTemplate.value ||
-      compositionFilterComposer.value ||
-      compositionFilterFrom.value ||
-      compositionFilterTo.value
-    ),
-);
-
-function clearCompositionFilters() {
-  compositionFilterTemplate.value = "";
-  compositionFilterComposer.value = "";
-  compositionFilterFrom.value = "";
-  compositionFilterTo.value = "";
-}
-
-// Filtered compositions, grouped by template_id — the Compositions tab's
-// list. Date filtering compares just the YYYY-MM-DD portion of
-// time_committed against the (inclusive) from/to bounds, so a composition
-// committed at any time during the "to" day is still included.
-/** Whether `timeCommitted`'s date portion falls within the inclusive
- *  [from, to] bound — either side empty means unbounded on that side. A
- *  composition with no time_committed can never match a non-empty range. */
-function compositionMatchesDateRange(
-  timeCommitted: string | null,
-  from: string,
-  to: string,
-): boolean {
-  if (!from && !to) return true;
-  const day = timeCommitted?.slice(0, 10);
-  if (!day) return false;
-  if (from && day < from) return false;
-  return !(to && day > to);
-}
-
-/** All three Compositions-tab filters as a single predicate, pulled out of
- *  compositionsByTemplate's loop so that computed stays a flat filter+group
- *  instead of a nest of per-field conditionals (SonarCloud flagged the
- *  latter's Cognitive Complexity). */
-function compositionMatchesFilters(
-  comp: CompositionSummary,
-  templateQuery: string,
-  composerQuery: string,
-  from: string,
-  to: string,
-): boolean {
-  if (templateQuery && !(comp.template_id ?? "").toLowerCase().includes(templateQuery)) {
-    return false;
-  }
-  if (composerQuery && !(comp.composer ?? "").toLowerCase().includes(composerQuery)) {
-    return false;
-  }
-  return compositionMatchesDateRange(comp.time_committed, from, to);
-}
-
-const compositionsByTemplate = computed(() => {
-  if (!ehrStore.selectedEhr) return {};
-  const templateQuery = compositionFilterTemplate.value.trim().toLowerCase();
-  const composerQuery = compositionFilterComposer.value.trim().toLowerCase();
-  const from = compositionFilterFrom.value;
-  const to = compositionFilterTo.value;
-
-  const groups: Record<string, CompositionSummary[]> = {};
-  for (const comp of ehrStore.selectedEhr.compositions) {
-    if (!compositionMatchesFilters(comp, templateQuery, composerQuery, from, to)) continue;
-    const key = comp.template_id ?? "(no template)";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(comp);
-  }
-  return groups;
-});
-
-// Total row count across all template groups — separate from
-// compositionsByTemplate's own per-group counts, for the "Compositions (N)"
-// header, which shows the filtered count (not the EHR's unfiltered total)
-// once a filter narrows the list.
-const filteredCompositionCount = computed(() =>
-  Object.values(compositionsByTemplate.value).reduce((sum, comps) => sum + comps.length, 0),
-);
 
 function handleEhrCreated(newEhrId: string) {
   showCreateDialog.value = false;
@@ -1653,22 +1794,35 @@ function lookupContribution() {
               <div class="version-list">
                 <div
                   v-for="row in contributionRows"
-                  :key="`${row.source}-${row.version_id}`"
+                  :key="row.contribution_uid ?? row.components.map((c) => c.version_id).join(',')"
                   class="version-row"
                 >
                   <div class="version-row-main">
                     <div class="version-row-meta">
-                      <span class="badge badge-source">{{ row.source }}</span>
-                      <span v-if="row.sourceDetail">{{ row.sourceDetail }}</span>
+                      <span
+                        v-for="comp in row.components"
+                        :key="comp.version_id"
+                        class="badge badge-source"
+                      >
+                        {{ comp.source
+                        }}<template v-if="comp.sourceDetail"> — {{ comp.sourceDetail }}</template>
+                      </span>
                     </div>
-                    <div class="version-row-id mono">{{ row.version_id }}</div>
+                    <div class="version-row-id mono">
+                      {{ row.contribution_uid ?? "Contribution not resolved" }}
+                    </div>
                     <div class="version-row-meta">
                       <span v-if="row.change_type" class="badge">{{ row.change_type }}</span>
                       <span v-if="row.committer_name">{{ row.committer_name }}</span>
                       <span v-if="row.time_committed">{{ row.time_committed }}</span>
                     </div>
                   </div>
-                  <button type="button" class="btn btn-sm" @click="viewContributionForRow(row)">
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    :disabled="!row.contribution_uid"
+                    @click="viewContributionForRow(row)"
+                  >
                     View Contribution
                   </button>
                 </div>
