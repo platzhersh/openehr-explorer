@@ -341,6 +341,18 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  /** Drops the cached revision history without touching anything else — for
+   *  a mutation (save/delete) that happens while the "Version history" panel
+   *  is closed. `fetchDirectoryRevisionHistory`'s own gate is "already have a
+   *  non-empty list, skip fetching" (see `toggleDirectoryHistoryPanel` in
+   *  EhrBrowser.vue), so leaving a stale list in place after a mutation would
+   *  make the next panel-open silently show outdated revisions instead of
+   *  fetching fresh ones. */
+  function invalidateDirectoryRevisionHistory() {
+    directoryHistoryRequestId++; // invalidate any in-flight fetch too
+    directoryRevisionHistory.value = [];
+  }
+
   function clearDirectory() {
     directoryRequestId++; // invalidate any in-flight fetchDirectory call
     directory.value = null;
@@ -562,6 +574,7 @@ export const useEhrStore = defineStore("ehr", () => {
     updateDirectory,
     deleteDirectory,
     fetchDirectoryRevisionHistory,
+    invalidateDirectoryRevisionHistory,
     previewDirectoryVersion,
     previewDirectoryAtTime,
     clearDirectoryVersionPreview,

@@ -1289,13 +1289,17 @@ async function saveDirectory() {
   }
 }
 
-/** The save/delete just committed a new DIRECTORY version — if the "Version
- *  history" panel happens to be open, its list is now one version stale.
- *  Re-fetching (rather than leaving it to the next open) keeps it in sync
- *  with what the user is already looking at. */
+/** The save/delete just committed a new DIRECTORY version — the cached
+ *  revision history is now one version stale either way. If the panel is
+ *  open, refetch immediately so what's on screen stays in sync; if it's
+ *  closed, just drop the cache (per invalidateDirectoryRevisionHistory's
+ *  own doc comment) so the next open fetches fresh instead of silently
+ *  reusing the stale list. */
 function refreshDirectoryRevisionHistoryIfOpen() {
   if (showDirectoryHistoryPanel.value && serverStore.activeServerId && ehrId.value) {
     ehrStore.fetchDirectoryRevisionHistory(serverStore.activeServerId, ehrId.value);
+  } else {
+    ehrStore.invalidateDirectoryRevisionHistory();
   }
 }
 
@@ -2169,7 +2173,6 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
                   :key="bucket.day"
                   class="activity-bar"
                   tabindex="0"
-                  role="img"
                   :aria-label="`${bucket.day}: ${bucket.count} commit${bucket.count === 1 ? '' : 's'}`"
                 >
                   <div class="activity-bar-fill" :style="{ height: bucket.pct + '%' }"></div>
@@ -3166,22 +3169,26 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   pointer-events: none;
   z-index: 5;
 }
-.activity-bar-tooltip::after {
+/* Both pointer triangles share position/transform/border-style; only size,
+   vertical offset, and color actually differ between the border ring
+   (::after) and the fill on top of it (::before). */
+.activity-bar-tooltip::after,
+.activity-bar-tooltip::before {
   content: "";
   position: absolute;
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  border: 5px solid transparent;
+  border-style: solid;
+  border-color: transparent;
+}
+.activity-bar-tooltip::after {
+  border-width: 5px;
   border-top-color: var(--color-border);
 }
 .activity-bar-tooltip::before {
-  content: "";
-  position: absolute;
   top: calc(100% - 1px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
+  border-width: 4px;
   border-top-color: var(--color-bg);
   z-index: 1;
 }
