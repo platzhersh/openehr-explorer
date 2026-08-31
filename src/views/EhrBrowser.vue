@@ -1628,19 +1628,6 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
         </div>
 
         <div v-if="activeTab === 'detail'" class="detail-section">
-          <div class="stat-grid">
-            <button
-              v-for="card in ehrStatCards"
-              :key="card.label"
-              type="button"
-              class="stat-card"
-              @click="card.onClick"
-            >
-              <div class="stat-value">{{ formatStatCount(card.value) }}</div>
-              <div class="stat-label">{{ card.label }}</div>
-            </button>
-          </div>
-
           <div class="detail-row">
             <span class="detail-label">EHR ID</span>
             <span class="detail-value mono">
@@ -1671,6 +1658,19 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
           <div class="detail-row" v-if="ehrStore.selectedEhr.subject_namespace">
             <span class="detail-label">Subject Namespace</span>
             <span class="detail-value">{{ ehrStore.selectedEhr.subject_namespace }}</span>
+          </div>
+
+          <div class="stat-grid">
+            <button
+              v-for="card in ehrStatCards"
+              :key="card.label"
+              type="button"
+              class="stat-card"
+              @click="card.onClick"
+            >
+              <div class="stat-value">{{ formatStatCount(card.value) }}</div>
+              <div class="stat-label">{{ card.label }}</div>
+            </button>
           </div>
         </div>
 
@@ -2521,7 +2521,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
-  margin-bottom: 20px;
+  margin-top: 20px;
 }
 .stat-card {
   display: block;
