@@ -122,8 +122,8 @@ function compositionLabel(uid: string): string {
           :value="item.id"
           type="text"
           class="item-id-input mono"
-          placeholder="Composition UID"
-          aria-label="Composition UID"
+          placeholder="Reference ID"
+          aria-label="Reference ID"
           :title="compositionLabel(item.id)"
           @input="handleRenameItem(item.key, $event)"
         />

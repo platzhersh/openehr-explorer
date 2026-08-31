@@ -347,7 +347,9 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryError.value = null;
     directoryLoading.value = false;
     directoryLoaded.value = false;
+    directoryHistoryRequestId++; // invalidate any in-flight fetchDirectoryRevisionHistory call
     directoryRevisionHistory.value = [];
+    directoryRevisionHistoryLoading.value = false;
     directoryRevisionHistoryError.value = null;
     clearDirectoryVersionPreview();
   }
@@ -425,6 +427,11 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  // Bumped by clearDirectory() so a slow response for a since-abandoned
+  // EHR/server can't land after a newer request and overwrite the history
+  // list — same pattern as directoryRequestId above.
+  let directoryHistoryRequestId = 0;
+
   /** Fetches the DIRECTORY's full revision history (every version ever
    *  committed for this EHR), for the "Version history" panel. Independent
    *  of `fetchDirectory` — an empty history (never-created DIRECTORY) is a
@@ -432,36 +439,51 @@ export const useEhrStore = defineStore("ehr", () => {
    *  Rust side (the same command the reconstructed Contributions tab uses,
    *  see EhrBrowser.vue — OEH-47). */
   async function fetchDirectoryRevisionHistory(serverId: string, ehrId: string) {
+    const requestId = ++directoryHistoryRequestId;
     directoryRevisionHistoryLoading.value = true;
     directoryRevisionHistoryError.value = null;
     try {
-      directoryRevisionHistory.value = await invoke<DirectoryRevision[]>("get_directory_versions", {
+      const result = await invoke<DirectoryRevision[]>("get_directory_versions", {
         serverId,
         ehrId,
       });
+      if (requestId !== directoryHistoryRequestId) return; // superseded by a newer request
+      directoryRevisionHistory.value = result;
     } catch (e) {
+      if (requestId !== directoryHistoryRequestId) return;
       directoryRevisionHistory.value = [];
       directoryRevisionHistoryError.value = String(e);
     } finally {
-      directoryRevisionHistoryLoading.value = false;
+      if (requestId === directoryHistoryRequestId) directoryRevisionHistoryLoading.value = false;
     }
   }
+
+  // Shared by both preview functions below (rather than one counter each)
+  // since they write to the same `directoryVersionPreview` state — whichever
+  // of "preview this version" / "preview at this time" was asked for most
+  // recently should win, regardless of which function it came through.
+  let directoryPreviewRequestId = 0;
 
   /** Previews one historical DIRECTORY version by its version UID (from
    *  `directoryRevisionHistory`), without touching the live `directory`. */
   async function previewDirectoryVersion(serverId: string, ehrId: string, versionUid: string) {
+    const requestId = ++directoryPreviewRequestId;
     directoryVersionPreviewLoading.value = true;
     directoryVersionPreviewError.value = null;
     try {
-      directoryVersionPreview.value = await invoke<Record<string, unknown> | null>(
-        "get_directory_version",
-        { serverId, ehrId, versionUid },
-      );
+      const result = await invoke<Record<string, unknown> | null>("get_directory_version", {
+        serverId,
+        ehrId,
+        versionUid,
+      });
+      if (requestId !== directoryPreviewRequestId) return; // superseded by a newer request
+      directoryVersionPreview.value = result;
     } catch (e) {
+      if (requestId !== directoryPreviewRequestId) return;
       directoryVersionPreview.value = null;
       directoryVersionPreviewError.value = String(e);
     } finally {
-      directoryVersionPreviewLoading.value = false;
+      if (requestId === directoryPreviewRequestId) directoryVersionPreviewLoading.value = false;
     }
   }
 
@@ -469,22 +491,28 @@ export const useEhrStore = defineStore("ehr", () => {
    *  interpreted as UTC by the server), without touching the live
    *  `directory`. */
   async function previewDirectoryAtTime(serverId: string, ehrId: string, versionAtTime: string) {
+    const requestId = ++directoryPreviewRequestId;
     directoryVersionPreviewLoading.value = true;
     directoryVersionPreviewError.value = null;
     try {
-      directoryVersionPreview.value = await invoke<Record<string, unknown> | null>(
-        "get_directory",
-        { serverId, ehrId, versionAtTime },
-      );
+      const result = await invoke<Record<string, unknown> | null>("get_directory", {
+        serverId,
+        ehrId,
+        versionAtTime,
+      });
+      if (requestId !== directoryPreviewRequestId) return; // superseded by a newer request
+      directoryVersionPreview.value = result;
     } catch (e) {
+      if (requestId !== directoryPreviewRequestId) return;
       directoryVersionPreview.value = null;
       directoryVersionPreviewError.value = String(e);
     } finally {
-      directoryVersionPreviewLoading.value = false;
+      if (requestId === directoryPreviewRequestId) directoryVersionPreviewLoading.value = false;
     }
   }
 
   function clearDirectoryVersionPreview() {
+    directoryPreviewRequestId++; // invalidate any in-flight preview call
     directoryVersionPreview.value = null;
     directoryVersionPreviewError.value = null;
     directoryVersionPreviewLoading.value = false;

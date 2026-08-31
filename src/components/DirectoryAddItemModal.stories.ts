@@ -88,6 +88,7 @@ export const ManualEntryRequiresAnIdValue: Story = {
 export const ManualEntrySubmits: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    await userEvent.clear(canvas.getByLabelText(/namespace/i));
     await userEvent.type(canvas.getByLabelText(/namespace/i), "issuer.example.org");
     await userEvent.clear(canvas.getByLabelText(/^type$/i));
     await userEvent.type(canvas.getByLabelText(/^type$/i), "PERSON");

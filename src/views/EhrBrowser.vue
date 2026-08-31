@@ -1109,6 +1109,15 @@ function countDirectoryStats(node: unknown): { folders: number; items: number } 
 const directoryStats = computed(() => countDirectoryStats(ehrStore.directory));
 const previewDirectoryStats = computed(() => countDirectoryStats(ehrStore.directoryVersionPreview));
 
+// A revision entry with no usable version_id (malformed/unexpected server
+// response) can't be opened — get_directory_version needs a real version
+// UID, and an empty one is meaningless (not "the current version"). Filter
+// those out rather than rendering a row whose "Open" button silently does
+// nothing useful.
+const usableDirectoryRevisions = computed(() =>
+  ehrStore.directoryRevisionHistory.filter((rev) => rev.version_id.trim().length > 0),
+);
+
 function resetDirectoryHistoryUi() {
   showDirectoryHistoryPanel.value = false;
   showDirectoryAtTimePanel.value = false;
@@ -1241,7 +1250,7 @@ function applyJsonEditorToTree() {
     jsonEditorError.value = `Invalid JSON: ${String(e)}`;
     return;
   }
-  if (typeof parsed !== "object" || parsed === null) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     jsonEditorError.value = "Expected a FOLDER object.";
     return;
   }
@@ -1932,15 +1941,12 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
               <div v-else-if="ehrStore.directoryRevisionHistoryError" class="error-msg">
                 {{ ehrStore.directoryRevisionHistoryError }}
               </div>
-              <div
-                v-else-if="ehrStore.directoryRevisionHistory.length === 0"
-                class="empty-versions"
-              >
+              <div v-else-if="usableDirectoryRevisions.length === 0" class="empty-versions">
                 No version history available for this directory.
               </div>
               <template v-else>
                 <div
-                  v-for="rev in ehrStore.directoryRevisionHistory"
+                  v-for="rev in usableDirectoryRevisions"
                   :key="rev.version_id"
                   class="version-row"
                 >
@@ -2590,34 +2596,14 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   font-style: italic;
 }
 
-.version-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-}
-.version-row:not(:last-child) {
-  border-bottom: 1px solid var(--color-border);
-}
-
-.version-row-main {
-  min-width: 0;
-}
-
+/* .version-row / .version-row-main / .version-row-meta are shared with the
+   Status History and Contributions tabs' revision rows — see the
+   "Revision-history / reconstructed-contribution rows" block below (OEH-47).
+   Only the mono id styling is specific to this panel. */
 .version-row-id.mono {
   font-family: var(--font-mono);
   font-size: 12px;
   word-break: break-all;
-}
-
-.version-row-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
 }
 
 .at-time-label {
