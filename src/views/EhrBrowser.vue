@@ -56,7 +56,9 @@ const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
-const activeTab = ref<"detail" | "directory" | "status" | "json" | "contributions">("detail");
+const activeTab = ref<
+  "detail" | "directory" | "status" | "compositions" | "json" | "contributions"
+>("detail");
 
 // DIRECTORY create/update/delete (OEH-27 follow-up) — editing state for the
 // Directory tab. `editableDirectory` is a plain-field working copy (see
@@ -965,17 +967,69 @@ function onToggleSortDir() {
   void ehrStore.toggleSortDir(serverStore.activeServerId);
 }
 
-// Group compositions by template_id
+// --- Compositions tab (OEH-47) ---
+// FerroEHR gives Compositions its own tab, filterable by template/composer/
+// date range, separate from the EHR-metadata "Status" (our "Detail") tab.
+// All filtering is client-side over the composition list get_ehr_detail
+// already fetches in full — no new backend command, since that AQL query
+// has no LIMIT to page around in the first place.
+const compositionFilterTemplate = ref("");
+const compositionFilterComposer = ref("");
+const compositionFilterFrom = ref(""); // date input value, "YYYY-MM-DD"
+const compositionFilterTo = ref("");
+
+const compositionFiltersActive = computed(
+  () =>
+    !!(
+      compositionFilterTemplate.value ||
+      compositionFilterComposer.value ||
+      compositionFilterFrom.value ||
+      compositionFilterTo.value
+    ),
+);
+
+function clearCompositionFilters() {
+  compositionFilterTemplate.value = "";
+  compositionFilterComposer.value = "";
+  compositionFilterFrom.value = "";
+  compositionFilterTo.value = "";
+}
+
+// Filtered compositions, grouped by template_id — the Compositions tab's
+// list. Date filtering compares just the YYYY-MM-DD portion of
+// time_committed against the (inclusive) from/to bounds, so a composition
+// committed at any time during the "to" day is still included.
 const compositionsByTemplate = computed(() => {
   if (!ehrStore.selectedEhr) return {};
+  const templateQuery = compositionFilterTemplate.value.trim().toLowerCase();
+  const composerQuery = compositionFilterComposer.value.trim().toLowerCase();
+  const from = compositionFilterFrom.value;
+  const to = compositionFilterTo.value;
+
   const groups: Record<string, CompositionSummary[]> = {};
   for (const comp of ehrStore.selectedEhr.compositions) {
+    if (templateQuery && !(comp.template_id ?? "").toLowerCase().includes(templateQuery)) continue;
+    if (composerQuery && !(comp.composer ?? "").toLowerCase().includes(composerQuery)) continue;
+    if (from || to) {
+      const day = comp.time_committed?.slice(0, 10);
+      if (!day) continue;
+      if (from && day < from) continue;
+      if (to && day > to) continue;
+    }
     const key = comp.template_id ?? "(no template)";
     if (!groups[key]) groups[key] = [];
     groups[key].push(comp);
   }
   return groups;
 });
+
+// Total row count across all template groups — separate from
+// compositionsByTemplate's own per-group counts, for the "Compositions (N)"
+// header, which shows the filtered count (not the EHR's unfiltered total)
+// once a filter narrows the list.
+const filteredCompositionCount = computed(() =>
+  Object.values(compositionsByTemplate.value).reduce((sum, comps) => sum + comps.length, 0),
+);
 
 function handleEhrCreated(newEhrId: string) {
   showCreateDialog.value = false;
@@ -1304,6 +1358,14 @@ function lookupContribution() {
               <button
                 type="button"
                 class="tab"
+                :class="{ active: activeTab === 'compositions' }"
+                @click="activeTab = 'compositions'"
+              >
+                Compositions
+              </button>
+              <button
+                type="button"
+                class="tab"
                 :class="{ active: activeTab === 'json' }"
                 @click="activeTab = 'json'"
               >
@@ -1610,11 +1672,56 @@ function lookupContribution() {
           </div>
         </div>
 
-        <h3 class="section-title" v-if="activeTab === 'detail'">
-          Compositions ({{ ehrStore.selectedEhr.compositions.length }})
-        </h3>
+        <!-- Compositions View (OEH-47) -->
+        <div v-if="activeTab === 'compositions'" class="compositions-tab-view">
+          <h3 class="section-title">
+            Compositions ({{
+              compositionFiltersActive
+                ? `${filteredCompositionCount} of ${ehrStore.selectedEhr.compositions.length}`
+                : ehrStore.selectedEhr.compositions.length
+            }})
+          </h3>
 
-        <template v-if="activeTab === 'detail'">
+          <div class="composition-filters">
+            <label for="comp-filter-template" class="visually-hidden">Template</label>
+            <input
+              id="comp-filter-template"
+              class="input"
+              v-model="compositionFilterTemplate"
+              placeholder="Template"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+            />
+            <label for="comp-filter-composer" class="visually-hidden">Composer</label>
+            <input
+              id="comp-filter-composer"
+              class="input"
+              v-model="compositionFilterComposer"
+              placeholder="Composer"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+            />
+            <label for="comp-filter-from" class="visually-hidden">From date</label>
+            <input
+              id="comp-filter-from"
+              type="date"
+              class="input"
+              v-model="compositionFilterFrom"
+            />
+            <label for="comp-filter-to" class="visually-hidden">To date</label>
+            <input id="comp-filter-to" type="date" class="input" v-model="compositionFilterTo" />
+            <button
+              type="button"
+              class="btn btn-sm"
+              :disabled="!compositionFiltersActive"
+              @click="clearCompositionFilters"
+            >
+              Clear
+            </button>
+          </div>
+
           <div
             v-for="(comps, templateId) in compositionsByTemplate"
             :key="templateId"
@@ -1638,10 +1745,16 @@ function lookupContribution() {
             </div>
           </div>
 
-          <div v-if="ehrStore.selectedEhr.compositions.length === 0" class="empty-state">
+          <div
+            v-if="Object.keys(compositionsByTemplate).length === 0 && !compositionFiltersActive"
+            class="empty-state"
+          >
             <p>No compositions found for this EHR.</p>
           </div>
-        </template>
+          <div v-else-if="Object.keys(compositionsByTemplate).length === 0" class="empty-state">
+            <p>No compositions match these filters.</p>
+          </div>
+        </div>
       </template>
 
       <div v-else class="empty-state">
@@ -2296,6 +2409,23 @@ function lookupContribution() {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.compositions-tab-view {
+  margin-bottom: 24px;
+}
+
+.composition-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.composition-filters .input {
+  flex: 1;
+  min-width: 0;
+}
+.composition-filters input[type="date"] {
+  flex: 0 1 160px;
 }
 
 .template-group {
