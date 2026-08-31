@@ -491,6 +491,7 @@ watch(
     // once that list actually lands.
     clearStatusHistory();
     clearContributions();
+    clearCompositionFilters();
     if (activeTab.value === "status" && ehrId.value && id) {
       fetchStatusVersions();
     }
@@ -514,9 +515,13 @@ watch(ehrId, (id) => {
   }
 
   // Status history / Contributions — see the server-switch watcher above for
-  // why Contributions isn't re-fetched directly here.
+  // why Contributions isn't re-fetched directly here. Composition filters
+  // are reset too — a template/composer/date filter left over from the
+  // previous EHR would otherwise silently narrow the new EHR's list without
+  // the user having touched anything on this tab.
   clearStatusHistory();
   clearContributions();
+  clearCompositionFilters();
   if (activeTab.value === "status" && id && serverStore.activeServerId) {
     fetchStatusVersions();
   }
