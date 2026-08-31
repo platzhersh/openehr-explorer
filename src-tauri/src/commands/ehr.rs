@@ -881,6 +881,353 @@ pub async fn delete_directory(
     Ok(format!("Directory for EHR {} deleted successfully", ehr_id))
 }
 
+// --- EHR_STATUS version fetch / at-time (OEH-47) ---
+//
+// EHR_STATUS is a VERSIONED_OBJECT, same as compositions and DIRECTORY, so
+// its "current or historical version" resource shape mirrors the DIRECTORY
+// functions above one-for-one:
+// - `version_uid: None` → the latest version: `GET /ehr/{ehr_id}/ehr_status`
+//   (optionally combined with a `version_at_time` query param).
+// - `version_uid: Some(uid)` → a specific historical version:
+//   `GET /ehr/{ehr_id}/ehr_status/{version_uid}`.
+
+fn build_ehr_status_url(
+    base: &str,
+    ehr_id: &str,
+    version_uid: Option<&str>,
+    version_at_time: Option<&str>,
+) -> String {
+    let path = match version_uid {
+        Some(uid) => format!("{}/rest/openehr/v1/ehr/{}/ehr_status/{}", base, ehr_id, uid),
+        None => format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id),
+    };
+
+    match version_at_time {
+        Some(time) => match reqwest::Url::parse(&path) {
+            Ok(mut url) => {
+                url.query_pairs_mut().append_pair("version_at_time", time);
+                url.to_string()
+            }
+            // Malformed base URL — fall back to the un-parameterized path;
+            // the request will fail downstream with a clearer connection error.
+            Err(_) => path,
+        },
+        None => path,
+    }
+}
+
+/// Shared GET + response handling for the EHR_STATUS commands below — like
+/// `fetch_directory`, a 404 is treated as "no such version" (`Ok(None)`)
+/// rather than a hard failure, since every EHR has *a* current EHR_STATUS but
+/// a `version_at_time` before creation or a stale `version_uid` legitimately
+/// has none.
+async fn fetch_ehr_status(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    auth: &AuthMethod,
+) -> Result<Option<Value>, String> {
+    let resp = send_instrumented(
+        app,
+        client,
+        make_request(client, reqwest::Method::GET, url, auth).header("Accept", "application/json"),
+    )
+    .await?;
+
+    if resp.status == 404 {
+        return Ok(None);
+    }
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    serde_json::from_str(&resp.body)
+        .map(Some)
+        .map_err(|e| format!("Failed to parse EHR_STATUS: {}", e))
+}
+
+/// Fetches the latest (or, if `version_at_time` is given, the version in
+/// effect at that instant) EHR_STATUS for an EHR — the "at a point in time"
+/// view for the Status history tab.
+#[tauri::command]
+pub async fn get_ehr_status(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_at_time: Option<String>,
+) -> Result<Option<Value>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = build_ehr_status_url(base, &ehr_id, None, version_at_time.as_deref());
+    fetch_ehr_status(&app, &client, &url, &profile.auth_method).await
+}
+
+/// Fetches a specific historical version of the EHR_STATUS, identified by its
+/// version UID (as returned by `get_ehr_status_versions`' `version_id`).
+#[tauri::command]
+pub async fn get_ehr_status_version(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_uid: String,
+) -> Result<Option<Value>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = build_ehr_status_url(base, &ehr_id, Some(&version_uid), None);
+    fetch_ehr_status(&app, &client, &url, &profile.auth_method).await
+}
+
+// --- VERSIONED_EHR_STATUS / VERSIONED_DIRECTORY revision history (OEH-47) ---
+//
+// Both EHR_STATUS and DIRECTORY are VERSIONED_OBJECTs with the same
+// `revision_history` resource compositions already use (see
+// `composition::get_composition_versions`), so together with that command
+// this trio lets the Contributions tab reconstruct a full commit list for an
+// EHR by unioning all three — openEHR has no single "list contributions for
+// an EHR" endpoint, but every contribution shows up as an entry in exactly
+// one of these three revision histories.
+
+/// The AUDIT_DETAILS attached to one entry in a VERSIONED_OBJECT's revision
+/// history. Structurally identical to `composition::CommitAudit`; kept as its
+/// own type here (rather than importing that one) so the EHR-level revision
+/// history commands don't reach into the composition module for an
+/// unrelated concept — same reasoning as `contribution::ContributionAudit`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevisionCommitAudit {
+    pub change_type: Option<String>,
+    pub committer_name: Option<String>,
+    pub time_committed: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevisionHistoryEntry {
+    pub version_id: String,
+    pub preceding_version_uid: Option<String>,
+    pub commit_audit: Option<RevisionCommitAudit>,
+    pub time_committed: Option<String>,
+}
+
+/// Parses a `GET .../versioned_{ehr_status,directory}/revision_history`
+/// response body into a flat list of entries. Mirrors the inline parsing in
+/// `composition::get_composition_versions` — pulled out into its own
+/// function here so the EHR_STATUS and DIRECTORY revision-history commands
+/// below share one implementation instead of duplicating it a second time.
+fn parse_revision_history(body: &Value) -> Vec<RevisionHistoryEntry> {
+    let items = body
+        .as_array()
+        .or_else(|| body.get("items").and_then(|i| i.as_array()))
+        .cloned()
+        .unwrap_or_default();
+
+    items
+        .iter()
+        .map(|item| {
+            let version_id = item
+                .get("version_id")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let audits = item.get("audits").and_then(|a| a.as_array());
+            let first_audit = audits.and_then(|a| a.first());
+
+            let commit_audit = first_audit.map(|audit| RevisionCommitAudit {
+                change_type: audit
+                    .get("change_type")
+                    .and_then(|c| c.get("value"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                committer_name: audit
+                    .get("committer")
+                    .and_then(|c| c.get("name"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                time_committed: audit
+                    .get("time_committed")
+                    .and_then(|t| t.get("value"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                description: audit
+                    .get("description")
+                    .and_then(|d| d.get("value"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+            });
+
+            let time_committed = commit_audit.as_ref().and_then(|a| a.time_committed.clone());
+
+            RevisionHistoryEntry {
+                version_id,
+                preceding_version_uid: item
+                    .get("preceding_version_uid")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                commit_audit,
+                time_committed,
+            }
+        })
+        .collect()
+}
+
+async fn fetch_revision_history(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    auth: &AuthMethod,
+) -> Result<Vec<RevisionHistoryEntry>, String> {
+    let resp = send_instrumented(
+        app,
+        client,
+        make_request(client, reqwest::Method::GET, url, auth).header("Accept", "application/json"),
+    )
+    .await?;
+
+    // A 404 here means "no such VERSIONED_OBJECT" — most commonly a
+    // DIRECTORY that was never created for this EHR (see fetch_directory's
+    // own 404 handling above) — which is an empty history, not a failure.
+    // Without this, one EHR with no DIRECTORY would fail the whole
+    // Contributions-tab reconstruction in EhrBrowser.vue, which unions this
+    // with the composition and EHR_STATUS histories via Promise.all.
+    if resp.status == 404 {
+        return Ok(Vec::new());
+    }
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    let body: Value = serde_json::from_str(&resp.body)
+        .map_err(|e| format!("Failed to parse revision history: {}", e))?;
+
+    Ok(parse_revision_history(&body))
+}
+
+/// EHR_STATUS revision history — the counterpart to
+/// `composition::get_composition_versions` for the EHR_STATUS
+/// VERSIONED_OBJECT. Backs the Status history tab.
+#[tauri::command]
+pub async fn get_ehr_status_versions(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+) -> Result<Vec<RevisionHistoryEntry>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/versioned_ehr_status/revision_history",
+        base, ehr_id
+    );
+    fetch_revision_history(&app, &client, &url, &profile.auth_method).await
+}
+
+/// DIRECTORY revision history — completes the trio (alongside composition
+/// and EHR_STATUS) that the reconstructed Contributions tab unions together.
+#[tauri::command]
+pub async fn get_directory_versions(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+) -> Result<Vec<RevisionHistoryEntry>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/versioned_directory/revision_history",
+        base, ehr_id
+    );
+    fetch_revision_history(&app, &client, &url, &profile.auth_method).await
+}
+
+/// Fetches a single VERSION (not just the object's current content) and
+/// extracts the CONTRIBUTION it was committed as part of, if the server
+/// includes that linkage — the EHR-level counterpart of
+/// `composition::get_composition_version_contribution`, shared by the
+/// EHR_STATUS and DIRECTORY commands below since both resources expose the
+/// same `.../versioned_{type}/version/{version_uid}` shape.
+async fn fetch_version_contribution(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    auth: &AuthMethod,
+) -> Result<Option<String>, String> {
+    let resp = send_instrumented(
+        app,
+        client,
+        make_request(client, reqwest::Method::GET, url, auth).header("Accept", "application/json"),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    let body: Value =
+        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse version: {}", e))?;
+
+    Ok(body
+        .get("contribution")
+        .and_then(|c| c.get("id"))
+        .and_then(|i| i.get("value"))
+        .and_then(|v| v.as_str())
+        .map(String::from))
+}
+
+/// Resolves the CONTRIBUTION a given EHR_STATUS version was committed as
+/// part of, for the Status history tab's "View Contribution" action.
+///
+/// Standard openEHR REST API endpoint:
+/// `GET /ehr/{ehr_id}/versioned_ehr_status/version/{version_uid}`.
+#[tauri::command]
+pub async fn get_ehr_status_version_contribution(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_uid: String,
+) -> Result<Option<String>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/versioned_ehr_status/version/{}",
+        base, ehr_id, version_uid
+    );
+    fetch_version_contribution(&app, &client, &url, &profile.auth_method).await
+}
+
+/// Resolves the CONTRIBUTION a given DIRECTORY version was committed as part
+/// of, for the reconstructed Contributions tab's "View Contribution" action.
+///
+/// Standard openEHR REST API endpoint:
+/// `GET /ehr/{ehr_id}/versioned_directory/version/{version_uid}`.
+#[tauri::command]
+pub async fn get_directory_version_contribution(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+    version_uid: String,
+) -> Result<Option<String>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = format!(
+        "{}/rest/openehr/v1/ehr/{}/versioned_directory/version/{}",
+        base, ehr_id, version_uid
+    );
+    fetch_version_contribution(&app, &client, &url, &profile.auth_method).await
+}
+
 // --- AQL-backed EHR search (PRD-0013) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1623,5 +1970,112 @@ mod tests {
         let external_ref = &status["subject"]["external_ref"];
         assert_eq!(external_ref["id"]["value"], "Testtest");
         assert_eq!(external_ref["id"]["scheme"], "ch.ahv");
+    }
+
+    // --- EHR_STATUS version fetch / at-time (OEH-47) ---
+
+    #[test]
+    fn test_build_ehr_status_url_latest() {
+        let url = build_ehr_status_url("https://cdr.example.com", "ehr-123", None, None);
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/ehr_status"
+        );
+    }
+
+    #[test]
+    fn test_build_ehr_status_url_specific_version() {
+        let url = build_ehr_status_url(
+            "https://cdr.example.com",
+            "ehr-123",
+            Some("uid::system::1"),
+            None,
+        );
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/ehr_status/uid::system::1"
+        );
+    }
+
+    #[test]
+    fn test_build_ehr_status_url_at_time() {
+        let url = build_ehr_status_url(
+            "https://cdr.example.com",
+            "ehr-123",
+            None,
+            Some("2026-08-25T12:00:00Z"),
+        );
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/ehr_status?version_at_time=2026-08-25T12%3A00%3A00Z"
+        );
+    }
+
+    // --- VERSIONED_EHR_STATUS / VERSIONED_DIRECTORY revision history (OEH-47) ---
+
+    #[test]
+    fn test_parse_revision_history_full_entry() {
+        let body = serde_json::json!([
+            {
+                "version_id": {"value": "abc123::local.ehrbase.org::1"},
+                "preceding_version_uid": null,
+                "audits": [
+                    {
+                        "change_type": {"value": "creation"},
+                        "committer": {"name": "Silvia"},
+                        "time_committed": {"value": "2026-08-25T10:00:00.000Z"},
+                        "description": {"value": "Initial commit"}
+                    }
+                ]
+            }
+        ]);
+        let entries = parse_revision_history(&body);
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry.version_id, "abc123::local.ehrbase.org::1");
+        assert!(entry.preceding_version_uid.is_none());
+        assert_eq!(
+            entry.time_committed.as_deref(),
+            Some("2026-08-25T10:00:00.000Z")
+        );
+        let audit = entry
+            .commit_audit
+            .as_ref()
+            .expect("audit should be present");
+        assert_eq!(audit.change_type.as_deref(), Some("creation"));
+        assert_eq!(audit.committer_name.as_deref(), Some("Silvia"));
+        assert_eq!(audit.description.as_deref(), Some("Initial commit"));
+    }
+
+    #[test]
+    fn test_parse_revision_history_accepts_items_wrapper() {
+        // Some CDRs wrap the array in an `items` field instead of returning
+        // it as the response body's top-level array.
+        let body = serde_json::json!({
+            "items": [
+                {"version_id": {"value": "v1"}, "audits": []}
+            ]
+        });
+        let entries = parse_revision_history(&body);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].version_id, "v1");
+        assert!(entries[0].commit_audit.is_none());
+    }
+
+    #[test]
+    fn test_parse_revision_history_empty() {
+        let body = serde_json::json!([]);
+        assert!(parse_revision_history(&body).is_empty());
+    }
+
+    #[test]
+    fn test_parse_revision_history_missing_audits() {
+        let body = serde_json::json!([
+            {"version_id": {"value": "v1"}}
+        ]);
+        let entries = parse_revision_history(&body);
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].commit_audit.is_none());
+        assert!(entries[0].time_committed.is_none());
     }
 }
