@@ -165,6 +165,10 @@ pub fn run() {
             settings::save_settings,
             // Terminology
             terminology::lookup_code,
+            terminology::describe_code,
+            terminology::expand_valueset,
+            terminology::validate_code,
+            terminology::test_subsumption,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

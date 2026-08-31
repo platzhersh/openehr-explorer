@@ -86,6 +86,8 @@ export type AnalyticsEvent =
   | "template_inspected"
   | "template_uploaded"
   | "template_opt_exported"
+  // --- terminology ---
+  | "terminology_query_run"
   // --- settings / engagement ---
   | "settings_saved"
   | "documentation_opened"
