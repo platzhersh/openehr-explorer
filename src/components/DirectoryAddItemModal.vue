@@ -11,9 +11,10 @@
  *    any other OBJECT_REF — a composition in a different EHR, or a
  *    reference to a non-COMPOSITION object entirely.
  *
- * Stays open after adding from the composition list so several items can be
- * added in one pass; the caller (DirectoryTreeEditor.vue) owns `open` and
- * decides when to close it.
+ * Closes itself after adding a reference (either path) — standard modal
+ * behavior, and what people expect after clicking a composition row or
+ * submitting the manual fields. Adding another reference means reopening
+ * via "+ Item reference".
  */
 import { ref, watch } from "vue";
 import type { CompositionOption } from "../lib/directoryEdit";
@@ -55,6 +56,7 @@ function addComposition(composition: CompositionOption) {
     namespace: "local",
     idScheme: "HIER_OBJECT_ID",
   });
+  emit("close");
 }
 
 function addManualReference() {
@@ -70,7 +72,7 @@ function addManualReference() {
     namespace: manualNamespace.value.trim() || "local",
     idScheme: manualIdScheme.value.trim() || "HIER_OBJECT_ID",
   });
-  manualIdValue.value = "";
+  emit("close");
 }
 
 function handleClose() {

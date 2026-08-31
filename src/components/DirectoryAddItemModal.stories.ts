@@ -53,8 +53,8 @@ export const NoCompositions: Story = {
 };
 
 /** Clicking a composition row emits `add` immediately, with COMPOSITION /
- *  local / HIER_OBJECT_ID filled in — the modal itself stays open so more
- *  than one reference can be added in a single pass. */
+ *  local / HIER_OBJECT_ID filled in, then closes the modal (`close`) —
+ *  adding a second reference means reopening via "+ Item reference". */
 export const ClickingACompositionAddsIt: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
@@ -66,23 +66,25 @@ export const ClickingACompositionAddsIt: Story = {
       namespace: "local",
       idScheme: "HIER_OBJECT_ID",
     });
+    await expect(args.onClose).toHaveBeenCalled();
   },
 };
 
 /** Manual entry requires an id value — submitting without one shows an
- *  inline error instead of emitting `add`. */
+ *  inline error instead of emitting `add`, and leaves the modal open. */
 export const ManualEntryRequiresAnIdValue: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: /add reference/i }));
     await expect(canvas.getByText(/enter an id value/i)).toBeVisible();
     await expect(args.onAdd).not.toHaveBeenCalled();
+    await expect(args.onClose).not.toHaveBeenCalled();
   },
 };
 
 /** A fully filled-in manual reference emits `add` with the entered fields,
  *  for a reference the composition list can't express (e.g. a different
- *  EHR's composition, or a non-COMPOSITION object). */
+ *  EHR's composition, or a non-COMPOSITION object) — then closes the modal. */
 export const ManualEntrySubmits: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
@@ -99,5 +101,6 @@ export const ManualEntrySubmits: Story = {
       namespace: "issuer.example.org",
       idScheme: "GENERIC_ID",
     });
+    await expect(args.onClose).toHaveBeenCalled();
   },
 };
