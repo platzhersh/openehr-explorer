@@ -71,8 +71,8 @@ const navGroups = [
           <li><strong>Disk space:</strong> ~10 MB</li>
         </ul>
         <p>
-          You will also need access to an openEHR CDR instance (such as <a href="https://ehrbase.org" target="_blank" rel="noopener">EHRBase</a>
-          or Better Platform) to connect to. The app does not include a built-in CDR.
+          You will also need access to an openEHR CDR instance (such as <a href="https://ehrbase.org" target="_blank" rel="noopener">EHRBase</a> or
+          Better Platform) to connect to. The app does not include a built-in CDR.
         </p>
       </section>
 
@@ -111,9 +111,9 @@ const navGroups = [
 
         <h3>Linux</h3>
         <p>
-          <strong>apt (Debian/Ubuntu, recommended):</strong> a self-hosted apt repository is published at
-          <a href="https://github.com/platzhersh/apt-openehr-explorer">platzhersh/apt-openehr-explorer</a> and updated automatically on every
-          release, so once added, updates arrive via the normal <code>apt upgrade</code> flow.
+          <strong>apt (Debian/Ubuntu, recommended):</strong> a self-hosted apt repository is published at <a
+            href="https://github.com/platzhersh/apt-openehr-explorer">platzhersh/apt-openehr-explorer</a
+          > and updated automatically on every release, so once added, updates arrive via the normal <code>apt upgrade</code> flow.
         </p>
         <CodeBlock
           client:load
@@ -131,9 +131,10 @@ const navGroups = [
           ]}
         />
         <p>
-          Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a>
-          for each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable
-          <code>.AppImage</code> (any distro).
+          Two package formats are also published directly on <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for
+          each version, for a one-off install or a distro without apt: a <code>.deb</code> package (Debian/Ubuntu) and a portable <code
+            >.AppImage</code
+          > (any distro).
         </p>
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
@@ -146,8 +147,8 @@ const navGroups = [
           segments={[{ cmd: "chmod +x openEHR.Explorer_0.8.0_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.8.0_amd64.AppImage" }]}
         />
         <p>
-          An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once
-          <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens.
+          An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
+          registration &mdash; currently paused archive-wide &mdash; reopens.
         </p>
       </section>
 
@@ -321,8 +322,9 @@ const navGroups = [
           <li>Full AQL paths are inserted automatically</li>
         </ul>
         <p>
-          Example: With a vital signs template selected, typing <code>obs/</code> suggests paths like
-          <code>data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude</code> with the label "Systolic".
+          Example: With a vital signs template selected, typing <code>obs/</code> suggests paths like <code
+            >data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude</code
+          > with the label "Systolic".
         </p>
 
         <Callout title="Pro Tip">Autocomplete activates as you type. Press <code>Ctrl+Space</code> to manually trigger suggestions at any time.</Callout>
