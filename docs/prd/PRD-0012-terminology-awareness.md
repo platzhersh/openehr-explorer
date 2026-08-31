@@ -1,7 +1,7 @@
 # PRD-0012: Terminology Awareness in Template Browser and Composition Viewer
 
 **Date:** 2026-04-05
-**Status:** Draft
+**Status:** Tier 1-3 implemented
 **Owner:** openEHR Explorer
 **Effort estimate:** S (Tier 1-2: ~1 day) / M (Tier 3: ~3 days)
 **Priority:** P1 (Should Have)
@@ -106,9 +106,46 @@ effective_url = profile.terminology_url   // per-profile override (optional)
 
 ---
 
-### Tier 3 — Web Template "Terminology Contract" Panel (P2, future)
+### Tier 3 — Terminology Browser (implemented, revised scope)
 
-Deferred to a follow-up PR. A dedicated panel in the Template Browser showing all external-coded nodes.
+**What shipped** differs from the originally-sketched "Web Template Terminology Contract Panel" (a
+panel embedded in the Template Browser listing all external-coded nodes). Instead, this tier became
+a standalone **Terminology Browser** view (`/terminology`, `src/views/TerminologyBrowser.vue`) — a
+general-purpose inspector for the FHIR terminology server already configured via PRD-0011's
+`terminology_url` hierarchy, independent of any one template. Rationale: term bindings describe a
+single code per node, not a bound value set, so there was no clean way to list "all coded nodes and
+their legal values" from data the app already parses — a standalone query tool made better use of
+the `$lookup`/`$expand`/`$validate-code`/`$subsumes` operations the terminology server already
+speaks, and generalizes beyond any one template.
+
+**Four operations**, each its own tab, all user-triggered (errors are surfaced, not swallowed —
+unlike the passive `lookup_code` resolution from Tier 2):
+
+- **Describe a Code** (`CodeSystem/$lookup`) — preferred term, designations (synonyms), and
+  properties (e.g. `parent`, `inactive`) for a single code. Richer than Tier 2's bare display string.
+- **Expand a Value Set** (`ValueSet/$expand`) — lists a value set's member concepts, with an optional
+  text filter and a result cap; each row can jump straight into "Describe a Code" for that concept.
+- **Validate Membership** (`ValueSet/$validate-code` / `CodeSystem/$validate-code`) — checks whether
+  a code is a legal member of a value set (or of the code system itself, if no value set is given).
+- **Test Subsumption** (`CodeSystem/$subsumes`) — the hierarchy relationship between two codes in the
+  same code system (`equivalent` / `subsumes` / `subsumed-by` / `not-subsumed`).
+
+**Deep link from Template Browser:** each row in the existing "Bound Concepts" panel (Tier 1) now
+carries a "Describe →" link that opens the Terminology Browser with that binding's system/code
+pre-filled and immediately resolved — closing the loop from "what does this node bind to" to "give me
+everything the terminology server knows about that code."
+
+**Affected files:**
+- `src-tauri/src/commands/terminology.rs` — `describe_code`, `expand_valueset`, `validate_code`,
+  `test_subsumption` commands, alongside the existing `lookup_code`
+- `src/lib/terminology.ts` — Vue-side wrappers for the four new commands
+- `src/views/TerminologyBrowser.vue` — the new view
+- `src/main.ts`, `src/components/AppSidebar.vue` — route + nav entry
+- `src/views/TemplateBrowser.vue` — "Describe →" deep link on each bound concept
+
+**Explicitly out of scope**, unchanged from the original non-goals: no terminology *search*/autocomplete
+widget wired into composition authoring (`CompositionForm.vue`), no `ConceptMap/$translate` support, no
+offline terminology distribution.
 
 ---
 
@@ -127,6 +164,14 @@ Deferred to a follow-up PR. A dedicated panel in the Template Browser showing al
 - [x] Add `terminology.ts` Vue utility with invoke wrapper
 - [x] Integrate into Composition Viewer Pretty pane — resolve codes on hover/expand
 
+### Phase 3: Tier 3 — Terminology Browser
+
+- [x] Add `describe_code`, `expand_valueset`, `validate_code`, `test_subsumption` commands to `terminology.rs`
+- [x] Add matching wrappers + types to `src/lib/terminology.ts`
+- [x] Build `TerminologyBrowser.vue` (Describe / Expand / Validate / Subsumes tabs) and register the `/terminology` route + sidebar entry
+- [x] Empty state when no terminology server is configured (global or per-profile)
+- [x] Deep link from Template Browser's Bound Concepts panel into the Describe tab
+
 ---
 
 ## Acceptance Criteria
@@ -144,6 +189,16 @@ Deferred to a follow-up PR. A dedicated panel in the Template Browser showing al
 - [x] When a URL is configured and a composition is opened, external coded values in the Pretty pane display as `{preferred term} [{system} {code}]`
 - [x] When the terminology server is unreachable, the viewer falls back gracefully to displaying the raw code with no error state
 - [x] Repeated codes within a session hit the in-memory cache, not the network
+
+### Tier 3
+
+- [x] The Terminology Browser is reachable from the sidebar and shows a clear empty state (with a link to Settings/Server Manager) when no terminology server is configured
+- [x] "Describe a Code" returns the preferred term, designations, and properties for a code
+- [x] "Expand a Value Set" lists a value set's member concepts with an optional text filter
+- [x] "Validate Membership" reports whether a code is valid, against either a value set or the code system itself
+- [x] "Test Subsumption" reports the hierarchy relationship between two codes
+- [x] Each operation surfaces terminology-server errors (unreachable, 404, unconfigured) directly, rather than degrading silently — these are user-triggered queries, not passive resolution
+- [x] Bound Concepts rows in the Template Browser link directly into "Describe a Code" with the binding pre-filled
 
 ---
 

@@ -16,6 +16,7 @@ const navItems = [
   { path: "/ehrs", label: "EHR Browser", icon: "H" },
   { path: "/templates", label: "Templates", icon: "T" },
   { path: "/aql", label: "AQL Runner", icon: "Q" },
+  { path: "/terminology", label: "Terminology", icon: "V" },
   { path: "/servers", label: "Servers", icon: "S" },
 ];
 

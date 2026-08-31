@@ -56,6 +56,11 @@ const router = createRouter({
       component: () => import("./views/AqlRunner.vue"),
     },
     {
+      path: "/terminology",
+      name: "terminology",
+      component: () => import("./views/TerminologyBrowser.vue"),
+    },
+    {
       path: "/servers",
       name: "servers",
       component: () => import("./views/ServerManager.vue"),
