@@ -1,0 +1,35 @@
+/*
+ * Design tokens — the single source of truth for the openEHR Explorer
+ * brand identity, as specified in docs/prd/PRD-0007-openehr-explorer-product-website.md
+ * and mirrored from the app's own CSS custom properties in src/App.vue.
+ *
+ * Previously these variables were copy-pasted into a <style> block at
+ * the top of every static docs/*.html page, and had already drifted
+ * once (compare.html's --text-muted didn't match the other three
+ * pages). Importing this file everywhere is what keeps that from
+ * happening again.
+ */
+:root {
+  --bg: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --surface: #1e2a4a;
+  --surface-hover: #253456;
+  --border: #2a3a5c;
+  --text: #e0e0e0;
+  --text-secondary: #8892b0;
+  --text-muted: #5a6a8a;
+  --primary: #64ffda;
+  --primary-dim: #3d9e85;
+  --primary-bg: rgba(100, 255, 218, 0.06);
+  --primary-border: rgba(100, 255, 218, 0.18);
+  --success: #6bff8e;
+  --warning: #ffd93d;
+  --error: #ff6b6b;
+  --planned: #818cf8;
+  --code-bg: #0d1117;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  --radius: 6px;
+  --hero-gradient: linear-gradient(135deg, #64ffda 0%, #38bdf8 60%, #818cf8 100%);
+}

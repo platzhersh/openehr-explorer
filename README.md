@@ -109,6 +109,7 @@ See the full, always-up-to-date **[Tool Comparison](https://platzhersh.github.io
 - [PRDs](docs/prd/) — product requirements for each feature
 - [ADRs](docs/adr/) — architecture decisions and rationale
 - [RELEASING.md](RELEASING.md) — release process
+- [website/](website/) — source for the docs/compare/brand-kit pages above (Astro + Vue, see `website/README.md`)
 
 ## Community
 

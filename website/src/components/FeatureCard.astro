@@ -1,0 +1,44 @@
+---
+// One tile in the landing page's feature grid. Previously six copies of
+// this markup were hand-written inline; the page now maps over a plain
+// data array (see src/pages/index.astro) instead.
+interface Props {
+  icon: string;
+  title: string;
+}
+const { icon, title } = Astro.props;
+---
+
+<div class="feature-card">
+  <div class="feature-icon" aria-hidden="true">{icon}</div>
+  <h3>{title}</h3>
+  <p><slot /></p>
+</div>
+
+<style>
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    transition: border-color 0.2s;
+  }
+  .feature-card:hover {
+    border-color: var(--primary-dim);
+  }
+  .feature-icon {
+    font-size: 1.8rem;
+    margin-bottom: 12px;
+  }
+  .feature-card h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+  .feature-card p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+</style>

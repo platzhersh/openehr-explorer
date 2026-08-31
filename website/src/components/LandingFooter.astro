@@ -1,0 +1,130 @@
+---
+// Rich multi-column footer used only by the landing page (index.astro).
+import Logo from "./Logo.astro";
+
+// See SiteHeader.astro for why these need the base prefix.
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
+---
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="footer-brand">
+          <Logo size={24} />
+          <span class="wordmark">openEHR Explorer</span>
+        </div>
+        <p class="footer-license">Apache 2.0 License</p>
+      </div>
+      <div class="footer-col">
+        <nav class="footer-links" aria-label="Footer navigation">
+          <a href={`${BASE}docs.html`}>Docs</a>
+          <a href={`${BASE}compare.html`}>Compare</a>
+          <a href={`${BASE}brand-kit.html`}>Brand Kit</a>
+          <a href="https://github.com/platzhersh/openehr-explorer" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a
+            href="https://discourse.openehr.org/t/openehr-explorer-a-cross-platform-desktop-cdr-browser-macos-windows-linux/17229"
+            target="_blank"
+            rel="noopener noreferrer">Announcement</a
+          >
+          <a href="https://discourse.openehr.org/" target="_blank" rel="noopener noreferrer">openEHR Discourse</a>
+          <a href="https://developer.openehr.org/tooling/query-tools/#openehr-explorer" target="_blank" rel="noopener noreferrer"
+            >openEHR Developer Tool Listing</a
+          >
+        </nav>
+      </div>
+      <div class="footer-col">
+        <p class="footer-heart">Built with &#10084;&#65039; for the openEHR community</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2026 <a href="https://github.com/platzhersh" target="_blank" rel="noopener noreferrer">@platzhersh</a> &middot; Not affiliated with
+      openEHR International
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 40px 0;
+  }
+  .footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .footer-cols {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  .footer-col {
+    flex: 1;
+    min-width: 180px;
+  }
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .footer-brand .wordmark {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .footer-license {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+  .footer-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+  .footer-links a {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    transition: color 0.2s;
+  }
+  .footer-links a:hover {
+    color: var(--text);
+  }
+  .footer-col:last-child {
+    text-align: right;
+  }
+  .footer-heart {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+  }
+  .footer-bottom {
+    text-align: center;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 768px) {
+    .footer-cols {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .footer-col:last-child {
+      text-align: center;
+    }
+    .footer-links {
+      text-align: center;
+    }
+  }
+</style>

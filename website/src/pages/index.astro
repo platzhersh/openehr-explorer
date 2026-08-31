@@ -1,0 +1,423 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import LandingFooter from "../components/LandingFooter.astro";
+import Logo from "../components/Logo.astro";
+import FeatureCard from "../components/FeatureCard.astro";
+import DownloadButton from "../components/vue/DownloadButton.vue";
+import DownloadsSparkline from "../components/vue/DownloadsSparkline.vue";
+import ScreenshotGallery from "../components/vue/ScreenshotGallery.vue";
+import CodeBlock from "../components/vue/CodeBlock.vue";
+
+// Root-relative, base-prefixed — see SiteHeader.astro for why a plain
+// relative path like "assets/..." or "docs.html" isn't safe here.
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
+
+const features = [
+  {
+    icon: "🖥️",
+    title: "Native Desktop App",
+    body: "Cross-platform (macOS, Windows, Linux). No Docker, no backend, no runtime. Installs in seconds.",
+  },
+  {
+    icon: "🔍",
+    title: "Template-Aware Viewer",
+    body: 'Compositions render with human-readable archetype labels — at0006 becomes "Any Event", not noise.',
+  },
+  {
+    icon: "⚡",
+    title: "AQL Query Runner",
+    body: "Write and execute AQL against your CDR. Results in a sortable table. Save queries, export CSV.",
+  },
+  {
+    icon: "🗂️",
+    title: "FLAT Path Panel",
+    body: "One-click copy of any FLAT path from the Web Template tree. Built for SDK and integration developers.",
+  },
+  {
+    icon: "🔌",
+    title: "Multi-Server Profiles",
+    body: "Save named connections to EHRBase, Better Platform, or any openEHR REST server. Switch instantly.",
+  },
+  {
+    icon: "🦀",
+    title: "Tauri-Powered",
+    body: "Rust (Tauri) + Vue 3. ~10 MB bundle, < 2 s launch time. No Electron overhead.",
+  },
+];
+
+const screenshots = [
+  {
+    src: `${BASE}assets/screenshots/01-ehr-browser.webp`,
+    alt: "EHR Browser showing a paginated list of EHRs on the left and a selected EHR's details plus grouped compositions on the right",
+    caption: "Browse EHRs and drill into their compositions, grouped by template.",
+    width: 1440,
+    height: 860,
+  },
+  {
+    src: `${BASE}assets/screenshots/04-templates.webp`,
+    alt: "Template Browser showing the list of templates on a server and an interactive OPT tree for the selected template",
+    caption: "Inspect Web Templates as a readable tree, with FLAT paths and raw OPT XML alongside.",
+    width: 1440,
+    height: 610,
+  },
+  {
+    src: `${BASE}assets/screenshots/06-aql-runner.webp`,
+    alt: "AQL Runner showing a query editor with a SELECT query and a tabular result set below it",
+    caption: "Write and run AQL queries with syntax highlighting, saved queries, and CSV export.",
+    width: 1440,
+    height: 645,
+  },
+];
+---
+
+<Layout
+  title="openEHR Explorer — Browse, Query, and Inspect Any openEHR CDR"
+  description="A native desktop app for browsing, querying, and inspecting openEHR CDR instances — a Postman alternative built for openEHR. Built with Tauri and Vue 3."
+  keywords="openEHR, openEHR Explorer, openEHR Postman, Postman alternative for openEHR, EHRBase, AQL, openEHR REST API, CDR browser"
+  path=""
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" is:inline>
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "openEHR Explorer",
+        "url": "https://platzhersh.github.io/openehr-explorer/",
+        "description": "A native desktop app for browsing, querying, and inspecting openEHR CDR instances — a Postman alternative built for openEHR. Built with Tauri and Vue 3.",
+        "keywords": "openEHR, openEHR Explorer, openEHR Postman, Postman alternative for openEHR, EHRBase, AQL, openEHR REST API",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Windows, Linux",
+        "softwareVersion": "0.8.0",
+        "image": "https://platzhersh.github.io/openehr-explorer/assets/og-image.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "codeRepository": "https://github.com/platzhersh/openehr-explorer"
+      }
+    </script>
+  </Fragment>
+
+  <SiteHeader current="home" />
+
+  <main>
+    <section class="hero">
+      <div class="hero-logo">
+        <Logo size={80} />
+      </div>
+      <h1>openEHR Explorer</h1>
+      <p class="hero-tagline">Browse, query, and inspect any openEHR CDR &mdash; no curl or Postman collection required.</p>
+      <div class="cta-group">
+        <DownloadButton client:load />
+        <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+      </div>
+      <p class="version-badge">v0.8.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href={`${BASE}docs.html#installation`}>Installation guide</a></p>
+      <p class="downloads-badge">
+        <a href="https://github.com/platzhersh/openehr-explorer/releases"
+          ><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads" /></a
+        >
+      </p>
+      <DownloadsSparkline client:load />
+    </section>
+
+    <section class="preview-strip">
+      <div class="preview-card">
+        <video
+          autoplay
+          loop
+          muted
+          playsinline
+          poster={`${BASE}assets/screenshots/07-aql-autocomplete.webp`}
+          aria-label="Screen recording of openEHR Explorer: adding a server profile and testing the connection, browsing EHRs, inspecting a Web Template, and writing an AQL query with template-aware autocomplete"
+        >
+          <source src={`${BASE}assets/demo.mp4`} type="video/mp4" />
+          <track kind="captions" src={`${BASE}assets/demo.vtt`} srclang="en" label="English" default />
+        </video>
+      </div>
+      <p class="preview-caption">Connect a server &middot; browse EHRs &middot; inspect templates &middot; AQL with autocomplete</p>
+    </section>
+
+    <ScreenshotGallery client:load screenshots={screenshots} />
+
+    <section class="features" id="features">
+      <h2 class="section-heading">Features</h2>
+      <div class="features-grid">
+        {features.map((f) => <FeatureCard icon={f.icon} title={f.title}>{f.body}</FeatureCard>)}
+      </div>
+    </section>
+
+    <section class="quickstart" id="quickstart">
+      <h2 class="section-heading">Get started in 30 seconds</h2>
+      <div class="quickstart-inner">
+        <h3>macOS (Homebrew)</h3>
+        <CodeBlock client:load segments={[{ cmd: "brew install --cask platzhersh/openehr-explorer/openehr-explorer" }]} />
+        <p class="quickstart-note">
+          Not yet notarized by Apple &mdash; on first launch, run <code>xattr -cr "/Applications/openEHR Explorer.app"</code> if macOS reports
+          the app as damaged.
+        </p>
+
+        <h3>Direct Download</h3>
+        <div class="code-block"><a href="https://github.com/platzhersh/openehr-explorer/releases">Download from GitHub Releases</a></div>
+        <p class="quickstart-note">
+          macOS: not yet notarized by Apple &mdash; if Gatekeeper reports the app as damaged on first launch, see <a
+            href={`${BASE}docs.html#troubleshooting`}>Troubleshooting</a
+          >.
+        </p>
+
+        <h3>Windows (Scoop)</h3>
+        <CodeBlock
+          client:load
+          segments={[
+            { cmd: "scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-explorer" },
+            { cmd: "scoop install openehr-explorer" },
+          ]}
+        />
+        <p class="quickstart-note">
+          Not yet Authenticode-signed &mdash; Windows SmartScreen may warn on first launch; click &ldquo;More info&rdquo; &rarr;
+          &ldquo;Run anyway&rdquo;. winget support is planned.
+        </p>
+
+        <h3>Linux (apt)</h3>
+        <CodeBlock
+          client:load
+          segments={[
+            {
+              cmd: "curl -fsSL https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main/openehr-explorer.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openehr-explorer.gpg",
+            },
+            {
+              cmd: 'echo "deb [signed-by=/usr/share/keyrings/openehr-explorer.gpg] https://raw.githubusercontent.com/platzhersh/apt-openehr-explorer/main stable main" | sudo tee /etc/apt/sources.list.d/openehr-explorer.list',
+            },
+            { cmd: "sudo apt update && sudo apt install open-ehr-explorer" },
+          ]}
+        />
+        <p class="quickstart-note">
+          Debian/Ubuntu (amd64) &mdash; future releases arrive via <code>apt upgrade</code>. Prefer a one-off install or another distro? Grab the <code
+            >.deb</code
+          >/<code>.AppImage</code> directly &mdash; see <a href={`${BASE}docs.html#installation`}>Installation</a>.
+        </p>
+      </div>
+    </section>
+
+    <section class="ecosystem">
+      <p>
+        Part of the openEHR developer tooling ecosystem &mdash; alongside <a href="https://platzhersh.github.io/oehrpy">oehrpy</a> (Python SDK) and <a
+          href="https://github.com/platzhersh/open-cis">Open CIS</a
+        > (reference clinical app). No runtime dependency between them &mdash; use any combination.
+      </p>
+      <p style="margin-top: 12px;">
+        Still reaching for Postman to poke at an openEHR CDR? See how openEHR Explorer compares as a <a
+          href={`${BASE}compare.html`}>Postman alternative for openEHR</a
+        >.
+      </p>
+    </section>
+  </main>
+
+  <LandingFooter />
+</Layout>
+
+<style>
+  .hero {
+    text-align: center;
+    padding: 80px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  .hero-logo {
+    animation: float 4s ease-in-out infinite;
+    margin-bottom: 32px;
+  }
+  .hero h1 {
+    font-size: 4rem;
+    font-weight: 600;
+    line-height: 1.1;
+    margin-bottom: 20px;
+    background: var(--hero-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-tagline {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    margin-bottom: 40px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .cta-group {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+  .btn:hover {
+    text-decoration: none;
+  }
+  /* .btn-primary lives in DownloadButton.vue's own scoped style now
+     (see ADR-0025/ADR-0026) — this page only needs .btn's base for the
+     plain-Astro .btn-secondary link below. */
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--primary-dim);
+  }
+  .version-badge {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+  .downloads-badge {
+    margin-top: 10px;
+  }
+
+  .preview-strip {
+    padding: 0 24px 80px;
+  }
+  .preview-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .preview-card svg,
+  .preview-card video,
+  .preview-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .preview-caption {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-top: 16px;
+    max-width: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .features {
+    padding: 80px 24px;
+  }
+  .section-heading {
+    font-size: 2rem;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 48px;
+    color: var(--text);
+  }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .quickstart {
+    padding: 80px 24px;
+  }
+  .quickstart-inner {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .quickstart-inner h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    margin-top: 32px;
+    color: var(--text);
+  }
+  .quickstart-inner h3:first-of-type {
+    margin-top: 0;
+  }
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--primary);
+    overflow-x: auto;
+    line-height: 1.7;
+  }
+  .code-block a {
+    color: var(--primary);
+  }
+  .quickstart-note {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .quickstart-note code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--text-secondary);
+  }
+
+  .ecosystem {
+    background: var(--surface);
+    padding: 40px 24px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .ecosystem p {
+    max-width: 800px;
+    margin: 0 auto;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 48px 24px;
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+    }
+    .hero-tagline {
+      font-size: 1.15rem;
+    }
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .features-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
