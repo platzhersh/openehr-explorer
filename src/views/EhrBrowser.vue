@@ -267,10 +267,16 @@ const contributionRows = ref<ContributionRow[]>([]);
 const contributionRowsLoading = ref(false);
 const contributionRowsError = ref<string | null>(null);
 const contributionRowsLoaded = ref(false);
+// Set when at least one (but not all) of the revision-history sources below
+// failed to load — the table still shows whatever succeeded, but the
+// missing source(s) are named so it's clear the table is incomplete rather
+// than genuinely empty for those sources.
+const contributionRowsPartialWarning = ref<string | null>(null);
 
 function clearContributions() {
   contributionRows.value = [];
   contributionRowsError.value = null;
+  contributionRowsPartialWarning.value = null;
   contributionRowsLoading.value = false;
   contributionRowsLoaded.value = false;
   contributionLookupError.value = null;
@@ -291,6 +297,15 @@ function toContributionRow(
   };
 }
 
+interface RevisionHistorySource {
+  /** Human-readable name for the partial-failure warning, e.g. "DIRECTORY"
+   *  or "Composition: Vital Signs". */
+  label: string;
+  source: ContributionSource;
+  sourceDetail: string | null;
+  promise: Promise<RevisionHistoryEntry[]>;
+}
+
 async function loadContributions() {
   if (!serverStore.activeServerId || !ehrId.value || !ehrStore.selectedEhr) return;
   const serverId = serverStore.activeServerId;
@@ -299,36 +314,69 @@ async function loadContributions() {
 
   contributionRowsLoading.value = true;
   contributionRowsError.value = null;
-  try {
-    const [statusHistory, directoryHistory, ...compositionHistories] = await Promise.all([
-      invoke<RevisionHistoryEntry[]>("get_ehr_status_versions", { serverId, ehrId: id }),
-      invoke<RevisionHistoryEntry[]>("get_directory_versions", { serverId, ehrId: id }),
-      ...compositions.map((comp) =>
-        invoke<RevisionHistoryEntry[]>("get_composition_versions", {
+  contributionRowsPartialWarning.value = null;
+
+  // Each source is fetched independently (Promise.allSettled, not
+  // Promise.all) — a composition, EHR_STATUS, or DIRECTORY revision-history
+  // request failing shouldn't discard every other history that succeeded.
+  const sources: RevisionHistorySource[] = [
+    {
+      label: "EHR_STATUS",
+      source: "EHR_STATUS",
+      sourceDetail: null,
+      promise: invoke<RevisionHistoryEntry[]>("get_ehr_status_versions", { serverId, ehrId: id }),
+    },
+    {
+      label: "DIRECTORY",
+      source: "DIRECTORY",
+      sourceDetail: null,
+      promise: invoke<RevisionHistoryEntry[]>("get_directory_versions", { serverId, ehrId: id }),
+    },
+    ...compositions.map((comp): RevisionHistorySource => {
+      const detail = comp.template_id ?? comp.name ?? comp.uid;
+      return {
+        label: `Composition: ${detail}`,
+        source: "Composition",
+        sourceDetail: detail,
+        promise: invoke<RevisionHistoryEntry[]>("get_composition_versions", {
           serverId,
           ehrId: id,
           versionedObjectUid: comp.uid.split("::")[0],
-        }).then((versions) => ({ label: comp.template_id ?? comp.name ?? comp.uid, versions })),
-      ),
-    ]);
+        }),
+      };
+    }),
+  ];
 
-    const rows: ContributionRow[] = [
-      ...statusHistory.map((v) => toContributionRow("EHR_STATUS", null, v)),
-      ...directoryHistory.map((v) => toContributionRow("DIRECTORY", null, v)),
-      ...compositionHistories.flatMap(({ label, versions }) =>
-        versions.map((v) => toContributionRow("Composition", label, v)),
-      ),
-    ];
-    // Newest first — entries without a committed timestamp (shouldn't
-    // normally happen) sort to the end rather than the top.
-    rows.sort((a, b) => (b.time_committed ?? "").localeCompare(a.time_committed ?? ""));
+  const settled = await Promise.allSettled(sources.map((s) => s.promise));
 
-    contributionRows.value = rows;
-    contributionRowsLoaded.value = true;
-  } catch (e) {
-    contributionRowsError.value = String(e);
-  } finally {
-    contributionRowsLoading.value = false;
+  const rows: ContributionRow[] = [];
+  const failed: { label: string; reason: unknown }[] = [];
+  settled.forEach((result, i) => {
+    const { source, sourceDetail, label } = sources[i];
+    if (result.status === "fulfilled") {
+      for (const v of result.value) rows.push(toContributionRow(source, sourceDetail, v));
+    } else {
+      failed.push({ label, reason: result.reason });
+    }
+  });
+  // Newest first — entries without a committed timestamp (shouldn't
+  // normally happen) sort to the end rather than the top.
+  rows.sort((a, b) => (b.time_committed ?? "").localeCompare(a.time_committed ?? ""));
+
+  contributionRowsLoading.value = false;
+
+  if (failed.length === sources.length) {
+    // Every source failed — this isn't "no contributions", it's a real
+    // failure, so report it as one (and leave contributionRowsLoaded false
+    // so reselecting the tab retries, matching directoryLoaded's convention).
+    contributionRowsError.value = String(failed[0].reason);
+    return;
+  }
+
+  contributionRows.value = rows;
+  contributionRowsLoaded.value = true;
+  if (failed.length > 0) {
+    contributionRowsPartialWarning.value = `Some sources failed to load and are missing from this table: ${failed.map((f) => f.label).join(", ")}.`;
   }
 }
 
@@ -1492,48 +1540,53 @@ function lookupContribution() {
             <h3>Failed to load contributions</h3>
             <p class="error-detail">{{ contributionRowsError }}</p>
           </div>
-          <template v-else-if="contributionRows.length > 0">
-            <div class="activity-chart" v-if="activityByDay.length > 1">
-              <div
-                v-for="bucket in activityByDay"
-                :key="bucket.day"
-                class="activity-bar"
-                :title="`${bucket.day}: ${bucket.count} commit(s)`"
-              >
-                <div class="activity-bar-fill" :style="{ height: bucket.pct + '%' }"></div>
-              </div>
+          <template v-else>
+            <div v-if="contributionRowsPartialWarning" class="limit-banner">
+              {{ contributionRowsPartialWarning }}
             </div>
-            <div class="version-list">
-              <div
-                v-for="row in contributionRows"
-                :key="`${row.source}-${row.version_id}`"
-                class="version-row"
-              >
-                <div class="version-row-main">
-                  <div class="version-row-meta">
-                    <span class="badge badge-source">{{ row.source }}</span>
-                    <span v-if="row.sourceDetail">{{ row.sourceDetail }}</span>
-                  </div>
-                  <div class="version-row-id mono">{{ row.version_id }}</div>
-                  <div class="version-row-meta">
-                    <span v-if="row.change_type" class="badge">{{ row.change_type }}</span>
-                    <span v-if="row.committer_name">{{ row.committer_name }}</span>
-                    <span v-if="row.time_committed">{{ row.time_committed }}</span>
-                  </div>
+            <template v-if="contributionRows.length > 0">
+              <div class="activity-chart" v-if="activityByDay.length > 1">
+                <div
+                  v-for="bucket in activityByDay"
+                  :key="bucket.day"
+                  class="activity-bar"
+                  :title="`${bucket.day}: ${bucket.count} commit(s)`"
+                >
+                  <div class="activity-bar-fill" :style="{ height: bucket.pct + '%' }"></div>
                 </div>
-                <button type="button" class="btn btn-sm" @click="viewContributionForRow(row)">
-                  View Contribution
-                </button>
               </div>
+              <div class="version-list">
+                <div
+                  v-for="row in contributionRows"
+                  :key="`${row.source}-${row.version_id}`"
+                  class="version-row"
+                >
+                  <div class="version-row-main">
+                    <div class="version-row-meta">
+                      <span class="badge badge-source">{{ row.source }}</span>
+                      <span v-if="row.sourceDetail">{{ row.sourceDetail }}</span>
+                    </div>
+                    <div class="version-row-id mono">{{ row.version_id }}</div>
+                    <div class="version-row-meta">
+                      <span v-if="row.change_type" class="badge">{{ row.change_type }}</span>
+                      <span v-if="row.committer_name">{{ row.committer_name }}</span>
+                      <span v-if="row.time_committed">{{ row.time_committed }}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-sm" @click="viewContributionForRow(row)">
+                    View Contribution
+                  </button>
+                </div>
+              </div>
+            </template>
+            <div v-else class="empty-state">
+              <h3>No contributions found</h3>
+              <p>
+                No revision history was reported for this EHR's compositions, EHR_STATUS, or
+                DIRECTORY.
+              </p>
             </div>
           </template>
-          <div v-else class="empty-state">
-            <h3>No contributions found</h3>
-            <p>
-              No revision history was reported for this EHR's compositions, EHR_STATUS, or
-              DIRECTORY.
-            </p>
-          </div>
 
           <h3 class="section-title contribution-lookup-title">Look up by UID</h3>
           <div class="contribution-lookup">

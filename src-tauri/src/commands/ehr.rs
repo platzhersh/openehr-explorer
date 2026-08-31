@@ -1089,6 +1089,16 @@ async fn fetch_revision_history(
     )
     .await?;
 
+    // A 404 here means "no such VERSIONED_OBJECT" — most commonly a
+    // DIRECTORY that was never created for this EHR (see fetch_directory's
+    // own 404 handling above) — which is an empty history, not a failure.
+    // Without this, one EHR with no DIRECTORY would fail the whole
+    // Contributions-tab reconstruction in EhrBrowser.vue, which unions this
+    // with the composition and EHR_STATUS histories via Promise.all.
+    if resp.status == 404 {
+        return Ok(Vec::new());
+    }
+
     if !resp.is_success {
         return Err(http_error(&resp));
     }
