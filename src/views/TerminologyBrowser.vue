@@ -288,6 +288,12 @@ function useConceptInLookup(concept: TerminologyConcept) {
           <div v-if="lookupResult.properties.length" class="result-section">
             <h4>Properties</h4>
             <table class="result-table">
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="(p, i) in lookupResult.properties" :key="i">
                   <td class="prop-code">{{ p.code }}</td>
