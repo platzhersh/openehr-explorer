@@ -999,6 +999,41 @@ function clearCompositionFilters() {
 // list. Date filtering compares just the YYYY-MM-DD portion of
 // time_committed against the (inclusive) from/to bounds, so a composition
 // committed at any time during the "to" day is still included.
+/** Whether `timeCommitted`'s date portion falls within the inclusive
+ *  [from, to] bound — either side empty means unbounded on that side. A
+ *  composition with no time_committed can never match a non-empty range. */
+function compositionMatchesDateRange(
+  timeCommitted: string | null,
+  from: string,
+  to: string,
+): boolean {
+  if (!from && !to) return true;
+  const day = timeCommitted?.slice(0, 10);
+  if (!day) return false;
+  if (from && day < from) return false;
+  return !(to && day > to);
+}
+
+/** All three Compositions-tab filters as a single predicate, pulled out of
+ *  compositionsByTemplate's loop so that computed stays a flat filter+group
+ *  instead of a nest of per-field conditionals (SonarCloud flagged the
+ *  latter's Cognitive Complexity). */
+function compositionMatchesFilters(
+  comp: CompositionSummary,
+  templateQuery: string,
+  composerQuery: string,
+  from: string,
+  to: string,
+): boolean {
+  if (templateQuery && !(comp.template_id ?? "").toLowerCase().includes(templateQuery)) {
+    return false;
+  }
+  if (composerQuery && !(comp.composer ?? "").toLowerCase().includes(composerQuery)) {
+    return false;
+  }
+  return compositionMatchesDateRange(comp.time_committed, from, to);
+}
+
 const compositionsByTemplate = computed(() => {
   if (!ehrStore.selectedEhr) return {};
   const templateQuery = compositionFilterTemplate.value.trim().toLowerCase();
@@ -1008,14 +1043,7 @@ const compositionsByTemplate = computed(() => {
 
   const groups: Record<string, CompositionSummary[]> = {};
   for (const comp of ehrStore.selectedEhr.compositions) {
-    if (templateQuery && !(comp.template_id ?? "").toLowerCase().includes(templateQuery)) continue;
-    if (composerQuery && !(comp.composer ?? "").toLowerCase().includes(composerQuery)) continue;
-    if (from || to) {
-      const day = comp.time_committed?.slice(0, 10);
-      if (!day) continue;
-      if (from && day < from) continue;
-      if (to && day > to) continue;
-    }
+    if (!compositionMatchesFilters(comp, templateQuery, composerQuery, from, to)) continue;
     const key = comp.template_id ?? "(no template)";
     if (!groups[key]) groups[key] = [];
     groups[key].push(comp);
