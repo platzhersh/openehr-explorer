@@ -139,6 +139,15 @@ export const useEhrStore = defineStore("ehr", () => {
   const directoryRevisionHistory = ref<DirectoryRevision[]>([]);
   const directoryRevisionHistoryLoading = ref(false);
   const directoryRevisionHistoryError = ref<string | null>(null);
+  // Same "distinguish a real empty result from never-fetched" role as
+  // `directoryLoaded` above, for the exact same reason: an EHR whose
+  // DIRECTORY has no revision history at all is a normal, stable result —
+  // without this, `toggleDirectoryHistoryPanel`'s "already have data, skip
+  // fetching" gate (keyed off `.length === 0`) would refetch on every panel
+  // reopen for such an EHR, since an empty array looks identical to one that
+  // was never populated. Left false after a failure so the next reselect
+  // retries, same as `directoryLoaded`.
+  const directoryRevisionHistoryLoaded = ref(false);
 
   const directoryVersionPreview = ref<Record<string, unknown> | null>(null);
   const directoryVersionPreviewLoading = ref(false);
@@ -343,14 +352,15 @@ export const useEhrStore = defineStore("ehr", () => {
 
   /** Drops the cached revision history without touching anything else — for
    *  a mutation (save/delete) that happens while the "Version history" panel
-   *  is closed. `fetchDirectoryRevisionHistory`'s own gate is "already have a
-   *  non-empty list, skip fetching" (see `toggleDirectoryHistoryPanel` in
-   *  EhrBrowser.vue), so leaving a stale list in place after a mutation would
-   *  make the next panel-open silently show outdated revisions instead of
-   *  fetching fresh ones. */
+   *  is closed. `fetchDirectoryRevisionHistory`'s own gate is "already
+   *  loaded, skip fetching" (see `toggleDirectoryHistoryPanel` in
+   *  EhrBrowser.vue), so leaving a stale list — and `directoryRevisionHistoryLoaded`
+   *  still true — in place after a mutation would make the next panel-open
+   *  silently show outdated revisions instead of fetching fresh ones. */
   function invalidateDirectoryRevisionHistory() {
     directoryHistoryRequestId++; // invalidate any in-flight fetch too
     directoryRevisionHistory.value = [];
+    directoryRevisionHistoryLoaded.value = false;
   }
 
   function clearDirectory() {
@@ -363,6 +373,7 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryRevisionHistory.value = [];
     directoryRevisionHistoryLoading.value = false;
     directoryRevisionHistoryError.value = null;
+    directoryRevisionHistoryLoaded.value = false;
     clearDirectoryVersionPreview();
   }
 
@@ -461,10 +472,12 @@ export const useEhrStore = defineStore("ehr", () => {
       });
       if (requestId !== directoryHistoryRequestId) return; // superseded by a newer request
       directoryRevisionHistory.value = result;
+      directoryRevisionHistoryLoaded.value = true;
     } catch (e) {
       if (requestId !== directoryHistoryRequestId) return;
       directoryRevisionHistory.value = [];
       directoryRevisionHistoryError.value = String(e);
+      // directoryRevisionHistoryLoaded stays false — a later reselect retries.
     } finally {
       if (requestId === directoryHistoryRequestId) directoryRevisionHistoryLoading.value = false;
     }
@@ -556,6 +569,7 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryRevisionHistory,
     directoryRevisionHistoryLoading,
     directoryRevisionHistoryError,
+    directoryRevisionHistoryLoaded,
     directoryVersionPreview,
     directoryVersionPreviewLoading,
     directoryVersionPreviewError,

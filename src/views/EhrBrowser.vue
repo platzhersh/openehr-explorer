@@ -1138,7 +1138,7 @@ function toggleDirectoryHistoryPanel() {
     showDirectoryHistoryPanel.value &&
     serverStore.activeServerId &&
     ehrId.value &&
-    ehrStore.directoryRevisionHistory.length === 0 &&
+    !ehrStore.directoryRevisionHistoryLoaded &&
     !ehrStore.directoryRevisionHistoryLoading
   ) {
     ehrStore.fetchDirectoryRevisionHistory(serverStore.activeServerId, ehrId.value);
@@ -2168,11 +2168,11 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             </div>
             <template v-if="contributionRows.length > 0">
               <div class="activity-chart" v-if="activityByDay.length > 1">
-                <div
+                <button
                   v-for="bucket in activityByDay"
                   :key="bucket.day"
+                  type="button"
                   class="activity-bar"
-                  tabindex="0"
                   :aria-label="`${bucket.day}: ${bucket.count} commit${bucket.count === 1 ? '' : 's'}`"
                 >
                   <div class="activity-bar-fill" :style="{ height: bucket.pct + '%' }"></div>
@@ -2182,7 +2182,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
                     >
                     <span class="activity-bar-tooltip-day">{{ bucket.day }}</span>
                   </div>
-                </div>
+                </button>
               </div>
               <div class="version-list">
                 <div
@@ -3123,7 +3123,11 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   justify-content: center;
   min-width: 2px;
   margin: 0 auto;
+  padding: 0;
+  border: none;
   border-radius: 2px;
+  background: none;
+  font: inherit;
   cursor: default;
   transition: background-color 0.15s;
 }
