@@ -128,10 +128,15 @@ pub fn run() {
             ehr::search_ehrs,
             ehr::get_directory,
             ehr::get_directory_version,
-            ehr::get_directory_revision_history,
             ehr::create_directory,
             ehr::update_directory,
             ehr::delete_directory,
+            ehr::get_directory_versions,
+            ehr::get_directory_version_contribution,
+            ehr::get_ehr_status,
+            ehr::get_ehr_status_version,
+            ehr::get_ehr_status_versions,
+            ehr::get_ehr_status_version_contribution,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,
@@ -166,6 +171,10 @@ pub fn run() {
             settings::save_settings,
             // Terminology
             terminology::lookup_code,
+            terminology::describe_code,
+            terminology::expand_valueset,
+            terminology::validate_code,
+            terminology::test_subsumption,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

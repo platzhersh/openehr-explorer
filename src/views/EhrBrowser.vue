@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, provide } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import {
   useEhrStore,
@@ -56,7 +57,9 @@ const showDeleteDialog = ref(false);
 const deleteConfirmText = ref("");
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
-const activeTab = ref<"detail" | "directory" | "json" | "contributions">("detail");
+const activeTab = ref<
+  "detail" | "directory" | "status" | "compositions" | "json" | "contributions"
+>("detail");
 
 // DIRECTORY create/update/delete (OEH-27 follow-up) — editing state for the
 // Directory tab. `editableDirectory` is a plain-field working copy (see
@@ -121,6 +124,584 @@ provide(DIRECTORY_MUTATIONS_KEY, {
 
 const contributionLookupUid = ref("");
 const contributionLookupError = ref<string | null>(null);
+
+// --- Status history tab (OEH-47) ---
+// EHR_STATUS is a VERSIONED_OBJECT, same as compositions — this mirrors the
+// composition Versions tab in CompositionViewer.vue: a revision-history
+// table plus an "at a point in time" fetch and a version-document preview.
+interface RevisionCommitAudit {
+  change_type: string | null;
+  committer_name: string | null;
+  time_committed: string | null;
+  description: string | null;
+}
+interface RevisionHistoryEntry {
+  version_id: string;
+  preceding_version_uid: string | null;
+  commit_audit: RevisionCommitAudit | null;
+  time_committed: string | null;
+}
+const statusVersions = ref<RevisionHistoryEntry[]>([]);
+const statusVersionsLoading = ref(false);
+const statusVersionsError = ref<string | null>(null);
+// Same "confirmed vs. never attempted" distinction as directoryLoaded — an
+// empty revision history is itself a stable, successful result.
+const statusVersionsLoaded = ref(false);
+const statusContributionError = ref<string | null>(null);
+
+// The document currently shown in the preview panel — either a specific
+// historical version (via "Open" on a revision row) or the version in
+// effect "at a point in time" (via the date picker below).
+const statusPreview = ref<Record<string, unknown> | null>(null);
+const statusPreviewLabel = ref<string | null>(null);
+const statusPreviewLoading = ref(false);
+const statusPreviewError = ref<string | null>(null);
+// `datetime-local` input value (no timezone) for the "at a point in time" picker.
+const statusAtTimeInput = ref("");
+
+// Bumped by clearStatusHistory() (called on every EHR/server switch — see
+// the watchers below) so a slow response for a since-abandoned EHR/server
+// can't land after a newer request and populate Status History (or its
+// preview panel) for the wrong EHR. Same pattern as ehr.ts's
+// fetchRequestId/directoryRequestId.
+let statusVersionsRequestId = 0;
+let statusPreviewRequestId = 0;
+
+function clearStatusHistory() {
+  statusVersionsRequestId++; // invalidate any in-flight fetchStatusVersions call
+  statusPreviewRequestId++; // invalidate any in-flight preview-panel load
+  statusVersions.value = [];
+  statusVersionsError.value = null;
+  statusVersionsLoading.value = false;
+  statusVersionsLoaded.value = false;
+  statusContributionError.value = null;
+  statusPreview.value = null;
+  statusPreviewLabel.value = null;
+  statusPreviewError.value = null;
+}
+
+async function fetchStatusVersions() {
+  if (!serverStore.activeServerId || !ehrId.value) return;
+  const requestId = ++statusVersionsRequestId;
+  statusVersionsLoading.value = true;
+  statusVersionsError.value = null;
+  try {
+    const result = await invoke<RevisionHistoryEntry[]>("get_ehr_status_versions", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+    });
+    if (requestId !== statusVersionsRequestId) return; // superseded by a newer request
+    // The Rust command always returns a real (possibly empty) array — the
+    // fallback here is just defensive insurance against a malformed IPC
+    // response, not an expected case.
+    statusVersions.value = result ?? [];
+    statusVersionsLoaded.value = true;
+  } catch (e) {
+    if (requestId !== statusVersionsRequestId) return;
+    statusVersionsError.value = String(e);
+  } finally {
+    if (requestId === statusVersionsRequestId) statusVersionsLoading.value = false;
+  }
+}
+
+function selectStatusHistoryTab() {
+  activeTab.value = "status";
+  if (
+    ehrId.value &&
+    serverStore.activeServerId &&
+    !statusVersionsLoaded.value &&
+    !statusVersionsLoading.value
+  ) {
+    fetchStatusVersions();
+  }
+}
+
+/** Loads a specific historical EHR_STATUS version into the preview panel. */
+async function viewStatusVersion(versionId: string) {
+  if (!serverStore.activeServerId || !ehrId.value) return;
+  const requestId = ++statusPreviewRequestId;
+  statusPreviewLoading.value = true;
+  statusPreviewError.value = null;
+  try {
+    const result = await invoke<Record<string, unknown> | null>("get_ehr_status_version", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionUid: versionId,
+    });
+    if (requestId !== statusPreviewRequestId) return; // superseded by a newer request
+    statusPreview.value = result;
+    statusPreviewLabel.value = versionId;
+  } catch (e) {
+    if (requestId !== statusPreviewRequestId) return;
+    statusPreviewError.value = String(e);
+  } finally {
+    if (requestId === statusPreviewRequestId) statusPreviewLoading.value = false;
+  }
+}
+
+/** Loads the EHR_STATUS version in effect at `statusAtTimeInput` into the
+ *  preview panel — the "at a point in time" view. */
+async function viewStatusAtTime() {
+  if (!serverStore.activeServerId || !ehrId.value || !statusAtTimeInput.value) return;
+  const requestId = ++statusPreviewRequestId;
+  statusPreviewLoading.value = true;
+  statusPreviewError.value = null;
+  const isoTime = new Date(statusAtTimeInput.value).toISOString();
+  try {
+    const result = await invoke<Record<string, unknown> | null>("get_ehr_status", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionAtTime: isoTime,
+    });
+    if (requestId !== statusPreviewRequestId) return; // superseded by a newer request
+    statusPreview.value = result;
+    statusPreviewLabel.value = `At ${isoTime}`;
+    if (statusPreview.value === null) {
+      statusPreviewError.value = "No EHR_STATUS version was in effect at that time.";
+    }
+  } catch (e) {
+    if (requestId !== statusPreviewRequestId) return;
+    statusPreviewError.value = String(e);
+  } finally {
+    if (requestId === statusPreviewRequestId) statusPreviewLoading.value = false;
+  }
+}
+
+/** Resolves the CONTRIBUTION an EHR_STATUS version was committed as part of,
+ *  then navigates to the Contribution viewer — same pattern as the
+ *  composition Versions tab's "View Contribution". */
+async function viewStatusContribution(versionId: string) {
+  if (!serverStore.activeServerId || !ehrId.value) return;
+  statusContributionError.value = null;
+  try {
+    const contributionUid = await invoke<string | null>("get_ehr_status_version_contribution", {
+      serverId: serverStore.activeServerId,
+      ehrId: ehrId.value,
+      versionUid: versionId,
+    });
+    if (!contributionUid) {
+      statusContributionError.value =
+        "This server did not report a contribution reference for this version.";
+      return;
+    }
+    router.push({
+      name: "contribution",
+      params: { ehrId: ehrId.value, contributionUid },
+    });
+  } catch (e) {
+    statusContributionError.value = String(e);
+  }
+}
+
+// --- Contributions tab reconstruction (OEH-47) ---
+// openEHR has no "list contributions for an EHR" endpoint — only GET-by-UID
+// (see the manual lookup form below) — so this reconstructs the table by
+// unioning the revision histories of every VERSIONED_OBJECT under the EHR:
+// every composition, EHR_STATUS, and DIRECTORY. A single CONTRIBUTION can
+// bundle several VERSIONs (e.g. a composition create alongside an
+// EHR_STATUS update committed together), so rows are grouped by resolved
+// CONTRIBUTION UID rather than shown one-per-version — otherwise a bundled
+// contribution would appear duplicated, once per object it touched.
+type ContributionSource = "Composition" | "EHR_STATUS" | "DIRECTORY";
+interface ContributionComponent {
+  source: ContributionSource;
+  sourceDetail: string | null;
+  version_id: string;
+}
+interface ContributionRow {
+  /** Null when this server didn't report a contribution reference for any
+   *  of the row's version(s) — shown as its own unresolved row rather than
+   *  silently dropped. */
+  contribution_uid: string | null;
+  components: ContributionComponent[];
+  change_type: string | null;
+  committer_name: string | null;
+  time_committed: string | null;
+}
+const contributionRows = ref<ContributionRow[]>([]);
+const contributionRowsLoading = ref(false);
+const contributionRowsError = ref<string | null>(null);
+const contributionRowsLoaded = ref(false);
+// Set when at least one (but not all) of the revision-history sources below
+// failed to load, or when at least one version's contribution reference
+// couldn't be resolved — the table still shows whatever succeeded, with a
+// note on what's incomplete rather than looking like a genuinely short list.
+const contributionRowsPartialWarning = ref<string | null>(null);
+
+// Bumped by clearContributions() (called on every EHR/server switch — see
+// the watchers below) so a slow response for a since-abandoned EHR/server
+// can't land after a newer request and populate this tab for the wrong EHR.
+let contributionsRequestId = 0;
+
+function clearContributions() {
+  contributionsRequestId++; // invalidate any in-flight loadContributions call
+  contributionRows.value = [];
+  contributionRowsError.value = null;
+  contributionRowsPartialWarning.value = null;
+  contributionRowsLoading.value = false;
+  contributionRowsLoaded.value = false;
+  contributionLookupError.value = null;
+}
+
+interface RevisionHistorySource {
+  /** Human-readable name for the partial-failure warning, e.g. "DIRECTORY"
+   *  or "Composition: Vital Signs". */
+  label: string;
+  source: ContributionSource;
+  sourceDetail: string | null;
+  promise: Promise<RevisionHistoryEntry[]>;
+}
+
+/** One revision-history entry, still tagged with which VERSIONED_OBJECT it
+ *  came from — the unit `loadContributions` resolves a CONTRIBUTION UID for
+ *  and then groups by that UID. */
+interface SourcedVersionEntry {
+  source: ContributionSource;
+  sourceDetail: string | null;
+  entry: RevisionHistoryEntry;
+}
+
+/** Resolves the CONTRIBUTION a single version belongs to, dispatching to
+ *  whichever resolver command matches its source VERSIONED_OBJECT. Shared
+ *  by loadContributions (eager, for grouping) — previously this dispatch
+ *  lived inline in a per-click handler; it's now purely a lookup. */
+function resolveVersionContribution(
+  serverId: string,
+  ehrId: string,
+  sv: SourcedVersionEntry,
+): Promise<string | null> {
+  if (sv.source === "EHR_STATUS") {
+    return invoke<string | null>("get_ehr_status_version_contribution", {
+      serverId,
+      ehrId,
+      versionUid: sv.entry.version_id,
+    });
+  }
+  if (sv.source === "DIRECTORY") {
+    return invoke<string | null>("get_directory_version_contribution", {
+      serverId,
+      ehrId,
+      versionUid: sv.entry.version_id,
+    });
+  }
+  return invoke<string | null>("get_composition_version_contribution", {
+    serverId,
+    ehrId,
+    versionedObjectUid: sv.entry.version_id.split("::")[0],
+    versionUid: sv.entry.version_id,
+  });
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight at once. Resolving
+ *  a CONTRIBUTION UID per version could otherwise fire one request per
+ *  composition version all at once for an EHR with a long history — mirrors
+ *  the CONCURRENCY cap in filter_by_directory_presence
+ *  (src-tauri/src/commands/ehr.rs). */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = Array.from({ length: items.length });
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      try {
+        results[index] = { status: "fulfilled", value: await fn(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** Groups resolved (version, contributionUid) pairs into one row per
+ *  CONTRIBUTION — versions that share a UID become one row's `components`;
+ *  a version with no resolvable UID becomes its own row (contribution_uid:
+ *  null) rather than being dropped. change_type/committer/time_committed
+ *  are taken from the first version in the group — they're expected to
+ *  match across every version committed as part of the same CONTRIBUTION. */
+function groupByContribution(
+  entries: { sv: SourcedVersionEntry; contributionUid: string | null }[],
+): ContributionRow[] {
+  const groups = new Map<string, ContributionRow>();
+  const ungrouped: ContributionRow[] = [];
+
+  for (const { sv, contributionUid } of entries) {
+    const component: ContributionComponent = {
+      source: sv.source,
+      sourceDetail: sv.sourceDetail,
+      version_id: sv.entry.version_id,
+    };
+    const existing = contributionUid ? groups.get(contributionUid) : undefined;
+    if (existing) {
+      existing.components.push(component);
+      continue;
+    }
+    const row: ContributionRow = {
+      contribution_uid: contributionUid,
+      components: [component],
+      change_type: sv.entry.commit_audit?.change_type ?? null,
+      committer_name: sv.entry.commit_audit?.committer_name ?? null,
+      time_committed: sv.entry.time_committed,
+    };
+    if (contributionUid) groups.set(contributionUid, row);
+    else ungrouped.push(row);
+  }
+
+  return [...groups.values(), ...ungrouped];
+}
+
+async function loadContributions() {
+  if (!serverStore.activeServerId || !ehrId.value || !ehrStore.selectedEhr) return;
+  const requestId = ++contributionsRequestId;
+  const serverId = serverStore.activeServerId;
+  const id = ehrId.value;
+  const compositions = ehrStore.selectedEhr.compositions;
+
+  contributionRowsLoading.value = true;
+  contributionRowsError.value = null;
+  contributionRowsPartialWarning.value = null;
+
+  // Each source is fetched independently (Promise.allSettled, not
+  // Promise.all) — a composition, EHR_STATUS, or DIRECTORY revision-history
+  // request failing shouldn't discard every other history that succeeded.
+  const sources: RevisionHistorySource[] = [
+    {
+      label: "EHR_STATUS",
+      source: "EHR_STATUS",
+      sourceDetail: null,
+      promise: invoke<RevisionHistoryEntry[]>("get_ehr_status_versions", { serverId, ehrId: id }),
+    },
+    {
+      label: "DIRECTORY",
+      source: "DIRECTORY",
+      sourceDetail: null,
+      promise: invoke<RevisionHistoryEntry[]>("get_directory_versions", { serverId, ehrId: id }),
+    },
+    ...compositions.map((comp): RevisionHistorySource => {
+      const detail = comp.template_id ?? comp.name ?? comp.uid;
+      return {
+        label: `Composition: ${detail}`,
+        source: "Composition",
+        sourceDetail: detail,
+        promise: invoke<RevisionHistoryEntry[]>("get_composition_versions", {
+          serverId,
+          ehrId: id,
+          versionedObjectUid: comp.uid.split("::")[0],
+        }),
+      };
+    }),
+  ];
+
+  const settled = await Promise.allSettled(sources.map((s) => s.promise));
+  if (requestId !== contributionsRequestId) return; // superseded by a newer request
+
+  const sourcedVersions: SourcedVersionEntry[] = [];
+  const failedSources: string[] = [];
+  settled.forEach((result, i) => {
+    const { source, sourceDetail, label } = sources[i];
+    if (result.status === "fulfilled") {
+      // Same defensive fallback as fetchStatusVersions — the Rust commands
+      // always return a real array, this only guards a malformed response.
+      for (const entry of result.value ?? []) sourcedVersions.push({ source, sourceDetail, entry });
+    } else {
+      failedSources.push(label);
+    }
+  });
+
+  if (failedSources.length === sources.length) {
+    // Every source failed — this isn't "no contributions", it's a real
+    // failure, so report it as one (and leave contributionRowsLoaded false
+    // so reselecting the tab retries, matching directoryLoaded's convention).
+    contributionRowsLoading.value = false;
+    contributionRowsError.value = "Failed to load revision history for this EHR.";
+    return;
+  }
+
+  const resolved = await mapWithConcurrency(sourcedVersions, 8, (sv) =>
+    resolveVersionContribution(serverId, id, sv),
+  );
+  if (requestId !== contributionsRequestId) return; // superseded by a newer request
+
+  const entries = sourcedVersions.map((sv, i) => {
+    const r = resolved[i];
+    return { sv, contributionUid: r.status === "fulfilled" ? r.value : null };
+  });
+  // Covers both a rejected request and a request that resolved but simply
+  // didn't carry a contribution reference (a real, common CDR answer, not
+  // an error) — either way the row couldn't be grouped by contribution.
+  const unresolvedCount = entries.filter((e) => e.contributionUid === null).length;
+
+  const rows = groupByContribution(entries);
+  // Newest first — entries without a committed timestamp (shouldn't
+  // normally happen) sort to the end rather than the top.
+  rows.sort((a, b) => (b.time_committed ?? "").localeCompare(a.time_committed ?? ""));
+
+  contributionRows.value = rows;
+  contributionRowsLoaded.value = true;
+  contributionRowsLoading.value = false;
+
+  const warnings: string[] = [];
+  if (failedSources.length > 0) {
+    warnings.push(
+      `Some sources failed to load and are missing from this table: ${failedSources.join(", ")}.`,
+    );
+  }
+  if (unresolvedCount > 0) {
+    warnings.push(
+      `${unresolvedCount} version(s) could not be matched to a contribution and are shown individually.`,
+    );
+  }
+  if (warnings.length > 0) contributionRowsPartialWarning.value = warnings.join(" ");
+}
+
+function selectContributionsTab() {
+  activeTab.value = "contributions";
+  if (
+    ehrId.value &&
+    serverStore.activeServerId &&
+    !contributionRowsLoaded.value &&
+    !contributionRowsLoading.value
+  ) {
+    loadContributions();
+  }
+}
+
+/** Opens the Contribution viewer for one reconstructed row. The
+ *  contribution UID is already resolved (during loadContributions, for
+ *  grouping) — this just navigates, or reports the "not resolved" case for
+ *  a row whose version(s) had no contribution reference. */
+function viewContributionForRow(row: ContributionRow) {
+  if (!ehrId.value) return;
+  contributionRowsError.value = null;
+  if (!row.contribution_uid) {
+    contributionRowsError.value =
+      "This server did not report a contribution reference for this version.";
+    return;
+  }
+  router.push({
+    name: "contribution",
+    params: { ehrId: ehrId.value, contributionUid: row.contribution_uid },
+  });
+}
+
+/** Rows bucketed by calendar day (UTC date portion of the ISO timestamp) for
+ *  the lightweight activity chart — a simple count-per-day view of when
+ *  contributions landed, not a replacement for the table above. */
+const activityByDay = computed(() => {
+  const counts = new Map<string, number>();
+  for (const row of contributionRows.value) {
+    if (!row.time_committed) continue;
+    const day = row.time_committed.slice(0, 10);
+    counts.set(day, (counts.get(day) ?? 0) + 1);
+  }
+  const days = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const max = Math.max(1, ...days.map(([, count]) => count));
+  return days.map(([day, count]) => ({ day, count, pct: Math.round((count / max) * 100) }));
+});
+
+// --- Compositions tab (OEH-47) ---
+// FerroEHR gives Compositions its own tab, filterable by template/composer/
+// date range, separate from the EHR-metadata "Status" (our "Detail") tab.
+// All filtering is client-side over the composition list get_ehr_detail
+// already fetches in full — no new backend command, since that AQL query
+// has no LIMIT to page around in the first place.
+//
+// Declared here (before the immediate-fire watchers below, which call
+// clearCompositionFilters()) rather than down near compositionsByTemplate's
+// other usages — a `const` referenced by an `{ immediate: true }` watcher
+// must already be initialized by the time that watcher's callback runs
+// synchronously during setup, or it's a temporal-dead-zone crash.
+const compositionFilterTemplate = ref("");
+const compositionFilterComposer = ref("");
+const compositionFilterFrom = ref(""); // date input value, "YYYY-MM-DD"
+const compositionFilterTo = ref("");
+
+const compositionFiltersActive = computed(
+  () =>
+    !!(
+      compositionFilterTemplate.value ||
+      compositionFilterComposer.value ||
+      compositionFilterFrom.value ||
+      compositionFilterTo.value
+    ),
+);
+
+function clearCompositionFilters() {
+  compositionFilterTemplate.value = "";
+  compositionFilterComposer.value = "";
+  compositionFilterFrom.value = "";
+  compositionFilterTo.value = "";
+}
+
+// Filtered compositions, grouped by template_id — the Compositions tab's
+// list. Date filtering compares just the YYYY-MM-DD portion of
+// time_committed against the (inclusive) from/to bounds, so a composition
+// committed at any time during the "to" day is still included.
+/** Whether `timeCommitted`'s date portion falls within the inclusive
+ *  [from, to] bound — either side empty means unbounded on that side. A
+ *  composition with no time_committed can never match a non-empty range. */
+function compositionMatchesDateRange(
+  timeCommitted: string | null,
+  from: string,
+  to: string,
+): boolean {
+  if (!from && !to) return true;
+  const day = timeCommitted?.slice(0, 10);
+  if (!day) return false;
+  if (from && day < from) return false;
+  return !(to && day > to);
+}
+
+/** All three Compositions-tab filters as a single predicate, pulled out of
+ *  compositionsByTemplate's loop so that computed stays a flat filter+group
+ *  instead of a nest of per-field conditionals (SonarCloud flagged the
+ *  latter's Cognitive Complexity). */
+function compositionMatchesFilters(
+  comp: CompositionSummary,
+  templateQuery: string,
+  composerQuery: string,
+  from: string,
+  to: string,
+): boolean {
+  if (templateQuery && !(comp.template_id ?? "").toLowerCase().includes(templateQuery)) {
+    return false;
+  }
+  if (composerQuery && !(comp.composer ?? "").toLowerCase().includes(composerQuery)) {
+    return false;
+  }
+  return compositionMatchesDateRange(comp.time_committed, from, to);
+}
+
+const compositionsByTemplate = computed(() => {
+  if (!ehrStore.selectedEhr) return {};
+  const templateQuery = compositionFilterTemplate.value.trim().toLowerCase();
+  const composerQuery = compositionFilterComposer.value.trim().toLowerCase();
+  const from = compositionFilterFrom.value;
+  const to = compositionFilterTo.value;
+
+  const groups: Record<string, CompositionSummary[]> = {};
+  for (const comp of ehrStore.selectedEhr.compositions) {
+    if (!compositionMatchesFilters(comp, templateQuery, composerQuery, from, to)) continue;
+    const key = comp.template_id ?? "(no template)";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(comp);
+  }
+  return groups;
+});
+
+// Total row count across all template groups — separate from
+// compositionsByTemplate's own per-group counts, for the "Compositions (N)"
+// header, which shows the filtered count (not the EHR's unfiltered total)
+// once a filter narrows the list.
+const filteredCompositionCount = computed(() =>
+  Object.values(compositionsByTemplate.value).reduce((sum, comps) => sum + comps.length, 0),
+);
+
 const showFilterModal = ref(false);
 const validationError = ref<string | null>(null);
 const searchHistory = ref<string[]>([]);
@@ -148,11 +729,28 @@ watch(
     // The route's :ehrId doesn't change on a server switch, so without this
     // the DIRECTORY tab would keep showing data fetched from the
     // now-abandoned server for whatever EHR ID happens to still be selected.
+    // Fetched unconditionally (not gated to the Directory tab being active)
+    // so the Detail tab's "Directory items" stat card has a real count
+    // without requiring a visit to the Directory tab first — it's a single
+    // cheap GET, unlike the Contributions reconstruction below.
     ehrStore.clearDirectory();
     cancelEditDirectory();
     resetDirectoryHistoryUi();
-    if (activeTab.value === "directory" && ehrId.value && id) {
+    if (ehrId.value && id) {
       ehrStore.fetchDirectory(id, ehrId.value);
+    }
+
+    // Same reasoning for the Status history and Contributions tabs — both
+    // are EHR-scoped. Contributions isn't re-fetched here even if active:
+    // it depends on the compositions list from fetchEhrDetail below, which
+    // this watcher doesn't await, so re-fetching now would race and read
+    // the still-stale list. The selectedEhr watcher further down handles it
+    // once that list actually lands.
+    clearStatusHistory();
+    clearContributions();
+    clearCompositionFilters();
+    if (activeTab.value === "status" && ehrId.value && id) {
+      fetchStatusVersions();
     }
   },
   { immediate: true },
@@ -166,13 +764,44 @@ watch(ehrId, (id) => {
   }
 
   // The DIRECTORY tab's data is EHR-scoped — reset it whenever the selected
-  // EHR changes, and re-fetch for the new EHR if that tab is currently open.
+  // EHR changes, and re-fetch for the new EHR (see the server-switch watcher
+  // above for why this isn't gated to the Directory tab being active).
   ehrStore.clearDirectory();
   cancelEditDirectory();
-  if (activeTab.value === "directory" && id && serverStore.activeServerId) {
+  resetDirectoryHistoryUi();
+  if (id && serverStore.activeServerId) {
     ehrStore.fetchDirectory(serverStore.activeServerId, id);
   }
+
+  // Status history / Contributions — see the server-switch watcher above for
+  // why Contributions isn't re-fetched directly here. Composition filters
+  // are reset too — a template/composer/date filter left over from the
+  // previous EHR would otherwise silently narrow the new EHR's list without
+  // the user having touched anything on this tab.
+  clearStatusHistory();
+  clearContributions();
+  clearCompositionFilters();
+  if (activeTab.value === "status" && id && serverStore.activeServerId) {
+    fetchStatusVersions();
+  }
 });
+
+// Contributions reconstruction depends on the compositions list, which
+// arrives asynchronously via fetchEhrDetail (triggered above) — this
+// re-fetches once that list actually lands, if the Contributions tab is the
+// one currently open.
+watch(
+  () => ehrStore.selectedEhr,
+  () => {
+    if (
+      activeTab.value === "contributions" &&
+      !contributionRowsLoaded.value &&
+      !contributionRowsLoading.value
+    ) {
+      loadContributions();
+    }
+  },
+);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -737,18 +1366,6 @@ function onToggleSortDir() {
   void ehrStore.toggleSortDir(serverStore.activeServerId);
 }
 
-// Group compositions by template_id
-const compositionsByTemplate = computed(() => {
-  if (!ehrStore.selectedEhr) return {};
-  const groups: Record<string, CompositionSummary[]> = {};
-  for (const comp of ehrStore.selectedEhr.compositions) {
-    const key = comp.template_id ?? "(no template)";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(comp);
-  }
-  return groups;
-});
-
 function handleEhrCreated(newEhrId: string) {
   showCreateDialog.value = false;
   void analytics.track("ehr_created");
@@ -811,6 +1428,68 @@ function lookupContribution() {
     params: { ehrId: ehrId.value, contributionUid: uid },
   });
 }
+
+// --- Detail-tab overview cards (OEH-47) ---
+// Dashboard-style stat cards, scoped to the selected EHR: Compositions,
+// Directory, Contributions — each a live count linking straight to that
+// tab, mirroring Dashboard.vue's .stat-grid/.stat-card pattern.
+//
+// Compositions and Directory counts are cheap (already-fetched composition
+// list; a single DIRECTORY GET, eagerly fetched by the watchers above) so
+// they're always live. Contributions is deliberately NOT eagerly computed
+// here — reconstructing it resolves a CONTRIBUTION per version across every
+// composition/EHR_STATUS/DIRECTORY revision, which is the kind of N+1 cost
+// that shouldn't fire just from opening the Detail tab. Its card shows a
+// real count once the Contributions tab has been visited (and caches it,
+// same as the tab itself), and just "—" before that.
+const statNumberFormatter = new Intl.NumberFormat();
+function formatStatCount(n: number | undefined): string {
+  return n === undefined ? "—" : statNumberFormatter.format(n);
+}
+
+/** Recursively counts DIRECTORY items (composition references) across every
+ *  folder — the number shown on the "Directory" stat card. */
+function countDirectoryItems(folder: unknown): number {
+  if (!folder || typeof folder !== "object") return 0;
+  const f = folder as { items?: unknown[]; folders?: unknown[] };
+  const items = Array.isArray(f.items) ? f.items.length : 0;
+  const subfolders = Array.isArray(f.folders) ? f.folders : [];
+  return items + subfolders.reduce((sum: number, sub) => sum + countDirectoryItems(sub), 0);
+}
+
+const directoryItemCount = computed(() =>
+  ehrStore.directoryLoaded ? countDirectoryItems(ehrStore.directory) : undefined,
+);
+
+const contributionsCount = computed(() =>
+  contributionRowsLoaded.value ? contributionRows.value.length : undefined,
+);
+
+interface EhrStatCard {
+  label: string;
+  value: number | undefined;
+  onClick: () => void;
+}
+
+const ehrStatCards = computed<EhrStatCard[]>(() => [
+  {
+    label: "Compositions",
+    value: ehrStore.selectedEhr?.compositions.length,
+    onClick: () => {
+      activeTab.value = "compositions";
+    },
+  },
+  {
+    label: "Directory items",
+    value: directoryItemCount.value,
+    onClick: selectDirectoryTab,
+  },
+  {
+    label: "Contributions",
+    value: contributionsCount.value,
+    onClick: selectContributionsTab,
+  },
+]);
 </script>
 
 <template>
@@ -1068,6 +1747,22 @@ function lookupContribution() {
               <button
                 type="button"
                 class="tab"
+                :class="{ active: activeTab === 'status' }"
+                @click="selectStatusHistoryTab"
+              >
+                Status History
+              </button>
+              <button
+                type="button"
+                class="tab"
+                :class="{ active: activeTab === 'compositions' }"
+                @click="activeTab = 'compositions'"
+              >
+                Compositions
+              </button>
+              <button
+                type="button"
+                class="tab"
                 :class="{ active: activeTab === 'json' }"
                 @click="activeTab = 'json'"
               >
@@ -1077,7 +1772,7 @@ function lookupContribution() {
                 type="button"
                 class="tab"
                 :class="{ active: activeTab === 'contributions' }"
-                @click="activeTab = 'contributions'"
+                @click="selectContributionsTab"
               >
                 Contributions
               </button>
@@ -1119,6 +1814,19 @@ function lookupContribution() {
           <div class="detail-row" v-if="ehrStore.selectedEhr.subject_namespace">
             <span class="detail-label">Subject Namespace</span>
             <span class="detail-value">{{ ehrStore.selectedEhr.subject_namespace }}</span>
+          </div>
+
+          <div class="stat-grid">
+            <button
+              v-for="card in ehrStatCards"
+              :key="card.label"
+              type="button"
+              class="stat-card"
+              @click="card.onClick"
+            >
+              <div class="stat-value">{{ formatStatCount(card.value) }}</div>
+              <div class="stat-label">{{ card.label }}</div>
+            </button>
           </div>
         </div>
 
@@ -1341,14 +2049,171 @@ function lookupContribution() {
           </template>
         </div>
 
-        <!-- Contributions View (OEH-28) -->
+        <!-- Status History View (OEH-47) -->
+        <div v-if="activeTab === 'status'" class="status-history-view">
+          <p class="contributions-hint">
+            EHR_STATUS is versioned the same way compositions are. Browse its revision history
+            below, or jump straight to the version in effect at a specific point in time.
+          </p>
+
+          <div class="at-time-picker">
+            <label for="status-at-time" class="visually-hidden">At a point in time</label>
+            <input
+              id="status-at-time"
+              type="datetime-local"
+              class="input"
+              v-model="statusAtTimeInput"
+            />
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              :disabled="!statusAtTimeInput"
+              @click="viewStatusAtTime"
+            >
+              View at time
+            </button>
+          </div>
+
+          <div v-if="statusContributionError" class="search-validation-error">
+            {{ statusContributionError }}
+          </div>
+
+          <div v-if="statusVersionsLoading" class="loading">
+            <span class="spinner"></span> Loading status history...
+          </div>
+          <div v-else-if="statusVersionsError" class="empty-state">
+            <h3>Failed to load status history</h3>
+            <p class="error-detail">{{ statusVersionsError }}</p>
+          </div>
+          <div v-else-if="statusVersions.length === 0" class="empty-state">
+            <h3>No version history available</h3>
+            <p>This server did not report a revision history for the EHR_STATUS.</p>
+          </div>
+          <div v-else class="version-list">
+            <div v-for="v in statusVersions" :key="v.version_id" class="version-row">
+              <div class="version-row-main">
+                <div class="version-row-id mono">{{ v.version_id }}</div>
+                <div class="version-row-meta">
+                  <span v-if="v.commit_audit?.change_type" class="badge">{{
+                    v.commit_audit.change_type
+                  }}</span>
+                  <span v-if="v.commit_audit?.committer_name">{{
+                    v.commit_audit.committer_name
+                  }}</span>
+                  <span v-if="v.time_committed">{{ v.time_committed }}</span>
+                </div>
+              </div>
+              <div class="version-row-actions">
+                <button type="button" class="btn btn-sm" @click="viewStatusVersion(v.version_id)">
+                  Open
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  @click="viewStatusContribution(v.version_id)"
+                >
+                  View Contribution
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Version-document preview panel -->
+          <div
+            v-if="statusPreviewLoading || statusPreview || statusPreviewError"
+            class="status-preview"
+          >
+            <h3 class="section-title">
+              Preview<span v-if="statusPreviewLabel"> — {{ statusPreviewLabel }}</span>
+            </h3>
+            <div v-if="statusPreviewLoading" class="loading">
+              <span class="spinner"></span> Loading version...
+            </div>
+            <div v-else-if="statusPreviewError" class="empty-state">
+              <p class="error-detail">{{ statusPreviewError }}</p>
+            </div>
+            <JsonViewer v-else-if="statusPreview" :value="statusPreview" />
+          </div>
+        </div>
+
+        <!-- Contributions View (OEH-28 / OEH-47) -->
         <div v-if="activeTab === 'contributions'" class="contributions-view">
           <p class="contributions-hint">
-            openEHR doesn't provide a way to list all contributions for an EHR — only to fetch one
-            by UID. Enter a known contribution UID below, or open a composition's
-            <strong>Versions</strong> tab and click <strong>View Contribution</strong> to jump
-            straight to the commit that created a specific version.
+            Reconstructed by unioning the revision histories of every composition, EHR_STATUS, and
+            DIRECTORY under this EHR — openEHR has no single "list contributions for an EHR"
+            endpoint. A contribution whose component versions were all deleted or purged won't show
+            up here; look it up by UID below as a fallback.
           </p>
+
+          <div v-if="contributionRowsLoading" class="loading">
+            <span class="spinner"></span> Loading contributions...
+          </div>
+          <div v-else-if="contributionRowsError" class="empty-state">
+            <h3>Failed to load contributions</h3>
+            <p class="error-detail">{{ contributionRowsError }}</p>
+          </div>
+          <template v-else>
+            <div v-if="contributionRowsPartialWarning" class="limit-banner">
+              {{ contributionRowsPartialWarning }}
+            </div>
+            <template v-if="contributionRows.length > 0">
+              <div class="activity-chart" v-if="activityByDay.length > 1">
+                <div
+                  v-for="bucket in activityByDay"
+                  :key="bucket.day"
+                  class="activity-bar"
+                  :title="`${bucket.day}: ${bucket.count} commit(s)`"
+                >
+                  <div class="activity-bar-fill" :style="{ height: bucket.pct + '%' }"></div>
+                </div>
+              </div>
+              <div class="version-list">
+                <div
+                  v-for="row in contributionRows"
+                  :key="row.contribution_uid ?? row.components.map((c) => c.version_id).join(',')"
+                  class="version-row"
+                >
+                  <div class="version-row-main">
+                    <div class="version-row-meta">
+                      <span
+                        v-for="comp in row.components"
+                        :key="comp.version_id"
+                        class="badge badge-source"
+                      >
+                        {{ comp.source
+                        }}<template v-if="comp.sourceDetail"> — {{ comp.sourceDetail }}</template>
+                      </span>
+                    </div>
+                    <div class="version-row-id mono">
+                      {{ row.contribution_uid ?? "Contribution not resolved" }}
+                    </div>
+                    <div class="version-row-meta">
+                      <span v-if="row.change_type" class="badge">{{ row.change_type }}</span>
+                      <span v-if="row.committer_name">{{ row.committer_name }}</span>
+                      <span v-if="row.time_committed">{{ row.time_committed }}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    :disabled="!row.contribution_uid"
+                    @click="viewContributionForRow(row)"
+                  >
+                    View Contribution
+                  </button>
+                </div>
+              </div>
+            </template>
+            <div v-else class="empty-state">
+              <h3>No contributions found</h3>
+              <p>
+                No revision history was reported for this EHR's compositions, EHR_STATUS, or
+                DIRECTORY.
+              </p>
+            </div>
+          </template>
+
+          <h3 class="section-title contribution-lookup-title">Look up by UID</h3>
           <div class="contribution-lookup">
             <label for="contribution-lookup-uid" class="visually-hidden">Contribution UID</label>
             <input
@@ -1370,11 +2235,56 @@ function lookupContribution() {
           </div>
         </div>
 
-        <h3 class="section-title" v-if="activeTab === 'detail'">
-          Compositions ({{ ehrStore.selectedEhr.compositions.length }})
-        </h3>
+        <!-- Compositions View (OEH-47) -->
+        <div v-if="activeTab === 'compositions'" class="compositions-tab-view">
+          <h3 class="section-title">
+            Compositions ({{
+              compositionFiltersActive
+                ? `${filteredCompositionCount} of ${ehrStore.selectedEhr.compositions.length}`
+                : ehrStore.selectedEhr.compositions.length
+            }})
+          </h3>
 
-        <template v-if="activeTab === 'detail'">
+          <div class="composition-filters">
+            <label for="comp-filter-template" class="visually-hidden">Template</label>
+            <input
+              id="comp-filter-template"
+              class="input"
+              v-model="compositionFilterTemplate"
+              placeholder="Template"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+            />
+            <label for="comp-filter-composer" class="visually-hidden">Composer</label>
+            <input
+              id="comp-filter-composer"
+              class="input"
+              v-model="compositionFilterComposer"
+              placeholder="Composer"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+            />
+            <label for="comp-filter-from" class="visually-hidden">From date</label>
+            <input
+              id="comp-filter-from"
+              type="date"
+              class="input"
+              v-model="compositionFilterFrom"
+            />
+            <label for="comp-filter-to" class="visually-hidden">To date</label>
+            <input id="comp-filter-to" type="date" class="input" v-model="compositionFilterTo" />
+            <button
+              type="button"
+              class="btn btn-sm"
+              :disabled="!compositionFiltersActive"
+              @click="clearCompositionFilters"
+            >
+              Clear
+            </button>
+          </div>
+
           <div
             v-for="(comps, templateId) in compositionsByTemplate"
             :key="templateId"
@@ -1398,10 +2308,16 @@ function lookupContribution() {
             </div>
           </div>
 
-          <div v-if="ehrStore.selectedEhr.compositions.length === 0" class="empty-state">
+          <div
+            v-if="Object.keys(compositionsByTemplate).length === 0 && !compositionFiltersActive"
+            class="empty-state"
+          >
             <p>No compositions found for this EHR.</p>
           </div>
-        </template>
+          <div v-else-if="Object.keys(compositionsByTemplate).length === 0" class="empty-state">
+            <p>No compositions match these filters.</p>
+          </div>
+        </div>
       </template>
 
       <div v-else class="empty-state">
@@ -2021,6 +2937,46 @@ function lookupContribution() {
 .detail-section {
   margin-bottom: 24px;
 }
+
+/* Detail-tab overview cards (OEH-47) — same visual language as
+   Dashboard.vue's .stat-grid/.stat-card, but <button>s (they switch a local
+   activeTab, not a route) rather than router-links. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.stat-card {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.stat-card:hover {
+  border-color: var(--color-primary-dim);
+  background: var(--color-surface-hover);
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+.stat-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
 .detail-row {
   display: flex;
   padding: 8px 0;
@@ -2066,6 +3022,110 @@ function lookupContribution() {
   flex: 1;
   font-family: var(--font-mono);
 }
+.contribution-lookup-title {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Status history (OEH-47) */
+.status-history-view {
+  margin-bottom: 24px;
+}
+.at-time-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.at-time-picker .input {
+  flex: 1;
+}
+.status-preview {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Revision-history / reconstructed-contribution rows — same shape as
+   CompositionViewer.vue's Versions tab. */
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.version-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.version-row-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.version-row-id {
+  font-size: 12px;
+  word-break: break-all;
+}
+.version-row-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.version-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: var(--color-primary-dim);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-source {
+  background: var(--color-surface-hover, var(--color-border));
+  color: var(--color-text-secondary);
+}
+
+/* Simple per-day commit-count bars above the Contributions table — not a
+   substitute for the table, just a quick sense of activity over time. */
+.activity-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 48px;
+  margin-bottom: 16px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.activity-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 2px;
+}
+.activity-bar-fill {
+  width: 100%;
+  min-height: 2px;
+  background: var(--color-primary-dim);
+  border-radius: 1px;
+}
 
 /* Visually hidden but still reachable by screen readers — pairs the
    contribution-UID input with an accessible label without duplicating the
@@ -2080,6 +3140,23 @@ function lookupContribution() {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.compositions-tab-view {
+  margin-bottom: 24px;
+}
+
+.composition-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.composition-filters .input {
+  flex: 1;
+  min-width: 0;
+}
+.composition-filters input[type="date"] {
+  flex: 0 1 160px;
 }
 
 .template-group {

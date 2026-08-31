@@ -78,9 +78,10 @@ export interface EhrSearchResponse {
   limit_reached: boolean;
 }
 
-// DIRECTORY revision history (OEH-46) — mirrors the Rust `CommitAudit`/
-// `DirectoryRevision` structs in src-tauri/src/commands/ehr.rs, which parse
-// the `versioned_directory/revision_history` response the same way
+// DIRECTORY revision history (OEH-46) — mirrors the Rust `RevisionCommitAudit`/
+// `RevisionHistoryEntry` structs in src-tauri/src/commands/ehr.rs (shared
+// with the Status History tab's EHR_STATUS revision history, OEH-47), which
+// parse the `versioned_directory/revision_history` response the same way
 // `composition::get_composition_versions` parses a composition's.
 export interface CommitAudit {
   change_type: string | null;
@@ -427,16 +428,17 @@ export const useEhrStore = defineStore("ehr", () => {
   /** Fetches the DIRECTORY's full revision history (every version ever
    *  committed for this EHR), for the "Version history" panel. Independent
    *  of `fetchDirectory` — an empty history (never-created DIRECTORY) is a
-   *  normal result, not an error, matching `get_directory_revision_history`
-   *  on the Rust side. */
+   *  normal result, not an error, matching `get_directory_versions` on the
+   *  Rust side (the same command the reconstructed Contributions tab uses,
+   *  see EhrBrowser.vue — OEH-47). */
   async function fetchDirectoryRevisionHistory(serverId: string, ehrId: string) {
     directoryRevisionHistoryLoading.value = true;
     directoryRevisionHistoryError.value = null;
     try {
-      directoryRevisionHistory.value = await invoke<DirectoryRevision[]>(
-        "get_directory_revision_history",
-        { serverId, ehrId },
-      );
+      directoryRevisionHistory.value = await invoke<DirectoryRevision[]>("get_directory_versions", {
+        serverId,
+        ehrId,
+      });
     } catch (e) {
       directoryRevisionHistory.value = [];
       directoryRevisionHistoryError.value = String(e);
