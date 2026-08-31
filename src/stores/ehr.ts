@@ -78,6 +78,24 @@ export interface EhrSearchResponse {
   limit_reached: boolean;
 }
 
+// DIRECTORY revision history (OEH-46) — mirrors the Rust `CommitAudit`/
+// `DirectoryRevision` structs in src-tauri/src/commands/ehr.rs, which parse
+// the `versioned_directory/revision_history` response the same way
+// `composition::get_composition_versions` parses a composition's.
+export interface CommitAudit {
+  change_type: string | null;
+  committer_name: string | null;
+  time_committed: string | null;
+  description: string | null;
+}
+
+export interface DirectoryRevision {
+  version_id: string;
+  preceding_version_uid: string | null;
+  commit_audit: CommitAudit | null;
+  time_committed: string | null;
+}
+
 export const useEhrStore = defineStore("ehr", () => {
   const ehrs = ref<EhrSummary[]>([]);
   const total = ref(0);
@@ -110,6 +128,20 @@ export const useEhrStore = defineStore("ehr", () => {
   // trigger a re-fetch on every later tab reselect. Left false after a
   // failure so the next reselect retries instead of silently no-op'ing.
   const directoryLoaded = ref(false);
+
+  // DIRECTORY revision history + point-in-time/version preview (OEH-46).
+  // `directory` above always tracks the *current* version (and is what
+  // Edit/Create/Delete Directory act on); a preview is a separate, inert
+  // snapshot the user asked to look at — it's never written back and never
+  // clobbers `directory`, so leaving the preview open can't interfere with
+  // editing the live directory.
+  const directoryRevisionHistory = ref<DirectoryRevision[]>([]);
+  const directoryRevisionHistoryLoading = ref(false);
+  const directoryRevisionHistoryError = ref<string | null>(null);
+
+  const directoryVersionPreview = ref<Record<string, unknown> | null>(null);
+  const directoryVersionPreviewLoading = ref(false);
+  const directoryVersionPreviewError = ref<string | null>(null);
 
   // Search state (PRD-0013)
   const searchResults = ref<EhrSearchResult[]>([]);
@@ -314,6 +346,9 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryError.value = null;
     directoryLoading.value = false;
     directoryLoaded.value = false;
+    directoryRevisionHistory.value = [];
+    directoryRevisionHistoryError.value = null;
+    clearDirectoryVersionPreview();
   }
 
   /** Creates the DIRECTORY for an EHR that doesn't have one yet. `folder` is
@@ -389,6 +424,70 @@ export const useEhrStore = defineStore("ehr", () => {
     }
   }
 
+  /** Fetches the DIRECTORY's full revision history (every version ever
+   *  committed for this EHR), for the "Version history" panel. Independent
+   *  of `fetchDirectory` — an empty history (never-created DIRECTORY) is a
+   *  normal result, not an error, matching `get_directory_revision_history`
+   *  on the Rust side. */
+  async function fetchDirectoryRevisionHistory(serverId: string, ehrId: string) {
+    directoryRevisionHistoryLoading.value = true;
+    directoryRevisionHistoryError.value = null;
+    try {
+      directoryRevisionHistory.value = await invoke<DirectoryRevision[]>(
+        "get_directory_revision_history",
+        { serverId, ehrId },
+      );
+    } catch (e) {
+      directoryRevisionHistory.value = [];
+      directoryRevisionHistoryError.value = String(e);
+    } finally {
+      directoryRevisionHistoryLoading.value = false;
+    }
+  }
+
+  /** Previews one historical DIRECTORY version by its version UID (from
+   *  `directoryRevisionHistory`), without touching the live `directory`. */
+  async function previewDirectoryVersion(serverId: string, ehrId: string, versionUid: string) {
+    directoryVersionPreviewLoading.value = true;
+    directoryVersionPreviewError.value = null;
+    try {
+      directoryVersionPreview.value = await invoke<Record<string, unknown> | null>(
+        "get_directory_version",
+        { serverId, ehrId, versionUid },
+      );
+    } catch (e) {
+      directoryVersionPreview.value = null;
+      directoryVersionPreviewError.value = String(e);
+    } finally {
+      directoryVersionPreviewLoading.value = false;
+    }
+  }
+
+  /** Previews the DIRECTORY as it stood at a given instant (ISO 8601,
+   *  interpreted as UTC by the server), without touching the live
+   *  `directory`. */
+  async function previewDirectoryAtTime(serverId: string, ehrId: string, versionAtTime: string) {
+    directoryVersionPreviewLoading.value = true;
+    directoryVersionPreviewError.value = null;
+    try {
+      directoryVersionPreview.value = await invoke<Record<string, unknown> | null>(
+        "get_directory",
+        { serverId, ehrId, versionAtTime },
+      );
+    } catch (e) {
+      directoryVersionPreview.value = null;
+      directoryVersionPreviewError.value = String(e);
+    } finally {
+      directoryVersionPreviewLoading.value = false;
+    }
+  }
+
+  function clearDirectoryVersionPreview() {
+    directoryVersionPreview.value = null;
+    directoryVersionPreviewError.value = null;
+    directoryVersionPreviewLoading.value = false;
+  }
+
   function clearSearch() {
     searchRequestId++; // invalidate any in-flight searchEhrs call
     searchResults.value = [];
@@ -412,6 +511,12 @@ export const useEhrStore = defineStore("ehr", () => {
     directoryLoading,
     directoryError,
     directoryLoaded,
+    directoryRevisionHistory,
+    directoryRevisionHistoryLoading,
+    directoryRevisionHistoryError,
+    directoryVersionPreview,
+    directoryVersionPreviewLoading,
+    directoryVersionPreviewError,
     searchResults,
     searchActive,
     searchLoading,
@@ -426,6 +531,10 @@ export const useEhrStore = defineStore("ehr", () => {
     createDirectory,
     updateDirectory,
     deleteDirectory,
+    fetchDirectoryRevisionHistory,
+    previewDirectoryVersion,
+    previewDirectoryAtTime,
+    clearDirectoryVersionPreview,
     searchEhrs,
     clearSearch,
     createEhr,

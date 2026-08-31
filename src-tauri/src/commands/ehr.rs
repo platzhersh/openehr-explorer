@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Semaphore;
 
+use super::composition::CommitAudit;
 use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
 use crate::inspector::{send_instrumented, InstrumentedResponse};
 
@@ -741,6 +742,132 @@ pub async fn get_directory_version(
 
     let url = build_directory_url(base, &ehr_id, Some(&version_uid), None);
     fetch_directory(&app, &client, &url, &profile.auth_method).await
+}
+
+/// One entry in the DIRECTORY's revision history — same shape as
+/// `composition::CompositionVersion`, since both come from the same kind of
+/// `VERSIONED_OBJECT` revision-history response (a list of ORIGINAL_VERSION
+/// summaries, each with an `audits` array whose first entry is the commit
+/// audit).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirectoryRevision {
+    pub version_id: String,
+    pub preceding_version_uid: Option<String>,
+    pub commit_audit: Option<CommitAudit>,
+    pub time_committed: Option<String>,
+}
+
+fn build_versioned_directory_revision_history_url(base: &str, ehr_id: &str) -> String {
+    format!(
+        "{}/rest/openehr/v1/ehr/{}/versioned_directory/revision_history",
+        base, ehr_id
+    )
+}
+
+/// Parses a `versioned_directory/revision_history` response body into
+/// `DirectoryRevision`s — factored out of `get_directory_revision_history` so
+/// it can be exercised directly with fixture JSON, without a live server.
+fn parse_directory_revision_history(body: &Value) -> Vec<DirectoryRevision> {
+    let items = body
+        .as_array()
+        .or_else(|| body.get("items").and_then(|i| i.as_array()))
+        .cloned()
+        .unwrap_or_default();
+
+    items
+        .iter()
+        .map(|item| {
+            let version_id = item
+                .get("version_id")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let audits = item.get("audits").and_then(|a| a.as_array());
+            let first_audit = audits.and_then(|a| a.first());
+
+            let commit_audit = first_audit.map(|audit| CommitAudit {
+                change_type: audit
+                    .get("change_type")
+                    .and_then(|c| c.get("value"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                committer_name: audit
+                    .get("committer")
+                    .and_then(|c| c.get("name"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                time_committed: audit
+                    .get("time_committed")
+                    .and_then(|t| t.get("value"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                description: audit
+                    .get("description")
+                    .and_then(|d| d.get("value"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+            });
+
+            let time_committed = commit_audit.as_ref().and_then(|a| a.time_committed.clone());
+
+            DirectoryRevision {
+                version_id,
+                preceding_version_uid: item
+                    .get("preceding_version_uid")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                commit_audit,
+                time_committed,
+            }
+        })
+        .collect()
+}
+
+/// Fetches the full revision history of the EHR's DIRECTORY — every version
+/// ever committed, not just the current one — via the standard openEHR
+/// `VERSIONED_DIRECTORY` resource:
+/// `GET /ehr/{ehr_id}/versioned_directory/revision_history`.
+///
+/// Mirrors `composition::get_composition_versions`, which does the same
+/// thing for `VERSIONED_COMPOSITION`. Each entry's `version_id` can be passed
+/// straight to `get_directory_version` to fetch that version's content.
+#[tauri::command]
+pub async fn get_directory_revision_history(
+    app: tauri::AppHandle,
+    server_id: String,
+    ehr_id: String,
+) -> Result<Vec<DirectoryRevision>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+
+    let url = build_versioned_directory_revision_history_url(base, &ehr_id);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
+
+    if resp.status == 404 {
+        // No DIRECTORY has ever been created for this EHR — an empty
+        // history, not an error (matches fetch_directory's own treatment of
+        // a 404 as "no directory" rather than a failure).
+        return Ok(Vec::new());
+    }
+
+    if !resp.is_success {
+        return Err(http_error(&resp));
+    }
+
+    let body: Value = serde_json::from_str(&resp.body)
+        .map_err(|e| format!("Failed to parse directory revision history: {}", e))?;
+
+    Ok(parse_directory_revision_history(&body))
 }
 
 /// Creates the DIRECTORY for an EHR that doesn't have one yet.
@@ -1623,5 +1750,75 @@ mod tests {
         let external_ref = &status["subject"]["external_ref"];
         assert_eq!(external_ref["id"]["value"], "Testtest");
         assert_eq!(external_ref["id"]["scheme"], "ch.ahv");
+    }
+
+    #[test]
+    fn test_build_versioned_directory_revision_history_url() {
+        let url =
+            build_versioned_directory_revision_history_url("https://cdr.example.com", "ehr-123");
+        assert_eq!(
+            url,
+            "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/versioned_directory/revision_history"
+        );
+    }
+
+    #[test]
+    fn test_parse_directory_revision_history_extracts_commit_audit() {
+        let body = serde_json::json!([
+            {
+                "version_id": { "value": "01a058ec-c19e-7823-b3f8-9fbb5e0e47f9::ferroehr.local::2" },
+                "preceding_version_uid": "01a058ec-c19a-7bc2-9988-9ad84f965f3b::ferroehr.local::1",
+                "audits": [
+                    {
+                        "change_type": { "value": "modification" },
+                        "committer": { "name": "ferroehr" },
+                        "time_committed": { "value": "2026-08-31T17:45:47.628264Z" },
+                        "description": { "value": "renamed folder" }
+                    }
+                ]
+            }
+        ]);
+        let revisions = parse_directory_revision_history(&body);
+        assert_eq!(revisions.len(), 1);
+        let rev = &revisions[0];
+        assert_eq!(
+            rev.version_id,
+            "01a058ec-c19e-7823-b3f8-9fbb5e0e47f9::ferroehr.local::2"
+        );
+        assert_eq!(
+            rev.preceding_version_uid.as_deref(),
+            Some("01a058ec-c19a-7bc2-9988-9ad84f965f3b::ferroehr.local::1")
+        );
+        let audit = rev.commit_audit.as_ref().expect("commit_audit");
+        assert_eq!(audit.change_type.as_deref(), Some("modification"));
+        assert_eq!(audit.committer_name.as_deref(), Some("ferroehr"));
+        assert_eq!(
+            audit.time_committed.as_deref(),
+            Some("2026-08-31T17:45:47.628264Z")
+        );
+        assert_eq!(
+            rev.time_committed.as_deref(),
+            Some("2026-08-31T17:45:47.628264Z")
+        );
+    }
+
+    #[test]
+    fn test_parse_directory_revision_history_handles_items_wrapper_and_missing_audits() {
+        let body = serde_json::json!({
+            "items": [
+                { "version_id": { "value": "uid::system::1" } }
+            ]
+        });
+        let revisions = parse_directory_revision_history(&body);
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0].version_id, "uid::system::1");
+        assert!(revisions[0].commit_audit.is_none());
+        assert!(revisions[0].time_committed.is_none());
+    }
+
+    #[test]
+    fn test_parse_directory_revision_history_empty_array() {
+        let revisions = parse_directory_revision_history(&serde_json::json!([]));
+        assert!(revisions.is_empty());
     }
 }

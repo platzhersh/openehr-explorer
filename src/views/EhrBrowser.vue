@@ -5,6 +5,7 @@ import { useServerStore } from "../stores/server";
 import {
   useEhrStore,
   type CompositionSummary,
+  type DirectoryRevision,
   type EhrSearchCriteria,
   type EhrSortField,
 } from "../stores/ehr";
@@ -68,6 +69,24 @@ const showDeleteDirectoryDialog = ref(false);
 const deletingDirectory = ref(false);
 const deleteDirectoryError = ref<string | null>(null);
 
+// Version history / "at time" preview (OEH-46). Only one of the two panels
+// is open at a time; opening either closes the other. `previewLabel`
+// describes what `ehrStore.directoryVersionPreview` currently shows (a
+// specific version, or a point in time) — the store itself has no notion of
+// "why", so that's tracked here alongside it.
+const showDirectoryHistoryPanel = ref(false);
+const showDirectoryAtTimePanel = ref(false);
+const directoryAtTimeInput = ref(""); // <input type="datetime-local"> value
+const directoryAtTimeError = ref<string | null>(null);
+const previewLabel = ref<string | null>(null);
+
+// "Advanced: edit as JSON" (OEH-46) — a raw-JSON escape hatch alongside the
+// tree editor for the DIRECTORY being created/edited, round-tripped through
+// the same toWireFolder/fromWireFolder helpers the tree editor itself uses.
+const showJsonEditor = ref(false);
+const jsonEditorText = ref("");
+const jsonEditorError = ref<string | null>(null);
+
 // `DirectoryTreeEditor` (at any depth) injects this instead of mutating the
 // `EditableFolder` it receives as a prop — every write is applied here, to
 // the tree this view actually owns, addressed by `path` (see
@@ -86,9 +105,9 @@ provide(DIRECTORY_MUTATIONS_KEY, {
     if (!editableDirectory.value) return;
     addDirectorySubfolder(getFolderAtPath(editableDirectory.value, path));
   },
-  addItem(path, compositionUid) {
+  addItem(path, id, type, namespace, idScheme) {
     if (!editableDirectory.value) return;
-    addDirectoryItem(getFolderAtPath(editableDirectory.value, path), compositionUid);
+    addDirectoryItem(getFolderAtPath(editableDirectory.value, path), id, type, namespace, idScheme);
   },
   removeSubfolder(parentPath, key) {
     if (!editableDirectory.value) return;
@@ -131,6 +150,7 @@ watch(
     // now-abandoned server for whatever EHR ID happens to still be selected.
     ehrStore.clearDirectory();
     cancelEditDirectory();
+    resetDirectoryHistoryUi();
     if (activeTab.value === "directory" && ehrId.value && id) {
       ehrStore.fetchDirectory(id, ehrId.value);
     }
@@ -437,6 +457,86 @@ function selectDirectoryTab() {
   }
 }
 
+/** Recursively counts folders and items in a DIRECTORY-shaped tree — used
+ *  for the "N folders · M items" header stat. Duck-typed against `folders`/
+ *  `items` arrays rather than a single named type: both the raw wire JSON
+ *  (`ehrStore.directory`, `ehrStore.directoryVersionPreview`) and the
+ *  editable tree (`EditableFolder`) use those same field names, so this one
+ *  function works for both without a shape conversion. */
+function countDirectoryStats(node: unknown): { folders: number; items: number } {
+  const n = node as { folders?: unknown[]; items?: unknown[] } | null | undefined;
+  const subfolders = n?.folders ?? [];
+  const items = n?.items ?? [];
+  let folders = 0;
+  let itemCount = items.length;
+  for (const sub of subfolders) {
+    const subStats = countDirectoryStats(sub);
+    folders += 1 + subStats.folders;
+    itemCount += subStats.items;
+  }
+  return { folders, items: itemCount };
+}
+
+const directoryStats = computed(() => countDirectoryStats(ehrStore.directory));
+const previewDirectoryStats = computed(() => countDirectoryStats(ehrStore.directoryVersionPreview));
+
+function resetDirectoryHistoryUi() {
+  showDirectoryHistoryPanel.value = false;
+  showDirectoryAtTimePanel.value = false;
+  directoryAtTimeInput.value = "";
+  directoryAtTimeError.value = null;
+  previewLabel.value = null;
+}
+
+function backToCurrentDirectory() {
+  ehrStore.clearDirectoryVersionPreview();
+  previewLabel.value = null;
+}
+
+function toggleDirectoryHistoryPanel() {
+  showDirectoryAtTimePanel.value = false;
+  showDirectoryHistoryPanel.value = !showDirectoryHistoryPanel.value;
+  if (
+    showDirectoryHistoryPanel.value &&
+    serverStore.activeServerId &&
+    ehrId.value &&
+    ehrStore.directoryRevisionHistory.length === 0 &&
+    !ehrStore.directoryRevisionHistoryLoading
+  ) {
+    ehrStore.fetchDirectoryRevisionHistory(serverStore.activeServerId, ehrId.value);
+  }
+}
+
+function toggleDirectoryAtTimePanel() {
+  showDirectoryHistoryPanel.value = false;
+  showDirectoryAtTimePanel.value = !showDirectoryAtTimePanel.value;
+}
+
+function directoryRevisionIsCurrent(rev: DirectoryRevision): boolean {
+  return rev.version_id === directoryVersionUid();
+}
+
+async function previewDirectoryRevision(rev: DirectoryRevision) {
+  if (!serverStore.activeServerId || !ehrId.value) return;
+  previewLabel.value = `Version ${rev.version_id}`;
+  await ehrStore.previewDirectoryVersion(serverStore.activeServerId, ehrId.value, rev.version_id);
+}
+
+async function submitDirectoryAtTime() {
+  directoryAtTimeError.value = null;
+  if (!directoryAtTimeInput.value) {
+    directoryAtTimeError.value = "Pick a date and time.";
+    return;
+  }
+  if (!serverStore.activeServerId || !ehrId.value) return;
+  // <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm" with no seconds
+  // or timezone — the input is labeled "interpreted as UTC" in the template,
+  // so that's what's appended here rather than the browser's local offset.
+  const versionAtTime = `${directoryAtTimeInput.value}:00Z`;
+  previewLabel.value = `At ${versionAtTime}`;
+  await ehrStore.previewDirectoryAtTime(serverStore.activeServerId, ehrId.value, versionAtTime);
+}
+
 function openCompositionRef(objectRef: { id?: { value?: string } }) {
   if (ehrId.value && objectRef.id?.value) {
     router.push({
@@ -464,6 +564,8 @@ function startCreateDirectory() {
   editableDirectory.value = emptyFolder("Root");
   directorySaveError.value = null;
   directoryEditMode.value = true;
+  showJsonEditor.value = false;
+  backToCurrentDirectory();
 }
 
 function startEditDirectory() {
@@ -471,12 +573,50 @@ function startEditDirectory() {
   editableDirectory.value = fromWireFolder(ehrStore.directory);
   directorySaveError.value = null;
   directoryEditMode.value = true;
+  showJsonEditor.value = false;
+  // Editing acts on the *current* directory regardless — close any
+  // historical preview so it's not still showing (and easy to mistake for
+  // what's being edited) once the tree editor opens.
+  backToCurrentDirectory();
 }
 
 function cancelEditDirectory() {
   directoryEditMode.value = false;
   editableDirectory.value = null;
   directorySaveError.value = null;
+  showJsonEditor.value = false;
+  jsonEditorText.value = "";
+  jsonEditorError.value = null;
+}
+
+/** Toggles the raw-JSON view of `editableDirectory`. Opening it seeds the
+ *  textarea from the tree's current state (via `toWireFolder`) rather than
+ *  keeping it live-synced — the two views would otherwise fight over
+ *  keystrokes while typing JSON. "Apply to tree" (below) is what pushes
+ *  edits back the other way. */
+function toggleJsonEditor() {
+  if (!editableDirectory.value) return;
+  showJsonEditor.value = !showJsonEditor.value;
+  jsonEditorError.value = null;
+  if (showJsonEditor.value) {
+    jsonEditorText.value = JSON.stringify(toWireFolder(editableDirectory.value), null, 2);
+  }
+}
+
+function applyJsonEditorToTree() {
+  jsonEditorError.value = null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonEditorText.value);
+  } catch (e) {
+    jsonEditorError.value = `Invalid JSON: ${String(e)}`;
+    return;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    jsonEditorError.value = "Expected a FOLDER object.";
+    return;
+  }
+  editableDirectory.value = fromWireFolder(parsed as Record<string, unknown>);
 }
 
 async function saveDirectory() {
@@ -501,10 +641,23 @@ async function saveDirectory() {
     }
     directoryEditMode.value = false;
     editableDirectory.value = null;
+    showJsonEditor.value = false;
+    jsonEditorText.value = "";
+    refreshDirectoryRevisionHistoryIfOpen();
   } catch (e) {
     directorySaveError.value = String(e);
   } finally {
     directorySaving.value = false;
+  }
+}
+
+/** The save/delete just committed a new DIRECTORY version — if the "Version
+ *  history" panel happens to be open, its list is now one version stale.
+ *  Re-fetching (rather than leaving it to the next open) keeps it in sync
+ *  with what the user is already looking at. */
+function refreshDirectoryRevisionHistoryIfOpen() {
+  if (showDirectoryHistoryPanel.value && serverStore.activeServerId && ehrId.value) {
+    ehrStore.fetchDirectoryRevisionHistory(serverStore.activeServerId, ehrId.value);
   }
 }
 
@@ -523,6 +676,8 @@ async function handleDeleteDirectory() {
     await ehrStore.deleteDirectory(serverStore.activeServerId, ehrId.value, existingVersionUid);
     void analytics.track("directory_deleted");
     showDeleteDirectoryDialog.value = false;
+    backToCurrentDirectory();
+    refreshDirectoryRevisionHistoryIfOpen();
   } catch (e) {
     deleteDirectoryError.value = String(e);
   } finally {
@@ -983,6 +1138,25 @@ function lookupContribution() {
               :is-root="true"
               :available-compositions="availableCompositionOptions"
             />
+
+            <div class="json-editor-toggle">
+              <button type="button" class="syntax-toggle" @click="toggleJsonEditor">
+                {{ showJsonEditor ? "Hide" : "Show" }} advanced: edit as JSON
+              </button>
+            </div>
+            <div v-if="showJsonEditor" class="json-editor">
+              <textarea
+                v-model="jsonEditorText"
+                class="json-editor-textarea mono"
+                spellcheck="false"
+                aria-label="DIRECTORY FOLDER JSON"
+              ></textarea>
+              <div v-if="jsonEditorError" class="delete-error">{{ jsonEditorError }}</div>
+              <button type="button" class="btn btn-sm" @click="applyJsonEditorToTree">
+                Apply to tree
+              </button>
+            </div>
+
             <div class="directory-edit-actions">
               <button
                 type="button"
@@ -1017,6 +1191,22 @@ function lookupContribution() {
                 Create Directory
               </button>
               <button
+                type="button"
+                class="btn btn-sm"
+                :class="{ active: showDirectoryHistoryPanel }"
+                @click="toggleDirectoryHistoryPanel"
+              >
+                Version history
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm"
+                :class="{ active: showDirectoryAtTimePanel }"
+                @click="toggleDirectoryAtTimePanel"
+              >
+                At time
+              </button>
+              <button
                 v-if="ehrStore.directory"
                 type="button"
                 class="btn btn-sm btn-danger"
@@ -1026,23 +1216,128 @@ function lookupContribution() {
               </button>
             </div>
 
-            <div v-if="ehrStore.directoryLoading" class="loading">
-              <span class="spinner"></span> Loading directory...
+            <!-- Version history panel (OEH-46) -->
+            <div v-if="showDirectoryHistoryPanel" class="directory-history-panel">
+              <div v-if="ehrStore.directoryRevisionHistoryLoading" class="loading">
+                <span class="spinner"></span> Loading version history...
+              </div>
+              <div v-else-if="ehrStore.directoryRevisionHistoryError" class="error-msg">
+                {{ ehrStore.directoryRevisionHistoryError }}
+              </div>
+              <div
+                v-else-if="ehrStore.directoryRevisionHistory.length === 0"
+                class="empty-versions"
+              >
+                No version history available for this directory.
+              </div>
+              <template v-else>
+                <div
+                  v-for="rev in ehrStore.directoryRevisionHistory"
+                  :key="rev.version_id"
+                  class="version-row"
+                >
+                  <div class="version-row-main">
+                    <div class="version-row-id mono">{{ rev.version_id }}</div>
+                    <div class="version-row-meta">
+                      <span v-if="directoryRevisionIsCurrent(rev)" class="badge badge-primary"
+                        >current</span
+                      >
+                      <span v-if="rev.commit_audit?.change_type" class="badge">{{
+                        rev.commit_audit.change_type
+                      }}</span>
+                      <span v-if="rev.commit_audit?.committer_name">{{
+                        rev.commit_audit.committer_name
+                      }}</span>
+                      <span v-if="rev.time_committed">{{ rev.time_committed }}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-sm" @click="previewDirectoryRevision(rev)">
+                    Open
+                  </button>
+                </div>
+              </template>
             </div>
-            <div v-else-if="ehrStore.directoryError" class="empty-state">
-              <h3>Failed to load directory</h3>
-              <p class="error-detail">{{ ehrStore.directoryError }}</p>
+
+            <!-- "At a point in time" panel (OEH-46) -->
+            <div v-if="showDirectoryAtTimePanel" class="directory-at-time-panel">
+              <label for="directory-at-time" class="at-time-label"
+                >Date and time (interpreted as UTC)</label
+              >
+              <div class="at-time-row">
+                <input
+                  id="directory-at-time"
+                  v-model="directoryAtTimeInput"
+                  type="datetime-local"
+                  class="input"
+                />
+                <button type="button" class="btn btn-sm" @click="submitDirectoryAtTime">
+                  Open that version
+                </button>
+              </div>
+              <div v-if="directoryAtTimeError" class="error-msg">{{ directoryAtTimeError }}</div>
             </div>
-            <DirectoryTree
-              v-else-if="ehrStore.directory"
-              :folder="ehrStore.directory"
-              :depth="0"
-              @open-item="openCompositionRef"
-            />
-            <div v-else class="empty-state">
-              <h3>No directory set</h3>
-              <p>This EHR doesn't have a DIRECTORY folder structure.</p>
+
+            <!-- Previewing a historical version/point in time (OEH-46) -->
+            <div v-if="previewLabel" class="directory-preview-banner">
+              <span>Previewing {{ previewLabel }}</span>
+              <button type="button" class="btn btn-sm" @click="backToCurrentDirectory">
+                Back to current
+              </button>
             </div>
+
+            <template v-if="previewLabel">
+              <div v-if="ehrStore.directoryVersionPreviewLoading" class="loading">
+                <span class="spinner"></span> Loading...
+              </div>
+              <div v-else-if="ehrStore.directoryVersionPreviewError" class="empty-state">
+                <h3>Failed to load that version</h3>
+                <p class="error-detail">{{ ehrStore.directoryVersionPreviewError }}</p>
+              </div>
+              <template v-else-if="ehrStore.directoryVersionPreview">
+                <div class="directory-stats">
+                  {{ previewDirectoryStats.folders }} folder{{
+                    previewDirectoryStats.folders === 1 ? "" : "s"
+                  }}
+                  · {{ previewDirectoryStats.items }} item{{
+                    previewDirectoryStats.items === 1 ? "" : "s"
+                  }}
+                </div>
+                <DirectoryTree
+                  :folder="ehrStore.directoryVersionPreview"
+                  :depth="0"
+                  @open-item="openCompositionRef"
+                />
+              </template>
+              <div v-else class="empty-state">
+                <h3>No directory at that point</h3>
+                <p>There was no DIRECTORY set for this EHR at that time/version.</p>
+              </div>
+            </template>
+
+            <template v-else>
+              <div v-if="ehrStore.directoryLoading" class="loading">
+                <span class="spinner"></span> Loading directory...
+              </div>
+              <div v-else-if="ehrStore.directoryError" class="empty-state">
+                <h3>Failed to load directory</h3>
+                <p class="error-detail">{{ ehrStore.directoryError }}</p>
+              </div>
+              <template v-else-if="ehrStore.directory">
+                <div class="directory-stats">
+                  {{ directoryStats.folders }} folder{{ directoryStats.folders === 1 ? "" : "s" }} ·
+                  {{ directoryStats.items }} item{{ directoryStats.items === 1 ? "" : "s" }}
+                </div>
+                <DirectoryTree
+                  :folder="ehrStore.directory"
+                  :depth="0"
+                  @open-item="openCompositionRef"
+                />
+              </template>
+              <div v-else class="empty-state">
+                <h3>No directory set</h3>
+                <p>This EHR doesn't have a DIRECTORY folder structure.</p>
+              </div>
+            </template>
           </template>
         </div>
 
@@ -1305,6 +1600,134 @@ function lookupContribution() {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--color-border);
+}
+
+.directory-toolbar .btn.active {
+  background: var(--color-primary-dim);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.directory-stats {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* "Advanced: edit as JSON" (OEH-46) */
+.json-editor-toggle {
+  margin-top: 12px;
+}
+.syntax-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.syntax-toggle:hover {
+  color: var(--color-text);
+}
+
+.json-editor {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.json-editor-textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.json-editor-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary-dim);
+}
+.json-editor-textarea.mono {
+  font-family: var(--font-mono);
+}
+
+/* Version history / at-time preview (OEH-46) */
+.directory-history-panel,
+.directory-at-time-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.empty-versions {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+.version-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.version-row-main {
+  min-width: 0;
+}
+
+.version-row-id.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.version-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.at-time-label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.at-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.directory-preview-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-primary-dim);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 13px;
 }
 
 .search-bar {

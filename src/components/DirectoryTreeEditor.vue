@@ -2,6 +2,7 @@
 import { inject, ref } from "vue";
 import type { CompositionOption, DirectoryMutations, EditableFolder } from "../lib/directoryEdit";
 import { DIRECTORY_MUTATIONS_KEY } from "../lib/directoryEdit";
+import DirectoryAddItemModal from "./DirectoryAddItemModal.vue";
 
 // Editable counterpart to DirectoryTree.vue — same FOLDER/OBJECT_REF
 // recursion, but bound to plain-field inputs instead of rendering the RM
@@ -38,7 +39,7 @@ const noopMutations: DirectoryMutations = {
 const mutations = inject(DIRECTORY_MUTATIONS_KEY, noopMutations);
 
 const expanded = ref(true);
-const selectedCompositionUid = ref("");
+const showAddItemModal = ref(false);
 
 function toggle() {
   expanded.value = !expanded.value;
@@ -61,10 +62,8 @@ function handleAddSubfolder() {
   expanded.value = true;
 }
 
-function handleAddItem() {
-  if (!selectedCompositionUid.value) return;
-  mutations.addItem(props.path, selectedCompositionUid.value);
-  selectedCompositionUid.value = "";
+function handleAddItem(item: { id: string; type: string; namespace: string; idScheme: string }) {
+  mutations.addItem(props.path, item.id, item.type, item.namespace, item.idScheme);
 }
 
 function handleRemoveItem(key: string) {
@@ -140,26 +139,18 @@ function compositionLabel(uid: string): string {
 
       <div class="dir-edit-actions">
         <button type="button" class="btn btn-sm" @click="handleAddSubfolder">+ Subfolder</button>
-        <select
-          v-model="selectedCompositionUid"
-          class="composition-picker"
-          aria-label="Add composition to folder"
-        >
-          <option value="">Add composition…</option>
-          <option v-for="c in availableCompositions" :key="c.uid" :value="c.uid">
-            {{ c.label }}
-          </option>
-        </select>
-        <button
-          type="button"
-          class="btn btn-sm"
-          :disabled="!selectedCompositionUid"
-          @click="handleAddItem"
-        >
-          + Item
+        <button type="button" class="btn btn-sm" @click="showAddItemModal = true">
+          + Item reference
         </button>
       </div>
     </div>
+
+    <DirectoryAddItemModal
+      :open="showAddItemModal"
+      :available-compositions="availableCompositions"
+      @close="showAddItemModal = false"
+      @add="handleAddItem"
+    />
   </div>
 </template>
 
@@ -273,16 +264,5 @@ function compositionLabel(uid: string): string {
   gap: 6px;
   padding: 6px;
   flex-wrap: wrap;
-}
-
-.composition-picker {
-  flex: 1;
-  min-width: 120px;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
-  color: inherit;
-  font-size: 12px;
 }
 </style>

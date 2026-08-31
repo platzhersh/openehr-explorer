@@ -30,6 +30,7 @@ import type { InjectionKey } from "vue";
  *  DIRECTORY. */
 const DEFAULT_ITEM_TYPE = "COMPOSITION";
 const DEFAULT_ITEM_NAMESPACE = "local";
+const DEFAULT_ID_SCHEME = "HIER_OBJECT_ID";
 
 export interface EditableItem {
   /** Local editing key — not part of the wire format. Needed for a stable
@@ -38,6 +39,11 @@ export interface EditableItem {
   id: string;
   type: string;
   namespace: string;
+  /** The OBJECT_ID variant (`_type`) the id is expressed as — almost always
+   *  `HIER_OBJECT_ID` (a plain UUID/versioned UID), but the RM also allows
+   *  `GENERIC_ID`, `ARCHETYPE_ID`, etc. for a reference outside this EHR's
+   *  own composition space. */
+  idScheme: string;
 }
 
 export interface EditableFolder {
@@ -73,7 +79,11 @@ export function emptyFolder(name = ""): EditableFolder {
 export function fromWireFolder(folder: Record<string, unknown>): EditableFolder {
   const f = folder as {
     name?: { value?: string };
-    items?: Array<{ id?: { value?: string }; type?: string; namespace?: string }>;
+    items?: Array<{
+      id?: { value?: string; _type?: string };
+      type?: string;
+      namespace?: string;
+    }>;
     folders?: Record<string, unknown>[];
   };
 
@@ -85,6 +95,7 @@ export function fromWireFolder(folder: Record<string, unknown>): EditableFolder 
       id: item.id?.value ?? "",
       type: item.type ?? DEFAULT_ITEM_TYPE,
       namespace: item.namespace ?? DEFAULT_ITEM_NAMESPACE,
+      idScheme: item.id?._type ?? DEFAULT_ID_SCHEME,
     })),
     folders: (f.folders ?? []).map(fromWireFolder),
   };
@@ -116,7 +127,7 @@ export function toWireFolder(folder: EditableFolder, isRoot = true): Record<stri
       .filter((item) => item.id.trim().length > 0)
       .map((item) => ({
         _type: "OBJECT_REF",
-        id: { _type: "HIER_OBJECT_ID", value: item.id.trim() },
+        id: { _type: item.idScheme.trim() || DEFAULT_ID_SCHEME, value: item.id.trim() },
         namespace: item.namespace.trim() || DEFAULT_ITEM_NAMESPACE,
         type: item.type.trim() || DEFAULT_ITEM_TYPE,
       })),
@@ -141,8 +152,14 @@ export function addSubfolder(folder: EditableFolder, name = "New folder"): void 
   folder.folders.push(emptyFolder(name));
 }
 
-export function addItem(folder: EditableFolder, id: string, type = DEFAULT_ITEM_TYPE): void {
-  folder.items.push({ key: nextKey("item"), id, type, namespace: DEFAULT_ITEM_NAMESPACE });
+export function addItem(
+  folder: EditableFolder,
+  id: string,
+  type = DEFAULT_ITEM_TYPE,
+  namespace = DEFAULT_ITEM_NAMESPACE,
+  idScheme = DEFAULT_ID_SCHEME,
+): void {
+  folder.items.push({ key: nextKey("item"), id, type, namespace, idScheme });
 }
 
 export function removeSubfolder(folder: EditableFolder, key: string): void {
@@ -195,7 +212,16 @@ export interface DirectoryMutations {
   renameFolder(path: readonly number[], name: string): void;
   renameItemId(path: readonly number[], key: string, id: string): void;
   addSubfolder(path: readonly number[]): void;
-  addItem(path: readonly number[], compositionUid: string): void;
+  /** `type`/`namespace`/`idScheme` default the same way the plain `addItem`
+   *  function above does — omit them for the common case (a COMPOSITION in
+   *  this EHR's own `local` namespace, a HIER_OBJECT_ID). */
+  addItem(
+    path: readonly number[],
+    id: string,
+    type?: string,
+    namespace?: string,
+    idScheme?: string,
+  ): void;
   removeSubfolder(parentPath: readonly number[], key: string): void;
   removeItem(parentPath: readonly number[], key: string): void;
 }

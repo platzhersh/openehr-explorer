@@ -128,6 +128,7 @@ pub fn run() {
             ehr::search_ehrs,
             ehr::get_directory,
             ehr::get_directory_version,
+            ehr::get_directory_revision_history,
             ehr::create_directory,
             ehr::update_directory,
             ehr::delete_directory,
