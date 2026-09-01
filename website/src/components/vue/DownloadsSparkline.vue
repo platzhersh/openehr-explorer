@@ -9,8 +9,9 @@ import { computed, onMounted, ref } from "vue";
 
 const HISTORY_URL = "https://raw.githubusercontent.com/platzhersh/openehr-explorer/data/docs/downloads-history.json";
 // A couple of days of noisy, near-flat snapshots isn't a curve worth
-// showing — wait for a full week before the sparkline appears.
-const MIN_POINTS = 7;
+// showing — wait for more than 3 days of history before the sparkline
+// appears.
+const MIN_POINTS = 4;
 const WIDTH = 120;
 const HEIGHT = 28;
 // Room the tooltip needs above the curve (its own height plus the gap).

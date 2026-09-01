@@ -823,7 +823,7 @@
       <p class="downloads-badge">
         <a href="https://github.com/platzhersh/openehr-explorer/releases"><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads"></a>
       </p>
-      <!-- Hidden until the daily snapshot history has at least a week's
+      <!-- Hidden until the daily snapshot history has more than 3 days'
            worth of points — see the downloads-sparkline script below. -->
       <div class="downloads-sparkline" id="downloads-sparkline" hidden>
         <svg id="downloads-sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-labelledby="downloads-sparkline-desc">
@@ -1171,8 +1171,9 @@
     (function () {
       var HISTORY_URL = 'https://raw.githubusercontent.com/platzhersh/openehr-explorer/data/docs/downloads-history.json';
       // A couple of days of noisy, near-flat snapshots isn't a curve worth
-      // showing — wait for a full week before the sparkline appears.
-      var MIN_POINTS = 7;
+      // showing — wait for more than 3 days of history before the
+      // sparkline appears.
+      var MIN_POINTS = 4;
 
       function buildPaths(points, width, height) {
         var totals = points.map(function (p) { return p.total; });

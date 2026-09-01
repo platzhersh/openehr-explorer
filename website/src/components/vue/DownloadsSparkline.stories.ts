@@ -10,7 +10,7 @@ const meta: Meta<typeof DownloadsSparkline> = {
     docs: {
       description: {
         component:
-          "Fetches the live downloads-history JSON from the repo's `data` branch on mount, same as production — there's nothing to control via args, and the `Default` story stays hidden until that fetch resolves with at least a week of history (or renders nothing if it's offline/unavailable, which is the common case in Storybook). `Populated` stubs the fetch with canned history so the rendered sparkline itself is visible here too.",
+          "Fetches the live downloads-history JSON from the repo's `data` branch on mount, same as production — there's nothing to control via args, and the `Default` story stays hidden until that fetch resolves with more than 3 days of history (or renders nothing if it's offline/unavailable, which is the common case in Storybook). `Populated` stubs the fetch with canned history so the rendered sparkline itself is visible here too.",
       },
     },
   },
