@@ -289,6 +289,11 @@
       gap: 8px;
     }
 
+    .downloads-sparkline-plot {
+      position: relative;
+      line-height: 0;
+    }
+
     .downloads-sparkline svg {
       width: 120px;
       height: 28px;
@@ -308,6 +313,68 @@
       stroke-width: 1.5;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+
+    .downloads-sparkline-cursor {
+      stroke: var(--primary);
+      stroke-width: 1;
+      opacity: 0.35;
+    }
+
+    .downloads-sparkline-dot {
+      fill: var(--primary);
+      stroke: var(--bg);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .downloads-sparkline-hit {
+      fill: transparent;
+      stroke: none;
+    }
+
+    /* Hidden by default; toggled via .is-visible from the hover handler
+       below rather than the `hidden` attribute, since author `display`
+       rules here would otherwise take precedence over it. */
+    .downloads-sparkline-hover {
+      opacity: 0;
+    }
+
+    .downloads-sparkline-hover.is-visible {
+      opacity: 1;
+    }
+
+    .downloads-sparkline-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%);
+      display: none;
+      align-items: baseline;
+      gap: 5px;
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.72rem;
+      line-height: 1.3;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .downloads-sparkline-tooltip.is-visible {
+      display: flex;
+    }
+
+    .downloads-sparkline-tooltip.is-below {
+      bottom: auto;
+      top: calc(100% + 8px);
+    }
+
+    .downloads-sparkline-tooltip span {
+      color: var(--text-muted);
+      font-size: 0.7rem;
     }
 
     .downloads-sparkline-caption {
@@ -826,11 +893,21 @@
       <!-- Hidden until the daily snapshot history has more than 3 days'
            worth of points — see the downloads-sparkline script below. -->
       <div class="downloads-sparkline" id="downloads-sparkline" hidden>
-        <svg id="downloads-sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-labelledby="downloads-sparkline-desc">
-          <desc id="downloads-sparkline-desc"></desc>
-          <path class="downloads-sparkline-area" d=""></path>
-          <path class="downloads-sparkline-line" d=""></path>
-        </svg>
+        <div class="downloads-sparkline-plot">
+          <svg id="downloads-sparkline-svg" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-labelledby="downloads-sparkline-desc">
+            <desc id="downloads-sparkline-desc"></desc>
+            <path class="downloads-sparkline-area" d=""></path>
+            <path class="downloads-sparkline-line" d=""></path>
+            <g class="downloads-sparkline-hover" id="downloads-sparkline-hover">
+              <line class="downloads-sparkline-cursor" id="downloads-sparkline-cursor" x1="0" x2="0" y1="0" y2="28"></line>
+              <circle class="downloads-sparkline-dot" id="downloads-sparkline-dot" r="2.5"></circle>
+            </g>
+            <!-- Transparent hit area: the paths alone leave gaps above the
+                 curve where pointermove would never fire. -->
+            <rect class="downloads-sparkline-hit" x="0" y="0" width="120" height="28"></rect>
+          </svg>
+          <output class="downloads-sparkline-tooltip" id="downloads-sparkline-tooltip"></output>
+        </div>
         <span class="downloads-sparkline-caption" id="downloads-sparkline-caption"></span>
       </div>
     </section>
@@ -1174,43 +1251,123 @@
       // showing — wait for more than 3 days of history before the
       // sparkline appears.
       var MIN_POINTS = 4;
+      // Room the tooltip needs above the curve (its own height plus the gap).
+      var TOOLTIP_CLEARANCE = 40;
 
-      function buildPaths(points, width, height) {
-        var totals = points.map(function (p) { return p.total; });
+      // The points/coords the currently-rendered curve was built from —
+      // pointermove reads these to snap the tooltip to the nearest
+      // recorded snapshot instead of interpolating.
+      var points = [];
+      var coords = [];
+
+      // The history file comes from a cross-origin fetch, not a schema this
+      // script controls — a malformed entry (missing/non-numeric `total`)
+      // would otherwise flow into Math.min/max as NaN and silently draw
+      // nothing while still marking the sparkline visible.
+      function isWellFormedPoint(value) {
+        return value && typeof value.date === 'string' && Number.isFinite(value.total);
+      }
+
+      function buildCoords(pts, width, height) {
+        var totals = pts.map(function (p) { return p.total; });
         var min = Math.min.apply(null, totals);
         var max = Math.max.apply(null, totals);
         var range = max - min || 1; // avoid a divide-by-zero on a flat line
 
-        var coords = points.map(function (p, i) {
-          var x = (i / (points.length - 1)) * width;
-          var y = height - ((p.total - min) / range) * height;
-          return x.toFixed(1) + ',' + y.toFixed(1);
+        return pts.map(function (p, i) {
+          return {
+            x: (i / (pts.length - 1)) * width,
+            y: height - ((p.total - min) / range) * height
+          };
         });
+      }
 
-        var line = 'M' + coords.join(' L');
+      function buildPaths(pts, width, height) {
+        var vertices = pts.map(function (c) { return c.x.toFixed(1) + ',' + c.y.toFixed(1); });
+        var line = 'M' + vertices.join(' L');
         var area = line + ' L' + width + ',' + height + ' L0,' + height + ' Z';
         return { line: line, area: area };
       }
 
-      function render(points) {
-        if (points.length < MIN_POINTS) return;
+      function render(rawPoints) {
+        var parsed = rawPoints.filter(isWellFormedPoint);
+        if (parsed.length < MIN_POINTS) return;
 
         var container = document.getElementById('downloads-sparkline');
         var svg = document.getElementById('downloads-sparkline-svg');
         if (!container || !svg) return;
 
         var viewBox = svg.viewBox.baseVal;
-        var paths = buildPaths(points, viewBox.width, viewBox.height);
+        var pointCoords = buildCoords(parsed, viewBox.width, viewBox.height);
+        var paths = buildPaths(pointCoords, viewBox.width, viewBox.height);
         svg.querySelector('.downloads-sparkline-line').setAttribute('d', paths.line);
         svg.querySelector('.downloads-sparkline-area').setAttribute('d', paths.area);
 
-        var first = points[0];
-        var last = points[points.length - 1];
+        points = parsed;
+        coords = pointCoords;
+
+        var first = parsed[0];
+        var last = parsed[parsed.length - 1];
         document.getElementById('downloads-sparkline-desc').textContent =
           'Total downloads grew from ' + first.total + ' on ' + first.date + ' to ' + last.total + ' on ' + last.date + '.';
         document.getElementById('downloads-sparkline-caption').textContent = 'since ' + first.date;
 
         container.hidden = false;
+        wireHover(svg, viewBox.width);
+      }
+
+      // The pointer lands anywhere along the curve; snap it to the nearest
+      // daily snapshot so the tooltip always reports a real recorded value
+      // rather than an interpolated one.
+      function wireHover(svg, width) {
+        var hover = document.getElementById('downloads-sparkline-hover');
+        var cursor = document.getElementById('downloads-sparkline-cursor');
+        var dot = document.getElementById('downloads-sparkline-dot');
+        var tooltip = document.getElementById('downloads-sparkline-tooltip');
+
+        // Built once as real DOM nodes (not innerHTML) since point.date
+        // comes from a cross-origin fetch — only their text is ever set.
+        var tooltipValue = document.createElement('strong');
+        var tooltipSep = document.createElement('span');
+        tooltipSep.setAttribute('aria-hidden', 'true');
+        tooltipSep.textContent = '·';
+        var tooltipDate = document.createElement('span');
+        tooltip.append(tooltipValue, tooltipSep, tooltipDate);
+
+        function showHover(index, rectTop) {
+          var point = points[index];
+          var coord = coords[index];
+          if (!point || !coord) return;
+
+          cursor.setAttribute('x1', coord.x);
+          cursor.setAttribute('x2', coord.x);
+          dot.setAttribute('cx', coord.x);
+          dot.setAttribute('cy', coord.y);
+          hover.classList.add('is-visible');
+
+          tooltipValue.textContent = point.total.toLocaleString();
+          tooltipDate.textContent = point.date;
+          tooltip.style.left = ((coord.x / width) * 100) + '%';
+          tooltip.classList.toggle('is-below', rectTop < TOOLTIP_CLEARANCE);
+          tooltip.classList.add('is-visible');
+        }
+
+        function clearHover() {
+          hover.classList.remove('is-visible');
+          tooltip.classList.remove('is-visible');
+        }
+
+        svg.addEventListener('pointermove', function (event) {
+          var rect = svg.getBoundingClientRect();
+          if (!rect.width || points.length === 0) return;
+
+          var ratio = (event.clientX - rect.left) / rect.width;
+          var index = Math.round(ratio * (points.length - 1));
+          index = Math.min(Math.max(index, 0), points.length - 1);
+          showHover(index, rect.top);
+        });
+        svg.addEventListener('pointerleave', clearHover);
+        svg.addEventListener('pointercancel', clearHover);
       }
 
       fetch(HISTORY_URL)
