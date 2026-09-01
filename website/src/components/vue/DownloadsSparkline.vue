@@ -61,7 +61,8 @@ function buildCoords(pts: Point[]): Coord[] {
 }
 
 function buildPaths(pts: Coord[]) {
-  const line = `M${pts.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" L")}`;
+  const vertices = pts.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" L");
+  const line = `M${vertices}`;
   const area = `${line} L${WIDTH},${HEIGHT} L0,${HEIGHT} Z`;
   return { line, area };
 }
@@ -154,17 +155,16 @@ onMounted(() => {
              curve where pointermove would never fire. -->
         <rect class="downloads-sparkline-hit" x="0" y="0" :width="WIDTH" :height="HEIGHT"></rect>
       </svg>
-      <div
+      <output
         v-if="hovered"
         class="downloads-sparkline-tooltip"
         :class="{ 'is-below': tooltipBelow }"
         :style="{ left: `${(hovered.coord.x / WIDTH) * 100}%` }"
-        role="status"
       >
         <strong>{{ hovered.point.total.toLocaleString() }}</strong>
         <span aria-hidden="true">·</span>
         <span>{{ hovered.point.date }}</span>
-      </div>
+      </output>
     </div>
     <span class="downloads-sparkline-caption">{{ caption }}</span>
   </div>
