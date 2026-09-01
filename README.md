@@ -8,7 +8,7 @@
   <a href="https://github.com/platzhersh/openehr-explorer/releases"><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/platzhersh/openehr-explorer" alt="License"></a>
   <a href="https://github.com/platzhersh/openehr-explorer/actions/workflows/ci.yml"><img src="https://github.com/platzhersh/openehr-explorer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://openehr-explorer.dev/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation"></a>
+  <a href="https://openehr-explorer.dev/"><img src="https://img.shields.io/badge/docs-openehr--explorer.dev-blue" alt="Documentation"></a>
 </p>
 
 A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, etc.) — a Postman alternative built specifically for openEHR.
