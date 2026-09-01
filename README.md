@@ -8,7 +8,7 @@
   <a href="https://github.com/platzhersh/openehr-explorer/releases"><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/platzhersh/openehr-explorer" alt="License"></a>
   <a href="https://github.com/platzhersh/openehr-explorer/actions/workflows/ci.yml"><img src="https://github.com/platzhersh/openehr-explorer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://platzhersh.github.io/openehr-explorer/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Documentation"></a>
+  <a href="https://openehr-explorer.dev/"><img src="https://img.shields.io/badge/docs-openehr--explorer.dev-blue" alt="Documentation"></a>
 </p>
 
 A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, etc.) — a Postman alternative built specifically for openEHR.
@@ -71,7 +71,7 @@ sudo apt install ./openehr-explorer_<version>_amd64.deb
 chmod +x openehr-explorer_<version>_amd64.AppImage && ./openehr-explorer_<version>_amd64.AppImage
 ```
 
-See the [installation docs](https://platzhersh.github.io/openehr-explorer/docs.html#installation) for troubleshooting (unsigned builds, Gatekeeper/SmartScreen warnings).
+See the [installation docs](https://openehr-explorer.dev/docs.html#installation) for troubleshooting (unsigned builds, Gatekeeper/SmartScreen warnings).
 
 ## Prerequisites
 
@@ -100,12 +100,12 @@ npm run tauri build
 
 There is no dedicated developer GUI for openEHR. Developers currently reach for generic tools (Postman, curl) or heavyweight alternatives (openEHRTool v2 with Docker, Better Studio for Better Platform only, ehr-ctrl). openEHR Explorer fills that gap.
 
-See the full, always-up-to-date **[Tool Comparison](https://platzhersh.github.io/openehr-explorer/compare.html)** on the docs site for a feature-by-feature breakdown against openEHRTool v2, Postman/curl, Better Studio, and ehr-ctrl.
+See the full, always-up-to-date **[Tool Comparison](https://openehr-explorer.dev/compare.html)** on the docs site for a feature-by-feature breakdown against openEHRTool v2, Postman/curl, Better Studio, and ehr-ctrl.
 
 ## Documentation
 
-- [User docs & guides](https://platzhersh.github.io/openehr-explorer/docs.html)
-- [Tool comparison](https://platzhersh.github.io/openehr-explorer/compare.html)
+- [User docs & guides](https://openehr-explorer.dev/docs.html)
+- [Tool comparison](https://openehr-explorer.dev/compare.html)
 - [PRDs](docs/prd/) — product requirements for each feature
 - [ADRs](docs/adr/) — architecture decisions and rationale
 - [RELEASING.md](RELEASING.md) — release process

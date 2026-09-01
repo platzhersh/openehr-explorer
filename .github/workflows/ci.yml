@@ -479,7 +479,7 @@ jobs:
             url "https://github.com/${REPO}/releases/download/v#{version}/openEHR.Explorer_#{version}_universal.dmg"
             name "openEHR Explorer"
             desc "Browse, query, and inspect any openEHR CDR"
-            homepage "https://platzhersh.github.io/openehr-explorer/"
+            homepage "https://openehr-explorer.dev/"
 
             depends_on macos: :catalina
 
@@ -572,7 +572,7 @@ jobs:
           {
               "version": "${VERSION}",
               "description": "Browse, query, and inspect any openEHR CDR — no curl required.",
-              "homepage": "https://platzhersh.github.io/openehr-explorer/",
+              "homepage": "https://openehr-explorer.dev/",
               "license": "Apache-2.0",
               "url": "https://github.com/${REPO}/releases/download/${TAG_NAME}/${EXE_NAME}",
               "hash": "${SHA256}",

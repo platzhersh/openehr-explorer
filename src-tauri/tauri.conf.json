@@ -34,7 +34,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "homepage": "https://platzhersh.github.io/openehr-explorer/",
+    "homepage": "https://openehr-explorer.dev/",
     "macOS": {
       "minimumSystemVersion": "10.15",
       "signingIdentity": null,
