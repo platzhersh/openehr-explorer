@@ -63,7 +63,7 @@ fn install_update_check_menu_item(app: &tauri::App) -> tauri::Result<()> {
 }
 
 /// The official website URL for openEHR Explorer
-pub const WEBSITE_URL: &str = "https://platzhersh.github.io/openehr-explorer/";
+pub const WEBSITE_URL: &str = "https://openehr-explorer.dev/";
 
 /// Aptabase App Key injected at compile time via the `APTABASE_APP_KEY` env var.
 ///

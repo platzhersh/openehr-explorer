@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://platzhersh.github.io/openehr-explorer/sitemap.xml
+Sitemap: https://openehr-explorer.dev/sitemap.xml

@@ -25,7 +25,7 @@ function isActive(path: string): boolean {
 }
 
 async function openDocumentation() {
-  await openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
+  await openUrl("https://openehr-explorer.dev/docs.html");
   void analytics.track("documentation_opened");
 }
 

@@ -4,7 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettingsStore } from "../stores/settings";
 import { useUpdateStore } from "../stores/update";
 
-const CHANGELOG_URL = "https://platzhersh.github.io/openehr-explorer/docs.html#changelog";
+const CHANGELOG_URL = "https://openehr-explorer.dev/docs.html#changelog";
 
 const settingsStore = useSettingsStore();
 const updateStore = useUpdateStore();
