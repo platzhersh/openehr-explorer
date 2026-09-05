@@ -39,6 +39,7 @@ defineEmits<{ click: [MouseEvent] }>();
       :class="[`size-${size}`, `variant-${variant}`]"
       :disabled="disabled || loading"
       :aria-label="title"
+      :title="title"
       @click.stop="$emit('click', $event)"
     >
       <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
