@@ -3,7 +3,9 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
+import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
+import CompassIcon from "../components/CompassIcon.vue";
 import CopyButton from "../components/CopyButton.vue";
 import TerminologySystemSelect from "../components/TerminologySystemSelect.vue";
 import {
@@ -22,7 +24,13 @@ const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
+const tourStore = useTourStore();
 const analytics = useAnalytics();
+
+function replayTour() {
+  void analytics.track("tour_replayed", { tour_id: "terminology" });
+  tourStore.start("terminology");
+}
 
 type TabId = "lookup" | "expand" | "validate" | "subsumes";
 
@@ -305,12 +313,22 @@ function useConceptInLookup(concept: TerminologyConcept) {
         >
           ← Back to template
         </button>
-        <h2>Terminology</h2>
+        <div class="header-title-row">
+          <h2>Terminology</h2>
+          <button
+            type="button"
+            class="tour-trigger-btn"
+            title="Take a tour of the Terminology Browser"
+            @click="replayTour"
+          >
+            <CompassIcon />
+          </button>
+        </div>
         <p class="subtitle">
           Query the FHIR terminology server configured for this connection: describe a code, expand
           a value set, and test membership or subsumption.
         </p>
-        <p class="scope-note">
+        <p class="scope-note" data-tour="terminology-scope-note">
           <strong>Not part of openEHR itself</strong> — this talks directly to a
           <a href="https://www.hl7.org/fhir/terminology-service.html" target="_blank" rel="noopener"
             >FHIR Terminology Service</a
@@ -337,7 +355,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
     </div>
 
     <template v-else>
-      <div class="tab-bar" role="tablist">
+      <div class="tab-bar" role="tablist" data-tour="terminology-tabs">
         <button
           v-for="tab in TABS"
           :key="tab.id"
@@ -377,6 +395,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
             <button
               type="button"
               class="btn btn-sm btn-ghost"
+              data-tour="terminology-example"
               :disabled="lookupLoading"
               @click="runLookupExample"
             >
@@ -617,6 +636,11 @@ function useConceptInLookup(concept: TerminologyConcept) {
 .back-to-template {
   display: block;
   margin-bottom: 8px;
+}
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .subtitle {
   margin-top: 4px;

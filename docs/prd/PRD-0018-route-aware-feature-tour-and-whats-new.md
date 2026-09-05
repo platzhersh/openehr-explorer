@@ -58,6 +58,7 @@ A tour is a named, ordered list of steps; each step highlights one DOM element (
 | `aql` | `aql` | Context template autocomplete, Run, Format, Saved Queries, Stored Queries |
 | `servers` | `servers` | Add a server profile |
 | `contribution` | `contribution` | Audit trail + versions overview (single step — see below) |
+| `terminology` | `terminology` | The four FHIR terminology operations, "Try an example", and the not-part-of-openEHR scope note |
 
 A tour auto-starts the first time a user navigates to one of its routes, provided:
 - The `tours_enabled` setting is on (default: on).

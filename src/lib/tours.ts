@@ -222,6 +222,28 @@ export const TOURS: Tour[] = [
     ],
   },
   {
+    id: "terminology",
+    routeNames: ["terminology"],
+    label: "Terminology Browser",
+    steps: [
+      step(
+        '[data-tour="terminology-tabs"]',
+        "Four terminology operations",
+        "Describe a single code, expand a value set into its member concepts, validate that a code belongs to a value set (or code system), or test how two codes relate in a hierarchy. Switch tabs any time.",
+      ),
+      step(
+        '[data-tour="terminology-example"]',
+        "Try an example",
+        "No code system or value set handy? Every tab has a one-click example that fills in known-good values and runs it immediately.",
+      ),
+      step(
+        '[data-tour="terminology-scope-note"]',
+        "A separate server, on purpose",
+        "This talks directly to a FHIR Terminology Service, not your openEHR CDR — openEHR doesn't define terminology operations of its own. Configure the server it queries in Settings or per-server in the Server Manager.",
+      ),
+    ],
+  },
+  {
     id: "servers",
     routeNames: ["servers"],
     label: "Server Manager",
