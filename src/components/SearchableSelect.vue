@@ -39,12 +39,7 @@ const props = withDefaults(
     placeholder?: string;
     /** Placeholder for the filter text field inside the open panel. */
     searchPlaceholder?: string;
-    /**
-     * Optional visible `<label>`. The control itself is a `<div>`, not a
-     * native labelable element (input/select/button/…), so the label is
-     * wired up via `aria-labelledby` rather than `for`/`id` — `for` only
-     * does anything on the whitelisted labelable tags.
-     */
+    /** Optional visible `<label>`, associated via `for`/`id` like TerminologySystemSelect. */
     label?: string;
     /**
      * Accessible name for the control when there's no visible `label` (e.g.
@@ -72,7 +67,6 @@ const props = withDefaults(
 const modelValue = defineModel<string | null>({ default: null });
 
 const controlId = useId();
-const labelId = useId();
 const listboxId = useId();
 const searchInputId = useId();
 
@@ -137,11 +131,12 @@ function scrollHighlightedIntoView() {
 }
 
 function onControlKeydown(event: KeyboardEvent) {
-  if (isOpen.value) return;
-  if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    open();
-  }
+  // Enter/Space are handled natively — the control is a real <button>, so
+  // the browser already turns those into a click (-> toggle()). Only
+  // ArrowDown needs custom handling since there's no native mapping for it.
+  if (isOpen.value || event.key !== "ArrowDown") return;
+  event.preventDefault();
+  open();
 }
 
 function onPanelKeydown(event: KeyboardEvent) {
@@ -201,29 +196,31 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootRef" class="searchable-select" :class="{ 'is-disabled': disabled }">
-    <label v-if="label" :id="labelId" class="searchable-select-label" @click="open">{{
-      label
-    }}</label>
+    <label v-if="label" :for="controlId" class="searchable-select-label">{{ label }}</label>
     <div
-      :id="controlId"
       class="input searchable-select-control"
       :class="{ 'no-selection': !selectedOption, open: isOpen }"
-      aria-haspopup="true"
-      :aria-expanded="isOpen"
-      :aria-controls="listboxId"
-      :aria-disabled="disabled"
-      :aria-labelledby="label ? labelId : undefined"
-      :aria-label="label ? undefined : ariaLabel"
-      :tabindex="disabled ? -1 : 0"
-      @click="toggle"
-      @keydown="onControlKeydown"
     >
-      <span class="searchable-select-value" :title="selectedOption?.label">
-        <slot v-if="selectedOption" name="selected" :option="selectedOption">{{
-          selectedOption.label
-        }}</slot>
-        <span v-else class="searchable-select-placeholder">{{ placeholder }}</span>
-      </span>
+      <button
+        :id="controlId"
+        type="button"
+        class="searchable-select-trigger"
+        aria-haspopup="true"
+        :aria-expanded="isOpen"
+        :aria-controls="listboxId"
+        :aria-label="label ? undefined : ariaLabel"
+        :disabled="disabled"
+        @click="toggle"
+        @keydown="onControlKeydown"
+      >
+        <span class="searchable-select-value" :title="selectedOption?.label">
+          <slot v-if="selectedOption" name="selected" :option="selectedOption">{{
+            selectedOption.label
+          }}</slot>
+          <span v-else class="searchable-select-placeholder">{{ placeholder }}</span>
+        </span>
+        <span class="searchable-select-arrow" aria-hidden="true">▾</span>
+      </button>
       <button
         v-if="clearable && selectedOption && !disabled"
         type="button"
@@ -233,7 +230,6 @@ onUnmounted(() => {
       >
         &times;
       </button>
-      <span class="searchable-select-arrow" aria-hidden="true">▾</span>
     </div>
 
     <div v-if="isOpen" class="searchable-select-panel">
@@ -305,19 +301,41 @@ onUnmounted(() => {
 
 .searchable-select-control {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 6px;
-  cursor: pointer;
-  user-select: none;
+}
+
+.searchable-select-control:focus-within,
+.searchable-select-control.open {
+  border-color: var(--color-primary-dim);
 }
 
 .searchable-select.is-disabled .searchable-select-control {
-  cursor: not-allowed;
   opacity: 0.6;
 }
 
-.searchable-select-control.open {
-  border-color: var(--color-primary-dim);
+/* The actual interactive element — a real <button> so a `<label for>` can
+   validly name it and Enter/Space activate it natively. Reset to look like
+   plain text filling the wrapping `.input` box rather than a button. */
+.searchable-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.searchable-select-trigger:disabled {
+  cursor: not-allowed;
 }
 
 .searchable-select-control.no-selection .searchable-select-value {
@@ -334,6 +352,7 @@ onUnmounted(() => {
 
 .searchable-select-clear {
   flex-shrink: 0;
+  align-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
