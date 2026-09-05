@@ -396,18 +396,36 @@ pub async fn update_composition(
         ));
     }
 
-    let result: Value =
-        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
+    // As with create_composition: whether the server returns the updated
+    // COMPOSITION as a JSON body (200) or an empty one (204, e.g. FerroEHR's
+    // default `Prefer: return=minimal` behavior when no Prefer header is
+    // sent) is server-dependent. Try the Location header first, then fall
+    // back to the body, instead of assuming a body is always present.
+    if let Some(location) = resp.headers.get("location") {
+        let new_uid = location
+            .split('/')
+            .next_back()
+            .ok_or("Could not extract composition UID from Location header")?
+            .to_string();
 
-    // Extract new version UID
-    let new_uid = result
-        .get("uid")
-        .and_then(|u| u.get("value"))
-        .and_then(|v| v.as_str())
-        .ok_or("Composition UID not found in response")?
-        .to_string();
+        return Ok(new_uid);
+    }
 
-    Ok(new_uid)
+    if !resp.body.is_empty() {
+        let result: Value = serde_json::from_str(&resp.body)
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        let new_uid = result
+            .get("uid")
+            .and_then(|u| u.get("value"))
+            .and_then(|v| v.as_str())
+            .ok_or("Composition UID not found in response")?
+            .to_string();
+
+        return Ok(new_uid);
+    }
+
+    Err("No Location header or response body found".to_string())
 }
 
 #[tauri::command]
