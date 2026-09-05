@@ -13,12 +13,7 @@ const emit = defineEmits<{
 
 <template>
   <Transition name="download-toast">
-    <div
-      v-if="toast"
-      class="download-toast"
-      :class="{ 'download-toast--error': toast.isError }"
-      role="status"
-    >
+    <output v-if="toast" class="download-toast" :class="{ 'download-toast--error': toast.isError }">
       <svg
         v-if="!toast.isError"
         class="download-toast-icon"
@@ -69,7 +64,7 @@ const emit = defineEmits<{
       >
         ✕
       </button>
-    </div>
+    </output>
   </Transition>
 </template>
 
