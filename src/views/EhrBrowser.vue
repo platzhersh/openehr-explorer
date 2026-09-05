@@ -1659,7 +1659,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             @click="selectEhr(ehr.ehr_id)"
           >
             <div class="ehr-id">
-              <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
+              <span class="id-text">{{ ehr.ehr_id }}</span>
               <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
@@ -1719,7 +1719,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             @click="selectEhr(ehr.ehr_id)"
           >
             <div class="ehr-id">
-              <span class="id-text">{{ ehr.ehr_id.substring(0, 8) }}...</span>
+              <span class="id-text">{{ ehr.ehr_id }}</span>
               <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">

@@ -194,7 +194,7 @@ watch(isOpen, (open) => {
       @click="toggle"
       @keydown="onControlKeydown"
     >
-      <span class="searchable-select-value">
+      <span class="searchable-select-value" :title="selectedOption?.label">
         <slot v-if="selectedOption" name="selected" :option="selectedOption">{{
           selectedOption.label
         }}</slot>
@@ -236,6 +236,7 @@ watch(isOpen, (open) => {
           :key="optionKey(option)"
           :aria-selected="option.value === modelValue"
           :data-highlighted="index === highlightedIndex"
+          :title="option.label"
           class="searchable-select-option"
           :class="{
             'is-highlighted': index === highlightedIndex,

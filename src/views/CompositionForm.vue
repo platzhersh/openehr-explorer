@@ -96,7 +96,7 @@ const sortedEhrs = computed(() => {
 const ehrOptions = computed<SearchableSelectOption[]>(() =>
   sortedEhrs.value.map((ehr) => {
     const subjectSuffix = ehr.subject_id ? ` (${ehr.subject_id})` : "";
-    return { value: ehr.ehr_id, label: `${ehr.ehr_id.substring(0, 8)}...${subjectSuffix}` };
+    return { value: ehr.ehr_id, label: `${ehr.ehr_id}${subjectSuffix}` };
   }),
 );
 
