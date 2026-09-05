@@ -17,8 +17,13 @@ pub async fn get_template_example(
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
+    // `detail_level` defaults to `required` per the Definition API spec (ITS-REST),
+    // i.e. a minimal example with only mandatory data points. EHRBase doesn't
+    // enforce that default and returns a fuller example regardless, but
+    // stricter CDRs (e.g. FerroEHR) do — so we ask for `medium` explicitly to
+    // get a realistic, committable example on every server, not just EHRBase.
     let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT",
+        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT&detail_level=medium",
         base,
         urlencoding::encode(&template_id)
     );
