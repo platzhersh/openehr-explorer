@@ -236,7 +236,8 @@ function doClear() {
           <button class="btn btn-sm btn-danger" @click="doClear">Yes</button>
           <button class="btn btn-sm" @click="showClearConfirm = false">No</button>
         </div>
-        <div class="drawer-state-group" role="group" aria-label="Panel height">
+        <fieldset class="drawer-state-group">
+          <legend class="sr-only">Panel height</legend>
           <button
             v-for="option in DRAWER_STATES"
             :key="option.state"
@@ -249,7 +250,7 @@ function doClear() {
           >
             <DrawerStateIcon :state="option.state" />
           </button>
-        </div>
+        </fieldset>
       </div>
     </div>
 
@@ -618,9 +619,26 @@ function doClear() {
 .drawer-state-group {
   display: flex;
   gap: 2px;
-  margin-left: 4px;
-  padding-left: 6px;
+  margin: 0 0 0 4px;
+  padding: 0 0 0 6px;
+  border: none;
   border-left: 1px solid var(--color-border);
+}
+
+/* Visually hidden but still readable by screen readers — the <fieldset>
+   groups the three height-state buttons semantically (see the SonarCloud
+   annotation on the earlier role="group" div), but a visible label would
+   duplicate each button's own title/aria-pressed state. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .state-btn {
