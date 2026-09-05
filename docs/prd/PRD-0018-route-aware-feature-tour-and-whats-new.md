@@ -142,6 +142,7 @@ Tour step targets use a dedicated `data-tour="…"` attribute rather than reusin
 
 ## Acceptance Criteria
 - [x] Visiting `/ehrs`, `/templates`, `/aql`, `/servers`, a composition, or a contribution for the first time auto-starts that route's tour.
+- [x] Visiting `/terminology` for the first time auto-starts its tour once a server is selected and a terminology server URL is configured; if neither is true yet, the tour is held back (not silently burned through its skip-missing-target behavior) and auto-starts as soon as both become true while still on that route. The compass icon always replays it on demand, on whichever tab is active.
 - [x] A `global: true` tour (the Request Inspector) never auto-starts on navigation and is reachable only via its own manual trigger.
 - [x] Completing or skipping a tour persists to `completed_tours` and it never auto-starts again.
 - [x] The compass-icon button in each view's header always restarts that view's tour, regardless of completion state.

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
+import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
 import CopyButton from "../components/CopyButton.vue";
 import TerminologySystemSelect from "../components/TerminologySystemSelect.vue";
@@ -23,6 +24,7 @@ const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
+const tourStore = useTourStore();
 const analytics = useAnalytics();
 
 type TabId = "lookup" | "expand" | "validate" | "subsumes";
@@ -262,6 +264,17 @@ function applyRouteQuery() {
 }
 
 watch(() => route.query, applyRouteQuery, { immediate: true });
+
+// The "Try an example" tour step (`[data-tour="terminology-example"]`) only
+// exists on the Describe tab's markup — force that tab active whenever this
+// view's tour starts (auto or via the compass icon), so the step's target
+// is there regardless of which tab the user happened to be on.
+watch(
+  () => tourStore.activeTourId,
+  (id) => {
+    if (id === "terminology") activeTab.value = "lookup";
+  },
+);
 
 // The "Describe →" link from a template's Bound Concepts panel also carries
 // `fromTemplate` (the template that sent us here) — used to show a "Back to

@@ -221,6 +221,16 @@ export const TOURS: Tour[] = [
       },
     ],
   },
+  // Unlike every other route tour, none of this tour's targets are chrome
+  // that renders unconditionally on navigation — the tab bar and "Try an
+  // example" button only exist once a server is selected *and* a
+  // terminology server URL is configured (see `TerminologyBrowser.vue`'s
+  // empty states). Auto-starting on route-enter alone would silently skip
+  // both of those steps for anyone who hasn't configured that yet, land on
+  // the always-rendered scope-note step, and mark the whole tour completed
+  // without ever showing the part that actually explains the tools. So
+  // `App.vue` holds off calling `maybeAutoStart` for this route until that
+  // config exists, then retries once it does — see `terminologyReady` there.
   {
     id: "terminology",
     routeNames: ["terminology"],
