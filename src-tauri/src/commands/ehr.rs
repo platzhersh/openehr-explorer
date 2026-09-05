@@ -1623,6 +1623,62 @@ const EHR_ID_SCAN_CHUNK: usize = 200;
 /// search on a huge, mostly-non-matching CDR doesn't scan indefinitely.
 const EHR_ID_SCAN_CAP: usize = 2000;
 
+/// Pages through `fetch_page` (given an offset, returns that page's
+/// already-parsed, *unfiltered* rows) collecting only the results whose
+/// `ehr_id` starts with `prefix`, until it has `EHR_SEARCH_DISPLAY_LIMIT`
+/// matches, the source runs out of rows (a page shorter than `chunk_size`
+/// means there's nothing left to fetch), or it has scanned `scan_cap` rows —
+/// whichever comes first. Returns the matches plus whether the scan stopped
+/// *without* exhausting the source — mirroring the other search dimensions'
+/// `limit_reached`, which likewise means "refine your search", not "this is
+/// exhaustive".
+///
+/// Kept generic over `fetch_page` — rather than calling `fetch_aql_rows`
+/// directly — specifically so this loop (the part that broke on a real
+/// EHRBase instance with ~1,500 EHRs: see `search_ehrs` and
+/// `EhrSearchCriteria::ehr_id_prefix`) can be unit tested against canned
+/// pages, without a live CDR or an HTTP mock.
+async fn scan_for_ehr_id_prefix<F, Fut>(
+    prefix: &str,
+    chunk_size: usize,
+    scan_cap: usize,
+    mut fetch_page: F,
+) -> Result<(Vec<EhrSearchResult>, bool), String>
+where
+    F: FnMut(usize) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<EhrSearchResult>, String>>,
+{
+    let mut matches: Vec<EhrSearchResult> = Vec::new();
+    let mut offset = 0usize;
+    let mut limit_reached = false;
+
+    loop {
+        let page = fetch_page(offset).await?;
+        let page_len = page.len();
+
+        matches.extend(filter_by_ehr_id_prefix(page, prefix));
+
+        offset += chunk_size;
+
+        if matches.len() >= EHR_SEARCH_DISPLAY_LIMIT {
+            matches.truncate(EHR_SEARCH_DISPLAY_LIMIT);
+            limit_reached = true;
+            break;
+        }
+        if page_len < chunk_size {
+            // The source ran out of rows before the scan cap — we've now
+            // seen everything it has, so no further matches exist.
+            break;
+        }
+        if offset >= scan_cap {
+            limit_reached = true;
+            break;
+        }
+    }
+
+    Ok((matches, limit_reached))
+}
+
 #[tauri::command]
 pub async fn search_ehrs(
     app: tauri::AppHandle,
@@ -1646,43 +1702,24 @@ pub async fn search_ehrs(
         .filter(|p| Uuid::parse_str(p.trim()).is_err());
 
     let (results, limit_reached) = if let Some(prefix) = partial_ehr_id_prefix {
-        let mut matches: Vec<EhrSearchResult> = Vec::new();
-        let mut offset = 0usize;
-        // True once we've stopped scanning *without* having exhausted the
-        // CDR's own data — i.e. there could be more matches we didn't look
-        // for. Mirrors the other search dimensions' `limit_reached`, which
-        // likewise means "refine your search", not "this is exhaustive".
-        let mut limit_reached = false;
-
-        loop {
-            let aql = build_ehr_search_aql_paged(&criteria, EHR_ID_SCAN_CHUNK, offset)?;
-            let rows = fetch_aql_rows(&app, &client, &url, &profile.auth_method, &aql).await?;
-            let page_len = rows.len();
-
-            matches.extend(filter_by_ehr_id_prefix(
-                parse_ehr_search_rows(&rows),
-                prefix,
-            ));
-
-            offset += EHR_ID_SCAN_CHUNK;
-
-            if matches.len() >= EHR_SEARCH_DISPLAY_LIMIT {
-                matches.truncate(EHR_SEARCH_DISPLAY_LIMIT);
-                limit_reached = true;
-                break;
+        scan_for_ehr_id_prefix(prefix, EHR_ID_SCAN_CHUNK, EHR_ID_SCAN_CAP, |offset| {
+            // Cloned per page (cheap — AppHandle/Client are Arc-backed, and
+            // AuthMethod is already cloned this way elsewhere, e.g.
+            // `filter_by_directory_presence` below) so the async block can
+            // own everything it needs without moving `app`/`client`/
+            // `profile` out from under the rest of `search_ehrs`, which
+            // still needs them (e.g. for the has_directory filter below).
+            let aql = build_ehr_search_aql_paged(&criteria, EHR_ID_SCAN_CHUNK, offset);
+            let app = app.clone();
+            let client = client.clone();
+            let url = url.clone();
+            let auth = profile.auth_method.clone();
+            async move {
+                let rows = fetch_aql_rows(&app, &client, &url, &auth, &aql?).await?;
+                Ok(parse_ehr_search_rows(&rows))
             }
-            if page_len < EHR_ID_SCAN_CHUNK {
-                // The CDR ran out of rows before the scan cap — we've now
-                // seen everything it has, so no further matches exist.
-                break;
-            }
-            if offset >= EHR_ID_SCAN_CAP {
-                limit_reached = true;
-                break;
-            }
-        }
-
-        (matches, limit_reached)
+        })
+        .await?
     } else {
         let aql = build_ehr_search_aql(&criteria)?;
         let rows = fetch_aql_rows(&app, &client, &url, &profile.auth_method, &aql).await?;
@@ -1989,6 +2026,142 @@ mod tests {
         let results = vec![search_result("ABCDEF00-0000-0000-0000-000000000000")];
         let filtered = filter_by_ehr_id_prefix(results, "abc");
         assert!(filtered.is_empty());
+    }
+
+    // --- scan_for_ehr_id_prefix ---------------------------------------
+    //
+    // These are the regression tests for the actual bug reported against a
+    // real EHRBase instance: a match sitting beyond the first page was never
+    // found because the old implementation only ever looked at one 200-row
+    // fetch. Each test below drives `scan_for_ehr_id_prefix` against canned
+    // pages (no network, no CDR) so the scanning/stopping logic itself is
+    // covered directly, rather than only the AQL string it builds.
+
+    /// Builds a `fetch_page` closure over pre-canned pages, keyed by
+    /// `offset / chunk_size` (matching how `scan_for_ehr_id_prefix` calls
+    /// it), and counts how many pages were actually requested — so a test
+    /// can assert the scan stopped as early as it should have, not just
+    /// that it eventually returned the right rows.
+    fn paged_fetcher(
+        pages: Vec<Vec<EhrSearchResult>>,
+        chunk_size: usize,
+        call_count: std::rc::Rc<std::cell::RefCell<usize>>,
+    ) -> impl FnMut(usize) -> std::future::Ready<Result<Vec<EhrSearchResult>, String>> {
+        move |offset: usize| {
+            *call_count.borrow_mut() += 1;
+            let page = pages.get(offset / chunk_size).cloned().unwrap_or_default();
+            std::future::ready(Ok(page))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scan_for_ehr_id_prefix_finds_match_on_a_later_page() {
+        // This is the exact shape of the original bug: the matching EHR
+        // isn't on the first page at all.
+        let pages = vec![
+            vec![search_result("00000000-0000-0000-0000-000000000000")],
+            vec![search_result("11111111-0000-0000-0000-000000000000")],
+            vec![search_result("eecf24e0-5ac9-4bfc-b958-475162940444")],
+        ];
+        let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
+        let (matches, limit_reached) =
+            scan_for_ehr_id_prefix("eec", 1, 10, paged_fetcher(pages, 1, calls.clone()))
+                .await
+                .unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].ehr_id, "eecf24e0-5ac9-4bfc-b958-475162940444");
+        assert!(
+            !limit_reached,
+            "the source wasn't exhausted, so this should not claim a truncated result"
+        );
+        // 3 pages, then one more empty call that signals "nothing left"
+        // (a short/empty page — see the exhaustion test below for the
+        // precise semantics); either 3 or 4 calls is fine here, so just
+        // check it didn't scan needlessly far past the match.
+        assert!(*calls.borrow() <= 4);
+    }
+
+    #[tokio::test]
+    async fn test_scan_for_ehr_id_prefix_stops_once_display_limit_reached() {
+        // A single page with more than EHR_SEARCH_DISPLAY_LIMIT (200)
+        // matches should be truncated, and the scan should stop immediately
+        // rather than requesting further pages it doesn't need.
+        let big_page: Vec<EhrSearchResult> = (0..250)
+            .map(|i| search_result(&format!("eec{:05}-0000-0000-0000-000000000000", i)))
+            .collect();
+        let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
+        let (matches, limit_reached) = scan_for_ehr_id_prefix(
+            "eec",
+            EHR_ID_SCAN_CHUNK,
+            EHR_ID_SCAN_CAP,
+            paged_fetcher(vec![big_page], EHR_ID_SCAN_CHUNK, calls.clone()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(matches.len(), EHR_SEARCH_DISPLAY_LIMIT);
+        assert!(limit_reached);
+        assert_eq!(*calls.borrow(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_scan_for_ehr_id_prefix_stops_when_source_is_exhausted() {
+        // A page shorter than chunk_size signals "no more rows" — the scan
+        // should stop there rather than requesting another page, and since
+        // it genuinely saw everything, limit_reached should be false even
+        // though it found nothing.
+        let pages = vec![
+            vec![search_result("00000000-0000-0000-0000-000000000000"); 3],
+            vec![search_result("11111111-0000-0000-0000-000000000000")], // short page: 1 < chunk_size (3)
+        ];
+        let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
+        let (matches, limit_reached) =
+            scan_for_ehr_id_prefix("zzz", 3, 100, paged_fetcher(pages, 3, calls.clone()))
+                .await
+                .unwrap();
+
+        assert!(matches.is_empty());
+        assert!(!limit_reached);
+        assert_eq!(*calls.borrow(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_scan_for_ehr_id_prefix_stops_at_scan_cap() {
+        // Every page is full (chunk_size rows) and none match, so without a
+        // cap this would loop forever. It should give up once it has
+        // scanned `scan_cap` rows and report limit_reached, not "no
+        // matches, search exhausted".
+        let full_non_matching_page =
+            vec![search_result("00000000-0000-0000-0000-000000000000"); 10];
+        let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
+        // Reuse the same page for every offset the fetcher is asked for by
+        // ignoring `pages` indexing — build a fetcher directly here instead
+        // of via `paged_fetcher`, since every page must be identical and
+        // "full" however many times it's requested.
+        let calls_for_closure = calls.clone();
+        let fetch_page = move |_offset: usize| {
+            *calls_for_closure.borrow_mut() += 1;
+            std::future::ready(Ok(full_non_matching_page.clone()))
+        };
+
+        let (matches, limit_reached) = scan_for_ehr_id_prefix("zzz", 10, 50, fetch_page)
+            .await
+            .unwrap();
+
+        assert!(matches.is_empty());
+        assert!(limit_reached);
+        assert_eq!(*calls.borrow(), 5); // scan_cap / chunk_size
+    }
+
+    #[tokio::test]
+    async fn test_scan_for_ehr_id_prefix_propagates_fetch_errors() {
+        let result = scan_for_ehr_id_prefix("eec", 200, 2000, |_offset| {
+            std::future::ready(Err("boom".to_string()))
+        })
+        .await;
+
+        assert_eq!(result.unwrap_err(), "boom");
     }
 
     #[test]
