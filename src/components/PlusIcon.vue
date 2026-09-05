@@ -2,9 +2,10 @@
   Plus icon for the app's "create new" buttons (Upload Template, New EHR,
   New Composition, Add Server, ...). A plain inline SVG rather than a
   literal "+" text glyph, so the mark renders as a crisp, consistently
-  weighted line icon instead of a font-dependent character that looks
-  slightly different across platforms. Matches the thin-stroke line-icon
-  style used elsewhere (see CompassIcon.vue, FilterIcon.vue).
+  weighted icon instead of a font-dependent character that looks slightly
+  different across platforms. A filled circle behind the plus mark reads
+  as a small badge, more distinct at a glance than a bare "+" alongside
+  the button's own label text.
 -->
 <template>
   <svg
@@ -15,6 +16,12 @@
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
-    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+    <circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.9" />
+    <path
+      d="M12 7.5v9M7.5 12h9"
+      stroke="var(--color-bg, #1a1a2e)"
+      stroke-width="1.8"
+      stroke-linecap="round"
+    />
   </svg>
 </template>

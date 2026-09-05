@@ -9,7 +9,7 @@ const meta: Meta<typeof PlusIcon> = {
     docs: {
       description: {
         component:
-          "Static inline SVG used in place of a literal \"+\" text glyph on the app's 'create new' buttons (Upload Template, New EHR, New Composition, Add Server, ...). No props — inherits `color` via `currentColor`, so it's typically shown inside a button.",
+          "Static inline SVG used in place of a literal \"+\" text glyph on the app's 'create new' buttons (Upload Template, New EHR, New Composition, Add Server, ...). Renders as a filled circle badge with the plus mark cut out of it. No props — the circle fill inherits `color` via `currentColor`, and the cut-out plus mark uses the `--color-bg` CSS variable (falling back to the app's dark background) for contrast, so it's typically shown inside a button.",
       },
     },
   },
