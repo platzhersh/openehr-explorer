@@ -5,6 +5,8 @@ import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import EditButton from "../components/EditButton.vue";
+import DeleteButton from "../components/DeleteButton.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
@@ -182,8 +184,18 @@ function credentialBackendLabel(backend: string): string {
             >
               {{ profile.is_default ? "★ Default" : "Set as Default" }}
             </button>
-            <button class="btn btn-sm" @click="editProfile(profile)">Edit</button>
-            <button class="btn btn-sm btn-danger" @click="remove(profile.id)">Delete</button>
+            <EditButton
+              title="Edit server profile"
+              variant="bordered"
+              size="md"
+              @click="editProfile(profile)"
+            />
+            <DeleteButton
+              title="Delete server profile"
+              variant="bordered"
+              size="md"
+              @click="remove(profile.id)"
+            />
           </div>
         </div>
 
