@@ -43,7 +43,7 @@ function onCustomInput(e: Event) {
 <template>
   <div class="terminology-system-select">
     <select class="input" :value="selectValue" @change="onSelectChange">
-      <option v-for="s in TERMINOLOGY_SYSTEMS" :key="s.value" :value="s.value">
+      <option v-for="s in TERMINOLOGY_SYSTEMS" :key="s.value" :value="s.value" :title="s.uri">
         {{ s.label }}
       </option>
       <option :value="CUSTOM">Custom…</option>

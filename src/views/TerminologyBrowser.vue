@@ -58,7 +58,10 @@ const TABS: { id: TabId; label: string; operation: string; blurb: string }[] = [
 ];
 
 const activeTab = ref<TabId>("lookup");
-const activeTabInfo = computed(() => TABS.find((t) => t.id === activeTab.value)!);
+// `.find()` is statically typed as possibly `undefined`; falling back to
+// TABS[0] (rather than a `!` non-null assertion) keeps this total even
+// though activeTab, by construction, always matches one of TABS' ids.
+const activeTabInfo = computed(() => TABS.find((t) => t.id === activeTab.value) ?? TABS[0]);
 
 // Well-known FHIR core value sets, offered as one-click presets — remembering
 // (or looking up) a canonical value set URL by hand is the main friction
@@ -78,8 +81,13 @@ const effectiveTerminologyUrl = computed(
   () => serverStore.activeServer?.terminology_url || settingsStore.settings.terminology_server_url,
 );
 
+// SNOMED CT is the default system for every tab and the one used by every
+// "Try an example" shortcut below — named once so it isn't repeated as a
+// magic string at each call site.
+const DEFAULT_SYSTEM = "SNOMED-CT";
+
 // --- Describe a Code -------------------------------------------------
-const lookupSystem = ref("SNOMED-CT");
+const lookupSystem = ref(DEFAULT_SYSTEM);
 const lookupCodeInput = ref("");
 const lookupLoading = ref(false);
 const lookupError = ref<string | null>(null);
@@ -88,7 +96,7 @@ const canLookup = computed(() => !!lookupSystem.value.trim() && !!lookupCodeInpu
 
 /** Fills in a known-good SNOMED CT code and runs it — a one-click way to see what this tab does. */
 function runLookupExample() {
-  lookupSystem.value = "SNOMED-CT";
+  lookupSystem.value = DEFAULT_SYSTEM;
   lookupCodeInput.value = "91302008";
   void runLookup();
 }
@@ -148,7 +156,7 @@ async function runExpand() {
 }
 
 // --- Validate Membership -------------------------------------------------
-const validateSystem = ref("SNOMED-CT");
+const validateSystem = ref(DEFAULT_SYSTEM);
 const validateCodeInput = ref("");
 const validateValueSetUrl = ref("");
 const validateLoading = ref(false);
@@ -160,7 +168,7 @@ const canValidate = computed(
 
 /** Fills in a known-good SNOMED CT code and runs it — a one-click way to see what this tab does. */
 function runValidateExample() {
-  validateSystem.value = "SNOMED-CT";
+  validateSystem.value = DEFAULT_SYSTEM;
   validateCodeInput.value = "386661006";
   validateValueSetUrl.value = "";
   void runValidate();
@@ -187,7 +195,7 @@ async function runValidate() {
 }
 
 // --- Test Subsumption -------------------------------------------------
-const subsumesSystem = ref("SNOMED-CT");
+const subsumesSystem = ref(DEFAULT_SYSTEM);
 const subsumesCodeA = ref("");
 const subsumesCodeB = ref("");
 const subsumesLoading = ref(false);
@@ -200,7 +208,7 @@ const canSubsume = computed(
 
 /** Fills in two related SNOMED CT codes and runs it — a one-click way to see what this tab does. */
 function runSubsumesExample() {
-  subsumesSystem.value = "SNOMED-CT";
+  subsumesSystem.value = DEFAULT_SYSTEM;
   subsumesCodeA.value = "64572001";
   subsumesCodeB.value = "195967001";
   void runSubsumes();
