@@ -555,6 +555,20 @@ onUnmounted(() => {
                   {{ resolvedBindingTerms[`${binding.terminology}|${binding.code}`] }}
                 </span>
                 <span v-if="binding.node_id" class="term-node-id">({{ binding.node_id }})</span>
+                <router-link
+                  class="term-binding-describe"
+                  :to="{
+                    name: 'terminology',
+                    query: {
+                      system: binding.terminology,
+                      code: binding.code,
+                      fromTemplate: selectedTemplateId,
+                    },
+                  }"
+                  title="Open in Terminology Browser"
+                >
+                  Describe →
+                </router-link>
               </div>
             </div>
           </div>
@@ -1293,6 +1307,17 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.term-binding-describe {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.term-binding-describe:hover {
+  text-decoration: underline;
 }
 
 .flat-view {

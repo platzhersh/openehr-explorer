@@ -50,7 +50,7 @@ function handleKeydown(e: KeyboardEvent) {
     // Ctrl/Cmd + Shift + D: Open Documentation
     if (e.shiftKey && (e.key === "D" || e.key === "d")) {
       e.preventDefault();
-      openUrl("https://platzhersh.github.io/openehr-explorer/docs.html");
+      openUrl("https://openehr-explorer.dev/docs.html");
       void analytics.track("documentation_opened");
     }
     // Ctrl/Cmd + 1: Switch to EHR Browser

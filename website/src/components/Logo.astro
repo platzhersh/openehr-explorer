@@ -1,0 +1,20 @@
+---
+// The openEHR Explorer logomark — a hexagon with a magnifying glass,
+// stroked in the brand teal. Previously this exact <svg> markup was
+// duplicated seven times across the four static HTML pages (header,
+// hero, and footer of index.html; header of the other three); it now
+// lives in one place.
+interface Props {
+  size?: number;
+  color?: string;
+  title?: string;
+}
+
+const { size = 32, color = "#64ffda", title = "openEHR Explorer logo" } = Astro.props;
+---
+
+<svg viewBox="0 0 64 64" width={size} height={size} role="img" aria-label={title}>
+  <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke={color} stroke-width="2.5"></polygon>
+  <circle cx="28" cy="28" r="10" fill="none" stroke={color} stroke-width="2"></circle>
+  <line x1="35" y1="35" x2="44" y2="44" stroke={color} stroke-width="2.5" stroke-linecap="round"></line>
+</svg>

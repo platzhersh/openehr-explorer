@@ -1,0 +1,24 @@
+---
+import SEO from "../components/SEO.astro";
+import "../styles/tokens.css";
+import "../styles/base.css";
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+  keywords?: string;
+}
+
+const { title, description, path, keywords } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <SEO title={title} description={description} path={path} keywords={keywords} />
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

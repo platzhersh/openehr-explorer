@@ -1,0 +1,142 @@
+---
+// Sticky site header, reused across all four pages. Consolidates three
+// near-identical (but not quite identical — the old index.html used a
+// slightly different class scheme and pill shape than docs/compare/
+// brand-kit) copies of this markup + CSS into one component.
+import Logo from "./Logo.astro";
+import GithubIcon from "./GithubIcon.astro";
+
+interface Props {
+  current: "home" | "docs" | "compare" | "brand-kit";
+}
+
+const { current } = Astro.props;
+
+const isActive = (page: Props["current"]) => (current === page ? "active" : undefined);
+
+// Root-relative, base-prefixed — a plain relative href like "docs.html"
+// resolves against the browser's *current* URL, which breaks the moment
+// someone lands on the site root without a trailing slash (the browser
+// then treats the base-path segment as a filename, not a directory).
+// import.meta.env.BASE_URL is the literal `base` config value, which
+// astro.config.mjs sets *without* a trailing slash — normalize it here
+// so concatenation below always gets exactly one separating slash.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
+---
+
+<header class="header">
+  <div class="header-inner">
+    <a href={`${BASE}index.html`} class="header-brand">
+      <Logo size={32} />
+      <span class="header-wordmark">openEHR Explorer</span>
+    </a>
+    <nav class="header-nav" aria-label="Main navigation">
+      {
+        current === "home" && (
+          <>
+            <a href="#features">Features</a>
+            <a href="#quickstart">Quick Start</a>
+          </>
+        )
+      }
+      {current !== "home" && <a href={`${BASE}index.html`}>Home</a>}
+      <a href={`${BASE}docs.html`} class:list={[isActive("docs")]}>Docs</a>
+      <a href={`${BASE}compare.html`} class:list={[isActive("compare")]}>Compare</a>
+      <a href={`${BASE}brand-kit.html`} class:list={[isActive("brand-kit")]}>Brand Kit</a>
+      <a href="https://github.com/platzhersh/openehr-explorer" class="github-pill" target="_blank" rel="noopener noreferrer">
+        <GithubIcon size={16} />
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  .header-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .header-brand:hover {
+    text-decoration: none;
+  }
+  .header-wordmark {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .header-nav a {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .header-nav a:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .header-nav a.active {
+    color: var(--primary);
+  }
+  .github-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    transition:
+      border-color 0.15s,
+      color 0.15s;
+  }
+  .github-pill:hover {
+    border-color: var(--primary);
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  @media (max-width: 768px) {
+    .header-inner {
+      flex-direction: column;
+      height: auto;
+      padding: 12px 24px;
+      gap: 12px;
+    }
+    .header-nav {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 14px;
+    }
+    .header-nav a {
+      font-size: 13px;
+    }
+  }
+</style>

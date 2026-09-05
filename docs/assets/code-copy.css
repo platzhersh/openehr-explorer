@@ -1,0 +1,73 @@
+/* Copy-to-clipboard affordance for install command snippets, shared by
+   index.html and docs.html. Depends on the CSS custom properties each
+   page already defines on :root (--border, --surface, --surface-hover,
+   --primary, --primary-dim, --text-muted, --success). */
+
+.code-block {
+  position: relative;
+}
+
+.code-block.has-copy {
+  padding-right: 48px;
+}
+
+/* Each shell command gets its own line, prefixed with a "$" so it reads
+   as a distinct step rather than a wrapped continuation of the line
+   above — the ::before content is excluded from copy/selection by
+   every evergreen browser, so it never ends up in a paste. */
+.code-line {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.code-line::before {
+  content: '$ ';
+  color: var(--text-muted);
+}
+
+.code-line + .code-line {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary-dim);
+  background: var(--surface-hover);
+}
+
+.code-copy-btn .icon-check {
+  display: none;
+  color: var(--success);
+}
+
+.code-copy-btn.copied {
+  border-color: var(--success);
+}
+
+.code-copy-btn.copied .icon-copy {
+  display: none;
+}
+
+.code-copy-btn.copied .icon-check {
+  display: block;
+}

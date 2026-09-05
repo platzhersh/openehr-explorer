@@ -63,7 +63,7 @@ fn install_update_check_menu_item(app: &tauri::App) -> tauri::Result<()> {
 }
 
 /// The official website URL for openEHR Explorer
-pub const WEBSITE_URL: &str = "https://platzhersh.github.io/openehr-explorer/";
+pub const WEBSITE_URL: &str = "https://openehr-explorer.dev/";
 
 /// Aptabase App Key injected at compile time via the `APTABASE_APP_KEY` env var.
 ///
@@ -131,6 +131,12 @@ pub fn run() {
             ehr::create_directory,
             ehr::update_directory,
             ehr::delete_directory,
+            ehr::get_directory_versions,
+            ehr::get_directory_version_contribution,
+            ehr::get_ehr_status,
+            ehr::get_ehr_status_version,
+            ehr::get_ehr_status_versions,
+            ehr::get_ehr_status_version_contribution,
             // Composition
             composition::get_composition,
             composition::get_composition_flat,
@@ -165,6 +171,10 @@ pub fn run() {
             settings::save_settings,
             // Terminology
             terminology::lookup_code,
+            terminology::describe_code,
+            terminology::expand_valueset,
+            terminology::validate_code,
+            terminology::test_subsumption,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

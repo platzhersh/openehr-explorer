@@ -11,6 +11,23 @@
  */
 @import "../src/styles/shared-utilities.css";
 
+/*
+ * website/'s Vue components (see ADR-0026) use their own, unprefixed
+ * token names (--bg, --primary, …) rather than the app's --color-*
+ * convention below — same palette, two naming schemes that predate
+ * this shared Storybook (see ADR-0026's "Neutral" consequences). The
+ * names don't collide, so both sets coexist here rather than one
+ * component set rendering unstyled.
+ *
+ * Only tokens.css is imported, not website/'s base.css: every website
+ * Vue component already carries its own complete <style> (each is
+ * self-contained per ADR-0025), so none of them actually need base.css's
+ * reset/body/a/:focus-visible rules to render correctly — and importing
+ * those globally would leak website-specific `a`/`:focus-visible`
+ * styling into the app's own stories.
+ */
+@import "../website/src/styles/tokens.css";
+
 *,
 *::before,
 *::after {

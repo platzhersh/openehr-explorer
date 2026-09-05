@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="openEHR Explorer icon">
+  <title>openEHR Explorer — icon</title>
+  <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="none" stroke="#64ffda" stroke-width="2.5"/>
+  <circle cx="28" cy="28" r="10" fill="none" stroke="#64ffda" stroke-width="2"/>
+  <line x1="35" y1="35" x2="44" y2="44" stroke="#64ffda" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
