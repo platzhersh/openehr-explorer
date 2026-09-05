@@ -139,7 +139,7 @@ onMounted(async () => {
   // Set default time — edit mode already restored the composition's own
   // context/start_time above; only a genuinely new composition wants "now".
   if (!isEditMode.value) {
-    compositionTime.value = new Date().toISOString().slice(0, 16);
+    compositionTime.value = toDatetimeLocalValue(new Date());
   }
 
   // Load draft if exists
@@ -181,7 +181,7 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
     // servers reject (e.g. EHRBase/FerroEHR's HISTORY.Events_valid check).
     const startTime = (composition as any)?.context?.start_time?.value as string | undefined;
     if (startTime) {
-      compositionTime.value = startTime.slice(0, 16);
+      compositionTime.value = toDatetimeLocalValue(new Date(startTime));
     }
 
     const flatComp = await invoke<Record<string, unknown>>("get_composition_flat", {
@@ -332,6 +332,18 @@ function transformMedblocksExport(rawData: Record<string, unknown>): Record<stri
   return formData;
 }
 
+// Converts an absolute instant to the value format <input type="datetime-local">
+// expects: a timezone-naive "YYYY-MM-DDTHH:mm" string read as the *local*
+// timezone. date.toISOString() returns UTC, so slicing that directly (as this
+// code used to) silently reinterprets a UTC wall-clock time as local — only
+// correct for UTC browsers, off by the local offset everywhere else, which
+// then compounds when the field round-trips back through `new Date(value)`
+// on submit.
+function toDatetimeLocalValue(date: Date): string {
+  const localMs = date.getTime() - date.getTimezoneOffset() * 60000;
+  return new Date(localMs).toISOString().slice(0, 16);
+}
+
 // Merges the ctx/* shortcuts (which EHRBase expands automatically) onto a
 // transformed FLAT payload.
 function withContextFields(
@@ -452,7 +464,7 @@ async function handleSubmit() {
     // If-Match instead. Mirrors update_composition's versioned_object_uid.
     const url = isEditMode.value
       ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`
-      : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
+      : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`;
 
     const ifMatchLine = isEditMode.value ? `\nIf-Match: "${props.compositionUid}"` : "";
     requestSummaryLine.value = `${method} ${url}\nContent-Type: ${flatCompositionContentType()}\nopenehr-template-id: ${templateId}${ifMatchLine}`;
@@ -531,7 +543,7 @@ function handleReset() {
     language.value = "en";
     territory.value = "US";
     flatData.value = {};
-    compositionTime.value = new Date().toISOString().slice(0, 16);
+    compositionTime.value = toDatetimeLocalValue(new Date());
   }
   error.value = null;
   success.value = null;
@@ -619,7 +631,7 @@ watch(
       flatData.value = {};
       error.value = null;
       success.value = null;
-      compositionTime.value = new Date().toISOString().slice(0, 16);
+      compositionTime.value = toDatetimeLocalValue(new Date());
 
       // Reset medblocks form (mb-auto-form's method is clear(), not reset())
       if (mbFormRef.value) {
