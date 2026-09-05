@@ -5,6 +5,7 @@ import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
 import CopyButton from "../components/CopyButton.vue";
+import TerminologySystemSelect from "../components/TerminologySystemSelect.vue";
 import {
   describeCode,
   expandValueSet,
@@ -25,20 +26,50 @@ const analytics = useAnalytics();
 
 type TabId = "lookup" | "expand" | "validate" | "subsumes";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "lookup", label: "Describe a Code" },
-  { id: "expand", label: "Expand a Value Set" },
-  { id: "validate", label: "Validate Membership" },
-  { id: "subsumes", label: "Test Subsumption" },
+const TABS: { id: TabId; label: string; operation: string; blurb: string }[] = [
+  {
+    id: "lookup",
+    label: "Describe a Code",
+    operation: "CodeSystem/$lookup",
+    blurb:
+      "Look up a single code and see its preferred term, synonyms, and properties (e.g. parent, inactive). Use this to check what a stored or bound code actually means.",
+  },
+  {
+    id: "expand",
+    label: "Expand a Value Set",
+    operation: "ValueSet/$expand",
+    blurb:
+      "List the concepts that belong to a value set, optionally narrowed by a text filter. Use this to see the legal options for a coded field before you pick one.",
+  },
+  {
+    id: "validate",
+    label: "Validate Membership",
+    operation: "ValueSet/$validate-code or CodeSystem/$validate-code",
+    blurb:
+      "Check whether a code is a legal member of a value set — or just a valid code in its code system, if you leave the value set blank.",
+  },
+  {
+    id: "subsumes",
+    label: "Test Subsumption",
+    operation: "CodeSystem/$subsumes",
+    blurb:
+      "Compare two codes from the same code system and see how they relate in the hierarchy: equivalent, one broader than the other, or unrelated.",
+  },
 ];
 
 const activeTab = ref<TabId>("lookup");
+const activeTabInfo = computed(() => TABS.find((t) => t.id === activeTab.value)!);
 
-// Common terminology system identifiers, offered as a datalist — the same
-// set the Rust side maps to FHIR CodeSystem URIs (see
-// `terminology_to_fhir_system` in terminology.rs). Any other value is
-// passed straight through as a canonical system URI.
-const COMMON_SYSTEMS = ["SNOMED-CT", "LOINC", "ICD-10", "ICD-11", "ATC"];
+// Well-known FHIR core value sets, offered as one-click presets — remembering
+// (or looking up) a canonical value set URL by hand is the main friction
+// point of the Expand tab. Not exhaustive, just enough to get a first result
+// without leaving the app; any other canonical URL still works by typing it.
+const EXPAND_PRESETS = [
+  { label: "Administrative Gender", url: "http://hl7.org/fhir/ValueSet/administrative-gender" },
+  { label: "Marital Status", url: "http://hl7.org/fhir/ValueSet/marital-status" },
+  { label: "Observation Status", url: "http://hl7.org/fhir/ValueSet/observation-status" },
+  { label: "Condition Clinical Status", url: "http://hl7.org/fhir/ValueSet/condition-clinical" },
+];
 
 // A profile-level override always wins; falling back to the global default
 // mirrors `effective_terminology_url` in settings.rs — this is purely for
@@ -53,9 +84,17 @@ const lookupCodeInput = ref("");
 const lookupLoading = ref(false);
 const lookupError = ref<string | null>(null);
 const lookupResult = ref<CodeDescription | null>(null);
+const canLookup = computed(() => !!lookupSystem.value.trim() && !!lookupCodeInput.value.trim());
+
+/** Fills in a known-good SNOMED CT code and runs it — a one-click way to see what this tab does. */
+function runLookupExample() {
+  lookupSystem.value = "SNOMED-CT";
+  lookupCodeInput.value = "91302008";
+  void runLookup();
+}
 
 async function runLookup() {
-  if (!serverStore.activeServerId || !lookupSystem.value || !lookupCodeInput.value) return;
+  if (!serverStore.activeServerId || !canLookup.value) return;
   lookupLoading.value = true;
   lookupError.value = null;
   lookupResult.value = null;
@@ -80,9 +119,16 @@ const expandCount = ref(100);
 const expandLoading = ref(false);
 const expandError = ref<string | null>(null);
 const expandResult = ref<ValueSetExpansion | null>(null);
+const canExpand = computed(() => !!expandUrl.value.trim());
+
+/** Fills in one of the well-known value set presets and runs it immediately. */
+function applyExpandPreset(url: string) {
+  expandUrl.value = url;
+  void runExpand();
+}
 
 async function runExpand() {
-  if (!serverStore.activeServerId || !expandUrl.value) return;
+  if (!serverStore.activeServerId || !canExpand.value) return;
   expandLoading.value = true;
   expandError.value = null;
   expandResult.value = null;
@@ -108,9 +154,20 @@ const validateValueSetUrl = ref("");
 const validateLoading = ref(false);
 const validateError = ref<string | null>(null);
 const validateResult = ref<CodeValidation | null>(null);
+const canValidate = computed(
+  () => !!validateSystem.value.trim() && !!validateCodeInput.value.trim(),
+);
+
+/** Fills in a known-good SNOMED CT code and runs it — a one-click way to see what this tab does. */
+function runValidateExample() {
+  validateSystem.value = "SNOMED-CT";
+  validateCodeInput.value = "386661006";
+  validateValueSetUrl.value = "";
+  void runValidate();
+}
 
 async function runValidate() {
-  if (!serverStore.activeServerId || !validateSystem.value || !validateCodeInput.value) return;
+  if (!serverStore.activeServerId || !canValidate.value) return;
   validateLoading.value = true;
   validateError.value = null;
   validateResult.value = null;
@@ -136,6 +193,18 @@ const subsumesCodeB = ref("");
 const subsumesLoading = ref(false);
 const subsumesError = ref<string | null>(null);
 const subsumesResult = ref<SubsumptionResult | null>(null);
+const canSubsume = computed(
+  () =>
+    !!subsumesSystem.value.trim() && !!subsumesCodeA.value.trim() && !!subsumesCodeB.value.trim(),
+);
+
+/** Fills in two related SNOMED CT codes and runs it — a one-click way to see what this tab does. */
+function runSubsumesExample() {
+  subsumesSystem.value = "SNOMED-CT";
+  subsumesCodeA.value = "64572001";
+  subsumesCodeB.value = "195967001";
+  void runSubsumes();
+}
 
 const SUBSUMPTION_EXPLANATIONS: Record<string, string> = {
   equivalent: "Code A and Code B are the same concept.",
@@ -145,13 +214,7 @@ const SUBSUMPTION_EXPLANATIONS: Record<string, string> = {
 };
 
 async function runSubsumes() {
-  if (
-    !serverStore.activeServerId ||
-    !subsumesSystem.value ||
-    !subsumesCodeA.value ||
-    !subsumesCodeB.value
-  )
-    return;
+  if (!serverStore.activeServerId || !canSubsume.value) return;
   subsumesLoading.value = true;
   subsumesError.value = null;
   subsumesResult.value = null;
@@ -268,25 +331,30 @@ function useConceptInLookup(concept: TerminologyConcept) {
         </button>
       </div>
 
+      <div class="tab-blurb">
+        <p>
+          <span class="operation-name">{{ activeTabInfo.operation }}</span> —
+          {{ activeTabInfo.blurb }}
+        </p>
+      </div>
+
       <!-- Describe a Code -->
       <div v-if="activeTab === 'lookup'" class="tool-panel">
         <form class="tool-form" @submit.prevent="runLookup">
           <div class="form-row">
             <label>
               Terminology system
-              <input
-                class="input"
-                v-model="lookupSystem"
-                list="terminology-systems"
-                placeholder="SNOMED-CT"
-              />
+              <TerminologySystemSelect v-model="lookupSystem" />
             </label>
             <label>
               Code
               <input class="input" v-model="lookupCodeInput" placeholder="91302008" />
             </label>
-            <button type="submit" class="btn btn-primary" :disabled="lookupLoading">
+            <button type="submit" class="btn btn-primary" :disabled="lookupLoading || !canLookup">
               {{ lookupLoading ? "Looking up…" : "Describe" }}
+            </button>
+            <button type="button" class="btn btn-sm btn-ghost" @click="runLookupExample">
+              Try an example
             </button>
           </div>
         </form>
@@ -350,8 +418,23 @@ function useConceptInLookup(concept: TerminologyConcept) {
               Count
               <input class="input" type="number" min="1" max="1000" v-model.number="expandCount" />
             </label>
-            <button type="submit" class="btn btn-primary" :disabled="expandLoading">
+            <button type="submit" class="btn btn-primary" :disabled="expandLoading || !canExpand">
               {{ expandLoading ? "Expanding…" : "Expand" }}
+            </button>
+          </div>
+          <p class="form-help">
+            A canonical value set URL — e.g. a FHIR core value set, or one bound to a template
+            node's term binding (see a template's "Bound Concepts" panel). Try one of:
+          </p>
+          <div class="preset-chips">
+            <button
+              v-for="preset in EXPAND_PRESETS"
+              :key="preset.url"
+              type="button"
+              class="btn btn-sm btn-ghost"
+              @click="applyExpandPreset(preset.url)"
+            >
+              {{ preset.label }}
             </button>
           </div>
         </form>
@@ -398,12 +481,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
           <div class="form-row">
             <label>
               Terminology system
-              <input
-                class="input"
-                v-model="validateSystem"
-                list="terminology-systems"
-                placeholder="SNOMED-CT"
-              />
+              <TerminologySystemSelect v-model="validateSystem" />
             </label>
             <label>
               Code
@@ -417,8 +495,15 @@ function useConceptInLookup(concept: TerminologyConcept) {
                 placeholder="leave empty to validate against the code system itself"
               />
             </label>
-            <button type="submit" class="btn btn-primary" :disabled="validateLoading">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              :disabled="validateLoading || !canValidate"
+            >
               {{ validateLoading ? "Validating…" : "Validate" }}
+            </button>
+            <button type="button" class="btn btn-sm btn-ghost" @click="runValidateExample">
+              Try an example
             </button>
           </div>
         </form>
@@ -447,12 +532,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
           <div class="form-row">
             <label>
               Terminology system
-              <input
-                class="input"
-                v-model="subsumesSystem"
-                list="terminology-systems"
-                placeholder="SNOMED-CT"
-              />
+              <TerminologySystemSelect v-model="subsumesSystem" />
             </label>
             <label>
               Code A
@@ -462,8 +542,15 @@ function useConceptInLookup(concept: TerminologyConcept) {
               Code B
               <input class="input" v-model="subsumesCodeB" placeholder="195967001" />
             </label>
-            <button type="submit" class="btn btn-primary" :disabled="subsumesLoading">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              :disabled="subsumesLoading || !canSubsume"
+            >
               {{ subsumesLoading ? "Testing…" : "Test" }}
+            </button>
+            <button type="button" class="btn btn-sm btn-ghost" @click="runSubsumesExample">
+              Try an example
             </button>
           </div>
         </form>
@@ -478,10 +565,6 @@ function useConceptInLookup(concept: TerminologyConcept) {
         </div>
       </div>
     </template>
-
-    <datalist id="terminology-systems">
-      <option v-for="s in COMMON_SYSTEMS" :key="s" :value="s" />
-    </datalist>
   </div>
 </template>
 
@@ -520,7 +603,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
   border-radius: var(--radius);
   overflow: hidden;
   width: fit-content;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 .tab {
   padding: 6px 14px;
@@ -536,6 +619,17 @@ function useConceptInLookup(concept: TerminologyConcept) {
 .tab.active {
   background: var(--color-primary-dim);
   color: #fff;
+}
+
+.tab-blurb {
+  margin-bottom: 20px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.operation-name {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
 }
 
 .tool-panel {
@@ -570,6 +664,19 @@ function useConceptInLookup(concept: TerminologyConcept) {
 }
 .count-field {
   width: 90px;
+}
+
+.form-help {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
 }
 .count-field .input {
   width: 100%;

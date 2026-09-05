@@ -1,6 +1,31 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
+ * Terminology systems recognised by name (rather than raw canonical URL) on
+ * the Rust side — see `terminology_to_fhir_system` in `terminology.rs`. Any
+ * other string is passed straight through as a canonical system URI, so this
+ * list is a set of friendly shortcuts, not a restriction: it drives the
+ * "common systems" dropdown in the Terminology Browser, whose picker always
+ * lets you fall back to typing a raw URL for anything not listed here.
+ */
+export interface TerminologySystemOption {
+  /** The identifier sent to the backend — matches a case in `terminology_to_fhir_system`. */
+  value: string;
+  /** Human-readable name shown in the dropdown. */
+  label: string;
+  /** The canonical FHIR CodeSystem URI this shortcut resolves to, shown as a hint. */
+  uri: string;
+}
+
+export const TERMINOLOGY_SYSTEMS: TerminologySystemOption[] = [
+  { value: "SNOMED-CT", label: "SNOMED CT", uri: "http://snomed.info/sct" },
+  { value: "LOINC", label: "LOINC", uri: "http://loinc.org" },
+  { value: "ICD-10", label: "ICD-10", uri: "http://hl7.org/fhir/sid/icd-10" },
+  { value: "ICD-11", label: "ICD-11", uri: "http://id.who.int/icd/release/11/mms" },
+  { value: "ATC", label: "ATC (WHO)", uri: "http://www.whocc.no/atc" },
+];
+
+/**
  * Look up a terminology code's display name via the configured FHIR terminology server.
  * Returns the preferred term string, or null if resolution is unavailable/fails.
  *
