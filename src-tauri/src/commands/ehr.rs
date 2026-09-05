@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Semaphore;
+use uuid::Uuid;
 
 use super::server::{create_client, get_profile_by_id, make_request, AuthMethod, ServerType};
 use crate::inspector::{send_instrumented, InstrumentedResponse};
@@ -1259,15 +1260,24 @@ pub async fn get_directory_version_contribution(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EhrSearchCriteria {
     /// EHR ID prefix ("starts with") match. Unlike `subject_id` below, this
-    /// can't be expressed as a working AQL predicate: confirmed against a
+    /// can't be expressed as a working `LIKE` predicate: confirmed against a
     /// real EHRBase instance, `WHERE e/ehr_id/value LIKE '<prefix>%'`
     /// consistently returns zero rows even when a matching EHR exists.
     /// `ehr_id` is an EHR-level attribute — the same class of path EHRBase
     /// already rejects outright for `time_created` in WHERE clauses (see
     /// `build_ehr_search_aql`) and for `ORDER BY` (see `list_ehrs`) — except
-    /// here it fails silently instead of returning an error. So this is
-    /// applied as a post-filter in `search_ehrs` instead, the same way
-    /// `has_directory` is below.
+    /// here it fails silently instead of returning an error.
+    ///
+    /// When the whole value is a full, valid EHR ID (a UUID), equality
+    /// *does* work reliably (see `get_ehr_detail`'s composition lookup,
+    /// which already relies on `e/ehr_id/value = '<id>'`), so
+    /// `build_ehr_search_aql` uses that instead — a complete ID always
+    /// finds its EHR in one query, regardless of how many EHRs exist on the
+    /// server. A genuine partial prefix has no working predicate at all, so
+    /// it's applied as a scanning post-filter in `search_ehrs` instead,
+    /// bounded by a scan cap rather than the CDR's own `LIMIT` — see
+    /// `search_ehrs` for that loop, and `has_directory` below for the
+    /// simpler version of the same post-filter pattern.
     pub ehr_id_prefix: Option<String>,
     pub subject_id: Option<String>,
     pub subject_namespace: Option<String>,
@@ -1310,9 +1320,27 @@ fn escape_aql_string(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-/// Build an AQL query string from the given search criteria.
-/// Returns an error if no criteria are provided (to prevent full-table scans).
+/// Row cap shared by every `search_ehrs` search dimension: the single-shot
+/// `LIMIT` `build_ehr_search_aql` appends, and the number of matches the
+/// `ehr_id_prefix` scanning loop in `search_ehrs` collects before stopping.
+const EHR_SEARCH_DISPLAY_LIMIT: usize = 200;
+
+/// Build an AQL query string from the given search criteria, capped at 200
+/// rows. Returns an error if no criteria are provided (to prevent
+/// full-table scans).
 pub fn build_ehr_search_aql(criteria: &EhrSearchCriteria) -> Result<String, String> {
+    build_ehr_search_aql_paged(criteria, EHR_SEARCH_DISPLAY_LIMIT, 0)
+}
+
+/// Same as `build_ehr_search_aql`, but with an explicit `LIMIT`/`OFFSET`
+/// instead of always `LIMIT 200 OFFSET 0`. `search_ehrs` uses this directly
+/// to page through the CDR in chunks when scanning for a partial
+/// `ehr_id_prefix` match (see its doc comment on `EhrSearchCriteria`).
+fn build_ehr_search_aql_paged(
+    criteria: &EhrSearchCriteria,
+    limit: usize,
+    offset: usize,
+) -> Result<String, String> {
     // Determine if we need to include COMPOSITION in the FROM clause
     let has_compositions_filter = criteria.has_compositions == Some(true);
 
@@ -1354,9 +1382,17 @@ FROM EHR e CONTAINS EHR_STATUS s"
         "s"
     };
 
-    // ehr_id_prefix intentionally does NOT become a predicate here — see the
-    // doc comment on `EhrSearchCriteria::ehr_id_prefix`. It's applied as a
-    // post-filter in `search_ehrs` instead.
+    // A genuine partial ehr_id_prefix can't be a WHERE predicate at all —
+    // see the doc comment on `EhrSearchCriteria::ehr_id_prefix` — so it's
+    // applied as a scanning post-filter in `search_ehrs` instead. But when
+    // the whole value is a full, valid EHR ID, exact equality works fine
+    // (confirmed by `get_ehr_detail`'s composition lookup, which already
+    // relies on it), so use that instead of falling back to a scan.
+    if let Some(ref prefix) = criteria.ehr_id_prefix {
+        if let Ok(id) = Uuid::parse_str(prefix.trim()) {
+            predicates.push(format!("e/ehr_id/value = '{}'", id));
+        }
+    }
 
     if let Some(ref subject_id) = criteria.subject_id {
         predicates.push(format!(
@@ -1428,18 +1464,22 @@ FROM EHR e CONTAINS EHR_STATUS s"
     // Build the final query
     if predicates.is_empty() {
         // Only has_compositions:true, no WHERE clause needed
-        Ok(format!("{} LIMIT 200", base))
+        Ok(format!("{} LIMIT {} OFFSET {}", base, limit, offset))
     } else {
         let where_clause = predicates.join(" AND ");
-        Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
+        Ok(format!(
+            "{} WHERE {} LIMIT {} OFFSET {}",
+            base, where_clause, limit, offset
+        ))
     }
 }
 
 /// Filters `results` down to only the EHRs whose `ehr_id` starts with
 /// `prefix` (case-sensitive, matching the case-sensitive semantics an AQL
-/// `LIKE` predicate would have had). See the doc comment on
-/// `EhrSearchCriteria::ehr_id_prefix` for why this can't be a WHERE
-/// predicate in the first place.
+/// `LIKE` predicate would have had). Used by `search_ehrs`'s scanning loop
+/// for a genuine *partial* `ehr_id_prefix` — see the doc comment on
+/// `EhrSearchCriteria::ehr_id_prefix` for why that case has no working
+/// WHERE predicate at all (unlike a full EHR ID, which does).
 fn filter_by_ehr_id_prefix(results: Vec<EhrSearchResult>, prefix: &str) -> Vec<EhrSearchResult> {
     results
         .into_iter()
@@ -1511,23 +1551,40 @@ async fn filter_by_directory_presence(
     kept.into_iter().map(|(_, result)| result).collect()
 }
 
-#[tauri::command]
-pub async fn search_ehrs(
-    app: tauri::AppHandle,
-    server_id: String,
-    criteria: EhrSearchCriteria,
-) -> Result<EhrSearchResponse, String> {
-    let aql = build_ehr_search_aql(&criteria)?;
+/// Parses AQL result rows (each a JSON array in the column order
+/// `build_ehr_search_aql`/`build_ehr_search_aql_paged` select) into
+/// `EhrSearchResult`s. Shared by `search_ehrs`'s single-query path and its
+/// `ehr_id_prefix` scanning loop below.
+fn parse_ehr_search_rows(rows: &[Value]) -> Vec<EhrSearchResult> {
+    rows.iter()
+        .filter_map(|row| {
+            let arr = row.as_array()?;
+            Some(EhrSearchResult {
+                ehr_id: arr.first()?.as_str()?.to_string(),
+                time_created: arr.get(1).and_then(|v| v.as_str()).map(String::from),
+                subject_id: arr.get(2).and_then(|v| v.as_str()).map(String::from),
+                subject_namespace: arr.get(3).and_then(|v| v.as_str()).map(String::from),
+                is_modifiable: arr.get(4).and_then(|v| v.as_bool()),
+                is_queryable: arr.get(5).and_then(|v| v.as_bool()),
+                system_id: arr.get(6).and_then(|v| v.as_str()).map(String::from),
+            })
+        })
+        .collect()
+}
 
-    let profile = get_profile_by_id(&server_id)?;
-    let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
+/// Fires one AQL query against `url` and returns its `rows` array. Shared by
+/// `search_ehrs`'s single-query path and its `ehr_id_prefix` scanning loop.
+async fn fetch_aql_rows(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    auth: &AuthMethod,
+    aql: &str,
+) -> Result<Vec<Value>, String> {
     let resp = send_instrumented(
-        &app,
-        &client,
-        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+        app,
+        client,
+        make_request(client, reqwest::Method::POST, url, auth)
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({ "q": aql })),
     )
@@ -1543,38 +1600,101 @@ pub async fn search_ehrs(
     let body: Value =
         serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    let rows = body
+    Ok(body
         .get("rows")
         .and_then(|r| r.as_array())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_default())
+}
 
-    let results: Vec<EhrSearchResult> = rows
-        .iter()
-        .filter_map(|row| {
-            let arr = row.as_array()?;
-            Some(EhrSearchResult {
-                ehr_id: arr.first()?.as_str()?.to_string(),
-                time_created: arr.get(1).and_then(|v| v.as_str()).map(String::from),
-                subject_id: arr.get(2).and_then(|v| v.as_str()).map(String::from),
-                subject_namespace: arr.get(3).and_then(|v| v.as_str()).map(String::from),
-                is_modifiable: arr.get(4).and_then(|v| v.as_bool()),
-                is_queryable: arr.get(5).and_then(|v| v.as_bool()),
-                system_id: arr.get(6).and_then(|v| v.as_str()).map(String::from),
-            })
-        })
-        .collect();
+/// Page size used when scanning for a partial `ehr_id_prefix` match (see
+/// `search_ehrs`) — one request per chunk, same size as the single-shot
+/// `LIMIT 200` every other search dimension uses.
+const EHR_ID_SCAN_CHUNK: usize = 200;
 
-    // `limit_reached` reflects the raw AQL result set (capped at 200 rows by
-    // the query's own LIMIT) — computed before the ehr_id_prefix/directory
-    // post-filters so "showing first 200, refine your search" still means
-    // what it says even as those filters narrow the displayed count further.
-    let limit_reached = results.len() >= 200;
+/// Upper bound on how many EHRs `search_ehrs` will scan through looking for
+/// partial `ehr_id_prefix` matches before giving up. A *full* EHR ID never
+/// needs this — it's matched exactly in one query regardless of how many
+/// EHRs exist on the server (see `build_ehr_search_aql_paged`) — but a
+/// genuine partial prefix has no working WHERE predicate on EHRBase, so the
+/// only option left is to page through the CDR's own default ordering and
+/// filter client-side. 2000 is a pragmatic tradeoff: enough to cover most
+/// real dev/test CDRs in a handful of requests, while still bounded so a
+/// search on a huge, mostly-non-matching CDR doesn't scan indefinitely.
+const EHR_ID_SCAN_CAP: usize = 2000;
 
-    let results = if let Some(ref prefix) = criteria.ehr_id_prefix {
-        filter_by_ehr_id_prefix(results, prefix)
+#[tauri::command]
+pub async fn search_ehrs(
+    app: tauri::AppHandle,
+    server_id: String,
+    criteria: EhrSearchCriteria,
+) -> Result<EhrSearchResponse, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let base = profile.base_url.trim_end_matches('/');
+    let url = format!("{}/rest/openehr/v1/query/aql", base);
+
+    // A genuine *partial* ehr_id_prefix (i.e. not a full, valid EHR ID) has
+    // no working AQL predicate on EHRBase — see the doc comment on
+    // `EhrSearchCriteria::ehr_id_prefix` — so it can't just ride along in
+    // the single query every other criterion uses. Instead, page through
+    // the CDR (still applying whatever other predicates were given) and
+    // filter client-side, up to `EHR_ID_SCAN_CAP` rows.
+    let partial_ehr_id_prefix = criteria
+        .ehr_id_prefix
+        .as_deref()
+        .filter(|p| Uuid::parse_str(p.trim()).is_err());
+
+    let (results, limit_reached) = if let Some(prefix) = partial_ehr_id_prefix {
+        let mut matches: Vec<EhrSearchResult> = Vec::new();
+        let mut offset = 0usize;
+        // True once we've stopped scanning *without* having exhausted the
+        // CDR's own data — i.e. there could be more matches we didn't look
+        // for. Mirrors the other search dimensions' `limit_reached`, which
+        // likewise means "refine your search", not "this is exhaustive".
+        let mut limit_reached = false;
+
+        loop {
+            let aql = build_ehr_search_aql_paged(&criteria, EHR_ID_SCAN_CHUNK, offset)?;
+            let rows = fetch_aql_rows(&app, &client, &url, &profile.auth_method, &aql).await?;
+            let page_len = rows.len();
+
+            matches.extend(filter_by_ehr_id_prefix(
+                parse_ehr_search_rows(&rows),
+                prefix,
+            ));
+
+            offset += EHR_ID_SCAN_CHUNK;
+
+            if matches.len() >= EHR_SEARCH_DISPLAY_LIMIT {
+                matches.truncate(EHR_SEARCH_DISPLAY_LIMIT);
+                limit_reached = true;
+                break;
+            }
+            if page_len < EHR_ID_SCAN_CHUNK {
+                // The CDR ran out of rows before the scan cap — we've now
+                // seen everything it has, so no further matches exist.
+                break;
+            }
+            if offset >= EHR_ID_SCAN_CAP {
+                limit_reached = true;
+                break;
+            }
+        }
+
+        (matches, limit_reached)
     } else {
-        results
+        let aql = build_ehr_search_aql(&criteria)?;
+        let rows = fetch_aql_rows(&app, &client, &url, &profile.auth_method, &aql).await?;
+        let results = parse_ehr_search_rows(&rows);
+
+        // `limit_reached` reflects the raw AQL result set (capped at 200
+        // rows by the query's own LIMIT) — computed before the directory
+        // post-filter so "showing first 200, refine your search" still
+        // means what it says even after that filter narrows the count
+        // further.
+        let limit_reached = results.len() >= EHR_SEARCH_DISPLAY_LIMIT;
+        (results, limit_reached)
     };
 
     let results = if let Some(want_directory) = criteria.has_directory {
@@ -1775,6 +1895,48 @@ mod tests {
         assert!(!aql.contains("ehr_id/value LIKE"));
     }
 
+    #[test]
+    fn test_full_ehr_id_uses_exact_match_predicate() {
+        // A full, valid EHR ID *is* filterable — unlike a partial prefix —
+        // because exact equality on e/ehr_id/value is confirmed working on
+        // EHRBase (see EhrSearchCriteria::ehr_id_prefix's doc comment).
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("eecf24e0-5ac9-4bfc-b958-475162940444".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("WHERE e/ehr_id/value = 'eecf24e0-5ac9-4bfc-b958-475162940444'"));
+        assert!(!aql.contains("LIKE"));
+    }
+
+    #[test]
+    fn test_full_ehr_id_is_case_and_whitespace_insensitive() {
+        // Uuid::parse_str accepts mixed case and the value gets trimmed and
+        // re-rendered in canonical (lowercase) form either way.
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("  EECF24E0-5AC9-4BFC-B958-475162940444  ".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("WHERE e/ehr_id/value = 'eecf24e0-5ac9-4bfc-b958-475162940444'"));
+    }
+
+    #[test]
+    fn test_full_ehr_id_combines_with_other_predicates() {
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("eecf24e0-5ac9-4bfc-b958-475162940444".to_string());
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("e/ehr_id/value = 'eecf24e0-5ac9-4bfc-b958-475162940444'"));
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+        assert!(aql.contains(" AND "));
+    }
+
+    #[test]
+    fn test_build_ehr_search_aql_paged_uses_given_limit_and_offset() {
+        let mut c = empty_criteria();
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql_paged(&c, 50, 400).unwrap();
+        assert!(aql.contains("LIMIT 50 OFFSET 400"));
+        assert!(!aql.contains("LIMIT 200"));
+    }
+
     fn search_result(ehr_id: &str) -> EhrSearchResult {
         EhrSearchResult {
             ehr_id: ehr_id.to_string(),
@@ -1785,6 +1947,29 @@ mod tests {
             is_queryable: None,
             system_id: None,
         }
+    }
+
+    #[test]
+    fn test_parse_ehr_search_rows() {
+        let rows: Vec<Value> = serde_json::from_str(
+            r#"[
+                ["eecf24e0-5ac9-4bfc-b958-475162940444", "2024-08-30T21:45:33.389606Z", "sub-1", "ns-1", true, false, "local.ehrbase.org"],
+                "not-a-row-array-should-be-skipped"
+            ]"#,
+        )
+        .unwrap();
+        let results = parse_ehr_search_rows(&rows);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].ehr_id, "eecf24e0-5ac9-4bfc-b958-475162940444");
+        assert_eq!(
+            results[0].time_created.as_deref(),
+            Some("2024-08-30T21:45:33.389606Z")
+        );
+        assert_eq!(results[0].subject_id.as_deref(), Some("sub-1"));
+        assert_eq!(results[0].subject_namespace.as_deref(), Some("ns-1"));
+        assert_eq!(results[0].is_modifiable, Some(true));
+        assert_eq!(results[0].is_queryable, Some(false));
+        assert_eq!(results[0].system_id.as_deref(), Some("local.ehrbase.org"));
     }
 
     #[test]

@@ -146,7 +146,7 @@ Predicate clauses are appended to a `WHERE` block based on which criteria are no
 
 | Criterion | AQL predicate |
 |---|---|
-| `ehr_id_prefix` | ⚠️ **Not a WHERE predicate** — see [Known Limitations](#ehr-id-prefix-search-does-not-use-a-where-predicate). Applied as a post-filter on the AQL results instead. |
+| `ehr_id_prefix` | `e/ehr_id/value = '<value>'` **only when `<value>` is a full, valid EHR ID** — otherwise ⚠️ not a WHERE predicate at all, see [Known Limitations](#ehr-id-prefix-search-does-not-use-a-where-predicate). A partial prefix is resolved via a bounded scan-and-filter in `search_ehrs` instead. |
 | `subject_id` | `s/subject/external_ref/id/value LIKE '%<value>%'` |
 | `subject_namespace` | `s/subject/external_ref/namespace = '<value>'` |
 | `system_id` | `e/system_id/value = '<value>'` |
@@ -261,9 +261,11 @@ The `ehr_id_prefix` ("starts with") criterion originally shipped as `WHERE e/ehr
 
 **Why this happens:** `ehr_id` is the same class of EHR-level attribute as `time_created` (see above) and `ORDER BY e/ehr_id/value` (see `list_ehrs`'s `is_order_by_unsupported`), which EHRBase's AQL implementation does not fully support outside of SELECT. The difference is that this particular path fails silently for `LIKE` rather than raising the "not implemented" error `ORDER BY` and `time_created` do.
 
-**Fix:** `ehr_id_prefix` is no longer compiled into the AQL WHERE clause at all. It's applied as a post-filter in `search_ehrs` instead — the same pattern already used for `has_directory` (which also can't be an AQL predicate, for a different reason: the DIRECTORY isn't a queryable attribute at all). The AQL query still returns up to 200 rows (unfiltered by `ehr_id`, or filtered by whatever other criteria are combined with it), and `search_ehrs` then keeps only the rows whose `ehr_id` starts with the given prefix, case-sensitively.
+**Fix, part 1 — full EHR ID:** when the whole `ehr_id_prefix` value is a syntactically valid EHR ID (a UUID), `build_ehr_search_aql` compiles it as `WHERE e/ehr_id/value = '<id>'` instead of `LIKE`. Exact equality on this same EHR-level path is confirmed to work fine on EHRBase (`get_ehr_detail`'s composition lookup already relies on `e/ehr_id/value = '<id>'`) — only the pattern-match form is broken. This means pasting a complete EHR ID always finds it in a single query, however many EHRs exist on the server.
 
-**Trade-off:** because the prefix match now happens after the CDR's own `LIMIT 200`, a match that exists beyond the first 200 EHRs the CDR would otherwise return (e.g., on a very large, unsorted CDR) can be missed. This is the same trade-off the "Showing first 200 results — refine your search" banner already communicates for every other search dimension.
+**Fix, part 2 — partial prefix:** a genuine partial prefix still has no working WHERE predicate at all, so it can't ride along in the normal single query. Instead, `search_ehrs` pages through the CDR in chunks of 200 (still applying whatever other criteria were combined with it) and filters each chunk client-side for `ehr_id`s starting with the prefix, the same post-filter pattern already used for `has_directory` — stopping once it has 200 matches, once the CDR runs out of rows, or once it has scanned `EHR_ID_SCAN_CAP` (2000) rows, whichever comes first.
+
+**Trade-off:** confirmed against a real EHRBase sandbox with roughly 1,500 EHRs, a single `LIMIT 200` fetch only covered CDR-default-ordered IDs starting `00`–`22`something — nowhere near enough to reach a prefix like `eecf`. Scanning up to 2000 rows covers that case, but a partial-prefix search can still, in principle, miss a match that exists beyond the scan cap on an especially large CDR. There is no way around this without CDR-side support for filtering on this attribute — pasting the *full* EHR ID instead (part 1, above) sidesteps the limitation entirely and is the recommended way to jump straight to a known EHR.
 
 ## Technical Notes
 
@@ -307,4 +309,4 @@ Tested target: EHRBase 2.x. The `CONTAINS EHR_STATUS s` clause and `s/subject/ex
 |---|---|---|---|
 | 1.0 | 2026-04-09 | openEHR Explorer Team | Initial draft |
 | 1.1 | 2026-04-09 | openEHR Explorer Team | Added created-on, created-before, created-after search criteria; date boundary resolution; conflict rule; timezone open question |
-| 1.2 | 2026-09-05 | openEHR Explorer Team | Fixed `ehr_id_prefix`: `LIKE` on `e/ehr_id/value` was silently returning zero rows on EHRBase; now applied as a post-filter instead of a WHERE predicate |
+| 1.2 | 2026-09-05 | openEHR Explorer Team | Fixed `ehr_id_prefix`: `LIKE` on `e/ehr_id/value` was silently returning zero rows on EHRBase; a full EHR ID now uses an exact-match predicate instead, and a genuine partial prefix is resolved via a bounded client-side scan instead of a single 200-row fetch |
