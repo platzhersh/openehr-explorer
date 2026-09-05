@@ -1335,7 +1335,7 @@ function prevPage() {
 }
 
 function nextPage() {
-  if (serverStore.activeServerId) {
+  if (ehrStore.hasMore && serverStore.activeServerId) {
     currentPage.value++;
     ehrStore.fetchEhrs(serverStore.activeServerId, currentPage.value);
   }
@@ -1728,7 +1728,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             Previous
           </button>
           <span class="page-info">Page {{ currentPage + 1 }}</span>
-          <button type="button" class="btn btn-sm" @click="nextPage">Next</button>
+          <button type="button" class="btn btn-sm" :disabled="!ehrStore.hasMore" @click="nextPage">
+            Next
+          </button>
         </div>
       </div>
     </div>

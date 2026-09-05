@@ -17,16 +17,24 @@
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--color-surface-hover);
   border-color: var(--color-primary-dim);
+}
+/* Without this, a disabled button (e.g. EHR Browser's "Previous"/"Next"
+   pagination controls at the first/last page) is visually identical to an
+   enabled one — same colors, same pointer cursor — even though clicking it
+   does nothing. Applies to every `.btn`/`.btn-primary`/`.btn-danger` use. */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .btn-primary {
   background: var(--color-primary-dim);
   border-color: var(--color-primary);
   color: #fff;
 }
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--color-primary);
   color: var(--color-bg);
 }
@@ -38,7 +46,7 @@
   border-color: var(--color-error);
   color: var(--color-error);
 }
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background: var(--color-error);
   color: #fff;
 }
