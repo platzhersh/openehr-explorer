@@ -3,11 +3,10 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
-import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
-import CompassIcon from "../components/CompassIcon.vue";
 import CopyButton from "../components/CopyButton.vue";
 import TerminologySystemSelect from "../components/TerminologySystemSelect.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import {
   describeCode,
   expandValueSet,
@@ -24,13 +23,7 @@ const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
-const tourStore = useTourStore();
 const analytics = useAnalytics();
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "terminology" });
-  tourStore.start("terminology");
-}
 
 type TabId = "lookup" | "expand" | "validate" | "subsumes";
 
@@ -315,14 +308,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
         </button>
         <div class="header-title-row">
           <h2>Terminology</h2>
-          <button
-            type="button"
-            class="tour-trigger-btn"
-            title="Take a tour of the Terminology Browser"
-            @click="replayTour"
-          >
-            <CompassIcon />
-          </button>
+          <TourReplayButton tour-id="terminology" view-label="Terminology Browser" />
         </div>
         <p class="subtitle">
           Query the FHIR terminology server configured for this connection: describe a code, expand
