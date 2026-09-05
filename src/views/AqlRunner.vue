@@ -9,6 +9,7 @@ import { useVirtualList } from "../composables/useVirtualList";
 import AqlEditor from "../components/AqlEditor.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
+import DeleteButton from "../components/DeleteButton.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
@@ -317,14 +318,7 @@ const editorStyle = computed(() => ({
               @click="loadQuery(sq)"
             >
               <div class="saved-name">{{ sq.name }}</div>
-              <button
-                type="button"
-                class="icon-btn-ghost"
-                @click.stop="deleteSavedQuery(sq.id)"
-                title="Delete"
-              >
-                X
-              </button>
+              <DeleteButton title="Delete saved query" @click.stop="deleteSavedQuery(sq.id)" />
             </div>
           </div>
           <div v-if="queryStore.savedQueries.length === 0" class="empty-state">

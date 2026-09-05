@@ -12,6 +12,8 @@ import SearchOverlay from "../components/SearchOverlay.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
+import EditButton from "../components/EditButton.vue";
+import DeleteButton from "../components/DeleteButton.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -339,8 +341,13 @@ onUnmounted(() => {
           variant="bordered"
           data-tour="composition-copy"
         />
-        <button class="btn btn-sm" @click="handleEdit">Edit</button>
-        <button class="btn btn-sm btn-danger" @click="showDeleteDialog = true">Delete</button>
+        <EditButton title="Edit composition" variant="bordered" size="md" @click="handleEdit" />
+        <DeleteButton
+          title="Delete composition"
+          variant="bordered"
+          size="md"
+          @click="showDeleteDialog = true"
+        />
       </div>
     </div>
 
