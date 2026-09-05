@@ -47,10 +47,11 @@ export function useFileDownload() {
 
   /**
    * Prompts the user for a save location, defaulting to `defaultFileName`,
-   * writes `content` to it, and shows a success toast. Resolves to the
-   * chosen path, or `null` if the user cancelled the dialog — callers
-   * should treat cancellation as a normal, silent no-op rather than an
-   * error.
+   * writes `content` to it, and shows a success (or, on write failure,
+   * error) toast. Resolves to the chosen path, or `null` if the user
+   * cancelled the dialog or the write failed — either way there's nothing
+   * left for the caller to do, since the toast already reports the
+   * outcome.
    */
   async function saveTextFile(
     content: string,
@@ -66,7 +67,7 @@ export function useFileDownload() {
       await writeTextFile(path, content);
     } catch (e) {
       showToast(`Failed to save ${options.defaultFileName}: ${String(e)}`, path, true);
-      throw e;
+      return null;
     }
 
     showToast(`Saved ${options.defaultFileName}`, path);

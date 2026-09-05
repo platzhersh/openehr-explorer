@@ -205,17 +205,15 @@ async function downloadOpt() {
   const templateId = selectedTemplateId.value;
   if (!opt || !templateId) return;
 
-  try {
-    const path = await saveTextFile(opt, {
-      defaultFileName: `${templateId}.opt`,
-      filterName: "OPT Files",
-      extensions: ["opt", "xml"],
-    });
-    // A `null` path means the user cancelled the save dialog — not an export.
-    if (path) void analytics.track("template_opt_exported");
-  } catch {
-    // Write failure is already surfaced via the error toast in useFileDownload.
-  }
+  const path = await saveTextFile(opt, {
+    defaultFileName: `${templateId}.opt`,
+    filterName: "OPT Files",
+    extensions: ["opt", "xml"],
+  });
+  // A `null` path means the user cancelled the save dialog or the write
+  // failed (already surfaced via the error toast in useFileDownload) —
+  // neither counts as a completed export.
+  if (path) void analytics.track("template_opt_exported");
 }
 
 // Search functionality
