@@ -221,6 +221,38 @@ export const TOURS: Tour[] = [
       },
     ],
   },
+  // Unlike every other route tour, none of this tour's targets are chrome
+  // that renders unconditionally on navigation — the tab bar and "Try an
+  // example" button only exist once a server is selected *and* a
+  // terminology server URL is configured (see `TerminologyBrowser.vue`'s
+  // empty states). Auto-starting on route-enter alone would silently skip
+  // both of those steps for anyone who hasn't configured that yet, land on
+  // the always-rendered scope-note step, and mark the whole tour completed
+  // without ever showing the part that actually explains the tools. So
+  // `App.vue` holds off calling `maybeAutoStart` for this route until that
+  // config exists, then retries once it does — see `terminologyReady` there.
+  {
+    id: "terminology",
+    routeNames: ["terminology"],
+    label: "Terminology Browser",
+    steps: [
+      step(
+        '[data-tour="terminology-tabs"]',
+        "Four terminology operations",
+        "Describe a single code, expand a value set into its member concepts, validate that a code belongs to a value set (or code system), or test how two codes relate in a hierarchy. Switch tabs any time.",
+      ),
+      step(
+        '[data-tour="terminology-example"]',
+        "Try an example",
+        "No code system or value set handy? Every tab has a one-click example that fills in known-good values and runs it immediately.",
+      ),
+      step(
+        '[data-tour="terminology-scope-note"]',
+        "A separate server, on purpose",
+        "This talks directly to a FHIR Terminology Service, not your openEHR CDR — openEHR doesn't define terminology operations of its own. Configure the server it queries in Settings or per-server in the Server Manager.",
+      ),
+    ],
+  },
   {
     id: "servers",
     routeNames: ["servers"],

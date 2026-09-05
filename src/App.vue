@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -144,15 +144,56 @@ function checkWhatsNewAndTours() {
 }
 
 /**
+ * True once the Terminology Browser's tools can actually render — a server
+ * is selected and a terminology server URL is configured (per-server, or
+ * the global default). Its tour's targets (the operation tabs, "Try an
+ * example") don't exist until then; see the comment on the `terminology`
+ * tour in `tours.ts`.
+ */
+const terminologyReady = computed(
+  () =>
+    !!serverStore.activeServerId &&
+    !!(serverStore.activeServer?.terminology_url || settingsStore.settings.terminology_server_url),
+);
+
+/**
+ * Route-aware auto-start, gated on top of `tourStore.maybeAutoStart` for
+ * routes whose tour targets aren't guaranteed to exist yet (currently just
+ * `terminology` — see `terminologyReady`). Everything else passes straight
+ * through unchanged.
+ */
+function maybeAutoStartRoute(name: string | null | undefined) {
+  if (name === "terminology" && !terminologyReady.value) return;
+  tourStore.maybeAutoStart(name);
+}
+
+/**
  * Try the app-wide intro tour first — it auto-starts once, ever, ahead of
  * any route-aware tour. Once it's been seen/skipped (or is disabled), fall
  * back to offering the current route's tour, same as before its existence.
  */
 function offerNextTour() {
   if (!tourStore.maybeAutoStartIntro()) {
-    tourStore.maybeAutoStart(route.name as string | undefined);
+    maybeAutoStartRoute(route.name as string | undefined);
   }
 }
+
+// The terminology tour is deliberately held back by `maybeAutoStartRoute`
+// until `terminologyReady` — retry it here the moment that flips true (e.g.
+// the user picks a server for the first time) while still on that route, so
+// the tour isn't lost simply because it wasn't ready the instant they
+// navigated there.
+watch(terminologyReady, (ready) => {
+  if (
+    ready &&
+    route.name === "terminology" &&
+    settingsStore.loaded &&
+    !showAnalyticsConsent.value &&
+    !whatsNewStore.visible
+  ) {
+    tourStore.maybeAutoStart("terminology");
+  }
+});
 
 onMounted(async () => {
   serverStore.loadProfiles();
@@ -208,7 +249,7 @@ watch(
   async (name) => {
     if (!settingsStore.loaded || showAnalyticsConsent.value || whatsNewStore.visible) return;
     await nextTick();
-    tourStore.maybeAutoStart(name as string | undefined);
+    maybeAutoStartRoute(name as string | undefined);
   },
 );
 

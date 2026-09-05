@@ -4,10 +4,9 @@ import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery, type StoredQuerySummary } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
 import { useVirtualList } from "../composables/useVirtualList";
 import AqlEditor from "../components/AqlEditor.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
@@ -15,7 +14,6 @@ import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aql
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -195,11 +193,6 @@ async function runQuery() {
   await queryStore.executeAql(serverStore.activeServerId, queryText.value);
   // Feature-adoption ping only — NEVER include the query text itself.
   void analytics.track("aql_executed");
-}
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "aql" });
-  tourStore.start("aql");
 }
 
 function formatQuery() {
@@ -429,14 +422,7 @@ const editorStyle = computed(() => ({
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button
-                type="button"
-                class="tour-trigger-btn"
-                title="Take a tour of the AQL Runner"
-                @click="replayTour"
-              >
-                <CompassIcon />
-              </button>
+              <TourReplayButton tour-id="aql" view-label="AQL Runner" />
               <button
                 type="button"
                 class="btn btn-sm"

@@ -11,12 +11,11 @@ import {
   type EhrSortField,
 } from "../stores/ehr";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import EhrFilterModal from "../components/EhrFilterModal.vue";
 import DirectoryTree from "../components/DirectoryTree.vue";
 import DirectoryTreeEditor from "../components/DirectoryTreeEditor.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import FilterIcon from "../components/FilterIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
@@ -39,7 +38,6 @@ const router = useRouter();
 const serverStore = useServerStore();
 const ehrStore = useEhrStore();
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 onMounted(() => {
   // Track that the user opened the EHR browser. No IDs, URLs, or counts — just
@@ -47,10 +45,6 @@ onMounted(() => {
   void analytics.track("ehr_browsed");
 });
 
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "ehrs" });
-  tourStore.start("ehrs");
-}
 const searchQuery = ref("");
 const currentPage = ref(0);
 const showCreateDialog = ref(false);
@@ -1515,14 +1509,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
         </h2>
         <h2 v-else>EHRs</h2>
         <div class="header-actions">
-          <button
-            type="button"
-            class="tour-trigger-btn"
-            title="Take a tour of the EHR Browser"
-            @click="replayTour"
-          >
-            <CompassIcon />
-          </button>
+          <TourReplayButton tour-id="ehrs" view-label="EHR Browser" />
           <button
             type="button"
             class="btn btn-sm btn-primary"
