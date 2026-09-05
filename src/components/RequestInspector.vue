@@ -6,6 +6,7 @@ import {
   generateCurl,
   formatTimestamp,
   statusClass,
+  statusText,
   methodClass,
 } from "../stores/inspector";
 import type { RequestLogEntry } from "../stores/inspector";
@@ -16,9 +17,16 @@ import JsonViewer from "./JsonViewer.vue";
 import XmlViewer from "./XmlViewer.vue";
 import BashViewer from "./BashViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
+import DrawerStateIcon from "./DrawerStateIcon.vue";
 import CopyButton from "./CopyButton.vue";
 
 type DrawerState = "collapsed" | "half" | "expanded";
+
+const DRAWER_STATES: { state: DrawerState; label: string }[] = [
+  { state: "collapsed", label: "Collapse" },
+  { state: "half", label: "Half height" },
+  { state: "expanded", label: "Full height" },
+];
 
 const store = useInspectorStore();
 const analytics = useAnalytics();
@@ -77,6 +85,10 @@ function toggleDrawer() {
   else drawerState.value = "collapsed";
 }
 
+function setDrawerState(state: DrawerState) {
+  drawerState.value = state;
+}
+
 // The inspector tour (see `src/lib/tours.ts`) is manual-only, not route-aware
 // — the panel is global, not tied to one screen. Its later steps target
 // content that only renders while the drawer is open, so make sure it's
@@ -85,16 +97,6 @@ function replayTour() {
   void analytics.track("tour_replayed", { tour_id: "inspector" });
   if (drawerState.value === "collapsed") drawerState.value = "half";
   tourStore.start("inspector");
-}
-
-function cycleUp() {
-  if (drawerState.value === "collapsed") drawerState.value = "half";
-  else if (drawerState.value === "half") drawerState.value = "expanded";
-}
-
-function cycleDown() {
-  if (drawerState.value === "expanded") drawerState.value = "half";
-  else if (drawerState.value === "half") drawerState.value = "collapsed";
 }
 
 const drawerHeight = computed(() => {
@@ -209,16 +211,15 @@ function doClear() {
 <template>
   <div class="inspector-drawer" :style="{ height: drawerHeight }">
     <!-- Header bar -->
-    <div class="inspector-header" data-tour="inspector-header" @click="toggleDrawer">
+    <div class="inspector-header" data-tour="inspector-header">
       <div class="header-left">
-        <span class="drawer-icon">{{ drawerState === "collapsed" ? "\u25B2" : "\u25BC" }}</span>
         <span class="header-title">Request Inspector</span>
         <span v-if="store.entries.length > 0" class="entry-count-badge">
           {{ store.entries.length }}
         </span>
         <span v-if="store.hasErrors && drawerState === 'collapsed'" class="error-dot" />
       </div>
-      <div class="header-actions" @click.stop>
+      <div class="header-actions">
         <button
           type="button"
           class="tour-trigger-btn"
@@ -235,8 +236,20 @@ function doClear() {
           <button class="btn btn-sm btn-danger" @click="doClear">Yes</button>
           <button class="btn btn-sm" @click="showClearConfirm = false">No</button>
         </div>
-        <button class="btn btn-sm" @click="cycleUp" title="Expand">&#x2B06;</button>
-        <button class="btn btn-sm" @click="cycleDown" title="Collapse">&#x2B07;</button>
+        <div class="drawer-state-group" role="group" aria-label="Panel height">
+          <button
+            v-for="option in DRAWER_STATES"
+            :key="option.state"
+            type="button"
+            class="state-btn"
+            :class="{ active: drawerState === option.state }"
+            :title="option.label"
+            :aria-pressed="drawerState === option.state"
+            @click="setDrawerState(option.state)"
+          >
+            <DrawerStateIcon :state="option.state" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -265,8 +278,14 @@ function doClear() {
             <span class="entry-path" :title="entry.url">
               {{ extractPath(entry.url) }}
             </span>
-            <span :class="['entry-status', statusClass(entry.status)]">
-              {{ entry.status }}
+            <span
+              :class="['entry-status', statusClass(entry.status)]"
+              :title="`${entry.status} ${statusText(entry.status)}`.trim()"
+            >
+              {{ entry.status
+              }}<span v-if="statusText(entry.status)" class="status-text">
+                {{ statusText(entry.status) }}</span
+              >
             </span>
             <span class="entry-duration">{{ entry.duration_ms }}ms</span>
           </div>
@@ -378,7 +397,10 @@ function doClear() {
                 <div class="summary-grid">
                   <span class="summary-label">Status</span>
                   <span :class="['summary-value', statusClass(selected.status)]">
-                    {{ selected.status }}
+                    {{ selected.status
+                    }}<span v-if="statusText(selected.status)">
+                      {{ statusText(selected.status) }}</span
+                    >
                   </span>
                   <span class="summary-label">Content-Type</span>
                   <span class="summary-value mono">{{
@@ -545,7 +567,6 @@ function doClear() {
   min-height: 32px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  cursor: pointer;
   user-select: none;
 }
 
@@ -553,11 +574,6 @@ function doClear() {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.drawer-icon {
-  font-size: 10px;
-  color: var(--color-text-muted);
 }
 
 .header-title {
@@ -593,6 +609,43 @@ function doClear() {
   gap: 6px;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+/* Drawer height state buttons — collapsed / half / expanded, each a
+   one-click jump to that height rather than a cycle, so the state you
+   land on is always the one you clicked (see PRD-0005 for the three
+   states themselves). */
+.drawer-state-group {
+  display: flex;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid var(--color-border);
+}
+
+.state-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.state-btn:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-hover);
+}
+
+.state-btn.active {
+  color: var(--color-primary);
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-primary-dim);
 }
 
 .inspector-content {
@@ -693,6 +746,12 @@ function doClear() {
   font-weight: 600;
   font-size: 11px;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.status-text {
+  font-weight: 400;
+  opacity: 0.75;
 }
 
 .status-2xx {
