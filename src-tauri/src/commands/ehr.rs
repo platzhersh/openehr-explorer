@@ -1258,6 +1258,16 @@ pub async fn get_directory_version_contribution(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EhrSearchCriteria {
+    /// EHR ID prefix ("starts with") match. Unlike `subject_id` below, this
+    /// can't be expressed as a working AQL predicate: confirmed against a
+    /// real EHRBase instance, `WHERE e/ehr_id/value LIKE '<prefix>%'`
+    /// consistently returns zero rows even when a matching EHR exists.
+    /// `ehr_id` is an EHR-level attribute — the same class of path EHRBase
+    /// already rejects outright for `time_created` in WHERE clauses (see
+    /// `build_ehr_search_aql`) and for `ORDER BY` (see `list_ehrs`) — except
+    /// here it fails silently instead of returning an error. So this is
+    /// applied as a post-filter in `search_ehrs` instead, the same way
+    /// `has_directory` is below.
     pub ehr_id_prefix: Option<String>,
     pub subject_id: Option<String>,
     pub subject_namespace: Option<String>,
@@ -1344,12 +1354,9 @@ FROM EHR e CONTAINS EHR_STATUS s"
         "s"
     };
 
-    if let Some(ref prefix) = criteria.ehr_id_prefix {
-        predicates.push(format!(
-            "e/ehr_id/value LIKE '{}%'",
-            escape_aql_string(prefix)
-        ));
-    }
+    // ehr_id_prefix intentionally does NOT become a predicate here — see the
+    // doc comment on `EhrSearchCriteria::ehr_id_prefix`. It's applied as a
+    // post-filter in `search_ehrs` instead.
 
     if let Some(ref subject_id) = criteria.subject_id {
         predicates.push(format!(
@@ -1407,9 +1414,14 @@ FROM EHR e CONTAINS EHR_STATUS s"
     }
 
     // Check if any criteria was provided (either predicates, has_compositions:true,
-    // or has_directory — the latter never adds a predicate since it's applied as a
-    // post-filter in `search_ehrs`, but it's still a real criterion the user asked for).
-    if predicates.is_empty() && !has_compositions_filter && criteria.has_directory.is_none() {
+    // or has_directory/ehr_id_prefix — neither of those ever adds a predicate since
+    // both are applied as post-filters in `search_ehrs`, but they're still real
+    // criteria the user asked for).
+    if predicates.is_empty()
+        && !has_compositions_filter
+        && criteria.has_directory.is_none()
+        && criteria.ehr_id_prefix.is_none()
+    {
         return Err("At least one search criterion must be provided".to_string());
     }
 
@@ -1421,6 +1433,18 @@ FROM EHR e CONTAINS EHR_STATUS s"
         let where_clause = predicates.join(" AND ");
         Ok(format!("{} WHERE {} LIMIT 200", base, where_clause))
     }
+}
+
+/// Filters `results` down to only the EHRs whose `ehr_id` starts with
+/// `prefix` (case-sensitive, matching the case-sensitive semantics an AQL
+/// `LIKE` predicate would have had). See the doc comment on
+/// `EhrSearchCriteria::ehr_id_prefix` for why this can't be a WHERE
+/// predicate in the first place.
+fn filter_by_ehr_id_prefix(results: Vec<EhrSearchResult>, prefix: &str) -> Vec<EhrSearchResult> {
+    results
+        .into_iter()
+        .filter(|r| r.ehr_id.starts_with(prefix))
+        .collect()
 }
 
 /// Filters `results` down to only the EHRs whose DIRECTORY presence matches
@@ -1542,10 +1566,16 @@ pub async fn search_ehrs(
         .collect();
 
     // `limit_reached` reflects the raw AQL result set (capped at 200 rows by
-    // the query's own LIMIT) — computed before the directory post-filter so
-    // "showing first 200, refine your search" still means what it says even
-    // when has_directory then narrows the displayed count further.
+    // the query's own LIMIT) — computed before the ehr_id_prefix/directory
+    // post-filters so "showing first 200, refine your search" still means
+    // what it says even as those filters narrow the displayed count further.
     let limit_reached = results.len() >= 200;
+
+    let results = if let Some(ref prefix) = criteria.ehr_id_prefix {
+        filter_by_ehr_id_prefix(results, prefix)
+    } else {
+        results
+    };
 
     let results = if let Some(want_directory) = criteria.has_directory {
         filter_by_directory_presence(
@@ -1720,12 +1750,60 @@ mod tests {
     }
 
     #[test]
-    fn test_ehr_id_prefix() {
+    fn test_ehr_id_prefix_alone_is_a_valid_criterion_but_not_an_aql_predicate() {
+        // ehr_id_prefix can't become a working AQL predicate — EHRBase
+        // silently returns zero rows for LIKE on this EHR-level path (see
+        // EhrSearchCriteria::ehr_id_prefix) — so it's applied as a
+        // post-filter in search_ehrs instead. It must still count as "a
+        // criterion was provided" so the query isn't rejected.
         let mut c = empty_criteria();
         c.ehr_id_prefix = Some("fde80e0e".to_string());
         let aql = build_ehr_search_aql(&c).unwrap();
-        assert!(aql.contains("e/ehr_id/value LIKE 'fde80e0e%'"));
+        assert!(!aql.contains("ehr_id/value LIKE"));
+        assert!(!aql.contains("WHERE"));
         assert!(aql.contains("LIMIT 200"));
+    }
+
+    #[test]
+    fn test_ehr_id_prefix_combines_with_other_predicates() {
+        let mut c = empty_criteria();
+        c.ehr_id_prefix = Some("fde80e0e".to_string());
+        c.subject_namespace = Some("patnr".to_string());
+        let aql = build_ehr_search_aql(&c).unwrap();
+        assert!(aql.contains("s/subject/external_ref/namespace = 'patnr'"));
+        // ehr_id_prefix itself never appears as a predicate.
+        assert!(!aql.contains("ehr_id/value LIKE"));
+    }
+
+    fn search_result(ehr_id: &str) -> EhrSearchResult {
+        EhrSearchResult {
+            ehr_id: ehr_id.to_string(),
+            time_created: None,
+            subject_id: None,
+            subject_namespace: None,
+            is_modifiable: None,
+            is_queryable: None,
+            system_id: None,
+        }
+    }
+
+    #[test]
+    fn test_filter_by_ehr_id_prefix_keeps_matches_only() {
+        let results = vec![
+            search_result("eecf24e0-5ac9-4bfc-b958-475162940444"),
+            search_result("72916ac9-a81c-4bd4-8bee-b173e5ecce77"),
+            search_result("eec12345-0000-0000-0000-000000000000"),
+        ];
+        let filtered = filter_by_ehr_id_prefix(results, "eec");
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().all(|r| r.ehr_id.starts_with("eec")));
+    }
+
+    #[test]
+    fn test_filter_by_ehr_id_prefix_is_case_sensitive() {
+        let results = vec![search_result("ABCDEF00-0000-0000-0000-000000000000")];
+        let filtered = filter_by_ehr_id_prefix(results, "abc");
+        assert!(filtered.is_empty());
     }
 
     #[test]

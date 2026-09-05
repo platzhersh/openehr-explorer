@@ -146,7 +146,7 @@ Predicate clauses are appended to a `WHERE` block based on which criteria are no
 
 | Criterion | AQL predicate |
 |---|---|
-| `ehr_id_prefix` | `e/ehr_id/value LIKE '<value>%'` |
+| `ehr_id_prefix` | ⚠️ **Not a WHERE predicate** — see [Known Limitations](#ehr-id-prefix-search-does-not-use-a-where-predicate). Applied as a post-filter on the AQL results instead. |
 | `subject_id` | `s/subject/external_ref/id/value LIKE '%<value>%'` |
 | `subject_namespace` | `s/subject/external_ref/namespace = '<value>'` |
 | `system_id` | `e/system_id/value = '<value>'` |
@@ -255,6 +255,16 @@ The date filters `created-on`, `created-before`, and `created-after` are **not c
 
 This limitation may be addressed if EHRBase adds support for WHERE predicates on EHR-level attributes in a future release.
 
+### EHR ID Prefix Search Does Not Use a WHERE Predicate
+
+The `ehr_id_prefix` ("starts with") criterion originally shipped as `WHERE e/ehr_id/value LIKE '<prefix>%'`. Confirmed against a real EHRBase instance, this predicate is **silently unreliable**: it returns HTTP 200 with an empty result set even when an EHR whose ID matches the prefix genuinely exists on the server — unlike `time_created` above, EHRBase doesn't reject it with an error, it just never matches.
+
+**Why this happens:** `ehr_id` is the same class of EHR-level attribute as `time_created` (see above) and `ORDER BY e/ehr_id/value` (see `list_ehrs`'s `is_order_by_unsupported`), which EHRBase's AQL implementation does not fully support outside of SELECT. The difference is that this particular path fails silently for `LIKE` rather than raising the "not implemented" error `ORDER BY` and `time_created` do.
+
+**Fix:** `ehr_id_prefix` is no longer compiled into the AQL WHERE clause at all. It's applied as a post-filter in `search_ehrs` instead — the same pattern already used for `has_directory` (which also can't be an AQL predicate, for a different reason: the DIRECTORY isn't a queryable attribute at all). The AQL query still returns up to 200 rows (unfiltered by `ehr_id`, or filtered by whatever other criteria are combined with it), and `search_ehrs` then keeps only the rows whose `ehr_id` starts with the given prefix, case-sensitively.
+
+**Trade-off:** because the prefix match now happens after the CDR's own `LIMIT 200`, a match that exists beyond the first 200 EHRs the CDR would otherwise return (e.g., on a very large, unsorted CDR) can be missed. This is the same trade-off the "Showing first 200 results — refine your search" banner already communicates for every other search dimension.
+
 ## Technical Notes
 
 ### AQL vs REST Endpoint Trade-off
@@ -297,3 +307,4 @@ Tested target: EHRBase 2.x. The `CONTAINS EHR_STATUS s` clause and `s/subject/ex
 |---|---|---|---|
 | 1.0 | 2026-04-09 | openEHR Explorer Team | Initial draft |
 | 1.1 | 2026-04-09 | openEHR Explorer Team | Added created-on, created-before, created-after search criteria; date boundary resolution; conflict rule; timezone open question |
+| 1.2 | 2026-09-05 | openEHR Explorer Team | Fixed `ehr_id_prefix`: `LIKE` on `e/ehr_id/value` was silently returning zero rows on EHRBase; now applied as a post-filter instead of a WHERE predicate |
