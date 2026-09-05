@@ -321,7 +321,11 @@ function useConceptInLookup(concept: TerminologyConcept) {
         </button>
         <div class="header-title-row">
           <h2>Terminology</h2>
-          <TourReplayButton tour-id="terminology" view-label="Terminology Browser" />
+          <TourReplayButton
+            v-if="serverStore.activeServerId && effectiveTerminologyUrl"
+            tour-id="terminology"
+            view-label="Terminology Browser"
+          />
         </div>
         <p class="subtitle">
           Query the FHIR terminology server configured for this connection: describe a code, expand
