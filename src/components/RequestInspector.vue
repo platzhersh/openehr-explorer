@@ -211,7 +211,7 @@ function doClear() {
 <template>
   <div class="inspector-drawer" :style="{ height: drawerHeight }">
     <!-- Header bar -->
-    <div class="inspector-header" data-tour="inspector-header">
+    <div class="inspector-header" data-tour="inspector-header" @click="toggleDrawer">
       <div class="header-left">
         <span class="header-title">Request Inspector</span>
         <span v-if="store.entries.length > 0" class="entry-count-badge">
@@ -219,7 +219,7 @@ function doClear() {
         </span>
         <span v-if="store.hasErrors && drawerState === 'collapsed'" class="error-dot" />
       </div>
-      <div class="header-actions">
+      <div class="header-actions" @click.stop>
         <button
           type="button"
           class="tour-trigger-btn"
@@ -568,6 +568,7 @@ function doClear() {
   min-height: 32px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
   user-select: none;
 }
 
