@@ -1623,15 +1623,27 @@ const EHR_ID_SCAN_CHUNK: usize = 200;
 /// search on a huge, mostly-non-matching CDR doesn't scan indefinitely.
 const EHR_ID_SCAN_CAP: usize = 2000;
 
-/// Pages through `fetch_page` (given an offset, returns that page's
-/// already-parsed, *unfiltered* rows) collecting only the results whose
-/// `ehr_id` starts with `prefix`, until it has `EHR_SEARCH_DISPLAY_LIMIT`
-/// matches, the source runs out of rows (a page shorter than `chunk_size`
-/// means there's nothing left to fetch), or it has scanned `scan_cap` rows —
+/// Pages through `fetch_page` (given an offset, returns that page's *raw*
+/// row count from the CDR alongside whatever matches the caller found
+/// within it — ehr_id prefix, has_directory, or both, already filtered)
+/// collecting matches until it has `EHR_SEARCH_DISPLAY_LIMIT` of them, the
+/// source runs out of rows (a *raw* page shorter than `chunk_size` means
+/// there's nothing left to fetch), or it has scanned `scan_cap` rows —
 /// whichever comes first. Returns the matches plus whether the scan stopped
 /// *without* exhausting the source — mirroring the other search dimensions'
 /// `limit_reached`, which likewise means "refine your search", not "this is
 /// exhaustive".
+///
+/// The raw row count and the filtered match count are deliberately kept
+/// separate: the stopping decision must be driven by how many *matches*
+/// were found (so a filter that's more selective than ehr_id prefix alone —
+/// namely `has_directory`, combined in by `search_ehrs` — doesn't cause an
+/// early, wrong stop) while "has the CDR run out of data" must be driven by
+/// the *raw* count regardless of how much filtering culled it. Collapsing
+/// the two was exactly the bug CodeRabbit caught in review: applying
+/// `has_directory` only after this whole scan finished meant a page of 200
+/// raw prefix matches with the wrong directory state looked like "done,
+/// limit reached" even though the very next page held the real match.
 ///
 /// Kept generic over `fetch_page` — rather than calling `fetch_aql_rows`
 /// directly — specifically so this loop (the part that broke on a real
@@ -1639,24 +1651,21 @@ const EHR_ID_SCAN_CAP: usize = 2000;
 /// `EhrSearchCriteria::ehr_id_prefix`) can be unit tested against canned
 /// pages, without a live CDR or an HTTP mock.
 async fn scan_for_ehr_id_prefix<F, Fut>(
-    prefix: &str,
     chunk_size: usize,
     scan_cap: usize,
     mut fetch_page: F,
 ) -> Result<(Vec<EhrSearchResult>, bool), String>
 where
     F: FnMut(usize) -> Fut,
-    Fut: std::future::Future<Output = Result<Vec<EhrSearchResult>, String>>,
+    Fut: std::future::Future<Output = Result<(usize, Vec<EhrSearchResult>), String>>,
 {
     let mut matches: Vec<EhrSearchResult> = Vec::new();
     let mut offset = 0usize;
     let mut limit_reached = false;
 
     loop {
-        let page = fetch_page(offset).await?;
-        let page_len = page.len();
-
-        matches.extend(filter_by_ehr_id_prefix(page, prefix));
+        let (raw_page_len, page_matches) = fetch_page(offset).await?;
+        matches.extend(page_matches);
 
         offset += chunk_size;
 
@@ -1665,7 +1674,7 @@ where
             limit_reached = true;
             break;
         }
-        if page_len < chunk_size {
+        if raw_page_len < chunk_size {
             // The source ran out of rows before the scan cap — we've now
             // seen everything it has, so no further matches exist.
             break;
@@ -1702,21 +1711,47 @@ pub async fn search_ehrs(
         .filter(|p| Uuid::parse_str(p.trim()).is_err());
 
     let (results, limit_reached) = if let Some(prefix) = partial_ehr_id_prefix {
-        scan_for_ehr_id_prefix(prefix, EHR_ID_SCAN_CHUNK, EHR_ID_SCAN_CAP, |offset| {
+        let prefix = prefix.to_string();
+        // Applied *inside* the scan loop (per page), not once after it —
+        // see `scan_for_ehr_id_prefix`'s doc comment on why folding
+        // has_directory in here, rather than post-filtering the scan's
+        // final result afterward like the single-query branch below does,
+        // is required for correctness once a partial prefix is also
+        // scanning multiple pages.
+        let want_directory = criteria.has_directory;
+        scan_for_ehr_id_prefix(EHR_ID_SCAN_CHUNK, EHR_ID_SCAN_CAP, |offset| {
             // Cloned per page (cheap — AppHandle/Client are Arc-backed, and
             // AuthMethod is already cloned this way elsewhere, e.g.
             // `filter_by_directory_presence` below) so the async block can
             // own everything it needs without moving `app`/`client`/
             // `profile` out from under the rest of `search_ehrs`, which
-            // still needs them (e.g. for the has_directory filter below).
+            // still needs them after the scan completes.
             let aql = build_ehr_search_aql_paged(&criteria, EHR_ID_SCAN_CHUNK, offset);
             let app = app.clone();
             let client = client.clone();
             let url = url.clone();
             let auth = profile.auth_method.clone();
+            let base = base.to_string();
+            let prefix = prefix.clone();
             async move {
                 let rows = fetch_aql_rows(&app, &client, &url, &auth, &aql?).await?;
-                Ok(parse_ehr_search_rows(&rows))
+                let raw_page_len = rows.len();
+                let page_matches = filter_by_ehr_id_prefix(parse_ehr_search_rows(&rows), &prefix);
+                let page_matches = match want_directory {
+                    Some(want) => {
+                        filter_by_directory_presence(
+                            &app,
+                            &client,
+                            &base,
+                            &auth,
+                            page_matches,
+                            want,
+                        )
+                        .await
+                    }
+                    None => page_matches,
+                };
+                Ok((raw_page_len, page_matches))
             }
         })
         .await?
@@ -1729,23 +1764,26 @@ pub async fn search_ehrs(
         // rows by the query's own LIMIT) — computed before the directory
         // post-filter so "showing first 200, refine your search" still
         // means what it says even after that filter narrows the count
-        // further.
+        // further. Unlike the scanning branch above, there's only ever one
+        // page here, so applying has_directory after the fact (rather than
+        // inside some loop) can't cause it to miss anything.
         let limit_reached = results.len() >= EHR_SEARCH_DISPLAY_LIMIT;
-        (results, limit_reached)
-    };
 
-    let results = if let Some(want_directory) = criteria.has_directory {
-        filter_by_directory_presence(
-            &app,
-            &client,
-            base,
-            &profile.auth_method,
-            results,
-            want_directory,
-        )
-        .await
-    } else {
-        results
+        let results = if let Some(want_directory) = criteria.has_directory {
+            filter_by_directory_presence(
+                &app,
+                &client,
+                base,
+                &profile.auth_method,
+                results,
+                want_directory,
+            )
+            .await
+        } else {
+            results
+        };
+
+        (results, limit_reached)
     };
 
     let total = results.len();
@@ -2041,16 +2079,23 @@ mod tests {
     /// `offset / chunk_size` (matching how `scan_for_ehr_id_prefix` calls
     /// it), and counts how many pages were actually requested — so a test
     /// can assert the scan stopped as early as it should have, not just
-    /// that it eventually returned the right rows.
+    /// that it eventually returned the right rows. Applies `filter_by_ehr_id_prefix`
+    /// itself, mirroring what `search_ehrs`'s real closure does before
+    /// handing a page back to `scan_for_ehr_id_prefix` — the raw page
+    /// length returned alongside it is the *unfiltered* page size, exactly
+    /// as `search_ehrs` reports it.
     fn paged_fetcher(
         pages: Vec<Vec<EhrSearchResult>>,
         chunk_size: usize,
+        prefix: &'static str,
         call_count: std::rc::Rc<std::cell::RefCell<usize>>,
-    ) -> impl FnMut(usize) -> std::future::Ready<Result<Vec<EhrSearchResult>, String>> {
+    ) -> impl FnMut(usize) -> std::future::Ready<Result<(usize, Vec<EhrSearchResult>), String>>
+    {
         move |offset: usize| {
             *call_count.borrow_mut() += 1;
             let page = pages.get(offset / chunk_size).cloned().unwrap_or_default();
-            std::future::ready(Ok(page))
+            let raw_len = page.len();
+            std::future::ready(Ok((raw_len, filter_by_ehr_id_prefix(page, prefix))))
         }
     }
 
@@ -2065,7 +2110,7 @@ mod tests {
         ];
         let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
         let (matches, limit_reached) =
-            scan_for_ehr_id_prefix("eec", 1, 10, paged_fetcher(pages, 1, calls.clone()))
+            scan_for_ehr_id_prefix(1, 10, paged_fetcher(pages, 1, "eec", calls.clone()))
                 .await
                 .unwrap();
 
@@ -2092,10 +2137,9 @@ mod tests {
             .collect();
         let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
         let (matches, limit_reached) = scan_for_ehr_id_prefix(
-            "eec",
             EHR_ID_SCAN_CHUNK,
             EHR_ID_SCAN_CAP,
-            paged_fetcher(vec![big_page], EHR_ID_SCAN_CHUNK, calls.clone()),
+            paged_fetcher(vec![big_page], EHR_ID_SCAN_CHUNK, "eec", calls.clone()),
         )
         .await
         .unwrap();
@@ -2117,7 +2161,7 @@ mod tests {
         ];
         let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
         let (matches, limit_reached) =
-            scan_for_ehr_id_prefix("zzz", 3, 100, paged_fetcher(pages, 3, calls.clone()))
+            scan_for_ehr_id_prefix(3, 100, paged_fetcher(pages, 3, "zzz", calls.clone()))
                 .await
                 .unwrap();
 
@@ -2142,12 +2186,14 @@ mod tests {
         let calls_for_closure = calls.clone();
         let fetch_page = move |_offset: usize| {
             *calls_for_closure.borrow_mut() += 1;
-            std::future::ready(Ok(full_non_matching_page.clone()))
+            let raw_len = full_non_matching_page.len();
+            std::future::ready(Ok((
+                raw_len,
+                filter_by_ehr_id_prefix(full_non_matching_page.clone(), "zzz"),
+            )))
         };
 
-        let (matches, limit_reached) = scan_for_ehr_id_prefix("zzz", 10, 50, fetch_page)
-            .await
-            .unwrap();
+        let (matches, limit_reached) = scan_for_ehr_id_prefix(10, 50, fetch_page).await.unwrap();
 
         assert!(matches.is_empty());
         assert!(limit_reached);
@@ -2156,12 +2202,48 @@ mod tests {
 
     #[tokio::test]
     async fn test_scan_for_ehr_id_prefix_propagates_fetch_errors() {
-        let result = scan_for_ehr_id_prefix("eec", 200, 2000, |_offset| {
+        let result = scan_for_ehr_id_prefix(200, 2000, |_offset| {
             std::future::ready(Err("boom".to_string()))
         })
         .await;
 
         assert_eq!(result.unwrap_err(), "boom");
+    }
+
+    #[tokio::test]
+    async fn test_scan_for_ehr_id_prefix_does_not_stop_early_on_raw_matches_alone() {
+        // Regression test for the has_directory interaction CodeRabbit
+        // flagged in review: if the stopping decision were based on raw
+        // ehr_id-prefix matches (200 of them) rather than the fully
+        // filtered per-page match count, the scan would wrongly stop after
+        // page 1 and never see page 2's real match — exactly mirroring
+        // "200 EHRs whose ehr_id matches but have the wrong directory
+        // state, followed by the one EHR that actually qualifies".
+        let calls = std::rc::Rc::new(std::cell::RefCell::new(0));
+        let calls_for_closure = calls.clone();
+        let fetch_page = move |offset: usize| {
+            *calls_for_closure.borrow_mut() += 1;
+            // Page 1 (offset 0): 200 raw rows, but the caller's combined
+            // filter (ehr_id prefix AND has_directory) rejects all of them
+            // — simulating "matched the prefix, wrong directory state".
+            // Page 2 (offset 200): a single row that passes every filter.
+            let (raw_len, page_matches) = if offset == 0 {
+                (200, Vec::new())
+            } else {
+                (
+                    1,
+                    vec![search_result("eecf24e0-5ac9-4bfc-b958-475162940444")],
+                )
+            };
+            std::future::ready(Ok((raw_len, page_matches)))
+        };
+
+        let (matches, limit_reached) = scan_for_ehr_id_prefix(200, 2000, fetch_page).await.unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].ehr_id, "eecf24e0-5ac9-4bfc-b958-475162940444");
+        assert!(!limit_reached);
+        assert_eq!(*calls.borrow(), 2);
     }
 
     #[test]
