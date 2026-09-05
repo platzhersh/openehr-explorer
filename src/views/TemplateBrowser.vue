@@ -407,7 +407,7 @@ onUnmounted(() => {
               @click.stop="createComposition(tmpl.template_id)"
               title="Create new composition"
             >
-              New Composition
+              + New Composition
             </button>
           </div>
         </div>
