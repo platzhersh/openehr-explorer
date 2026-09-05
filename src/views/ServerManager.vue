@@ -172,8 +172,13 @@ function credentialBackendLabel(backend: string): string {
             >
               {{ cardTestLoading[profile.id] ? "Testing..." : "Test" }}
             </button>
-            <button class="btn btn-sm" @click="serverStore.setActiveServer(profile.id)">
-              {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
+            <button
+              class="btn btn-sm"
+              :class="{ 'btn-active-state': profile.id === serverStore.activeServerId }"
+              :disabled="profile.id === serverStore.activeServerId"
+              @click="serverStore.setActiveServer(profile.id)"
+            >
+              {{ profile.id === serverStore.activeServerId ? "✓ Active" : "Use" }}
             </button>
             <button
               type="button"
@@ -284,6 +289,14 @@ function credentialBackendLabel(backend: string): string {
 .btn-active-toggle:hover {
   background: #eab308;
   color: var(--color-bg);
+}
+.btn-active-state:disabled {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-dim);
+  font-weight: 600;
+  cursor: default;
+  opacity: 1;
 }
 .warning-badge {
   background: rgba(255, 193, 7, 0.15);
