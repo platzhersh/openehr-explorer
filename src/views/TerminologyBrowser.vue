@@ -106,7 +106,7 @@ function runLookupExample() {
 }
 
 async function runLookup() {
-  if (!serverStore.activeServerId || !canLookup.value) return;
+  if (!serverStore.activeServerId || !canLookup.value || lookupLoading.value) return;
   lookupLoading.value = true;
   lookupError.value = null;
   lookupResult.value = null;
@@ -140,7 +140,7 @@ function applyExpandPreset(url: string) {
 }
 
 async function runExpand() {
-  if (!serverStore.activeServerId || !canExpand.value) return;
+  if (!serverStore.activeServerId || !canExpand.value || expandLoading.value) return;
   expandLoading.value = true;
   expandError.value = null;
   expandResult.value = null;
@@ -179,7 +179,7 @@ function runValidateExample() {
 }
 
 async function runValidate() {
-  if (!serverStore.activeServerId || !canValidate.value) return;
+  if (!serverStore.activeServerId || !canValidate.value || validateLoading.value) return;
   validateLoading.value = true;
   validateError.value = null;
   validateResult.value = null;
@@ -226,7 +226,7 @@ const SUBSUMPTION_EXPLANATIONS: Record<string, string> = {
 };
 
 async function runSubsumes() {
-  if (!serverStore.activeServerId || !canSubsume.value) return;
+  if (!serverStore.activeServerId || !canSubsume.value || subsumesLoading.value) return;
   subsumesLoading.value = true;
   subsumesError.value = null;
   subsumesResult.value = null;
@@ -374,7 +374,12 @@ function useConceptInLookup(concept: TerminologyConcept) {
             <button type="submit" class="btn btn-primary" :disabled="lookupLoading || !canLookup">
               {{ lookupLoading ? "Looking up…" : "Describe" }}
             </button>
-            <button type="button" class="btn btn-sm btn-ghost" @click="runLookupExample">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              :disabled="lookupLoading"
+              @click="runLookupExample"
+            >
               Try an example
             </button>
           </div>
@@ -453,6 +458,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
               :key="preset.url"
               type="button"
               class="btn btn-sm btn-ghost"
+              :disabled="expandLoading"
               @click="applyExpandPreset(preset.url)"
             >
               {{ preset.label }}
@@ -520,7 +526,12 @@ function useConceptInLookup(concept: TerminologyConcept) {
             >
               {{ validateLoading ? "Validating…" : "Validate" }}
             </button>
-            <button type="button" class="btn btn-sm btn-ghost" @click="runValidateExample">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              :disabled="validateLoading"
+              @click="runValidateExample"
+            >
               Try an example
             </button>
           </div>
@@ -564,7 +575,12 @@ function useConceptInLookup(concept: TerminologyConcept) {
             >
               {{ subsumesLoading ? "Testing…" : "Test" }}
             </button>
-            <button type="button" class="btn btn-sm btn-ghost" @click="runSubsumesExample">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              :disabled="subsumesLoading"
+              @click="runSubsumesExample"
+            >
               Try an example
             </button>
           </div>
