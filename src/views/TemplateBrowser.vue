@@ -15,7 +15,9 @@ import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
 import TemplateUploadModal from "../components/TemplateUploadModal.vue";
 import TemplateUploadZone from "../components/TemplateUploadZone.vue";
+import DownloadToast from "../components/DownloadToast.vue";
 import { useTemplateUpload } from "../composables/useTemplateUpload";
+import { useFileDownload } from "../composables/useFileDownload";
 import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
@@ -48,6 +50,12 @@ const showUploadModal = ref(false);
 // backs the inline drop zone shown when the server has no templates yet
 // (see the empty-state markup below), so the two never need to share state.
 const inlineUpload = useTemplateUpload();
+const {
+  toast: downloadToast,
+  dismissToast: dismissDownloadToast,
+  revealDownload,
+  saveTextFile,
+} = useFileDownload();
 
 const selectedTemplateId = computed(() => route.params.templateId as string | undefined);
 const termBindings = ref<TermBinding[]>([]);
@@ -192,20 +200,20 @@ function createComposition(templateId: string) {
   router.push({ name: "compose", params: { templateId } });
 }
 
-function downloadOpt() {
+async function downloadOpt() {
   const opt = templateStore.selectedOpt;
   const templateId = selectedTemplateId.value;
   if (!opt || !templateId) return;
 
-  void analytics.track("template_opt_exported");
-
-  const blob = new Blob([opt], { type: "application/xml" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${templateId}.opt`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const path = await saveTextFile(opt, {
+    defaultFileName: `${templateId}.opt`,
+    filterName: "OPT Files",
+    extensions: ["opt", "xml"],
+  });
+  // A `null` path means the user cancelled the save dialog or the write
+  // failed (already surfaced via the error toast in useFileDownload) —
+  // neither counts as a completed export.
+  if (path) void analytics.track("template_opt_exported");
 }
 
 // Search functionality
@@ -674,6 +682,12 @@ onUnmounted(() => {
     </div>
 
     <TemplateUploadModal :open="showUploadModal" @close="showUploadModal = false" />
+
+    <DownloadToast
+      :toast="downloadToast"
+      @reveal="revealDownload"
+      @dismiss="dismissDownloadToast"
+    />
   </div>
 </template>
 
