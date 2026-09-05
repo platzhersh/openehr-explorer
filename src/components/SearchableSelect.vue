@@ -61,6 +61,7 @@ const modelValue = defineModel<string | null>({ default: null });
 
 const controlId = useId();
 const listboxId = useId();
+const searchInputId = useId();
 
 const rootRef = ref<HTMLElement | null>(null);
 const searchInputRef = ref<HTMLInputElement | null>(null);
@@ -89,7 +90,7 @@ function open() {
   isOpen.value = true;
   query.value = "";
   const selectedIndex = filteredOptions.value.findIndex((o) => o.value === modelValue.value);
-  highlightedIndex.value = selectedIndex >= 0 ? selectedIndex : 0;
+  highlightedIndex.value = Math.max(selectedIndex, 0);
   nextTick(() => searchInputRef.value?.focus());
 }
 
@@ -185,8 +186,7 @@ watch(isOpen, (open) => {
       :id="controlId"
       class="input searchable-select-control"
       :class="{ 'no-selection': !selectedOption, open: isOpen }"
-      role="combobox"
-      aria-haspopup="listbox"
+      aria-haspopup="true"
       :aria-expanded="isOpen"
       :aria-controls="listboxId"
       :aria-disabled="disabled"
@@ -213,25 +213,27 @@ watch(isOpen, (open) => {
     </div>
 
     <div v-if="isOpen" class="searchable-select-panel">
+      <label :for="searchInputId" class="searchable-select-search-label">{{
+        searchPlaceholder
+      }}</label>
       <input
+        :id="searchInputId"
         ref="searchInputRef"
         v-model="query"
         type="text"
         class="input searchable-select-search"
         :placeholder="searchPlaceholder"
-        role="searchbox"
         :aria-controls="listboxId"
         aria-autocomplete="list"
         @keydown="onPanelKeydown"
       />
-      <ul :id="listboxId" ref="listRef" class="searchable-select-list" role="listbox">
+      <ul :id="listboxId" ref="listRef" class="searchable-select-list">
         <li v-if="filteredOptions.length === 0" class="searchable-select-empty">
           {{ noOptionsText }}
         </li>
         <li
           v-for="(option, index) in filteredOptions"
           :key="optionKey(option)"
-          role="option"
           :aria-selected="option.value === modelValue"
           :data-highlighted="index === highlightedIndex"
           class="searchable-select-option"
@@ -258,6 +260,22 @@ watch(isOpen, (open) => {
 .searchable-select-label {
   display: block;
   margin-bottom: 4px;
+}
+
+/* Visually hidden but still readable by screen readers — associates the
+   filter input with an accessible name without showing redundant text
+   next to its placeholder. Same technique as ToggleSwitch's hidden
+   checkbox. */
+.searchable-select-search-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .searchable-select-control {
