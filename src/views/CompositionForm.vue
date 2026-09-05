@@ -360,18 +360,19 @@ function transformMedblocksExport(rawData: Record<string, unknown>): Record<stri
 }
 
 // Converts an absolute instant to the value format <input type="datetime-local">
-// expects: a timezone-naive "YYYY-MM-DDTHH:mm:ss" string read as the *local*
-// timezone (the input's step="1" — see the template — is what makes it accept
-// and display seconds instead of truncating to the minute). date.toISOString()
-// returns UTC, so slicing that directly (as this code used to) silently
-// reinterprets a UTC wall-clock time as local — only correct for UTC browsers,
-// off by the local offset everywhere else, which then compounds when the
-// field round-trips back through `new Date(value)` on submit. Keeping seconds
-// matters here too: truncating them means an unchanged edit-time restore
-// still submits a different instant than the composition's original one.
+// expects: a timezone-naive "YYYY-MM-DDTHH:mm:ss.sss" string read as the
+// *local* timezone (the input's step="0.001" — see the template — is what
+// makes it accept and display milliseconds instead of truncating to the
+// minute). date.toISOString() returns UTC, so slicing that directly (as this
+// code used to) silently reinterprets a UTC wall-clock time as local — only
+// correct for UTC browsers, off by the local offset everywhere else, which
+// then compounds when the field round-trips back through `new Date(value)`
+// on submit. Keeping milliseconds matters here too: truncating them means an
+// unchanged edit-time restore still submits a different instant than the
+// composition's original one.
 function toDatetimeLocalValue(date: Date): string {
   const localMs = date.getTime() - date.getTimezoneOffset() * 60000;
-  return new Date(localMs).toISOString().slice(0, 19);
+  return new Date(localMs).toISOString().slice(0, 23);
 }
 
 // Merges the ctx/* shortcuts (which EHRBase expands automatically) onto a
@@ -812,7 +813,7 @@ watch(
               id="composition-time"
               v-model="compositionTime"
               type="datetime-local"
-              step="1"
+              step="0.001"
               class="input"
             />
           </div>
