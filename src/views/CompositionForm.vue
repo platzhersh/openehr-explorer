@@ -34,6 +34,11 @@ const compositionTime = ref("");
 const showEhrDialog = ref(false);
 const showPreview = ref(false);
 const isEditMode = ref(false);
+// True whenever loadCompositionForEdit hasn't (yet, or successfully) loaded
+// the composition being edited — gates the Update button so a load failure
+// can't silently submit a blank/partial form over the real composition (see
+// loadCompositionForEdit).
+const editLoadFailed = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const success = ref<string | null>(null);
@@ -153,6 +158,12 @@ onMounted(async () => {
 async function loadCompositionForEdit(existingComposition: Record<string, unknown> | null) {
   if (!props.ehrId || !props.compositionUid || !serverStore.activeServerId) return;
 
+  // Assumed failed until the load below fully succeeds — a thrown error or
+  // an empty FLAT response both leave this set, so a failed load can't
+  // silently let the user submit a blank/partial form over the real
+  // composition (see the Update button's :disabled binding).
+  editLoadFailed.value = true;
+
   try {
     loading.value = true;
 
@@ -190,7 +201,10 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
       compositionUid: props.compositionUid,
     });
 
-    if (!flatComp) return;
+    if (!flatComp) {
+      error.value = "Composition returned no FLAT data";
+      return;
+    }
     // hydrateMbForm() pushes this into the mb-auto-form once it has mounted
     // — after its webTemplate, so it knows what to do with these paths.
     flatData.value = flatComp;
@@ -201,6 +215,7 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
       flatData: flatComp,
       compositionTime: compositionTime.value,
     };
+    editLoadFailed.value = false;
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
   } finally {
@@ -333,15 +348,18 @@ function transformMedblocksExport(rawData: Record<string, unknown>): Record<stri
 }
 
 // Converts an absolute instant to the value format <input type="datetime-local">
-// expects: a timezone-naive "YYYY-MM-DDTHH:mm" string read as the *local*
-// timezone. date.toISOString() returns UTC, so slicing that directly (as this
-// code used to) silently reinterprets a UTC wall-clock time as local — only
-// correct for UTC browsers, off by the local offset everywhere else, which
-// then compounds when the field round-trips back through `new Date(value)`
-// on submit.
+// expects: a timezone-naive "YYYY-MM-DDTHH:mm:ss" string read as the *local*
+// timezone (the input's step="1" — see the template — is what makes it accept
+// and display seconds instead of truncating to the minute). date.toISOString()
+// returns UTC, so slicing that directly (as this code used to) silently
+// reinterprets a UTC wall-clock time as local — only correct for UTC browsers,
+// off by the local offset everywhere else, which then compounds when the
+// field round-trips back through `new Date(value)` on submit. Keeping seconds
+// matters here too: truncating them means an unchanged edit-time restore
+// still submits a different instant than the composition's original one.
 function toDatetimeLocalValue(date: Date): string {
   const localMs = date.getTime() - date.getTimezoneOffset() * 60000;
-  return new Date(localMs).toISOString().slice(0, 16);
+  return new Date(localMs).toISOString().slice(0, 19);
 }
 
 // Merges the ctx/* shortcuts (which EHRBase expands automatically) onto a
@@ -726,7 +744,7 @@ watch(
           </div>
           <div class="form-field">
             <label>Time</label>
-            <input v-model="compositionTime" type="datetime-local" class="input" />
+            <input v-model="compositionTime" type="datetime-local" step="1" class="input" />
           </div>
         </div>
       </div>
@@ -750,13 +768,15 @@ watch(
         <button
           class="btn btn-primary"
           @click="handleSubmit"
-          :disabled="!selectedEhrId || !composerName || loading"
+          :disabled="!selectedEhrId || !composerName || loading || (isEditMode && editLoadFailed)"
           :title="
             !selectedEhrId
               ? 'Please select an EHR'
               : !composerName
                 ? 'Please enter composer name'
-                : ''
+                : isEditMode && editLoadFailed
+                  ? 'Could not load the composition to edit — reload the page to try again'
+                  : ''
           "
         >
           {{ loading ? "Submitting..." : isEditMode ? "Update Composition" : "Create Composition" }}
