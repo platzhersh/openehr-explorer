@@ -114,7 +114,7 @@ A resizable side panel (default collapsed) showing the **live FLAT JSON** assemb
 #### 1.5 Submission
 
 1. Merge ctx fields with the medblocks-ui FLAT output.
-2. `POST /rest/openehr/v1/ehr/{ehr_id}/composition` with `Content-Type: application/openehr.wt.flat.schema+json`.
+2. `POST /rest/openehr/v1/ehr/{ehr_id}/composition?templateId={template_id}` with `Content-Type` set to the FLAT-format media type and `Accept: application/json`. The `Content-Type` value varies by CDR: EHRBase's deployed endpoint only accepts `application/openehr.wt.flat.schema+json`, while FerroEHR requires the openEHR REST spec's current `application/openehr.wt.flat+json` and rejects the `.schema` variant outright (415). Also send `openehr-template-id` (spec-required for a Simplified-Format commit; FerroEHR enforces this, EHRBase does not strictly require it alongside its `templateId` query parameter). See `flat_composition_content_type()` in `src-tauri/src/commands/composition.rs`.
 3. On success: success banner with Composition UID + **"View Composition"** link.
 4. On error: full CDR error body displayed in a scrollable, syntax-highlighted error panel.
 
@@ -134,7 +134,9 @@ Form state (template ID + EHR ID + FLAT snapshot) is auto-saved to local app sto
 
 From the Composition Viewer, an **"Edit"** button opens the medblocks-ui form pre-populated with the existing composition's data.
 
-**Pre-population:** Fetch the composition with `Accept: application/openehr.wt.flat.schema+json` and pass the returned FLAT object to medblocks-ui's `value` property. If the server does not support FLAT retrieval, show a dismissible warning: _"Could not load composition in FLAT format — starting with an empty form."_
+**Pre-population:** Fetch the composition with `Accept` set to the same per-CDR FLAT-format media type used as `Content-Type` for writes (see §1.5) and pass the returned FLAT object into medblocks-ui's `mb-auto-form` via its `import()` method. If the server does not support FLAT retrieval, show a dismissible warning: _"Could not load composition in FLAT format — starting with an empty form."_ Note: FerroEHR's FLAT GET has been observed to silently omit content nested under a `HISTORY`'s `events[].data`/`.state` item trees (its canonical JSON and Web Template representations for the same composition are complete) — tracked as [OEH-50](https://linear.app/platzh1rsch/issue/OEH-50).
+
+Submitting an update also restores the "Time" field from the composition's own `context/start_time` (via the canonical/structured GET already fetched for composer/language/territory) rather than defaulting to "now" — resubmitting archetype paths the web template defaults from `ctx/time` (e.g. a HISTORY's origin) as freshly "now" while other imported paths stay at their real original time trips RM validation on both EHRBase and FerroEHR (`Invariant Events_valid failed on type HISTORY`).
 
 **Template mismatch:** If the composition's `template_id` is not in the local cache, the app fetches the Web Template on demand via `GET /rest/openehr/v1/definition/template/adl1.4/{template_id}` (with a loading state). If the fetch fails, show an error with a link to the Template Browser to upload the missing template.
 
@@ -245,17 +247,17 @@ All theme customisations maintained in `src/styles/medblocks-overrides.css` usin
 
 ### EHRBase API Endpoints Used
 
-| Operation              | Endpoint                                                                                                  |
-| ---------------------- | --------------------------------------------------------------------------------------------------------- |
-| Create EHR             | `POST /rest/openehr/v1/ehr`                                                                               |
-| Get EHR Status         | `GET /rest/openehr/v1/ehr/{ehr_id}/ehr_status`                                                            |
-| Update EHR Status      | `PUT /rest/openehr/v1/ehr/{ehr_id}/ehr_status`                                                            |
-| Delete EHR             | `DELETE /rest/openehr/v1/ehr/{ehr_id}` _(EHRBase-specific)_                                               |
-| Create Composition     | `POST /rest/openehr/v1/ehr/{ehr_id}/composition`                                                          |
-| Get Composition (FLAT) | `GET /rest/openehr/v1/ehr/{ehr_id}/composition/{uid}` + `Accept: application/openehr.wt.flat.schema+json` |
-| Update Composition     | `PUT /rest/openehr/v1/ehr/{ehr_id}/composition/{uid}`                                                     |
-| Delete Composition     | `DELETE /rest/openehr/v1/ehr/{ehr_id}/composition/{uid}`                                                  |
-| Get Web Template       | `GET /rest/openehr/v1/definition/template/adl1.4/{template_id}`                                           |
+| Operation              | Endpoint                                                                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create EHR             | `POST /rest/openehr/v1/ehr`                                                                                                                                                                                                  |
+| Get EHR Status         | `GET /rest/openehr/v1/ehr/{ehr_id}/ehr_status`                                                                                                                                                                               |
+| Update EHR Status      | `PUT /rest/openehr/v1/ehr/{ehr_id}/ehr_status`                                                                                                                                                                               |
+| Delete EHR             | `DELETE /rest/openehr/v1/ehr/{ehr_id}` _(EHRBase-specific)_                                                                                                                                                                  |
+| Create Composition     | `POST /rest/openehr/v1/ehr/{ehr_id}/composition?templateId={template_id}` + `openehr-template-id` header + `Content-Type: application/openehr.wt.flat.schema+json`, `Accept: application/json` _(FerroEHR: `Content-Type: application/openehr.wt.flat+json` instead — see §1.5)_ |
+| Get Composition (FLAT) | `GET /rest/openehr/v1/ehr/{ehr_id}/composition/{uid}` + `Accept: application/openehr.wt.flat.schema+json` _(FerroEHR: `application/openehr.wt.flat+json` instead; see the FLAT-completeness caveat under §2.1 pre-population)_ |
+| Update Composition     | `PUT /rest/openehr/v1/ehr/{ehr_id}/composition/{uid}` (bare UUID on EHRBase, tolerates the full versioned uid on FerroEHR) + `openehr-template-id` header + `Content-Type`/`Accept` as above + `If-Match: "<full versioned uid>"` (quoted, naming the preceding version being updated from) |
+| Delete Composition     | `DELETE /rest/openehr/v1/ehr/{ehr_id}/composition/{uid}`                                                                                                                                                                     |
+| Get Web Template       | `GET /rest/openehr/v1/definition/template/adl1.4/{template_id}`                                                                                                                                                              |
 
 ---
 

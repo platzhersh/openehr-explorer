@@ -26,6 +26,13 @@ const ehrStore = useEhrStore();
 const templateStore = useTemplateStore();
 const compositionStore = useCompositionStore();
 
+// True when the route is editing an existing composition
+// (/edit/:ehrId/:compositionUid) rather than creating one from a template.
+// A single boolean check here (vs. repeating `props.compositionUid &&
+// props.ehrId` at each call site) also keeps onMounted's branching — and so
+// its cognitive complexity — down.
+const isEditRoute = computed(() => !!(props.compositionUid && props.ehrId));
+
 const selectedEhrId = ref("");
 const composerName = ref("");
 const language = ref("en");
@@ -34,6 +41,11 @@ const compositionTime = ref("");
 const showEhrDialog = ref(false);
 const showPreview = ref(false);
 const isEditMode = ref(false);
+// True whenever loadCompositionForEdit hasn't (yet, or successfully) loaded
+// the composition being edited — gates the Update button so a load failure
+// can't silently submit a blank/partial form over the real composition (see
+// loadCompositionForEdit).
+const editLoadFailed = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const success = ref<string | null>(null);
@@ -59,6 +71,7 @@ const originalEditState = ref<{
   language: string;
   territory: string;
   flatData: Record<string, unknown>;
+  compositionTime: string;
 } | null>(null);
 
 // medblocks-ui form ref
@@ -78,11 +91,67 @@ const sortedEhrs = computed(() => {
   });
 });
 
+// The following onMounted helpers are split out purely to keep its cognitive
+// complexity manageable — each is an independent concern (resolving edit
+// mode's implicit template ID, loading the web template) rather than a step
+// in a shared decision tree.
+
+// Edit mode: the route carries no templateId, so resolve it from the
+// existing composition's archetype details before loading the template.
+// Also returns the fetched (structured) composition, since
+// loadCompositionForEdit needs it too, for composer/language/territory (see
+// there for why), and shouldn't re-fetch what's already in hand.
+async function resolveEditTemplateId(
+  ehrId: string,
+  compositionUid: string,
+): Promise<{ templateId: string; existingComposition: Record<string, unknown> | null }> {
+  try {
+    const existingComposition = await invoke<Record<string, unknown>>("get_composition", {
+      serverId: serverStore.activeServerId,
+      ehrId,
+      compositionUid,
+    });
+    const templateId =
+      ((existingComposition as any)?.archetype_details?.template_id?.value as string) ||
+      ((existingComposition as any)?.archetype_node_id as string) ||
+      "";
+    return { templateId, existingComposition };
+  } catch (e) {
+    console.error("Failed to resolve template ID from composition:", e);
+    return { templateId: "", existingComposition: null };
+  }
+}
+
+async function loadWebTemplateOrSetError(templateId: string) {
+  if (!templateId) {
+    error.value = "No template ID provided";
+    return;
+  }
+  try {
+    await templateStore.fetchWebTemplate(serverStore.activeServerId as string, templateId);
+  } catch (e) {
+    console.error("Failed to fetch web template:", e);
+    error.value = `Failed to load template: ${e}`;
+  }
+}
+
 // Initialize
 onMounted(async () => {
   if (!serverStore.activeServerId) {
     error.value = "No server selected";
     return;
+  }
+
+  // Enter edit mode — and block submission — synchronously, before any
+  // await below. Without this, a stale selectedWebTemplate from a
+  // previously-mounted create/edit route can keep the form (and an
+  // enabled Submit button, since composerName may already carry a leftover
+  // value) visible while this composition's own data is still loading,
+  // letting a click fall through to the create path instead of updating
+  // the requested composition.
+  if (isEditRoute.value) {
+    isEditMode.value = true;
+    editLoadFailed.value = true;
   }
 
   // Fetch EHRs for selector
@@ -95,51 +164,39 @@ onMounted(async () => {
 
   // Load template
   let templateId = props.templateId || (route.params.templateId as string);
-
-  // Edit mode: the route carries no templateId, so resolve it from the
-  // existing composition's archetype details before loading the template.
-  // Keep the fetched (structured) composition around — loadCompositionForEdit
-  // needs it too, for composer/language/territory (see there for why).
   let existingComposition: Record<string, unknown> | null = null;
-  if (!templateId && props.compositionUid && props.ehrId) {
-    try {
-      existingComposition = await invoke<Record<string, unknown>>("get_composition", {
-        serverId: serverStore.activeServerId,
-        ehrId: props.ehrId,
-        compositionUid: props.compositionUid,
-      });
-      templateId =
-        ((existingComposition as any)?.archetype_details?.template_id?.value as string) ||
-        ((existingComposition as any)?.archetype_node_id as string) ||
-        "";
-    } catch (e) {
-      console.error("Failed to resolve template ID from composition:", e);
-    }
+  if (!templateId && isEditRoute.value) {
+    ({ templateId, existingComposition } = await resolveEditTemplateId(
+      props.ehrId as string,
+      props.compositionUid as string,
+    ));
   }
   resolvedTemplateId.value = templateId || "";
 
-  if (templateId) {
-    try {
-      await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
-    } catch (e) {
-      console.error("Failed to fetch web template:", e);
-      error.value = `Failed to load template: ${e}`;
-    }
-  } else {
-    error.value = "No template ID provided";
-  }
+  await loadWebTemplateOrSetError(templateId);
 
-  // Edit mode: load existing composition
-  if (props.compositionUid && props.ehrId) {
-    isEditMode.value = true;
+  // Edit mode: load existing composition (isEditMode/editLoadFailed were
+  // already set synchronously above).
+  if (isEditRoute.value) {
     await loadCompositionForEdit(existingComposition);
   }
 
-  // Set default time
-  compositionTime.value = new Date().toISOString().slice(0, 16);
+  // Set default time — edit mode already restored the composition's own
+  // context/start_time above; only a genuinely new composition wants "now".
+  if (!isEditMode.value) {
+    compositionTime.value = toDatetimeLocalValue(new Date());
+  }
 
-  // Load draft if exists
-  loadDraft();
+  // Load draft if exists — never in edit mode. draftKey is scoped by
+  // templateId + ehrId, not by compositionUid, so a leftover draft from a
+  // different composition against the same template/EHR (an abandoned
+  // create, or an edit of another instance) would otherwise silently
+  // overwrite the real data loadCompositionForEdit just restored above,
+  // and that stale draft would then get submitted as an update to *this*
+  // composition's record.
+  if (!isEditMode.value) {
+    loadDraft();
+  }
 
   // Push the web template — and, in edit mode, the composition's existing
   // FLAT data — into the mb-auto-form element once it has mounted.
@@ -148,6 +205,12 @@ onMounted(async () => {
 
 async function loadCompositionForEdit(existingComposition: Record<string, unknown> | null) {
   if (!props.ehrId || !props.compositionUid || !serverStore.activeServerId) return;
+
+  // Assumed failed until the load below fully succeeds — a thrown error or
+  // an empty FLAT response both leave this set, so a failed load can't
+  // silently let the user submit a blank/partial form over the real
+  // composition (see the Update button's :disabled binding).
+  editLoadFailed.value = true;
 
   try {
     loading.value = true;
@@ -167,14 +230,29 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
     composerName.value = ((composition as any)?.composer?.name as string) || "";
     language.value = ((composition as any)?.language?.code_string as string) || "en";
     territory.value = ((composition as any)?.territory?.code_string as string) || "US";
+    // context/start_time is another RM attribute the FLAT representation
+    // omits — read it from the structured composition too. This also feeds
+    // any archetype paths the web template defaults from ctx/time (e.g. a
+    // HISTORY's origin): leaving compositionTime at its "now" default on
+    // edit would resubmit those paths as freshly "now" while paths carried
+    // through unchanged from the imported FLAT data (like an already-set
+    // history origin) stay at their original, much older time — a mismatch
+    // servers reject (e.g. EHRBase/FerroEHR's HISTORY.Events_valid check).
+    const startTime = (composition as any)?.context?.start_time?.value as string | undefined;
+    if (startTime) {
+      compositionTime.value = toDatetimeLocalValue(new Date(startTime));
+    }
 
-    const flatComp = await invoke<Record<string, unknown>>("get_composition_flat", {
+    const flatComp = await invoke<Record<string, unknown> | null>("get_composition_flat", {
       serverId: serverStore.activeServerId,
       ehrId: props.ehrId,
       compositionUid: props.compositionUid,
     });
 
-    if (!flatComp) return;
+    if (!flatComp || Object.keys(flatComp).length === 0) {
+      error.value = "Composition returned no FLAT data";
+      return;
+    }
     // hydrateMbForm() pushes this into the mb-auto-form once it has mounted
     // — after its webTemplate, so it knows what to do with these paths.
     flatData.value = flatComp;
@@ -183,7 +261,9 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
       language: language.value,
       territory: territory.value,
       flatData: flatComp,
+      compositionTime: compositionTime.value,
     };
+    editLoadFailed.value = false;
   } catch (e) {
     error.value = `Could not load composition in FLAT format: ${e}`;
   } finally {
@@ -315,6 +395,22 @@ function transformMedblocksExport(rawData: Record<string, unknown>): Record<stri
   return formData;
 }
 
+// Converts an absolute instant to the value format <input type="datetime-local">
+// expects: a timezone-naive "YYYY-MM-DDTHH:mm:ss.sss" string read as the
+// *local* timezone (the input's step="0.001" — see the template — is what
+// makes it accept and display milliseconds instead of truncating to the
+// minute). date.toISOString() returns UTC, so slicing that directly (as this
+// code used to) silently reinterprets a UTC wall-clock time as local — only
+// correct for UTC browsers, off by the local offset everywhere else, which
+// then compounds when the field round-trips back through `new Date(value)`
+// on submit. Keeping milliseconds matters here too: truncating them means an
+// unchanged edit-time restore still submits a different instant than the
+// composition's original one.
+function toDatetimeLocalValue(date: Date): string {
+  const localMs = date.getTime() - date.getTimezoneOffset() * 60000;
+  return new Date(localMs).toISOString().slice(0, 23);
+}
+
 // Merges the ctx/* shortcuts (which EHRBase expands automatically) onto a
 // transformed FLAT payload.
 function withContextFields(
@@ -328,6 +424,19 @@ function withContextFields(
     "ctx/composer_name": composerName.value,
     "ctx/time": isoTime,
   };
+}
+
+// Mirrors flat_composition_content_type() in src-tauri/src/commands/composition.rs —
+// keep the two in sync. FerroEHR only accepts the openEHR REST spec's
+// current FLAT media type (application/openehr.wt.flat+json, per its own
+// 415 error message); EHRBase's actual deployed endpoint only recognizes
+// the older application/openehr.wt.flat.schema+json variant. Better
+// Platform / generic servers keep the `.schema` value this app has always
+// sent them.
+function flatCompositionContentType(): string {
+  return serverStore.activeServer?.server_type === "ferro_ehr"
+    ? "application/openehr.wt.flat+json"
+    : "application/openehr.wt.flat.schema+json";
 }
 
 // Trigger for manual refresh
@@ -359,18 +468,121 @@ function refreshPreview() {
   previewRefreshTrigger.value++;
 }
 
+// The following handleSubmit helpers are split out of it purely to keep its
+// cognitive complexity manageable — each one is an independent concern
+// (validation, form export, template resolution, request-URL construction,
+// the actual store call) rather than a step in a shared decision tree, so
+// pulling them out doesn't change behavior, only where each branch lives.
+
+// Returns a user-facing validation error, or null when it's fine to submit.
+function validateSubmission(): string | null {
+  if (!selectedEhrId.value || !serverStore.activeServerId) {
+    console.error("Validation failed: no EHR or server selected");
+    return "Please select an EHR";
+  }
+  if (!composerName.value) {
+    console.error("Validation failed: no composer name");
+    return "Please enter a composer name";
+  }
+  // Defense in depth alongside the Submit button's :disabled binding: reject
+  // an edit submission outright while the composition's own data is still
+  // loading (or failed to load), so a click during that window can never
+  // fall through to the create path or overwrite the composition with
+  // incomplete form data.
+  if (isEditMode.value && editLoadFailed.value) {
+    return "Could not load the composition to edit — reload the page to try again";
+  }
+  return null;
+}
+
+// Reads the mb-auto-form's current data via its export() method. medblocks-ui
+// paths follow the pattern "template_short/archetype:0/path/to/field" and
+// need transforming to EHRBase FLAT format — see transformMedblocksExport.
+function exportFormData(): Record<string, unknown> {
+  if (!mbFormRef.value) {
+    console.error("mbFormRef is null");
+    throw new Error("Form reference not available");
+  }
+  try {
+    const rawData = (mbFormRef.value as any).export?.() || {};
+    console.log("Raw exported data:", rawData);
+    const formData = transformMedblocksExport(rawData);
+    console.log("Form data (transformed):", formData);
+    return formData;
+  } catch (e) {
+    console.error("Failed to export form data:", e);
+    throw new Error(`Form export failed: ${e}`);
+  }
+}
+
+function resolveSubmitTemplateId(): string {
+  const templateId =
+    resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
+  if (!templateId) {
+    throw new Error("Template ID not found");
+  }
+  return templateId;
+}
+
+// Mirrors what the Rust command actually sends, for the request-details
+// display. The PUT path takes only the bare VERSIONED_OBJECT uid — EHRBase
+// 404s ("only UUID-type versionedObjectUids are supported") if the
+// ::system::version suffix is left on; that full string belongs in If-Match
+// instead. Mirrors update_composition's versioned_object_uid.
+function buildRequestUrl(templateId: string): { method: string; url: string } {
+  if (isEditMode.value) {
+    return {
+      method: "PUT",
+      url: `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`,
+    };
+  }
+  return {
+    method: "POST",
+    url: `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`,
+  };
+}
+
+// Submits the payload via the appropriate store action and records the
+// resulting success message/analytics event.
+async function submitCompositionPayload(
+  templateId: string,
+  payload: Record<string, unknown>,
+): Promise<string> {
+  const serverId = serverStore.activeServerId as string;
+  if (isEditMode.value && props.compositionUid) {
+    console.log("Update mode");
+    const result = await compositionStore.updateComposition(
+      serverId,
+      selectedEhrId.value,
+      props.compositionUid,
+      templateId,
+      payload,
+    );
+    success.value = `Composition updated successfully! New version: ${result}`;
+    console.log("Update successful:", result);
+    void analytics.track("composition_edited");
+    return result;
+  }
+
+  console.log("Create mode");
+  const result = await compositionStore.createComposition(
+    serverId,
+    selectedEhrId.value,
+    templateId,
+    payload,
+  );
+  success.value = `Composition created successfully! UID: ${result}`;
+  console.log("Create successful:", result);
+  void analytics.track("composition_created");
+  return result;
+}
+
 async function handleSubmit() {
   console.log("handleSubmit called");
 
-  if (!selectedEhrId.value || !serverStore.activeServerId) {
-    error.value = "Please select an EHR";
-    console.error("Validation failed: no EHR or server selected");
-    return;
-  }
-
-  if (!composerName.value) {
-    error.value = "Please enter a composer name";
-    console.error("Validation failed: no composer name");
+  const validationError = validateSubmission();
+  if (validationError) {
+    error.value = validationError;
     return;
   }
 
@@ -379,31 +591,8 @@ async function handleSubmit() {
   loading.value = true;
 
   try {
-    // Get form data using export() method. medblocks-ui paths follow the
-    // pattern "template_short/archetype:0/path/to/field" and need
-    // transforming to EHRBase FLAT format — see transformMedblocksExport.
-    let formData: Record<string, unknown> = {};
-    if (mbFormRef.value) {
-      try {
-        const rawData = (mbFormRef.value as any).export?.() || {};
-        console.log("Raw exported data:", rawData);
-        formData = transformMedblocksExport(rawData);
-        console.log("Form data (transformed):", formData);
-      } catch (e) {
-        console.error("Failed to export form data:", e);
-        throw new Error(`Form export failed: ${e}`);
-      }
-    } else {
-      console.error("mbFormRef is null");
-      throw new Error("Form reference not available");
-    }
-
-    // Get template ID
-    const templateId =
-      resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
-    if (!templateId) {
-      throw new Error("Template ID not found");
-    }
+    const formData = exportFormData();
+    const templateId = resolveSubmitTemplateId();
 
     // Build payload following EHRBase 2.x actual format
     const isoTime = compositionTime.value
@@ -415,42 +604,20 @@ async function handleSubmit() {
     console.log("Template ID:", templateId);
 
     // Build request details
-    const method = isEditMode.value ? "PUT" : "POST";
-    const url = isEditMode.value
-      ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid}`
-      : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition`;
-
-    requestSummaryLine.value = `${method} ${url}\nContent-Type: application/openehr.wt.flat.schema+json`;
+    const { method, url } = buildRequestUrl(templateId);
+    const ifMatchLine = isEditMode.value ? `\nIf-Match: "${props.compositionUid}"` : "";
+    requestSummaryLine.value = `${method} ${url}\nContent-Type: ${flatCompositionContentType()}\nopenehr-template-id: ${templateId}${ifMatchLine}`;
     requestPayload.value = payload;
 
     console.log("Submitting composition...");
 
-    let result: string;
-    if (isEditMode.value && props.compositionUid) {
-      console.log("Update mode");
-      result = await compositionStore.updateComposition(
-        serverStore.activeServerId,
-        selectedEhrId.value,
-        props.compositionUid,
-        payload,
-      );
-      success.value = `Composition updated successfully! New version: ${result}`;
-      console.log("Update successful:", result);
-      void analytics.track("composition_edited");
-    } else {
-      console.log("Create mode");
-      result = await compositionStore.createComposition(
-        serverStore.activeServerId,
-        selectedEhrId.value,
-        templateId,
-        payload,
-      );
-      success.value = `Composition created successfully! UID: ${result}`;
-      console.log("Create successful:", result);
-      void analytics.track("composition_created");
-    }
+    const result = await submitCompositionPayload(templateId, payload);
 
-    responseSummaryLine.value = "HTTP 201 Created";
+    // The exact status code varies by server (EHRBase/FerroEHR return
+    // 200 or 204 for updates, 201 for creates), and the Tauri command only
+    // surfaces the resulting uid, not the status line — so this reports the
+    // outcome, not a literal status code.
+    responseSummaryLine.value = isEditMode.value ? "Composition updated (2xx)" : "HTTP 201 Created";
     responsePayload.value = { uid: { value: result } };
 
     // Clear draft
@@ -484,6 +651,7 @@ function handleReset() {
     language.value = original.language;
     territory.value = original.territory;
     flatData.value = original.flatData;
+    compositionTime.value = original.compositionTime;
     // mb-auto-form has no reset()/value setter — import() is how its data
     // is (re-)populated (see hydrateMbForm for why .value isn't real here).
     (mbFormRef.value as any)?.import?.(original.flatData);
@@ -494,8 +662,8 @@ function handleReset() {
     language.value = "en";
     territory.value = "US";
     flatData.value = {};
+    compositionTime.value = toDatetimeLocalValue(new Date());
   }
-  compositionTime.value = new Date().toISOString().slice(0, 16);
   error.value = null;
   success.value = null;
   clearDraft();
@@ -518,7 +686,13 @@ const draftKey = computed(() => {
 });
 
 function saveDraft() {
-  if (!selectedEhrId.value) return;
+  // Never persist a draft while editing an existing composition — draftKey
+  // is scoped by templateId + ehrId, not compositionUid, so this would
+  // otherwise leak this composition's in-progress edits into the shared
+  // draft slot for that template/EHR pair, ready to be silently loaded into
+  // an unrelated new composition (or a different edit) later. See loadDraft's
+  // corresponding edit-mode guard in onMounted.
+  if (isEditMode.value || !selectedEhrId.value) return;
 
   const draft = {
     ehrId: selectedEhrId.value,
@@ -582,7 +756,7 @@ watch(
       flatData.value = {};
       error.value = null;
       success.value = null;
-      compositionTime.value = new Date().toISOString().slice(0, 16);
+      compositionTime.value = toDatetimeLocalValue(new Date());
 
       // Reset medblocks form (mb-auto-form's method is clear(), not reset())
       if (mbFormRef.value) {
@@ -676,8 +850,14 @@ watch(
             <input v-model="territory" type="text" class="input" placeholder="e.g., US, GB, DE" />
           </div>
           <div class="form-field">
-            <label>Time</label>
-            <input v-model="compositionTime" type="datetime-local" class="input" />
+            <label for="composition-time">Time</label>
+            <input
+              id="composition-time"
+              v-model="compositionTime"
+              type="datetime-local"
+              step="0.001"
+              class="input"
+            />
           </div>
         </div>
       </div>
@@ -701,13 +881,15 @@ watch(
         <button
           class="btn btn-primary"
           @click="handleSubmit"
-          :disabled="!selectedEhrId || !composerName || loading"
+          :disabled="!selectedEhrId || !composerName || loading || (isEditMode && editLoadFailed)"
           :title="
             !selectedEhrId
               ? 'Please select an EHR'
               : !composerName
                 ? 'Please enter composer name'
-                : ''
+                : isEditMode && editLoadFailed
+                  ? 'Could not load the composition to edit — reload the page to try again'
+                  : ''
           "
         >
           {{ loading ? "Submitting..." : isEditMode ? "Update Composition" : "Create Composition" }}

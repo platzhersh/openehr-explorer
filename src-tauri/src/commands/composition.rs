@@ -1,8 +1,31 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request};
+use super::server::{create_client, get_profile_by_id, make_request, ServerType};
 use crate::inspector::send_instrumented;
+
+/// The FLAT-format media type to use for a composition, as either a
+/// `Content-Type` (POST/PUT) or an `Accept` (GET) header.
+///
+/// The openEHR REST API spec's current media type for this is
+/// `application/openehr.wt.flat+json` — and that's exactly what FerroEHR's
+/// own 415/406 error messages name as accepted. EHRBase's actual deployed
+/// REST endpoint (verified directly against sandbox.ehrbase.org), however,
+/// only recognizes the older/draft `application/openehr.wt.flat.schema+json`
+/// variant: sending the spec-current media type gets rejected before it
+/// even reaches EHRBase's own validation logic (a generic framework-level
+/// 415), while the `.schema` variant is parsed and validated as expected.
+/// Better Platform and unspecified/generic servers keep the same `.schema`
+/// value this app has always sent them (unconfirmed either way, but
+/// unbroken until reported).
+fn flat_composition_content_type(server_type: &ServerType) -> &'static str {
+    match server_type {
+        ServerType::FerroEhr => "application/openehr.wt.flat+json",
+        ServerType::Ehrbase | ServerType::BetterPlatform | ServerType::Generic => {
+            "application/openehr.wt.flat.schema+json"
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompositionVersion {
@@ -74,8 +97,10 @@ pub async fn get_composition_flat(
     let resp = send_instrumented(
         &app,
         &client,
-        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/openehr.wt.flat.schema+json"),
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method).header(
+            "Accept",
+            flat_composition_content_type(&profile.server_type),
+        ),
     )
     .await?;
 
@@ -259,8 +284,17 @@ pub async fn create_composition(
         &app,
         &client,
         make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
-            .header("Content-Type", "application/openehr.wt.flat.schema+json")
+            .header(
+                "Content-Type",
+                flat_composition_content_type(&profile.server_type),
+            )
             .header("Accept", "application/json")
+            // The openEHR REST spec requires the target template for a
+            // Simplified-Format (FLAT) COMPOSITION commit to be named in
+            // this header; FerroEHR enforces that and rejects the request
+            // with a 422 otherwise. EHRBase accepts it fine alongside the
+            // `templateId` query parameter it additionally expects.
+            .header("openehr-template-id", &template_id)
             .json(&composition_data),
     )
     .await?;
@@ -311,23 +345,46 @@ pub async fn update_composition(
     server_id: String,
     ehr_id: String,
     composition_uid: String,
+    template_id: String,
     composition_data: Value,
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let base = profile.base_url.trim_end_matches('/');
 
+    // composition_uid is the full versioned uid ("<uuid>::<system>::<version>"),
+    // matching what If-Match needs — but the PUT path parameter is the plain
+    // VERSIONED_OBJECT uid. EHRBase enforces this strictly and 404s ("only
+    // UUID-type versionedObjectUids are supported") if the version/system
+    // suffix is left on; FerroEHR tolerates the full string here but still
+    // needs it, unabridged, in If-Match.
+    let versioned_object_uid = composition_uid
+        .split("::")
+        .next()
+        .unwrap_or(&composition_uid);
+
     let url = format!(
         "{}/rest/openehr/v1/ehr/{}/composition/{}",
-        base, ehr_id, composition_uid
+        base, ehr_id, versioned_object_uid
     );
 
     let resp = send_instrumented(
         &app,
         &client,
         make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
-            .header("Content-Type", "application/openehr.wt.flat.schema+json")
+            .header(
+                "Content-Type",
+                flat_composition_content_type(&profile.server_type),
+            )
             .header("Accept", "application/json")
+            // See create_composition — same Simplified-Format requirement.
+            .header("openehr-template-id", &template_id)
+            // Per the openEHR REST API spec, updating a COMPOSITION is an
+            // optimistic-concurrency operation: the server requires If-Match
+            // to name the preceding version being updated from (quoted, like
+            // the ETag it returns on GET), and rejects the request outright
+            // without it — confirmed against both EHRBase and FerroEHR.
+            .header("If-Match", format!("\"{}\"", composition_uid))
             .json(&composition_data),
     )
     .await?;
@@ -339,18 +396,36 @@ pub async fn update_composition(
         ));
     }
 
-    let result: Value =
-        serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse response: {}", e))?;
+    // As with create_composition: whether the server returns the updated
+    // COMPOSITION as a JSON body (200) or an empty one (204, e.g. FerroEHR's
+    // default `Prefer: return=minimal` behavior when no Prefer header is
+    // sent) is server-dependent. Try the Location header first, then fall
+    // back to the body, instead of assuming a body is always present.
+    if let Some(location) = resp.headers.get("location") {
+        let new_uid = location
+            .split('/')
+            .next_back()
+            .ok_or("Could not extract composition UID from Location header")?
+            .to_string();
 
-    // Extract new version UID
-    let new_uid = result
-        .get("uid")
-        .and_then(|u| u.get("value"))
-        .and_then(|v| v.as_str())
-        .ok_or("Composition UID not found in response")?
-        .to_string();
+        return Ok(new_uid);
+    }
 
-    Ok(new_uid)
+    if !resp.body.is_empty() {
+        let result: Value = serde_json::from_str(&resp.body)
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        let new_uid = result
+            .get("uid")
+            .and_then(|u| u.get("value"))
+            .and_then(|v| v.as_str())
+            .ok_or("Composition UID not found in response")?
+            .to_string();
+
+        return Ok(new_uid);
+    }
+
+    Err("No Location header or response body found".to_string())
 }
 
 #[tauri::command]
