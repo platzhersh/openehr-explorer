@@ -6,6 +6,7 @@ import { useDashboardStore } from "../stores/dashboard";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import CompassIcon from "../components/CompassIcon.vue";
+import RefreshButton from "../components/RefreshButton.vue";
 
 const router = useRouter();
 const serverStore = useServerStore();
@@ -86,15 +87,14 @@ watch(
         <span v-if="lastUpdated" class="last-updated">
           Updated {{ lastUpdated.toLocaleTimeString() }}
         </span>
-        <button
-          type="button"
-          class="btn btn-sm"
+        <RefreshButton
           data-tour="dashboard-refresh"
-          :disabled="!serverStore.activeServerId || dashboardStore.loading"
+          variant="bordered"
+          size="md"
+          :disabled="!serverStore.activeServerId"
+          :loading="dashboardStore.loading"
           @click="refresh"
-        >
-          {{ dashboardStore.loading ? "Refreshing…" : "Refresh" }}
-        </button>
+        />
       </div>
     </div>
 

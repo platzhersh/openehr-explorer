@@ -9,6 +9,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import JsonViewer from "../components/JsonViewer.vue";
+import RefreshButton from "../components/RefreshButton.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
 
 const analytics = useAnalytics();
@@ -922,7 +923,7 @@ watch(
       <div class="preview-header">
         <h3>FLAT JSON Preview</h3>
         <div class="preview-actions">
-          <button class="btn btn-sm" @click="refreshPreview" title="Refresh preview">↻</button>
+          <RefreshButton title="Refresh preview" @click="refreshPreview" />
         </div>
       </div>
       <div class="preview-json">

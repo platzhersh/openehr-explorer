@@ -20,6 +20,7 @@ import CompassIcon from "../components/CompassIcon.vue";
 import FilterIcon from "../components/FilterIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
+import RefreshButton from "../components/RefreshButton.vue";
 import {
   addItem as addDirectoryItem,
   addSubfolder as addDirectorySubfolder,
@@ -1530,7 +1531,12 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
           >
             + New EHR
           </button>
-          <button type="button" class="btn btn-sm" @click="refresh">Refresh</button>
+          <RefreshButton
+            variant="bordered"
+            size="md"
+            :loading="ehrStore.searchLoading || ehrStore.loading"
+            @click="refresh"
+          />
         </div>
       </div>
 
