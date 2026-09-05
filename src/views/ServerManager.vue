@@ -114,7 +114,12 @@ function credentialBackendLabel(backend: string): string {
         >
           <CompassIcon />
         </button>
-        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          data-tour="server-add"
+          @click="newProfile"
+        >
           + Add Server
         </button>
       </div>
