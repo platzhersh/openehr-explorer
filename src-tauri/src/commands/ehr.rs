@@ -48,6 +48,13 @@ pub struct EhrListResponse {
     /// this to tell the user sorting isn't supported rather than implying
     /// the shown order matches what they asked for.
     pub sort_applied: bool,
+    /// True if there is at least one more EHR beyond this page. `list_ehrs`
+    /// determines this by requesting `limit + 1` rows and checking whether
+    /// the extra row came back (see `list_ehrs`), which is exact — unlike
+    /// `total` below, it doesn't depend on a separate, potentially
+    /// unsupported COUNT query. The frontend uses this to disable "Next"
+    /// once the last page is reached instead of always allowing it.
+    pub has_more: bool,
 }
 
 /// Whitelisted EHR-list sort fields, mapped to their AQL path expressions.
@@ -127,6 +134,18 @@ fn is_order_by_unsupported(response_body: &str) -> bool {
         && (lower.contains("not implemented") || lower.contains("not supported"))
 }
 
+/// Splits off the lookahead row from a page fetched with `limit + 1`
+/// requested (see `list_ehrs`'s `fetch_limit`): returns the page truncated
+/// back down to `limit` rows, plus whether an extra row beyond it was
+/// actually present — i.e. whether another page exists. This is exact,
+/// unlike `EhrListResponse.total`, which doesn't require a separate COUNT
+/// query the CDR may not support.
+fn split_lookahead_page<T>(mut rows: Vec<T>, limit: usize) -> (Vec<T>, bool) {
+    let has_more = rows.len() > limit;
+    rows.truncate(limit);
+    (rows, has_more)
+}
+
 #[tauri::command]
 pub async fn list_ehrs(
     app: tauri::AppHandle,
@@ -141,8 +160,12 @@ pub async fn list_ehrs(
     let base = profile.base_url.trim_end_matches('/');
     let url = format!("{}/rest/openehr/v1/query/aql", base);
 
+    // Request one extra row beyond `limit` so we can tell whether another
+    // page exists (see `has_more` below) without a separate COUNT query.
+    let fetch_limit = limit.saturating_add(1);
+
     // Use AQL to list EHRs since the REST API list endpoint varies by implementation
-    let aql = build_ehr_list_aql(offset, limit, sort_by.as_deref(), sort_dir.as_deref())?;
+    let aql = build_ehr_list_aql(offset, fetch_limit, sort_by.as_deref(), sort_dir.as_deref())?;
     let resp = send_instrumented(
         &app,
         &client,
@@ -159,7 +182,7 @@ pub async fn list_ehrs(
     // requested order wasn't actually honored, so it can say so instead of
     // silently showing unsorted results as if they were sorted.
     let (resp, sort_applied) = if !resp.is_success && is_order_by_unsupported(&resp.body) {
-        let fallback_aql = build_ehr_list_aql_unsorted(offset, limit);
+        let fallback_aql = build_ehr_list_aql_unsorted(offset, fetch_limit);
         let fallback_resp = send_instrumented(
             &app,
             &client,
@@ -202,6 +225,8 @@ pub async fn list_ehrs(
         })
         .collect();
 
+    let (ehrs, has_more) = split_lookahead_page(ehrs, limit);
+
     let total = ehrs.len() + offset; // Approximate — exact total requires separate count query
 
     Ok(EhrListResponse {
@@ -210,6 +235,7 @@ pub async fn list_ehrs(
         limit,
         ehrs,
         sort_applied,
+        has_more,
     })
 }
 
@@ -1624,6 +1650,35 @@ mod tests {
         assert!(!is_order_by_unsupported(
             r#"{"error":"Bad Request","message":"malformed AQL query"}"#
         ));
+    }
+
+    #[test]
+    fn test_split_lookahead_page_reports_has_more_when_extra_row_present() {
+        // 21 rows fetched for a `limit` of 20 (the `fetch_limit = limit + 1`
+        // case) means there's a 21st EHR beyond this page.
+        let rows: Vec<u32> = (0..21).collect();
+        let (page, has_more) = split_lookahead_page(rows, 20);
+        assert_eq!(page, (0..20).collect::<Vec<u32>>());
+        assert!(has_more);
+    }
+
+    #[test]
+    fn test_split_lookahead_page_no_more_when_last_page_is_short() {
+        // Fewer rows than `limit` came back — this is the last page.
+        let rows: Vec<u32> = (0..5).collect();
+        let (page, has_more) = split_lookahead_page(rows, 20);
+        assert_eq!(page, (0..5).collect::<Vec<u32>>());
+        assert!(!has_more);
+    }
+
+    #[test]
+    fn test_split_lookahead_page_no_more_when_exactly_limit_rows_returned() {
+        // Exactly `limit` rows came back (no lookahead row) — this is also
+        // the last page.
+        let rows: Vec<u32> = (0..20).collect();
+        let (page, has_more) = split_lookahead_page(rows, 20);
+        assert_eq!(page, (0..20).collect::<Vec<u32>>());
+        assert!(!has_more);
     }
 
     #[test]

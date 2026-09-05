@@ -38,6 +38,10 @@ export interface EhrListResponse {
   // an unsorted query. See sort_field_path/is_order_by_unsupported in
   // src-tauri/src/commands/ehr.rs.
   sort_applied: boolean;
+  // True if there is at least one more EHR beyond this page — computed
+  // server-side by fetching one extra row past `limit` (see list_ehrs in
+  // src-tauri/src/commands/ehr.rs). Drives whether "Next" is enabled.
+  has_more: boolean;
 }
 
 // Whitelisted server-side (AQL ORDER BY) sort fields for the EHR list — must
@@ -116,6 +120,10 @@ export const useEhrStore = defineStore("ehr", () => {
   // list shown is actually unsorted. Starts true so no banner flashes
   // before the first fetch resolves.
   const sortApplied = ref(true);
+  // Mirrors EhrListResponse.has_more from the most recent fetchEhrs — true
+  // when another page exists after the one currently shown. Starts true so
+  // "Next" isn't briefly shown as disabled before the first fetch resolves.
+  const hasMore = ref(true);
 
   // DIRECTORY state (OEH-27) — the FOLDER/OBJECT_REF tree is arbitrary-depth
   // and data-driven, so it's kept as raw JSON rather than a typed interface,
@@ -184,6 +192,7 @@ export const useEhrStore = defineStore("ehr", () => {
       total.value = result.total;
       offset.value = result.offset;
       sortApplied.value = result.sort_applied;
+      hasMore.value = result.has_more;
     } catch (e) {
       if (requestId !== fetchRequestId) return;
       error.value = String(e);
@@ -559,6 +568,7 @@ export const useEhrStore = defineStore("ehr", () => {
     sortBy,
     sortDir,
     sortApplied,
+    hasMore,
     loading,
     error,
     selectedEhr,
