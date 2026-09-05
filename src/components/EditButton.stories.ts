@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import EditButton from "./EditButton.vue";
 
 const meta: Meta<typeof EditButton> = {
@@ -54,11 +54,12 @@ export const AllVariants: Story = {
 
 /** Clicking emits a `click` event that the parent uses to enter edit mode. */
 export const ClickToEdit: Story = {
-  args: { variant: "bordered", size: "md" },
-  play: async ({ canvasElement }) => {
+  args: { variant: "bordered", size: "md", onClick: fn() },
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const button = canvas.getByRole("button");
     await expect(button).toHaveAccessibleName("Edit");
     await userEvent.click(button);
+    await expect(args.onClick).toHaveBeenCalledTimes(1);
   },
 };
