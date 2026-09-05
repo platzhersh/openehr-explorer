@@ -431,28 +431,121 @@ function refreshPreview() {
   previewRefreshTrigger.value++;
 }
 
-async function handleSubmit() {
-  console.log("handleSubmit called");
+// The following handleSubmit helpers are split out of it purely to keep its
+// cognitive complexity manageable — each one is an independent concern
+// (validation, form export, template resolution, request-URL construction,
+// the actual store call) rather than a step in a shared decision tree, so
+// pulling them out doesn't change behavior, only where each branch lives.
 
+// Returns a user-facing validation error, or null when it's fine to submit.
+function validateSubmission(): string | null {
   if (!selectedEhrId.value || !serverStore.activeServerId) {
-    error.value = "Please select an EHR";
     console.error("Validation failed: no EHR or server selected");
-    return;
+    return "Please select an EHR";
   }
-
   if (!composerName.value) {
-    error.value = "Please enter a composer name";
     console.error("Validation failed: no composer name");
-    return;
+    return "Please enter a composer name";
   }
-
   // Defense in depth alongside the Submit button's :disabled binding: reject
   // an edit submission outright while the composition's own data is still
   // loading (or failed to load), so a click during that window can never
   // fall through to the create path or overwrite the composition with
   // incomplete form data.
   if (isEditMode.value && editLoadFailed.value) {
-    error.value = "Could not load the composition to edit — reload the page to try again";
+    return "Could not load the composition to edit — reload the page to try again";
+  }
+  return null;
+}
+
+// Reads the mb-auto-form's current data via its export() method. medblocks-ui
+// paths follow the pattern "template_short/archetype:0/path/to/field" and
+// need transforming to EHRBase FLAT format — see transformMedblocksExport.
+function exportFormData(): Record<string, unknown> {
+  if (!mbFormRef.value) {
+    console.error("mbFormRef is null");
+    throw new Error("Form reference not available");
+  }
+  try {
+    const rawData = (mbFormRef.value as any).export?.() || {};
+    console.log("Raw exported data:", rawData);
+    const formData = transformMedblocksExport(rawData);
+    console.log("Form data (transformed):", formData);
+    return formData;
+  } catch (e) {
+    console.error("Failed to export form data:", e);
+    throw new Error(`Form export failed: ${e}`);
+  }
+}
+
+function resolveSubmitTemplateId(): string {
+  const templateId =
+    resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
+  if (!templateId) {
+    throw new Error("Template ID not found");
+  }
+  return templateId;
+}
+
+// Mirrors what the Rust command actually sends, for the request-details
+// display. The PUT path takes only the bare VERSIONED_OBJECT uid — EHRBase
+// 404s ("only UUID-type versionedObjectUids are supported") if the
+// ::system::version suffix is left on; that full string belongs in If-Match
+// instead. Mirrors update_composition's versioned_object_uid.
+function buildRequestUrl(templateId: string): { method: string; url: string } {
+  if (isEditMode.value) {
+    return {
+      method: "PUT",
+      url: `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`,
+    };
+  }
+  return {
+    method: "POST",
+    url: `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`,
+  };
+}
+
+// Submits the payload via the appropriate store action and records the
+// resulting success message/analytics event.
+async function submitCompositionPayload(
+  templateId: string,
+  payload: Record<string, unknown>,
+): Promise<string> {
+  const serverId = serverStore.activeServerId as string;
+  if (isEditMode.value && props.compositionUid) {
+    console.log("Update mode");
+    const result = await compositionStore.updateComposition(
+      serverId,
+      selectedEhrId.value,
+      props.compositionUid,
+      templateId,
+      payload,
+    );
+    success.value = `Composition updated successfully! New version: ${result}`;
+    console.log("Update successful:", result);
+    void analytics.track("composition_edited");
+    return result;
+  }
+
+  console.log("Create mode");
+  const result = await compositionStore.createComposition(
+    serverId,
+    selectedEhrId.value,
+    templateId,
+    payload,
+  );
+  success.value = `Composition created successfully! UID: ${result}`;
+  console.log("Create successful:", result);
+  void analytics.track("composition_created");
+  return result;
+}
+
+async function handleSubmit() {
+  console.log("handleSubmit called");
+
+  const validationError = validateSubmission();
+  if (validationError) {
+    error.value = validationError;
     return;
   }
 
@@ -461,31 +554,8 @@ async function handleSubmit() {
   loading.value = true;
 
   try {
-    // Get form data using export() method. medblocks-ui paths follow the
-    // pattern "template_short/archetype:0/path/to/field" and need
-    // transforming to EHRBase FLAT format — see transformMedblocksExport.
-    let formData: Record<string, unknown> = {};
-    if (mbFormRef.value) {
-      try {
-        const rawData = (mbFormRef.value as any).export?.() || {};
-        console.log("Raw exported data:", rawData);
-        formData = transformMedblocksExport(rawData);
-        console.log("Form data (transformed):", formData);
-      } catch (e) {
-        console.error("Failed to export form data:", e);
-        throw new Error(`Form export failed: ${e}`);
-      }
-    } else {
-      console.error("mbFormRef is null");
-      throw new Error("Form reference not available");
-    }
-
-    // Get template ID
-    const templateId =
-      resolvedTemplateId.value || props.templateId || (route.params.templateId as string);
-    if (!templateId) {
-      throw new Error("Template ID not found");
-    }
+    const formData = exportFormData();
+    const templateId = resolveSubmitTemplateId();
 
     // Build payload following EHRBase 2.x actual format
     const isoTime = compositionTime.value
@@ -497,46 +567,14 @@ async function handleSubmit() {
     console.log("Template ID:", templateId);
 
     // Build request details
-    const method = isEditMode.value ? "PUT" : "POST";
-    // The PUT path takes only the bare VERSIONED_OBJECT uid — EHRBase 404s
-    // ("only UUID-type versionedObjectUids are supported") if the
-    // ::system::version suffix is left on; that full string belongs in
-    // If-Match instead. Mirrors update_composition's versioned_object_uid.
-    const url = isEditMode.value
-      ? `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`
-      : `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`;
-
+    const { method, url } = buildRequestUrl(templateId);
     const ifMatchLine = isEditMode.value ? `\nIf-Match: "${props.compositionUid}"` : "";
     requestSummaryLine.value = `${method} ${url}\nContent-Type: ${flatCompositionContentType()}\nopenehr-template-id: ${templateId}${ifMatchLine}`;
     requestPayload.value = payload;
 
     console.log("Submitting composition...");
 
-    let result: string;
-    if (isEditMode.value && props.compositionUid) {
-      console.log("Update mode");
-      result = await compositionStore.updateComposition(
-        serverStore.activeServerId,
-        selectedEhrId.value,
-        props.compositionUid,
-        templateId,
-        payload,
-      );
-      success.value = `Composition updated successfully! New version: ${result}`;
-      console.log("Update successful:", result);
-      void analytics.track("composition_edited");
-    } else {
-      console.log("Create mode");
-      result = await compositionStore.createComposition(
-        serverStore.activeServerId,
-        selectedEhrId.value,
-        templateId,
-        payload,
-      );
-      success.value = `Composition created successfully! UID: ${result}`;
-      console.log("Create successful:", result);
-      void analytics.track("composition_created");
-    }
+    const result = await submitCompositionPayload(templateId, payload);
 
     // The exact status code varies by server (EHRBase/FerroEHR return
     // 200 or 204 for updates, 201 for creates), and the Tauri command only
