@@ -10,6 +10,7 @@ import { lookupCode } from "../lib/terminology";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
+import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
@@ -353,7 +354,8 @@ onUnmounted(() => {
             data-tour="template-upload"
             @click="showUploadModal = true"
           >
-            + Upload Template
+            <PlusIcon />
+            Upload Template
           </button>
         </div>
       </div>
@@ -393,6 +395,7 @@ onUnmounted(() => {
               @click.stop="createComposition(tmpl.template_id)"
               title="Create new composition"
             >
+              <PlusIcon />
               New Composition
             </button>
           </div>

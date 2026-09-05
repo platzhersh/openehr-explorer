@@ -17,6 +17,7 @@ import DirectoryTree from "../components/DirectoryTree.vue";
 import DirectoryTreeEditor from "../components/DirectoryTreeEditor.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import FilterIcon from "../components/FilterIcon.vue";
+import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import RefreshButton from "../components/RefreshButton.vue";
@@ -1516,7 +1517,8 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             data-tour="ehr-create"
             @click="showCreateDialog = true"
           >
-            + New EHR
+            <PlusIcon />
+            New EHR
           </button>
           <RefreshButton
             variant="bordered"

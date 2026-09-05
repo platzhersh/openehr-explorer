@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import RefreshButton from "../components/RefreshButton.vue";
+import PlusIcon from "../components/PlusIcon.vue";
 import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
 
@@ -832,7 +833,8 @@ watch(
             @update:model-value="(id) => (selectedEhrId = id ?? '')"
           />
           <button v-if="!isEditMode" class="btn btn-sm btn-primary" @click="showEhrDialog = true">
-            + Create New EHR
+            <PlusIcon />
+            Create New EHR
           </button>
         </div>
       </div>

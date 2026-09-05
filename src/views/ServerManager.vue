@@ -4,6 +4,7 @@ import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
+import PlusIcon from "../components/PlusIcon.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 
@@ -100,8 +101,14 @@ function credentialBackendLabel(backend: string): string {
       <h2>Server Profiles</h2>
       <div class="header-actions">
         <TourReplayButton tour-id="servers" view-label="Server Manager" />
-        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
-          + Add Server
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          data-tour="server-add"
+          @click="newProfile"
+        >
+          <PlusIcon />
+          Add Server
         </button>
       </div>
     </div>

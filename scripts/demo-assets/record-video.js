@@ -62,7 +62,7 @@ async function recordScenes(page) {
   mark("Add a server profile and test the connection");
   await page.click('a.nav-item:has-text("Servers")');
   await page.waitForTimeout(700);
-  await page.click('button:has-text("+ Add Server")');
+  await page.click('button:has-text("Add Server")');
   await page.waitForSelector("#server-name", { timeout: 5000 });
   await page.waitForTimeout(400);
 

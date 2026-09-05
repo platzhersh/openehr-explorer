@@ -88,7 +88,7 @@ async function main() {
 
   // ---- 05-servers.webp: add + test a server profile ----
   await page.click('a.nav-item:has-text("Servers")');
-  await page.click('button:has-text("+ Add Server")');
+  await page.click('button:has-text("Add Server")');
   await page.waitForSelector("#server-name", { timeout: 5000 });
   await page.fill("#server-name", "Local EHRBase");
   await page.fill("#server-base-url", "http://localhost:8080/ehrbase");
