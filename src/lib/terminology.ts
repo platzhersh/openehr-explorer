@@ -17,12 +17,18 @@ export interface TerminologySystemOption {
   uri: string;
 }
 
+// These `uri` values are canonical FHIR CodeSystem identifiers, not endpoints
+// this app fetches — the spec mandates the exact `http://` string (e.g.
+// `http://loinc.org` is LOINC's canonical URI everywhere in FHIR, unrelated
+// to whether the terminology server itself is reached over TLS). Rewriting
+// them to `https://` would silently break `$lookup`/`$validate-code` calls
+// against any server that matches system URIs literally.
 export const TERMINOLOGY_SYSTEMS: TerminologySystemOption[] = [
-  { value: "SNOMED-CT", label: "SNOMED CT", uri: "http://snomed.info/sct" },
-  { value: "LOINC", label: "LOINC", uri: "http://loinc.org" },
-  { value: "ICD-10", label: "ICD-10", uri: "http://hl7.org/fhir/sid/icd-10" },
-  { value: "ICD-11", label: "ICD-11", uri: "http://id.who.int/icd/release/11/mms" },
-  { value: "ATC", label: "ATC (WHO)", uri: "http://www.whocc.no/atc" },
+  { value: "SNOMED-CT", label: "SNOMED CT", uri: "http://snomed.info/sct" }, // NOSONAR
+  { value: "LOINC", label: "LOINC", uri: "http://loinc.org" }, // NOSONAR
+  { value: "ICD-10", label: "ICD-10", uri: "http://hl7.org/fhir/sid/icd-10" }, // NOSONAR
+  { value: "ICD-11", label: "ICD-11", uri: "http://id.who.int/icd/release/11/mms" }, // NOSONAR
+  { value: "ATC", label: "ATC (WHO)", uri: "http://www.whocc.no/atc" }, // NOSONAR
 ];
 
 /**

@@ -26,13 +26,14 @@ const analytics = useAnalytics();
 
 type TabId = "lookup" | "expand" | "validate" | "subsumes";
 
-const TABS: { id: TabId; label: string; operation: string; blurb: string }[] = [
+const TABS: { id: TabId; label: string; operation: string; blurb: string; docUrl: string }[] = [
   {
     id: "lookup",
     label: "Describe a Code",
     operation: "CodeSystem/$lookup",
     blurb:
       "Look up a single code and see its preferred term, synonyms, and properties (e.g. parent, inactive). Use this to check what a stored or bound code actually means.",
+    docUrl: "https://www.hl7.org/fhir/codesystem-operation-lookup.html",
   },
   {
     id: "expand",
@@ -40,6 +41,7 @@ const TABS: { id: TabId; label: string; operation: string; blurb: string }[] = [
     operation: "ValueSet/$expand",
     blurb:
       "List the concepts that belong to a value set, optionally narrowed by a text filter. Use this to see the legal options for a coded field before you pick one.",
+    docUrl: "https://www.hl7.org/fhir/valueset-operation-expand.html",
   },
   {
     id: "validate",
@@ -47,6 +49,7 @@ const TABS: { id: TabId; label: string; operation: string; blurb: string }[] = [
     operation: "ValueSet/$validate-code or CodeSystem/$validate-code",
     blurb:
       "Check whether a code is a legal member of a value set — or just a valid code in its code system, if you leave the value set blank.",
+    docUrl: "https://www.hl7.org/fhir/valueset-operation-validate-code.html",
   },
   {
     id: "subsumes",
@@ -54,6 +57,7 @@ const TABS: { id: TabId; label: string; operation: string; blurb: string }[] = [
     operation: "CodeSystem/$subsumes",
     blurb:
       "Compare two codes from the same code system and see how they relate in the hierarchy: equivalent, one broader than the other, or unrelated.",
+    docUrl: "https://www.hl7.org/fhir/codesystem-operation-subsumes.html",
   },
 ];
 
@@ -306,6 +310,15 @@ function useConceptInLookup(concept: TerminologyConcept) {
           Query the FHIR terminology server configured for this connection: describe a code, expand
           a value set, and test membership or subsumption.
         </p>
+        <p class="scope-note">
+          <strong>Not part of openEHR itself</strong> — this talks directly to a
+          <a href="https://www.hl7.org/fhir/terminology-service.html" target="_blank" rel="noopener"
+            >FHIR Terminology Service</a
+          >, a separate HL7 standard for code systems and value sets. openEHR doesn't define
+          terminology operations of its own; the app just calls the FHIR server configured in
+          <router-link to="/settings">Settings</router-link>
+          or on the server profile, independently of your openEHR CDR.
+        </p>
       </div>
     </div>
 
@@ -343,6 +356,9 @@ function useConceptInLookup(concept: TerminologyConcept) {
         <p>
           <span class="operation-name">{{ activeTabInfo.operation }}</span> —
           {{ activeTabInfo.blurb }}
+          <a :href="activeTabInfo.docUrl" target="_blank" rel="noopener" class="doc-link"
+            >FHIR spec ↗</a
+          >
         </p>
       </div>
 
@@ -350,10 +366,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
       <div v-if="activeTab === 'lookup'" class="tool-panel">
         <form class="tool-form" @submit.prevent="runLookup">
           <div class="form-row">
-            <label>
-              Terminology system
-              <TerminologySystemSelect v-model="lookupSystem" />
-            </label>
+            <TerminologySystemSelect v-model="lookupSystem" label="Terminology system" />
             <label>
               Code
               <input class="input" v-model="lookupCodeInput" placeholder="91302008" />
@@ -487,10 +500,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
       <div v-if="activeTab === 'validate'" class="tool-panel">
         <form class="tool-form" @submit.prevent="runValidate">
           <div class="form-row">
-            <label>
-              Terminology system
-              <TerminologySystemSelect v-model="validateSystem" />
-            </label>
+            <TerminologySystemSelect v-model="validateSystem" label="Terminology system" />
             <label>
               Code
               <input class="input" v-model="validateCodeInput" placeholder="386661006" />
@@ -538,10 +548,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
       <div v-if="activeTab === 'subsumes'" class="tool-panel">
         <form class="tool-form" @submit.prevent="runSubsumes">
           <div class="form-row">
-            <label>
-              Terminology system
-              <TerminologySystemSelect v-model="subsumesSystem" />
-            </label>
+            <TerminologySystemSelect v-model="subsumesSystem" label="Terminology system" />
             <label>
               Code A
               <input class="input" v-model="subsumesCodeA" placeholder="64572001" />
@@ -601,6 +608,20 @@ function useConceptInLookup(concept: TerminologyConcept) {
   color: var(--color-text-secondary);
 }
 
+.scope-note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+.scope-note a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.scope-note a:hover {
+  text-decoration: underline;
+}
+
 .terminology-disabled a {
   color: var(--color-primary);
 }
@@ -638,6 +659,15 @@ function useConceptInLookup(concept: TerminologyConcept) {
 .operation-name {
   font-family: var(--font-mono);
   color: var(--color-primary);
+}
+.doc-link {
+  margin-left: 4px;
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.doc-link:hover {
+  text-decoration: underline;
 }
 
 .tool-panel {

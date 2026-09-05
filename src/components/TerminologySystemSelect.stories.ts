@@ -19,12 +19,13 @@ const meta: Meta<typeof TerminologySystemSelect> = {
     components: { TerminologySystemSelect },
     setup() {
       const value = ref(args.modelValue);
-      return { value };
+      return { value, label: args.label };
     },
-    template: `<TerminologySystemSelect v-model="value" />`,
+    template: `<TerminologySystemSelect v-model="value" :label="label" />`,
   }),
   args: {
     modelValue: "SNOMED-CT",
+    label: "Terminology system",
   },
 };
 

@@ -12,11 +12,19 @@
 // `applyRouteQuery` in TerminologyBrowser.vue) is treated as custom: the
 // select shows "Custom…" and the text field shows that value verbatim,
 // rather than silently discarding it.
-import { computed } from "vue";
+import { computed, useId } from "vue";
 import { TERMINOLOGY_SYSTEMS } from "../lib/terminology";
 
 const props = defineProps<{
   modelValue: string;
+  /**
+   * Visible field label, rendered as a proper `<label for>` inside this
+   * component — a parent-side `<label>Text<TerminologySystemSelect /></label>`
+   * looks, to static a11y analysis, like a label with no real form control
+   * (it can't see the `<select>` this renders), so the label lives here
+   * instead of at each call site.
+   */
+  label: string;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +32,7 @@ const emit = defineEmits<{
 }>();
 
 const CUSTOM = "__custom__";
+const selectId = useId();
 
 const isCustom = computed(() => !TERMINOLOGY_SYSTEMS.some((s) => s.value === props.modelValue));
 const selectValue = computed(() => (isCustom.value ? CUSTOM : props.modelValue));
@@ -42,7 +51,8 @@ function onCustomInput(e: Event) {
 
 <template>
   <div class="terminology-system-select">
-    <select class="input" :value="selectValue" @change="onSelectChange">
+    <label :for="selectId">{{ label }}</label>
+    <select :id="selectId" class="input" :value="selectValue" @change="onSelectChange">
       <option v-for="s in TERMINOLOGY_SYSTEMS" :key="s.value" :value="s.value" :title="s.uri">
         {{ s.label }}
       </option>
@@ -52,6 +62,7 @@ function onCustomInput(e: Event) {
       v-if="isCustom"
       class="input"
       :value="modelValue"
+      :aria-label="`Custom ${label.toLowerCase()}`"
       placeholder="Canonical system URI, e.g. http://hl7.org/fhir/sid/ndc"
       @input="onCustomInput"
     />
@@ -62,6 +73,11 @@ function onCustomInput(e: Event) {
 .terminology-system-select {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.terminology-system-select .input + .input {
+  margin-top: 2px;
 }
 </style>
