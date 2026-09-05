@@ -91,6 +91,18 @@ onMounted(async () => {
     return;
   }
 
+  // Enter edit mode — and block submission — synchronously, before any
+  // await below. Without this, a stale selectedWebTemplate from a
+  // previously-mounted create/edit route can keep the form (and an
+  // enabled Submit button, since composerName may already carry a leftover
+  // value) visible while this composition's own data is still loading,
+  // letting a click fall through to the create path instead of updating
+  // the requested composition.
+  if (props.compositionUid && props.ehrId) {
+    isEditMode.value = true;
+    editLoadFailed.value = true;
+  }
+
   // Fetch EHRs for selector
   await ehrStore.fetchEhrs(serverStore.activeServerId, 0);
 
@@ -135,9 +147,9 @@ onMounted(async () => {
     error.value = "No template ID provided";
   }
 
-  // Edit mode: load existing composition
+  // Edit mode: load existing composition (isEditMode/editLoadFailed were
+  // already set synchronously above).
   if (props.compositionUid && props.ehrId) {
-    isEditMode.value = true;
     await loadCompositionForEdit(existingComposition);
   }
 
@@ -201,7 +213,7 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
       compositionUid: props.compositionUid,
     });
 
-    if (!flatComp) {
+    if (!flatComp || Object.keys(flatComp).length === 0) {
       error.value = "Composition returned no FLAT data";
       return;
     }
@@ -434,6 +446,16 @@ async function handleSubmit() {
     return;
   }
 
+  // Defense in depth alongside the Submit button's :disabled binding: reject
+  // an edit submission outright while the composition's own data is still
+  // loading (or failed to load), so a click during that window can never
+  // fall through to the create path or overwrite the composition with
+  // incomplete form data.
+  if (isEditMode.value && editLoadFailed.value) {
+    error.value = "Could not load the composition to edit — reload the page to try again";
+    return;
+  }
+
   error.value = null;
   success.value = null;
   loading.value = true;
@@ -516,7 +538,11 @@ async function handleSubmit() {
       void analytics.track("composition_created");
     }
 
-    responseSummaryLine.value = "HTTP 201 Created";
+    // The exact status code varies by server (EHRBase/FerroEHR return
+    // 200 or 204 for updates, 201 for creates), and the Tauri command only
+    // surfaces the resulting uid, not the status line — so this reports the
+    // outcome, not a literal status code.
+    responseSummaryLine.value = isEditMode.value ? "Composition updated (2xx)" : "HTTP 201 Created";
     responsePayload.value = { uid: { value: result } };
 
     // Clear draft
@@ -743,8 +769,14 @@ watch(
             <input v-model="territory" type="text" class="input" placeholder="e.g., US, GB, DE" />
           </div>
           <div class="form-field">
-            <label>Time</label>
-            <input v-model="compositionTime" type="datetime-local" step="1" class="input" />
+            <label for="composition-time">Time</label>
+            <input
+              id="composition-time"
+              v-model="compositionTime"
+              type="datetime-local"
+              step="1"
+              class="input"
+            />
           </div>
         </div>
       </div>
