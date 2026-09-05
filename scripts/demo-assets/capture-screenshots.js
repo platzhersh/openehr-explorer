@@ -140,7 +140,12 @@ async function main() {
   // ---- 06-aql-runner.webp: a run query with tabular results ----
   await page.click('a.nav-item:has-text("AQL Runner")');
   await page.waitForSelector(".context-template-select", { timeout: 5000 });
-  await page.selectOption(".context-template-select", fixtures.vitalSignsTemplateId);
+  await page.click(".context-template-select .searchable-select-control");
+  await page.fill(".context-template-select .searchable-select-search", fixtures.vitalSignsTemplateId);
+  await page
+    .locator(".context-template-select .searchable-select-option")
+    .getByText(fixtures.vitalSignsTemplateId, { exact: true })
+    .click();
   const editor = page.locator(".codemirror-container .cm-content");
   await editor.click();
   await page.keyboard.press("ControlOrMeta+A");

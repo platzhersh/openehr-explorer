@@ -4,17 +4,16 @@ import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery, type StoredQuerySummary } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
 import { useVirtualList } from "../composables/useVirtualList";
 import AqlEditor from "../components/AqlEditor.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import DeleteButton from "../components/DeleteButton.vue";
+import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 const serverStore = useServerStore();
 const queryStore = useQueryStore();
@@ -28,6 +27,10 @@ const showSaveDialog = ref(false);
 
 // Context Template (Layer 3)
 const contextTemplateId = ref<string | null>(null);
+// One option per known template, keyed and labeled by its template_id.
+const contextTemplateOptions = computed<SearchableSelectOption[]>(() =>
+  templateStore.templates.map((t) => ({ value: t.template_id, label: t.template_id })),
+);
 
 // Resizable editor
 const editorHeight = ref(240);
@@ -185,20 +188,11 @@ function collectArchetypePaths(
   }
 }
 
-function clearContextTemplate() {
-  contextTemplateId.value = null;
-}
-
 async function runQuery() {
   if (!serverStore.activeServerId || !queryText.value.trim()) return;
   await queryStore.executeAql(serverStore.activeServerId, queryText.value);
   // Feature-adoption ping only — NEVER include the query text itself.
   void analytics.track("aql_executed");
-}
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "aql" });
-  tourStore.start("aql");
 }
 
 function formatQuery() {
@@ -428,14 +422,7 @@ const editorStyle = computed(() => ({
           <div class="editor-header">
             <h2>AQL Query</h2>
             <div class="editor-actions">
-              <button
-                type="button"
-                class="tour-trigger-btn"
-                title="Take a tour of the AQL Runner"
-                @click="replayTour"
-              >
-                <CompassIcon />
-              </button>
+              <TourReplayButton tour-id="aql" view-label="AQL Runner" />
               <button
                 type="button"
                 class="btn btn-sm"
@@ -474,32 +461,15 @@ const editorStyle = computed(() => ({
 
           <!-- Context Template selector (Layer 3) -->
           <div class="context-template-bar" data-tour="aql-context-template">
-            <label class="context-template-label">Context Template</label>
-            <div class="context-template-select-wrapper">
-              <select
-                v-model="contextTemplateId"
-                class="context-template-select"
-                :class="{ 'no-selection': !contextTemplateId }"
-              >
-                <option :value="null">— No template context —</option>
-                <option
-                  v-for="t in templateStore.templates"
-                  :key="t.template_id"
-                  :value="t.template_id"
-                >
-                  {{ t.template_id }}
-                </option>
-              </select>
-              <button
-                v-if="contextTemplateId"
-                type="button"
-                class="context-template-clear"
-                @click="clearContextTemplate"
-                title="Clear template context"
-              >
-                &times;
-              </button>
-            </div>
+            <SearchableSelect
+              v-model="contextTemplateId"
+              class="context-template-select"
+              label="Context Template"
+              :options="contextTemplateOptions"
+              placeholder="— No template context —"
+              search-placeholder="Search templates..."
+              clearable
+            />
           </div>
 
           <div class="editor-wrapper" :style="editorStyle">
@@ -759,66 +729,37 @@ const editorStyle = computed(() => ({
   background: var(--color-bg-secondary);
 }
 
-.context-template-label {
+.context-template-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.context-template-select :deep(.searchable-select-label) {
+  flex-shrink: 0;
+  margin-bottom: 0;
   font-size: 11px;
   font-weight: 500;
   color: var(--color-text-muted);
   white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
 }
 
-.context-template-select-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
-.context-template-select {
+.context-template-select :deep(.searchable-select-control) {
   flex: 1;
   min-width: 0;
   padding: 3px 8px;
   font-size: 12px;
   font-family: var(--font-mono);
   background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  outline: none;
-  cursor: pointer;
 }
 
-.context-template-select.no-selection {
+.context-template-select :deep(.searchable-select-control.no-selection) {
   border-style: dashed;
-  color: var(--color-text-muted);
-}
-
-.context-template-select:focus {
-  border-color: var(--color-primary-dim);
-}
-
-.context-template-clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
-  background: transparent;
-  color: var(--color-text-muted);
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.context-template-clear:hover {
-  color: var(--color-text);
-  background: var(--color-surface);
 }
 
 .editor-wrapper {

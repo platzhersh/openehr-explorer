@@ -9,7 +9,7 @@ import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
@@ -19,7 +19,6 @@ import TemplateUploadZone from "../components/TemplateUploadZone.vue";
 import DownloadToast from "../components/DownloadToast.vue";
 import { useTemplateUpload } from "../composables/useTemplateUpload";
 import { useFileDownload } from "../composables/useFileDownload";
-import { useTourStore } from "../stores/tour";
 
 interface TermBinding {
   terminology: string;
@@ -32,7 +31,6 @@ const router = useRouter();
 const serverStore = useServerStore();
 const templateStore = useTemplateStore();
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 // Named distinctly from the `searchQuery` prop on the nested
 // WtTreeNodeFiltered component below (and the same-named param on
@@ -139,11 +137,6 @@ function selectTemplate(id: string) {
   // Feature-adoption ping only — the template_id is an archetype identifier
   // that could be customer-specific, so it's deliberately NOT included.
   void analytics.track("template_inspected");
-}
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "templates" });
-  tourStore.start("templates");
 }
 
 const filteredTemplates = computed(() => {
@@ -354,14 +347,7 @@ onUnmounted(() => {
       <div class="panel-header">
         <h2>Templates</h2>
         <div class="header-actions">
-          <button
-            type="button"
-            class="tour-trigger-btn"
-            title="Take a tour of the Template Browser"
-            @click="replayTour"
-          >
-            <CompassIcon />
-          </button>
+          <TourReplayButton tour-id="templates" view-label="Template Browser" />
           <button
             type="button"
             class="btn btn-sm btn-primary"

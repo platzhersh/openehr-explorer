@@ -114,7 +114,12 @@ async function recordScenes(page) {
   await page.waitForSelector(".context-template-select", { timeout: 5000 });
   await page.waitForTimeout(700);
 
-  await page.selectOption(".context-template-select", "vital_signs.v1");
+  await page.click(".context-template-select .searchable-select-control");
+  await page.fill(".context-template-select .searchable-select-search", "vital_signs.v1");
+  await page
+    .locator(".context-template-select .searchable-select-option")
+    .getByText("vital_signs.v1", { exact: true })
+    .click();
   await page.waitForTimeout(1000);
 
   const editor = page.locator(".codemirror-container .cm-content");

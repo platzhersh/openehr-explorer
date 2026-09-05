@@ -2,16 +2,14 @@
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 const cardTestLoading = ref<Record<string, boolean>>({});
 const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
@@ -30,11 +28,6 @@ onMounted(async () => {
 function newProfile() {
   dialogProfile.value = null;
   dialogOpen.value = true;
-}
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "servers" });
-  tourStore.start("servers");
 }
 
 function editProfile(profile: ServerProfile) {
@@ -107,14 +100,7 @@ function credentialBackendLabel(backend: string): string {
     <div class="view-header">
       <h2>Server Profiles</h2>
       <div class="header-actions">
-        <button
-          type="button"
-          class="tour-trigger-btn"
-          title="Take a tour of the Server Manager"
-          @click="replayTour"
-        >
-          <CompassIcon />
-        </button>
+        <TourReplayButton tour-id="servers" view-label="Server Manager" />
         <button
           type="button"
           class="btn btn-sm btn-primary"
@@ -179,8 +165,13 @@ function credentialBackendLabel(backend: string): string {
             >
               {{ cardTestLoading[profile.id] ? "Testing..." : "Test" }}
             </button>
-            <button class="btn btn-sm" @click="serverStore.setActiveServer(profile.id)">
-              {{ profile.id === serverStore.activeServerId ? "Active" : "Use" }}
+            <button
+              class="btn btn-sm"
+              :class="{ 'btn-active-state': profile.id === serverStore.activeServerId }"
+              :disabled="profile.id === serverStore.activeServerId"
+              @click="serverStore.setActiveServer(profile.id)"
+            >
+              {{ profile.id === serverStore.activeServerId ? "✓ Active" : "Use" }}
             </button>
             <button
               type="button"
@@ -291,6 +282,14 @@ function credentialBackendLabel(backend: string): string {
 .btn-active-toggle:hover {
   background: #eab308;
   color: var(--color-bg);
+}
+.btn-active-state:disabled {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-dim);
+  font-weight: 600;
+  cursor: default;
+  opacity: 1;
 }
 .warning-badge {
   background: rgba(255, 193, 7, 0.15);

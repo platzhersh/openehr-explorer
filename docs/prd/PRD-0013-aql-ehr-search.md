@@ -146,7 +146,7 @@ Predicate clauses are appended to a `WHERE` block based on which criteria are no
 
 | Criterion | AQL predicate |
 |---|---|
-| `ehr_id_prefix` | `e/ehr_id/value LIKE '<value>%'` |
+| `ehr_id_prefix` | `e/ehr_id/value = '<value>'` **only when `<value>` is a full, valid EHR ID** — otherwise ⚠️ not a WHERE predicate at all, see [Known Limitations](#ehr-id-prefix-search-does-not-use-a-where-predicate). A partial prefix is resolved via a bounded scan-and-filter in `search_ehrs` instead. |
 | `subject_id` | `s/subject/external_ref/id/value LIKE '%<value>%'` |
 | `subject_namespace` | `s/subject/external_ref/namespace = '<value>'` |
 | `system_id` | `e/system_id/value = '<value>'` |
@@ -255,6 +255,22 @@ The date filters `created-on`, `created-before`, and `created-after` are **not c
 
 This limitation may be addressed if EHRBase adds support for WHERE predicates on EHR-level attributes in a future release.
 
+### EHR ID Prefix Search Does Not Use a WHERE Predicate
+
+The `ehr_id_prefix` ("starts with") criterion originally shipped as `WHERE e/ehr_id/value LIKE '<prefix>%'`. Confirmed against a real EHRBase instance, this predicate is **silently unreliable**: it returns HTTP 200 with an empty result set even when an EHR whose ID matches the prefix genuinely exists on the server — unlike `time_created` above, EHRBase doesn't reject it with an error, it just never matches.
+
+**Why this happens:** `ehr_id` is the same class of EHR-level attribute as `time_created` (see above) and `ORDER BY e/ehr_id/value` (see `list_ehrs`'s `is_order_by_unsupported`), which EHRBase's AQL implementation does not fully support outside of SELECT. The difference is that this particular path fails silently for `LIKE` rather than raising the "not implemented" error `ORDER BY` and `time_created` do.
+
+**Fix, part 1 — full EHR ID:** when the whole `ehr_id_prefix` value is a syntactically valid EHR ID (a UUID), `build_ehr_search_aql` compiles it as `WHERE e/ehr_id/value = '<id>'` instead of `LIKE`. Exact equality on this same EHR-level path is confirmed to work fine on EHRBase (`get_ehr_detail`'s composition lookup already relies on `e/ehr_id/value = '<id>'`) — only the pattern-match form is broken. This means pasting a complete EHR ID always finds it in a single query, however many EHRs exist on the server.
+
+**Fix, part 2 — partial prefix:** a genuine partial prefix still has no working WHERE predicate at all, so it can't ride along in the normal single query. Instead, `search_ehrs` pages through the CDR in chunks of 200 (still applying whatever other criteria were combined with it) and filters each chunk client-side for `ehr_id`s starting with the prefix, the same post-filter pattern already used for `has_directory` — stopping once it has 200 matches, once the CDR runs out of rows, or once it has scanned `EHR_ID_SCAN_CAP` (2000) rows, whichever comes first.
+
+**Trade-off:** confirmed against a real EHRBase sandbox with roughly 1,500 EHRs, a single `LIMIT 200` fetch only covered CDR-default-ordered IDs starting `00`–`22`something — nowhere near enough to reach a prefix like `eecf`. Scanning up to 2000 rows covers that case, but a partial-prefix search can still, in principle, miss a match that exists beyond the scan cap on an especially large CDR. There is no way around this without CDR-side support for filtering on this attribute — pasting the *full* EHR ID instead (part 1, above) sidesteps the limitation entirely and is the recommended way to jump straight to a known EHR.
+
+**Interaction with `has_directory`:** because the partial-prefix path scans multiple pages, `has_directory` must be applied *inside* the scan loop (per page, before deciding whether 200 matches have been found) rather than once after the whole scan finishes — otherwise a page of 200 prefix matches with the wrong directory state would look like "done, limit reached" and the search would never reach a later page holding the real match. `search_ehrs` does this by folding `has_directory` into the same per-page filter as the prefix check; the single-query paths (a full EHR ID, or no `ehr_id_prefix` at all) only ever see one page, so applying `has_directory` after the fact there is still correct. See `scan_for_ehr_id_prefix`'s regression test for the exact scenario this covers.
+
+**Residual risk — pagination without `ORDER BY`:** the AQL specification leaves result order undefined when a query has no `ORDER BY` clause, and `search_ehrs`'s partial-prefix scan pages through the CDR using `LIMIT`/`OFFSET` with no `ORDER BY` at all. In principle, a CDR is free to return a different relative ordering across the separate paginated requests the scan issues, which could skip or duplicate rows the same way it already can across `list_ehrs`'s pages (see `build_ehr_list_aql`'s tiebreaker for the general problem). We can't add a stable order here to close this gap: `ORDER BY e/ehr_id/value` is exactly the EHR-level path EHRBase already rejects outright (see `is_order_by_unsupported`), so a query shape that would make the scan provably complete isn't available on the CDR this fix targets. In practice, EHRBase's unordered scan has been observed to return EHRs in a stable, ascending-`ehr_id` order across repeated identical queries against unchanging data (see the `00`–`22`-prefix banding in the trade-off above) — but this is empirical, implementation-specific behavior, not a guarantee, and a CDR under concurrent write load during a scan could still see a row skipped or duplicated. This is accepted as a known limitation rather than fixed, since the fix AQL itself would call for (a stable `ORDER BY`) is unavailable on EHRBase.
+
 ## Technical Notes
 
 ### AQL vs REST Endpoint Trade-off
@@ -297,3 +313,4 @@ Tested target: EHRBase 2.x. The `CONTAINS EHR_STATUS s` clause and `s/subject/ex
 |---|---|---|---|
 | 1.0 | 2026-04-09 | openEHR Explorer Team | Initial draft |
 | 1.1 | 2026-04-09 | openEHR Explorer Team | Added created-on, created-before, created-after search criteria; date boundary resolution; conflict rule; timezone open question |
+| 1.2 | 2026-09-05 | openEHR Explorer Team | Fixed `ehr_id_prefix`: `LIKE` on `e/ehr_id/value` was silently returning zero rows on EHRBase; a full EHR ID now uses an exact-match predicate instead, and a genuine partial prefix is resolved via a bounded client-side scan instead of a single 200-row fetch. Fixed `has_directory` combined with a partial prefix incorrectly stopping the scan early on raw (pre-directory-filter) match counts. Documented the residual pagination-order risk from scanning without `ORDER BY`. |

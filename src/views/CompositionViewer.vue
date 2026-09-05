@@ -5,11 +5,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import EditButton from "../components/EditButton.vue";
@@ -20,7 +19,6 @@ const router = useRouter();
 const serverStore = useServerStore();
 const compositionStore = useCompositionStore();
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 const ehrId = computed(() => route.params.ehrId as string);
 const compositionUid = computed(() => route.params.compositionUid as string);
@@ -199,11 +197,6 @@ function goBack() {
   router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
 }
 
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "composition" });
-  tourStore.start("composition");
-}
-
 // Data shown in the JSON / FLAT tabs — JsonViewer takes the parsed value
 // directly rather than a pre-stringified, pre-highlighted string.
 const jsonViewerData = computed(() => {
@@ -290,14 +283,7 @@ onUnmounted(() => {
       <button class="btn btn-sm" @click="goBack">Back</button>
       <h2>Composition</h2>
       <div class="header-actions">
-        <button
-          type="button"
-          class="tour-trigger-btn"
-          title="Take a tour of the Composition Viewer"
-          @click="replayTour"
-        >
-          <CompassIcon />
-        </button>
+        <TourReplayButton tour-id="composition" view-label="Composition Viewer" />
         <div class="tab-bar" data-tour="composition-tabs">
           <button
             class="tab"

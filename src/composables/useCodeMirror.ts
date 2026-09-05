@@ -3,7 +3,8 @@ import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { completionKeymap } from "@codemirror/autocomplete";
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
+import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { aql } from "../lib/aql/codemirror-aql";
 import { aqlAutocomplete, type AqlCompletionConfig } from "../lib/aql/codemirror-autocomplete";
 
@@ -59,6 +60,35 @@ const darkTheme = EditorView.theme(
   { dark: true },
 );
 
+/**
+ * Syntax highlighting tuned for the app's dark theme.
+ *
+ * @codemirror/language's `defaultHighlightStyle` uses colors chosen for a
+ * light background (dark, low-saturation blues/reds/greens), which read as
+ * muddy or low-contrast against `--color-bg` (#1a1a2e). This style reuses
+ * the app's palette where it already has a matching hue (comments, numbers,
+ * operators) and adds a few extra hues for tokens the palette has no
+ * dedicated color for (keywords, strings, builtin functions), picked to
+ * stay legible and distinct from each other on the dark background.
+ */
+const aqlHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#c792ea" },
+  { tag: [tags.atom, tags.bool], color: "var(--color-primary)" },
+  { tag: tags.null, color: "var(--color-text-secondary)", fontStyle: "italic" },
+  { tag: [tags.number, tags.literal], color: "var(--color-success)" },
+  { tag: [tags.string, tags.special(tags.string), tags.deleted], color: "#e2a468" },
+  { tag: [tags.typeName, tags.className], color: "var(--color-primary)" },
+  { tag: tags.standard(tags.name), color: "#7cc6ff" },
+  { tag: tags.special(tags.name), color: "var(--color-warning)" },
+  { tag: tags.name, color: "var(--color-text)" },
+  {
+    tag: [tags.operator, tags.punctuation, tags.paren, tags.brace, tags.squareBracket],
+    color: "var(--color-text-secondary)",
+  },
+  { tag: [tags.comment, tags.meta], color: "var(--color-text-muted)", fontStyle: "italic" },
+  { tag: tags.invalid, color: "var(--color-error)" },
+]);
+
 export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCodeMirrorOptions) {
   const view = ref<EditorView | null>(null);
 
@@ -85,7 +115,7 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
       aql(),
       aqlAutocomplete(options.completionConfig),
       history(),
-      syntaxHighlighting(defaultHighlightStyle),
+      syntaxHighlighting(aqlHighlightStyle),
       bracketMatching(),
       EditorView.lineWrapping,
       darkTheme,

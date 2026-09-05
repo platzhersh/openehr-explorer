@@ -3,9 +3,11 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
+import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
 import CopyButton from "../components/CopyButton.vue";
 import TerminologySystemSelect from "../components/TerminologySystemSelect.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import {
   describeCode,
   expandValueSet,
@@ -22,6 +24,7 @@ const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const settingsStore = useSettingsStore();
+const tourStore = useTourStore();
 const analytics = useAnalytics();
 
 type TabId = "lookup" | "expand" | "validate" | "subsumes";
@@ -262,6 +265,17 @@ function applyRouteQuery() {
 
 watch(() => route.query, applyRouteQuery, { immediate: true });
 
+// The "Try an example" tour step (`[data-tour="terminology-example"]`) only
+// exists on the Describe tab's markup — force that tab active whenever this
+// view's tour starts (auto or via the compass icon), so the step's target
+// is there regardless of which tab the user happened to be on.
+watch(
+  () => tourStore.activeTourId,
+  (id) => {
+    if (id === "terminology") activeTab.value = "lookup";
+  },
+);
+
 // The "Describe →" link from a template's Bound Concepts panel also carries
 // `fromTemplate` (the template that sent us here) — used to show a "Back to
 // template" link, so following a term binding out to the Terminology
@@ -305,12 +319,15 @@ function useConceptInLookup(concept: TerminologyConcept) {
         >
           ← Back to template
         </button>
-        <h2>Terminology</h2>
+        <div class="header-title-row">
+          <h2>Terminology</h2>
+          <TourReplayButton tour-id="terminology" view-label="Terminology Browser" />
+        </div>
         <p class="subtitle">
           Query the FHIR terminology server configured for this connection: describe a code, expand
           a value set, and test membership or subsumption.
         </p>
-        <p class="scope-note">
+        <p class="scope-note" data-tour="terminology-scope-note">
           <strong>Not part of openEHR itself</strong> — this talks directly to a
           <a href="https://www.hl7.org/fhir/terminology-service.html" target="_blank" rel="noopener"
             >FHIR Terminology Service</a
@@ -337,7 +354,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
     </div>
 
     <template v-else>
-      <div class="tab-bar" role="tablist">
+      <div class="tab-bar" role="tablist" data-tour="terminology-tabs">
         <button
           v-for="tab in TABS"
           :key="tab.id"
@@ -377,6 +394,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
             <button
               type="button"
               class="btn btn-sm btn-ghost"
+              data-tour="terminology-example"
               :disabled="lookupLoading"
               @click="runLookupExample"
             >
@@ -617,6 +635,11 @@ function useConceptInLookup(concept: TerminologyConcept) {
 .back-to-template {
   display: block;
   margin-bottom: 8px;
+}
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .subtitle {
   margin-top: 4px;

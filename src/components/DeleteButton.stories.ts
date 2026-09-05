@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import DeleteButton from "./DeleteButton.vue";
 
 const meta: Meta<typeof DeleteButton> = {
@@ -54,11 +54,12 @@ export const AllVariants: Story = {
 
 /** Clicking emits a `click` event that the parent uses to trigger the delete (typically behind a confirmation dialog). */
 export const ClickToDelete: Story = {
-  args: { variant: "bordered", size: "md" },
-  play: async ({ canvasElement }) => {
+  args: { variant: "bordered", size: "md", onClick: fn() },
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const button = canvas.getByRole("button");
     await expect(button).toHaveAccessibleName("Delete");
     await userEvent.click(button);
+    await expect(args.onClick).toHaveBeenCalledTimes(1);
   },
 };
