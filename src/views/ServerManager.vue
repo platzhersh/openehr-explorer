@@ -5,6 +5,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
 import CompassIcon from "../components/CompassIcon.vue";
+import PlusIcon from "../components/PlusIcon.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 
@@ -120,7 +121,8 @@ function credentialBackendLabel(backend: string): string {
           data-tour="server-add"
           @click="newProfile"
         >
-          + Add Server
+          <PlusIcon />
+          Add Server
         </button>
       </div>
     </div>
