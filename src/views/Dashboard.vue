@@ -4,20 +4,13 @@ import { useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
 import { useDashboardStore } from "../stores/dashboard";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import RefreshButton from "../components/RefreshButton.vue";
 
 const router = useRouter();
 const serverStore = useServerStore();
 const dashboardStore = useDashboardStore();
 const analytics = useAnalytics();
-const tourStore = useTourStore();
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "dashboard" });
-  tourStore.start("dashboard");
-}
 
 // Timestamp of the last successful count fetch, shown next to the refresh
 // button so "live" doesn't silently mean "however stale this happens to be".
@@ -76,14 +69,7 @@ watch(
     <div class="view-header">
       <h2>Overview</h2>
       <div class="header-actions">
-        <button
-          type="button"
-          class="tour-trigger-btn"
-          title="Take a tour of the Overview"
-          @click="replayTour"
-        >
-          <CompassIcon />
-        </button>
+        <TourReplayButton tour-id="dashboard" view-label="Overview" />
         <span v-if="lastUpdated" class="last-updated">
           Updated {{ lastUpdated.toLocaleTimeString() }}
         </span>

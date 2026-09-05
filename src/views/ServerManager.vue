@@ -2,15 +2,13 @@
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
-import { useTourStore } from "../stores/tour";
 import ServerFormDialog from "../components/ServerFormDialog.vue";
-import CompassIcon from "../components/CompassIcon.vue";
+import TourReplayButton from "../components/TourReplayButton.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
-const tourStore = useTourStore();
 
 const cardTestLoading = ref<Record<string, boolean>>({});
 const cardTestResult = ref<Record<string, { success: boolean; message: string }>>({});
@@ -29,11 +27,6 @@ onMounted(async () => {
 function newProfile() {
   dialogProfile.value = null;
   dialogOpen.value = true;
-}
-
-function replayTour() {
-  void analytics.track("tour_replayed", { tour_id: "servers" });
-  tourStore.start("servers");
 }
 
 function editProfile(profile: ServerProfile) {
@@ -106,14 +99,7 @@ function credentialBackendLabel(backend: string): string {
     <div class="view-header">
       <h2>Server Profiles</h2>
       <div class="header-actions">
-        <button
-          type="button"
-          class="tour-trigger-btn"
-          title="Take a tour of the Server Manager"
-          @click="replayTour"
-        >
-          <CompassIcon />
-        </button>
+        <TourReplayButton tour-id="servers" view-label="Server Manager" />
         <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
           + Add Server
         </button>
