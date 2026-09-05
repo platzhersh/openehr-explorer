@@ -284,9 +284,9 @@ function doClear() {
               :title="`${entry.status} ${statusText(entry.status)}`.trim()"
             >
               {{ entry.status
-              }}<span v-if="statusText(entry.status)" class="status-text">
-                {{ statusText(entry.status) }}</span
-              >
+              }}<span v-if="statusText(entry.status)" class="status-text">{{
+                ` ${statusText(entry.status)}`
+              }}</span>
             </span>
             <span class="entry-duration">{{ entry.duration_ms }}ms</span>
           </div>
@@ -399,9 +399,9 @@ function doClear() {
                   <span class="summary-label">Status</span>
                   <span :class="['summary-value', statusClass(selected.status)]">
                     {{ selected.status
-                    }}<span v-if="statusText(selected.status)">
-                      {{ statusText(selected.status) }}</span
-                    >
+                    }}<span v-if="statusText(selected.status)">{{
+                      ` ${statusText(selected.status)}`
+                    }}</span>
                   </span>
                   <span class="summary-label">Content-Type</span>
                   <span class="summary-value mono">{{
