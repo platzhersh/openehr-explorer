@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import EhrCreateDialog from "../components/EhrCreateDialog.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import RefreshButton from "../components/RefreshButton.vue";
+import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
 
 const analytics = useAnalytics();
@@ -91,6 +92,13 @@ const sortedEhrs = computed(() => {
     return timeB - timeA; // Descending order (newest first)
   });
 });
+
+const ehrOptions = computed<SearchableSelectOption[]>(() =>
+  sortedEhrs.value.map((ehr) => ({
+    value: ehr.ehr_id,
+    label: `${ehr.ehr_id.substring(0, 8)}...${ehr.subject_id ? ` (${ehr.subject_id})` : ""}`,
+  })),
+);
 
 // The following onMounted helpers are split out purely to keep its cognitive
 // complexity manageable — each is an independent concern (resolving edit
@@ -811,12 +819,15 @@ watch(
       <div class="form-section">
         <h3>Select EHR</h3>
         <div class="ehr-selector">
-          <select v-model="selectedEhrId" class="input" :disabled="isEditMode">
-            <option value="">-- Select EHR --</option>
-            <option v-for="ehr in sortedEhrs" :key="ehr.ehr_id" :value="ehr.ehr_id">
-              {{ ehr.ehr_id.substring(0, 8) }}... {{ ehr.subject_id ? `(${ehr.subject_id})` : "" }}
-            </option>
-          </select>
+          <SearchableSelect
+            class="ehr-select"
+            :options="ehrOptions"
+            :model-value="selectedEhrId || null"
+            :disabled="isEditMode"
+            placeholder="-- Select EHR --"
+            search-placeholder="Search EHRs..."
+            @update:model-value="(id) => (selectedEhrId = id ?? '')"
+          />
           <button v-if="!isEditMode" class="btn btn-sm btn-primary" @click="showEhrDialog = true">
             + Create New EHR
           </button>
@@ -1010,7 +1021,7 @@ watch(
   align-items: center;
 }
 
-.ehr-selector select {
+.ehr-selector .ehr-select {
   flex: 1;
 }
 

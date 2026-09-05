@@ -10,6 +10,7 @@ import AqlEditor from "../components/AqlEditor.vue";
 import CompassIcon from "../components/CompassIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import DeleteButton from "../components/DeleteButton.vue";
+import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 
@@ -28,6 +29,9 @@ const showSaveDialog = ref(false);
 
 // Context Template (Layer 3)
 const contextTemplateId = ref<string | null>(null);
+const contextTemplateOptions = computed<SearchableSelectOption[]>(() =>
+  templateStore.templates.map((t) => ({ value: t.template_id, label: t.template_id })),
+);
 
 // Resizable editor
 const editorHeight = ref(240);
@@ -183,10 +187,6 @@ function collectArchetypePaths(
       collectArchetypePaths(child, pathMap);
     }
   }
-}
-
-function clearContextTemplate() {
-  contextTemplateId.value = null;
 }
 
 async function runQuery() {
@@ -475,31 +475,14 @@ const editorStyle = computed(() => ({
           <!-- Context Template selector (Layer 3) -->
           <div class="context-template-bar" data-tour="aql-context-template">
             <label class="context-template-label">Context Template</label>
-            <div class="context-template-select-wrapper">
-              <select
-                v-model="contextTemplateId"
-                class="context-template-select"
-                :class="{ 'no-selection': !contextTemplateId }"
-              >
-                <option :value="null">— No template context —</option>
-                <option
-                  v-for="t in templateStore.templates"
-                  :key="t.template_id"
-                  :value="t.template_id"
-                >
-                  {{ t.template_id }}
-                </option>
-              </select>
-              <button
-                v-if="contextTemplateId"
-                type="button"
-                class="context-template-clear"
-                @click="clearContextTemplate"
-                title="Clear template context"
-              >
-                &times;
-              </button>
-            </div>
+            <SearchableSelect
+              v-model="contextTemplateId"
+              class="context-template-select"
+              :options="contextTemplateOptions"
+              placeholder="— No template context —"
+              search-placeholder="Search templates..."
+              clearable
+            />
           </div>
 
           <div class="editor-wrapper" :style="editorStyle">
@@ -768,57 +751,20 @@ const editorStyle = computed(() => ({
   letter-spacing: 0.5px;
 }
 
-.context-template-select-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.context-template-select {
   flex: 1;
   min-width: 0;
 }
 
-.context-template-select {
-  flex: 1;
-  min-width: 0;
+.context-template-select :deep(.searchable-select-control) {
   padding: 3px 8px;
   font-size: 12px;
   font-family: var(--font-mono);
   background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  outline: none;
-  cursor: pointer;
 }
 
-.context-template-select.no-selection {
+.context-template-select :deep(.searchable-select-control.no-selection) {
   border-style: dashed;
-  color: var(--color-text-muted);
-}
-
-.context-template-select:focus {
-  border-color: var(--color-primary-dim);
-}
-
-.context-template-clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
-  background: transparent;
-  color: var(--color-text-muted);
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.context-template-clear:hover {
-  color: var(--color-text);
-  background: var(--color-surface);
 }
 
 .editor-wrapper {

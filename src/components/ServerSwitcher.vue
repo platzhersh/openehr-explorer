@@ -1,25 +1,30 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useServerStore } from "../stores/server";
+import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 
 const serverStore = useServerStore();
+
+const serverOptions = computed<SearchableSelectOption[]>(() =>
+  serverStore.profiles.map((profile) => ({
+    value: profile.id,
+    label: profile.name + (serverStore.connectionStatus[profile.id] === "connected" ? " [ok]" : ""),
+  })),
+);
 </script>
 
 <template>
   <div class="server-switcher" data-tour="server-select">
     <label class="switcher-label">Server</label>
-    <select
-      class="input server-select"
-      :value="serverStore.activeServerId"
-      @change="serverStore.setActiveServer(($event.target as HTMLSelectElement).value)"
-    >
-      <option v-if="serverStore.profiles.length === 0" value="" disabled>
-        No servers configured
-      </option>
-      <option v-for="profile in serverStore.profiles" :key="profile.id" :value="profile.id">
-        {{ profile.name }}
-        <template v-if="serverStore.connectionStatus[profile.id] === 'connected'"> [ok] </template>
-      </option>
-    </select>
+    <SearchableSelect
+      class="server-select"
+      :options="serverOptions"
+      :model-value="serverStore.activeServerId"
+      :placeholder="serverStore.profiles.length === 0 ? 'No servers configured' : 'Select a server'"
+      search-placeholder="Search servers..."
+      no-options-text="No servers configured"
+      @update:model-value="(id) => id && serverStore.setActiveServer(id)"
+    />
     <div
       v-if="serverStore.activeServer"
       class="connection-indicator"
@@ -51,6 +56,9 @@ const serverStore = useServerStore();
 
 .server-select {
   width: 100%;
+}
+
+.server-select :deep(.searchable-select-control) {
   font-size: 12px;
 }
 
