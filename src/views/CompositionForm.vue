@@ -26,6 +26,13 @@ const ehrStore = useEhrStore();
 const templateStore = useTemplateStore();
 const compositionStore = useCompositionStore();
 
+// True when the route is editing an existing composition
+// (/edit/:ehrId/:compositionUid) rather than creating one from a template.
+// A single boolean check here (vs. repeating `props.compositionUid &&
+// props.ehrId` at each call site) also keeps onMounted's branching — and so
+// its cognitive complexity — down.
+const isEditRoute = computed(() => !!(props.compositionUid && props.ehrId));
+
 const selectedEhrId = ref("");
 const composerName = ref("");
 const language = ref("en");
@@ -84,6 +91,50 @@ const sortedEhrs = computed(() => {
   });
 });
 
+// The following onMounted helpers are split out purely to keep its cognitive
+// complexity manageable — each is an independent concern (resolving edit
+// mode's implicit template ID, loading the web template) rather than a step
+// in a shared decision tree.
+
+// Edit mode: the route carries no templateId, so resolve it from the
+// existing composition's archetype details before loading the template.
+// Also returns the fetched (structured) composition, since
+// loadCompositionForEdit needs it too, for composer/language/territory (see
+// there for why), and shouldn't re-fetch what's already in hand.
+async function resolveEditTemplateId(
+  ehrId: string,
+  compositionUid: string,
+): Promise<{ templateId: string; existingComposition: Record<string, unknown> | null }> {
+  try {
+    const existingComposition = await invoke<Record<string, unknown>>("get_composition", {
+      serverId: serverStore.activeServerId,
+      ehrId,
+      compositionUid,
+    });
+    const templateId =
+      ((existingComposition as any)?.archetype_details?.template_id?.value as string) ||
+      ((existingComposition as any)?.archetype_node_id as string) ||
+      "";
+    return { templateId, existingComposition };
+  } catch (e) {
+    console.error("Failed to resolve template ID from composition:", e);
+    return { templateId: "", existingComposition: null };
+  }
+}
+
+async function loadWebTemplateOrSetError(templateId: string) {
+  if (!templateId) {
+    error.value = "No template ID provided";
+    return;
+  }
+  try {
+    await templateStore.fetchWebTemplate(serverStore.activeServerId as string, templateId);
+  } catch (e) {
+    console.error("Failed to fetch web template:", e);
+    error.value = `Failed to load template: ${e}`;
+  }
+}
+
 // Initialize
 onMounted(async () => {
   if (!serverStore.activeServerId) {
@@ -98,7 +149,7 @@ onMounted(async () => {
   // value) visible while this composition's own data is still loading,
   // letting a click fall through to the create path instead of updating
   // the requested composition.
-  if (props.compositionUid && props.ehrId) {
+  if (isEditRoute.value) {
     isEditMode.value = true;
     editLoadFailed.value = true;
   }
@@ -113,43 +164,20 @@ onMounted(async () => {
 
   // Load template
   let templateId = props.templateId || (route.params.templateId as string);
-
-  // Edit mode: the route carries no templateId, so resolve it from the
-  // existing composition's archetype details before loading the template.
-  // Keep the fetched (structured) composition around — loadCompositionForEdit
-  // needs it too, for composer/language/territory (see there for why).
   let existingComposition: Record<string, unknown> | null = null;
-  if (!templateId && props.compositionUid && props.ehrId) {
-    try {
-      existingComposition = await invoke<Record<string, unknown>>("get_composition", {
-        serverId: serverStore.activeServerId,
-        ehrId: props.ehrId,
-        compositionUid: props.compositionUid,
-      });
-      templateId =
-        ((existingComposition as any)?.archetype_details?.template_id?.value as string) ||
-        ((existingComposition as any)?.archetype_node_id as string) ||
-        "";
-    } catch (e) {
-      console.error("Failed to resolve template ID from composition:", e);
-    }
+  if (!templateId && isEditRoute.value) {
+    ({ templateId, existingComposition } = await resolveEditTemplateId(
+      props.ehrId as string,
+      props.compositionUid as string,
+    ));
   }
   resolvedTemplateId.value = templateId || "";
 
-  if (templateId) {
-    try {
-      await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
-    } catch (e) {
-      console.error("Failed to fetch web template:", e);
-      error.value = `Failed to load template: ${e}`;
-    }
-  } else {
-    error.value = "No template ID provided";
-  }
+  await loadWebTemplateOrSetError(templateId);
 
   // Edit mode: load existing composition (isEditMode/editLoadFailed were
   // already set synchronously above).
-  if (props.compositionUid && props.ehrId) {
+  if (isEditRoute.value) {
     await loadCompositionForEdit(existingComposition);
   }
 
