@@ -195,7 +195,7 @@ async function loadCompositionForEdit(existingComposition: Record<string, unknow
       compositionTime.value = toDatetimeLocalValue(new Date(startTime));
     }
 
-    const flatComp = await invoke<Record<string, unknown>>("get_composition_flat", {
+    const flatComp = await invoke<Record<string, unknown> | null>("get_composition_flat", {
       serverId: serverStore.activeServerId,
       ehrId: props.ehrId,
       compositionUid: props.compositionUid,
