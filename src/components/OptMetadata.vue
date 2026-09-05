@@ -230,6 +230,9 @@ const descriptionPreview = computed(() => {
                 {{ authorDisplay }}
               </a>
               <span v-else>{{ authorDisplay }}</span>
+              <span v-if="metadata.originalAuthor.email" class="author-email">
+                {{ metadata.originalAuthor.email }}
+              </span>
             </span>
           </div>
 
@@ -386,6 +389,12 @@ const descriptionPreview = computed(() => {
 
 .author-link:hover {
   text-decoration: underline;
+}
+
+.author-email {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
 }
 
 .description-container {
