@@ -159,8 +159,16 @@ onMounted(async () => {
     compositionTime.value = toDatetimeLocalValue(new Date());
   }
 
-  // Load draft if exists
-  loadDraft();
+  // Load draft if exists — never in edit mode. draftKey is scoped by
+  // templateId + ehrId, not by compositionUid, so a leftover draft from a
+  // different composition against the same template/EHR (an abandoned
+  // create, or an edit of another instance) would otherwise silently
+  // overwrite the real data loadCompositionForEdit just restored above,
+  // and that stale draft would then get submitted as an update to *this*
+  // composition's record.
+  if (!isEditMode.value) {
+    loadDraft();
+  }
 
   // Push the web template — and, in edit mode, the composition's existing
   // FLAT data — into the mb-auto-form element once it has mounted.
@@ -650,7 +658,13 @@ const draftKey = computed(() => {
 });
 
 function saveDraft() {
-  if (!selectedEhrId.value) return;
+  // Never persist a draft while editing an existing composition — draftKey
+  // is scoped by templateId + ehrId, not compositionUid, so this would
+  // otherwise leak this composition's in-progress edits into the shared
+  // draft slot for that template/EHR pair, ready to be silently loaded into
+  // an unrelated new composition (or a different edit) later. See loadDraft's
+  // corresponding edit-mode guard in onMounted.
+  if (isEditMode.value || !selectedEhrId.value) return;
 
   const draft = {
     ehrId: selectedEhrId.value,
