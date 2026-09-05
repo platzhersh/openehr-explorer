@@ -24,7 +24,7 @@
  * plain text (e.g. a connection-status suffix) while keeping the built-in
  * filtering/keyboard/open-close behaviour.
  */
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, useId, watch } from "vue";
 
 export interface SearchableSelectOption {
   value: string | null;
@@ -39,8 +39,19 @@ const props = withDefaults(
     placeholder?: string;
     /** Placeholder for the filter text field inside the open panel. */
     searchPlaceholder?: string;
-    /** Optional visible `<label>`, associated via `for`/`id` like TerminologySystemSelect. */
+    /**
+     * Optional visible `<label>`. The control itself is a `<div>`, not a
+     * native labelable element (input/select/button/…), so the label is
+     * wired up via `aria-labelledby` rather than `for`/`id` — `for` only
+     * does anything on the whitelisted labelable tags.
+     */
     label?: string;
+    /**
+     * Accessible name for the control when there's no visible `label` (e.g.
+     * a selector whose purpose is already conveyed by a heading next to
+     * it). Ignored when `label` is set — that takes precedence.
+     */
+    ariaLabel?: string;
     /** Shown in the panel when the filter matches nothing. */
     noOptionsText?: string;
     disabled?: boolean;
@@ -51,6 +62,7 @@ const props = withDefaults(
     placeholder: "Select...",
     searchPlaceholder: "Search...",
     label: undefined,
+    ariaLabel: undefined,
     noOptionsText: "No matches",
     disabled: false,
     clearable: false,
@@ -60,6 +72,7 @@ const props = withDefaults(
 const modelValue = defineModel<string | null>({ default: null });
 
 const controlId = useId();
+const labelId = useId();
 const listboxId = useId();
 const searchInputId = useId();
 
@@ -177,11 +190,20 @@ watch(isOpen, (open) => {
     document.removeEventListener("mousedown", onDocumentMousedown);
   }
 });
+
+// Unmounting while the panel is open skips the watcher's "closed" branch
+// above, which would otherwise leak this listener (and the component's
+// closure) on the document indefinitely.
+onUnmounted(() => {
+  document.removeEventListener("mousedown", onDocumentMousedown);
+});
 </script>
 
 <template>
   <div ref="rootRef" class="searchable-select" :class="{ 'is-disabled': disabled }">
-    <label v-if="label" :for="controlId" class="searchable-select-label">{{ label }}</label>
+    <label v-if="label" :id="labelId" class="searchable-select-label" @click="open">{{
+      label
+    }}</label>
     <div
       :id="controlId"
       class="input searchable-select-control"
@@ -190,6 +212,8 @@ watch(isOpen, (open) => {
       :aria-expanded="isOpen"
       :aria-controls="listboxId"
       :aria-disabled="disabled"
+      :aria-labelledby="label ? labelId : undefined"
+      :aria-label="label ? undefined : ariaLabel"
       :tabindex="disabled ? -1 : 0"
       @click="toggle"
       @keydown="onControlKeydown"

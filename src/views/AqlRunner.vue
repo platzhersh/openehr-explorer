@@ -29,6 +29,7 @@ const showSaveDialog = ref(false);
 
 // Context Template (Layer 3)
 const contextTemplateId = ref<string | null>(null);
+// One option per known template, keyed and labeled by its template_id.
 const contextTemplateOptions = computed<SearchableSelectOption[]>(() =>
   templateStore.templates.map((t) => ({ value: t.template_id, label: t.template_id })),
 );
@@ -474,10 +475,10 @@ const editorStyle = computed(() => ({
 
           <!-- Context Template selector (Layer 3) -->
           <div class="context-template-bar" data-tour="aql-context-template">
-            <label class="context-template-label">Context Template</label>
             <SearchableSelect
               v-model="contextTemplateId"
               class="context-template-select"
+              label="Context Template"
               :options="contextTemplateOptions"
               placeholder="— No template context —"
               search-placeholder="Search templates..."
@@ -742,21 +743,29 @@ const editorStyle = computed(() => ({
   background: var(--color-bg-secondary);
 }
 
-.context-template-label {
+.context-template-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.context-template-select :deep(.searchable-select-label) {
+  flex-shrink: 0;
+  margin-bottom: 0;
   font-size: 11px;
   font-weight: 500;
   color: var(--color-text-muted);
   white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.context-template-select {
-  flex: 1;
-  min-width: 0;
+  cursor: pointer;
 }
 
 .context-template-select :deep(.searchable-select-control) {
+  flex: 1;
+  min-width: 0;
   padding: 3px 8px;
   font-size: 12px;
   font-family: var(--font-mono);

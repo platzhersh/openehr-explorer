@@ -93,6 +93,8 @@ const sortedEhrs = computed(() => {
   });
 });
 
+// One option per EHR, labeled by its full ehr_id (searchable in full, not
+// just an 8-char prefix) plus the subject_id when the server reports one.
 const ehrOptions = computed<SearchableSelectOption[]>(() =>
   sortedEhrs.value.map((ehr) => {
     const subjectSuffix = ehr.subject_id ? ` (${ehr.subject_id})` : "";
@@ -821,6 +823,7 @@ watch(
         <div class="ehr-selector">
           <SearchableSelect
             class="ehr-select"
+            aria-label="Select EHR"
             :options="ehrOptions"
             :model-value="selectedEhrId || null"
             :disabled="isEditMode"
