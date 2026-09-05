@@ -60,7 +60,14 @@ fn about_metadata() -> AboutMetadata<'static> {
 fn install_update_check_menu_item(app: &tauri::App) -> tauri::Result<()> {
     let handle = app.handle();
     let menu = Menu::default(handle)?;
-    let about = PredefinedMenuItem::about(handle, Some(APP_NAME), Some(about_metadata()))?;
+    // `PredefinedMenuItem::about`'s `text` becomes the menu item's label
+    // verbatim — it does not prepend "About" the way `Menu::default`'s own
+    // item does, so that has to be spelled out here.
+    let about = PredefinedMenuItem::about(
+        handle,
+        Some(&format!("About {APP_NAME}")),
+        Some(about_metadata()),
+    )?;
 
     let check_for_updates = MenuItem::with_id(
         handle,
