@@ -108,6 +108,11 @@ async function main() {
   await page.waitForSelector(".ehr-item", { timeout: 5000 });
   await page.click(`.ehr-item:has-text("${fixtures.primaryEhrId.slice(0, 8)}")`);
   await page.waitForTimeout(500);
+  // EHR detail now opens on its "Detail" tab by default; compositions moved
+  // to their own "Compositions" tab (OEH-47) — switch to it so the
+  // screenshot still shows the grouped composition list it's named for.
+  await page.click('.tab-bar .tab:has-text("Compositions")');
+  await page.waitForTimeout(300);
   await saveElementScreenshot(page, ".ehr-browser", "01-ehr-browser.webp");
 
   // ---- 02/03/03b: Composition Viewer — Pretty / FLAT / JSON ----
