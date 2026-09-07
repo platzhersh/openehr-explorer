@@ -1,6 +1,6 @@
 [package]
 name = "openehr-explorer"
-version = "0.8.0"
+version = "0.9.0"
 description = "Cross-platform desktop browser for openEHR CDR instances"
 authors = ["openEHR Explorer Contributors"]
 homepage = "https://openehr-explorer.dev/"
