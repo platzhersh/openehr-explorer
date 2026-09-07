@@ -826,6 +826,18 @@ LIMIT 10</div>
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.9.0 — Terminology Browser, EHR History &amp; Directory Versioning</h3>
+        <ul>
+          <li><strong>Terminology Browser:</strong> A new standalone Terminology Browser view lets you look up codes by system, with per-tab explanations, worked examples, and a guided product tour</li>
+          <li><strong>EHR Status History &amp; Compositions Tabs:</strong> The EHR detail view now shows full EHR_STATUS version history and a dedicated Compositions tab, with contributions reconstructed for context</li>
+          <li><strong>DIRECTORY Version History:</strong> The DIRECTORY viewer gains version history, at-time viewing, in-place JSON editing, and a richer add-reference flow</li>
+          <li><strong>Template Tools:</strong> OPT downloads now use a native save dialog with a success toast, template metadata shows the author's email inline, and template examples request medium detail level</li>
+          <li><strong>UI Polish:</strong> Refresh, delete, and edit buttons across the app now use consistent icon+tooltip styling, dropdowns gained a searchable/filterable component, and AQL editor syntax highlighting was improved for dark theme</li>
+          <li><strong>Request Inspector:</strong> Explicit height-state buttons, HTTP status reason phrases, and restored click-anywhere-on-header drawer resizing</li>
+          <li><strong>Composition Fix:</strong> Fixed creating and updating compositions against FerroEHR and EHRBase</li>
+          <li><strong>EHR Search Fix:</strong> Searching by EHR ID prefix now works as a proper post-filter instead of a broken AQL <code>LIKE</code></li>
+        </ul>
+
         <h3>v0.8.0 — DIRECTORY CRUD, Live Dashboard &amp; Template Tools</h3>
         <ul>
           <li><strong>DIRECTORY CRUD:</strong> Create, update, and delete DIRECTORY folder entries directly from the EHR browser, building on the read-only DIRECTORY viewer introduced in v0.7.0</li>
