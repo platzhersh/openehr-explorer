@@ -1,8 +1,9 @@
 # Demo asset generator
 
 Regenerates every marketing screenshot and the hero demo video/gif on the
-landing page (`docs/assets/screenshots/*.webp`, `docs/assets/demo.mp4`,
-`docs/assets/demo.gif`, `docs/assets/demo.vtt`) and the README gif.
+landing page (`website/public/assets/screenshots/*.webp`,
+`website/public/assets/demo.mp4`, `website/public/assets/demo.gif`,
+`website/public/assets/demo.vtt`) and the README gif.
 
 No real EHRBase server, no native Tauri shell, no Docker required — these
 scripts drive the actual Vue frontend (`npm run dev`) in headless Chromium
@@ -16,8 +17,8 @@ rationale and a step-by-step walkthrough.
 
 ```bash
 npm run dev &                          # terminal 1 — vite dev server
-npm run demo:screenshots               # docs/assets/screenshots/*.webp
-npm run demo:video                     # docs/assets/demo.{mp4,gif,vtt}
+npm run demo:screenshots               # website/public/assets/screenshots/*.webp
+npm run demo:video                     # website/public/assets/demo.{mp4,gif,vtt}
 ```
 
 Both scripts accept `--url <vite-dev-server-url>` if you're not using the

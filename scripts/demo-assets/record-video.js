@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Regenerates the hero demo.mp4 / demo.gif / demo.vtt in docs/assets/.
+// Regenerates the hero demo.mp4 / demo.gif / demo.vtt in
+// website/public/assets/.
 // Drives the real Vue frontend in Playwright against the fixtures in
 // mock.js, then encodes the raw capture with ffmpeg/gifsicle. See the
 // "generate-demo-assets" skill for prerequisites and the full explanation
@@ -22,7 +23,7 @@ import { requireBinary } from "./resolve-binary.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
-const ASSETS_DIR = path.join(REPO_ROOT, "docs", "assets");
+const ASSETS_DIR = path.join(REPO_ROOT, "website", "public", "assets");
 const MOCK_PATH = path.join(__dirname, "mock.js");
 
 const urlArgIdx = process.argv.indexOf("--url");
@@ -248,7 +249,7 @@ async function main() {
   writeVtt();
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
-  console.log("\nDone. Review docs/assets/demo.mp4 and demo.gif before committing.");
+  console.log("\nDone. Review website/public/assets/demo.mp4 and demo.gif before committing.");
 }
 
 try {
