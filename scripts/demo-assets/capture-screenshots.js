@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Regenerates the static marketing screenshots in docs/assets/screenshots/.
+// Regenerates the static marketing screenshots in
+// website/public/assets/screenshots/.
 // Drives the real Vue frontend in Playwright against the fixtures in
 // mock.js — see the "generate-demo-assets" skill for prerequisites and the
 // full explanation of why this mocks Tauri's IPC boundary instead of
@@ -17,7 +18,7 @@ import { requireBinary } from "./resolve-binary.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
-const OUT_DIR = path.join(REPO_ROOT, "docs", "assets", "screenshots");
+const OUT_DIR = path.join(REPO_ROOT, "website", "public", "assets", "screenshots");
 const MOCK_PATH = path.join(__dirname, "mock.js");
 
 const urlArgIdx = process.argv.indexOf("--url");

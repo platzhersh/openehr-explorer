@@ -38,11 +38,11 @@ that need to stay in sync:
 - `src-tauri/Cargo.toml`
 - `src-tauri/Cargo.lock`
 - `src-tauri/tauri.conf.json`
-- `docs/index.html` (version badge)
-- `docs/docs.html` (Linux AppImage install snippet)
+- `website/src/pages/index.astro` (version badge)
+- `website/src/pages/docs.astro` (Linux AppImage/deb install snippet)
 
 **Step 2 — changelog entry.** Adds a new `<h3>` entry under
-`<section id="changelog">` in `docs/docs.html`, following the existing
+`<section id="changelog">` in `website/src/pages/docs.astro`, following the existing
 format (version + one-line theme, then a bullet list of user-facing
 highlights), based on reviewing what actually changed since the previous
 tag — not a raw commit-message dump.

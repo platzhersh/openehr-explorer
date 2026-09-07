@@ -14,12 +14,12 @@ Update the version string in all of the following files (these are the exact fil
 3. `src-tauri/Cargo.toml` — `[package]` → `version`
 4. `src-tauri/Cargo.lock` — the `[[package]]` entry for `name = "openehr-explorer"`
 5. `src-tauri/tauri.conf.json` — top-level `"version"`
-6. `docs/index.html` — the `version-badge` paragraph (e.g. `v0.4.0 &middot; macOS …`)
-7. `docs/docs.html` — the Linux AppImage install snippet (`openehr-explorer_<version>_amd64.AppImage`, two occurrences)
+6. `website/src/pages/index.astro` — the `version-badge` paragraph (e.g. `v0.4.0 &middot; macOS …`)
+7. `website/src/pages/docs.astro` — the Debian/AppImage install snippets (`openEHR.Explorer_<version>_amd64.deb`/`.AppImage`)
 
 Rules:
 - Only replace the current version with `$1`. Do NOT touch historical version references in `docs/prd/` or `docs/adr/` (these are intentional historical records).
-- Do not touch the `#changelog` section of `docs/docs.html` here — that's Step 2, and lands in a separate commit.
+- Do not touch the `#changelog` section of `website/src/pages/docs.astro` here — that's Step 2, and lands in a separate commit.
 - After editing, run `git diff --stat` and confirm exactly 7 files changed, matching the stat of commit `287322b`.
 - Commit the changes with this message:
 
@@ -34,11 +34,11 @@ Rules:
 
 ## Step 2: Changelog entry
 
-Add a new changelog entry for `$1` in `docs/docs.html`:
+Add a new changelog entry for `$1` in `website/src/pages/docs.astro`:
 
 1. Find the previous tag: `git describe --tags --abbrev=0` (before the tag for `$1` is created).
 2. Review what changed since that tag: `git log <previous-tag>..HEAD --oneline`. Read the underlying commits/PRs as needed to understand user-facing impact — don't just paraphrase commit subjects.
-3. Add a new `<h3>v$1 — <short theme>` block as the **first** entry under `<section id="changelog">` in `docs/docs.html` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
+3. Add a new `<h3>v$1 — <short theme>` block as the **first** entry under `<section id="changelog">` in `website/src/pages/docs.astro` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
 4. Commit separately with this message:
 
   ```
@@ -66,5 +66,5 @@ Add a matching entry for `$1` to `src/lib/whats-new.ts` (the in-app "What's New"
 
 Regenerate the landing page screenshots and hero video/gif so they reflect the app as it looks in `$1`, since the UI has likely changed since these were last captured:
 
-1. Run the `/generate-demo-assets` command (`both`) — it covers prerequisites (ffmpeg, gifsicle, Playwright's Chromium, a running `npm run dev`), regenerates `docs/assets/screenshots/*.webp`, `demo.mp4`, `demo.gif`, and `demo.vtt`, and commits the result itself.
+1. Run the `/generate-demo-assets` command (`both`) — it covers prerequisites (ffmpeg, gifsicle, Playwright's Chromium, a running `npm run dev`), regenerates `website/public/assets/screenshots/*.webp`, `demo.mp4`, `demo.gif`, and `demo.vtt`, and commits the result itself.
 2. Skip this step only if the user explicitly says not to regenerate assets for this bump.

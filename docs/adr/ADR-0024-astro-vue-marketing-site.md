@@ -1,7 +1,7 @@
 # ADR-0024: Astro + Vue for the Marketing/Docs Site
 
 **Date:** 2026-08-30
-**Status:** Proposed
+**Status:** Accepted
 **Deciders:** Development Team
 **Related:** PRD-0007 (openEHR Explorer Product Website)
 
@@ -28,7 +28,7 @@ We will rebuild the site as an **Astro** project in `website/`, using Astro's Vu
 - **Shared design tokens** (`website/src/styles/tokens.css`): the single `:root` token block from PRD-0007's canonical table, imported once. `compare.html`'s drifted `--text-muted` is fixed to the canonical value as part of this migration — a direct example of the problem this ADR is meant to prevent from recurring.
 - **Shared layout primitives** (`website/src/components/`): `SiteHeader.astro`, `SimpleFooter.astro`, `LandingFooter.astro`, `SEO.astro`, `Logo.astro`, `GithubIcon.astro`, `FeatureCard.astro`, `Callout.astro` replace what were four independent copies of header/footer/meta-tag markup.
 - **Vue islands** replace the vanilla-JS IIFEs that used to sit at the bottom of `index.html` and `docs.html`: OS-aware download button, screenshot lightbox/gallery, downloads-history sparkline, and the docs sidebar's search + `IntersectionObserver` active-section tracking. Behavior is unchanged; each island is a direct port of the corresponding IIFE onto Vue's reactivity.
-- **`docs/` is left untouched by this change.** It remains the live, deployed site until the Pages source setting above is switched and this workflow is verified end-to-end.
+- **`docs/`'s static site files have since been retired** (see Migration Plan below) — `docs/adr/` and `docs/prd/` remain, unrelated documentation that was never part of the site.
 
 ## Consequences
 
@@ -48,10 +48,10 @@ We will rebuild the site as an **Astro** project in `website/`, using Astro's Vu
 
 ## Migration Plan
 
-1. **This PR (draft):** land `website/` alongside the still-live `docs/`, with a `pages.yml` workflow that builds (and can deploy to a Pages environment once the source setting is switched) but does not yet replace the live site.
-2. **Verify:** confirm the built site matches `docs/` visually and functionally (screenshots, Lighthouse, broken-link check).
-3. **Cut over:** switch Settings → Pages → Source to "GitHub Actions", merge, confirm the live site is served from the Actions deployment.
-4. **Retire `docs/`:** once the cutover is confirmed stable, delete the old static HTML/assets from `docs/` (keeping `docs/adr/` and `docs/prd/`, which are unrelated documentation, not site source).
+1. **✅ Land `website/`:** shipped alongside the still-live `docs/`, with a `pages.yml` workflow that builds and validates the site without yet replacing the live one.
+2. **✅ Verify:** the built site was confirmed to match `docs/` visually and functionally (screenshots, Lighthouse, broken-link check).
+3. **✅ Cut over:** Settings → Pages → Source switched to "GitHub Actions" (see OEH-48); the live site at `openehr-explorer.dev` is now served from the Actions deployment (`.github/workflows/pages.yml`).
+4. **✅ Retire `docs/`:** the old static HTML/assets have been deleted from `docs/`, keeping `docs/adr/` and `docs/prd/`, which are unrelated documentation, not site source.
 5. **Follow-ups considered out of scope for this PR:** an `@astrojs/sitemap`-generated sitemap instead of the static `sitemap.xml` copy; converting `compare.astro`'s large comparison table into a data-driven component instead of hand-written markup; extracting genuinely shared components (e.g. an icon set) into a package consumable by both `website/` and `src/`.
 
 ## Alternatives Considered

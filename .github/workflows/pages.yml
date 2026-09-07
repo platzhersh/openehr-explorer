@@ -4,11 +4,10 @@ name: Pages (website)
 # (only on main) publishes the build to GitHub Pages via the Actions
 # deployment flow. See docs/adr/ADR-0024-astro-vue-marketing-site.md.
 #
-# NOTE: the "deploy" job below only takes effect once this repository's
-# Pages source is switched to "GitHub Actions" (Settings → Pages →
-# Source). Until that one-time switch happens, Pages keeps serving the
-# static docs/ folder exactly as before, and this workflow's "build" job
-# still runs on every PR to catch a broken site build before merge.
+# The repository's Pages source has been switched to "GitHub Actions"
+# (Settings → Pages → Source), so the "deploy" job below is what serves
+# the live site at openehr-explorer.dev. This workflow's "build" job also
+# runs on every PR to catch a broken site build before merge.
 on:
   push:
     branches: [main]
@@ -47,7 +46,7 @@ jobs:
 
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: website/dist
 
@@ -65,4 +64,4 @@ jobs:
     steps:
       - name: Deploy
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
