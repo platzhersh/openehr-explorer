@@ -7,6 +7,7 @@ import TourReplayButton from "../components/TourReplayButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
+import LockIcon from "../components/LockIcon.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
@@ -83,6 +84,28 @@ function isInsecureHttpUrl(url: string): boolean {
   }
 }
 
+/**
+ * Tooltip text for a card's Use/Active and Set as Default buttons.
+ * Both are toggles whose label only states the *current* state ("Active",
+ * "★ Default"), so the hint spells out what a click would do — or, for the
+ * already-active server, why the button is disabled. Tooltip only, no
+ * `aria-label`: these buttons already have a visible text label, and
+ * overriding it with different wording breaks voice control ("click Set as
+ * Default") — unlike the icon-only Edit/Delete buttons, which have no
+ * visible name to preserve.
+ */
+function activeTooltip(profile: ServerProfile): string {
+  return profile.id === serverStore.activeServerId
+    ? "This is the server the app is currently using"
+    : "Switch the app to this server";
+}
+
+function defaultTooltip(profile: ServerProfile): string {
+  return profile.is_default
+    ? "Preselected on app start — click to stop preselecting it"
+    : "Preselect this server on app start";
+}
+
 function credentialBackendLabel(backend: string): string {
   switch (backend) {
     case "os_keychain":
@@ -101,12 +124,7 @@ function credentialBackendLabel(backend: string): string {
       <h2>Server Profiles</h2>
       <div class="header-actions">
         <TourReplayButton tour-id="servers" view-label="Server Manager" />
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          data-tour="server-add"
-          @click="newProfile"
-        >
+        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
           <PlusIcon />
           Add Server
         </button>
@@ -131,22 +149,23 @@ function credentialBackendLabel(backend: string): string {
               <span
                 v-if="serverStore.versionInfo[profile.id]?.server_version"
                 class="badge version-badge"
-                :title="serverStore.versionInfo[profile.id]?.server_version ?? ''"
+                :data-tooltip="`Server version ${serverStore.versionInfo[profile.id]?.server_version ?? ''}`"
               >
                 v{{ serverStore.versionInfo[profile.id]?.server_version }}
               </span>
               <span
                 v-if="isInsecureHttpUrl(profile.base_url)"
                 class="badge warning-badge"
-                title="Using HTTP for a remote server (credentials sent unencrypted)"
+                data-tooltip="Using HTTP for a remote server (credentials sent unencrypted)"
               >
                 ⚠️ HTTP
               </span>
               <span
                 class="badge secure-badge"
-                :title="`Credentials stored via ${credentialBackendLabel(profile.credential_backend)}`"
+                :data-tooltip="`Credentials stored via ${credentialBackendLabel(profile.credential_backend)}`"
               >
-                🔒 {{ credentialBackendLabel(profile.credential_backend) }}
+                <LockIcon />
+                {{ credentialBackendLabel(profile.credential_backend) }}
               </span>
             </div>
             <div
@@ -160,6 +179,7 @@ function credentialBackendLabel(backend: string): string {
           <div class="profile-actions">
             <button
               class="btn btn-sm"
+              data-tooltip="Test the connection to this server"
               @click="testProfileConnection(profile)"
               :disabled="cardTestLoading[profile.id]"
             >
@@ -168,6 +188,7 @@ function credentialBackendLabel(backend: string): string {
             <button
               class="btn btn-sm"
               :class="{ 'btn-active-state': profile.id === serverStore.activeServerId }"
+              :data-tooltip="activeTooltip(profile)"
               :disabled="profile.id === serverStore.activeServerId"
               @click="serverStore.setActiveServer(profile.id)"
             >
@@ -177,7 +198,7 @@ function credentialBackendLabel(backend: string): string {
               type="button"
               class="btn btn-sm"
               :class="{ 'btn-active-toggle': profile.is_default }"
-              title="Preselect this server on app start"
+              :data-tooltip="defaultTooltip(profile)"
               @click="toggleDefault(profile)"
             >
               {{ profile.is_default ? "★ Default" : "Set as Default" }}
@@ -298,6 +319,9 @@ function credentialBackendLabel(backend: string): string {
   border: 1px solid #fbbf24;
 }
 .secure-badge {
+  /* The icon is a real element now, not a glyph inside the label text, so
+     the badge needs to space it from the label itself. */
+  gap: 5px;
   background: rgba(34, 197, 94, 0.1);
   color: #22c55e;
   font-weight: 600;
@@ -316,6 +340,11 @@ function credentialBackendLabel(backend: string): string {
 }
 .profile-actions {
   display: flex;
+  /* Without this the row stretches every button to the height of its tallest
+     item — the 26px icon buttons — which silently inflated the compact
+     `.btn-sm` text buttons (Test / Use / Set as Default) well past their own
+     padding. Center instead so each keeps its intended size. */
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }

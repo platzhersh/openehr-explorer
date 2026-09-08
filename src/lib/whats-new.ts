@@ -27,6 +27,45 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.0",
+    date: "2026-09-07",
+    highlights: [
+      {
+        title: "Terminology Browser",
+        description:
+          "Look up codes across terminology systems from a new standalone Terminology Browser, with per-tab explanations, worked examples, and a guided tour.",
+        tourId: "terminology",
+        routePath: "/terminology",
+      },
+      {
+        title: "EHR status history & compositions tab",
+        description:
+          "The EHR detail view now shows full EHR_STATUS version history and a dedicated Compositions tab, with contributions reconstructed for context.",
+        tourId: "ehrs",
+        routePath: "/ehrs",
+      },
+      {
+        title: "DIRECTORY version history",
+        description:
+          "Step through a folder's version history, view it at any point in time, and edit DIRECTORY entries as raw JSON when you need finer control.",
+        tourId: "ehrs",
+        routePath: "/ehrs",
+      },
+      {
+        title: "Native save dialog for templates",
+        description:
+          "Downloading a template's OPT XML now opens your OS's native save dialog and confirms with a success toast, instead of a silent browser download.",
+        tourId: "templates",
+        routePath: "/templates",
+      },
+      {
+        title: "FerroEHR composition fix",
+        description:
+          "Fixed creating and updating compositions against FerroEHR and EHRBase, and fixed EHR ID prefix search to work as a proper filter.",
+      },
+    ],
+  },
+  {
     version: "0.8.0",
     date: "2026-08-28",
     highlights: [

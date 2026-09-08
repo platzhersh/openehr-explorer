@@ -76,6 +76,51 @@
   background: var(--color-surface-hover);
 }
 
+/* Hover/focus tooltip for any element that doesn't already ship one —
+   `<button class="btn" data-tooltip="Preselect this server on app start">`.
+   Deliberately the same chip as the one CopyButton/RefreshButton/EditButton/
+   DeleteButton render (see EditButton.vue), so a hint on a plain button or a
+   badge reads identically to a hint on an icon button. Prefer this over the
+   native `title` attribute, whose OS tooltip is slow to appear, unstyled and
+   visibly foreign inside the app's dark chrome — and don't set both, or the
+   native one pops up on top of this a second later. Pair it with an
+   `aria-label` on interactive elements, since a CSS tooltip is invisible to
+   assistive tech. */
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    visibility 0.12s;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
 .input {
   padding: 6px 10px;
   border: 1px solid var(--color-border);

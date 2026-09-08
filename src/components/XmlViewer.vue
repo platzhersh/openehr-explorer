@@ -174,8 +174,18 @@ const copyText = computed(() => xmlLinesToText(lines.value));
 
 <template>
   <div class="xml-viewer">
-    <div v-if="showCopyButton" class="xv-copy-btn-wrap">
-      <CopyButton :text="copyText" title="Copy XML to clipboard" size="md" variant="bordered" />
+    <div v-if="showCopyButton || $slots.actions" class="xv-actions">
+      <!-- Extra floating actions a caller wants alongside Copy (e.g.
+           TemplateBrowser's SearchButton). Rendered first so they sit to the
+           left of the copy button, which stays the rightmost, fixed one. -->
+      <slot name="actions" />
+      <CopyButton
+        v-if="showCopyButton"
+        :text="copyText"
+        title="Copy XML to clipboard"
+        size="md"
+        variant="bordered"
+      />
     </div>
 
     <div ref="scrollEl" class="xv-scroll" @scroll="onScroll">
@@ -225,11 +235,14 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   min-height: 0;
 }
 
-.xv-copy-btn-wrap {
+.xv-actions {
   position: absolute;
   top: 4px;
   right: 4px;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Fills whatever height the caller's layout gives it (flex:1 in a bounded

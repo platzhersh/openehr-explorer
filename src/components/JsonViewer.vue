@@ -364,8 +364,18 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
 
 <template>
   <div class="json-viewer">
-    <div v-if="showCopyButton" class="jv-copy-btn-wrap">
-      <CopyButton :text="copyText" title="Copy JSON to clipboard" size="md" variant="bordered" />
+    <div v-if="showCopyButton || $slots.actions" class="jv-actions">
+      <!-- Extra floating actions a caller wants alongside Copy (e.g.
+           TemplateBrowser's SearchButton). Rendered first so they sit to the
+           left of the copy button, which stays the rightmost, fixed one. -->
+      <slot name="actions" />
+      <CopyButton
+        v-if="showCopyButton"
+        :text="copyText"
+        title="Copy JSON to clipboard"
+        size="md"
+        variant="bordered"
+      />
     </div>
 
     <div ref="scrollEl" class="jv-scroll" @scroll="onScroll">
@@ -431,11 +441,14 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
   min-height: 0;
 }
 
-.jv-copy-btn-wrap {
+.jv-actions {
   position: absolute;
   top: 4px;
   right: 4px;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Fills whatever height the caller's layout gives it (flex:1 in a bounded
