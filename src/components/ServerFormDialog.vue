@@ -4,6 +4,7 @@ import { useServerStore, type ServerProfile, type ServerProfileInput } from "../
 import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
+import LockIcon from "./LockIcon.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -406,7 +407,8 @@ function handleClose() {
                 "
               />
               <p v-if="existingProfileHasPassword()" class="form-help secure-hint">
-                🔒 Password is stored securely. Leave empty to keep the existing password.
+                <LockIcon />
+                Password is stored securely. Leave empty to keep the existing password.
               </p>
             </div>
           </template>
@@ -423,7 +425,8 @@ function handleClose() {
                 "
               />
               <p v-if="existingProfileHasToken()" class="form-help secure-hint">
-                🔒 Token is stored securely. Leave empty to keep the existing token.
+                <LockIcon />
+                Token is stored securely. Leave empty to keep the existing token.
               </p>
             </div>
           </template>
@@ -459,7 +462,8 @@ function handleClose() {
                   "
                 />
                 <p v-if="existingProfileHasAdminPassword()" class="form-help secure-hint">
-                  🔒 Password is stored securely. Leave empty to keep the existing password.
+                  <LockIcon />
+                  Password is stored securely. Leave empty to keep the existing password.
                 </p>
               </div>
             </template>
@@ -478,7 +482,8 @@ function handleClose() {
                   "
                 />
                 <p v-if="existingProfileHasAdminToken()" class="form-help secure-hint">
-                  🔒 Token is stored securely. Leave empty to keep the existing token.
+                  <LockIcon />
+                  Token is stored securely. Leave empty to keep the existing token.
                 </p>
               </div>
             </template>
@@ -605,7 +610,17 @@ function handleClose() {
 }
 
 .secure-hint {
+  display: flex;
+  /* Top-aligned, not centered: the sentence wraps to two lines in a narrow
+     window, and a centered icon would then float beside the gap between
+     them. */
+  align-items: flex-start;
+  gap: 5px;
   color: #22c55e;
+}
+.secure-hint svg {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .form-divider {

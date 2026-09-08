@@ -7,6 +7,7 @@ import TourReplayButton from "../components/TourReplayButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
+import LockIcon from "../components/LockIcon.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
@@ -163,7 +164,8 @@ function credentialBackendLabel(backend: string): string {
                 class="badge secure-badge"
                 :data-tooltip="`Credentials stored via ${credentialBackendLabel(profile.credential_backend)}`"
               >
-                🔒 {{ credentialBackendLabel(profile.credential_backend) }}
+                <LockIcon />
+                {{ credentialBackendLabel(profile.credential_backend) }}
               </span>
             </div>
             <div
@@ -317,6 +319,9 @@ function credentialBackendLabel(backend: string): string {
   border: 1px solid #fbbf24;
 }
 .secure-badge {
+  /* The icon is a real element now, not a glyph inside the label text, so
+     the badge needs to space it from the label itself. */
+  gap: 5px;
   background: rgba(34, 197, 94, 0.1);
   color: #22c55e;
   font-weight: 600;
