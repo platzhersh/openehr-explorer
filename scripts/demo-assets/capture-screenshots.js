@@ -101,6 +101,9 @@ async function main() {
   await page.waitForTimeout(300);
   await page.click('.profile-actions button:has-text("Test")');
   await page.waitForSelector(".card-test-result.success", { timeout: 5000 });
+  // Move off the button so its new hover tooltip isn't still showing in the
+  // screenshot — the click above leaves the mouse resting on top of it.
+  await page.mouse.move(0, 0);
   await page.waitForTimeout(300);
   await saveElementScreenshot(page, ".server-manager", "05-servers.webp");
 
