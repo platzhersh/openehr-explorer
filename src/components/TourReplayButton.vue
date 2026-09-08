@@ -17,7 +17,7 @@ import CompassIcon from "./CompassIcon.vue";
 const props = defineProps<{
   /** Tour id from `src/lib/tours.ts`, passed to `tourStore.start` and the analytics event. */
   tourId: string;
-  /** Human-readable view name, e.g. "Terminology Browser" — used in the button's title as "Take a tour of the ___". */
+  /** Human-readable view name, e.g. "Terminology Browser" — used in the button's tooltip as "Take a tour of the ___". */
   viewLabel: string;
 }>();
 
@@ -34,7 +34,8 @@ function replayTour() {
   <button
     type="button"
     class="tour-trigger-btn"
-    :title="`Take a tour of the ${viewLabel}`"
+    :data-tooltip="`Take a tour of the ${viewLabel}`"
+    :aria-label="`Take a tour of the ${viewLabel}`"
     @click="replayTour"
   >
     <CompassIcon />

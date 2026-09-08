@@ -464,7 +464,7 @@ onUnmounted(() => {
               type="button"
               class="btn btn-sm icon-btn"
               :disabled="!templateStore.selectedOpt"
-              title="Download OPT"
+              data-tooltip="Download OPT"
               aria-label="Download OPT"
               @click="downloadOpt"
             >
