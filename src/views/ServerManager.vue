@@ -101,12 +101,7 @@ function credentialBackendLabel(backend: string): string {
       <h2>Server Profiles</h2>
       <div class="header-actions">
         <TourReplayButton tour-id="servers" view-label="Server Manager" />
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          data-tour="server-add"
-          @click="newProfile"
-        >
+        <button type="button" class="btn btn-primary" data-tour="server-add" @click="newProfile">
           <PlusIcon />
           Add Server
         </button>
@@ -316,6 +311,11 @@ function credentialBackendLabel(backend: string): string {
 }
 .profile-actions {
   display: flex;
+  /* Without this the row stretches every button to the height of its tallest
+     item — the 26px icon buttons — which silently inflated the compact
+     `.btn-sm` text buttons (Test / Use / Set as Default) well past their own
+     padding. Center instead so each keeps its intended size. */
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }

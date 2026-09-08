@@ -350,7 +350,7 @@ onUnmounted(() => {
           <TourReplayButton tour-id="templates" view-label="Template Browser" />
           <button
             type="button"
-            class="btn btn-sm btn-primary"
+            class="btn btn-primary"
             data-tour="template-upload"
             @click="showUploadModal = true"
           >
@@ -391,7 +391,7 @@ onUnmounted(() => {
               </div>
             </div>
             <button
-              class="btn btn-sm btn-primary"
+              class="btn btn-sm btn-primary new-composition-btn"
               @click.stop="createComposition(tmpl.template_id)"
               title="Create new composition"
             >
@@ -1025,6 +1025,12 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 .template-item.active {
   background: var(--color-surface);
   border-left: 3px solid var(--color-primary);
+}
+
+/* `.template-item` is a column flex container, so without this the button
+   stretches to the full width of the list item instead of hugging its label. */
+.new-composition-btn {
+  align-self: flex-start;
 }
 
 .template-content {

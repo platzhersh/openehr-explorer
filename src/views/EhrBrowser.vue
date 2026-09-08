@@ -1513,7 +1513,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
           <TourReplayButton tour-id="ehrs" view-label="EHR Browser" />
           <button
             type="button"
-            class="btn btn-sm btn-primary"
+            class="btn btn-primary"
             data-tour="ehr-create"
             @click="showCreateDialog = true"
           >
