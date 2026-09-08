@@ -9,6 +9,7 @@ import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
+import SearchButton from "../components/SearchButton.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
@@ -211,14 +212,24 @@ async function downloadOpt() {
 }
 
 // Search functionality
+//
+// Reveals the active tab's SearchOverlay and puts the cursor in it. Also
+// wired to each tab's floating SearchButton, since Ctrl/Cmd+F alone is
+// discoverable only by trying it. Re-running it while the overlay is
+// already open just refocuses the field (and restarts at the first match),
+// which is what pressing the shortcut again does in a browser too.
+function openPanelSearch() {
+  showPanelSearch.value = true;
+  currentMatchIndex.value = 0;
+  nextTick(() => searchOverlayRef.value?.focus());
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (!selectedTemplateId.value) return;
 
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     e.preventDefault();
-    showPanelSearch.value = true;
-    currentMatchIndex.value = 0;
-    nextTick(() => searchOverlayRef.value?.focus());
+    openPanelSearch();
   }
 }
 
@@ -580,6 +591,12 @@ onUnmounted(() => {
           />
 
           <div v-if="filteredWtTree" class="wt-tree">
+            <!-- Anchored to the tree rather than the panel's own top-right
+                 corner, which the metadata card and info banner above already
+                 occupy. -->
+            <div v-if="!showPanelSearch" class="panel-actions">
+              <SearchButton title="Search tree (Ctrl+F)" @click="openPanelSearch" />
+            </div>
             <WtTreeNodeFiltered
               :key="filteredWtTree.path"
               :node="filteredWtTree"
@@ -610,7 +627,11 @@ onUnmounted(() => {
             :search-term="panelSearchQuery"
             :current-match-index="currentMatchIndex"
             @total-matches="jsonViewerMatches = $event"
-          />
+          >
+            <template #actions>
+              <SearchButton v-if="!showPanelSearch" @click="openPanelSearch" />
+            </template>
+          </JsonViewer>
         </div>
 
         <!-- OPT XML -->
@@ -631,11 +652,20 @@ onUnmounted(() => {
             :search-term="panelSearchQuery"
             :current-match-index="currentMatchIndex"
             @total-matches="xmlViewerMatches = $event"
-          />
+          >
+            <template #actions>
+              <SearchButton v-if="!showPanelSearch" @click="openPanelSearch" />
+            </template>
+          </XmlViewer>
         </div>
 
         <!-- FLAT Paths -->
         <div v-if="activeTab === 'flat'" class="flat-view">
+          <!-- No embedded viewer here to hang the button off, so anchor it to
+               the same top-right corner XmlViewer/JsonViewer put theirs in. -->
+          <div v-if="!showPanelSearch" class="panel-actions">
+            <SearchButton title="Filter paths (Ctrl+F)" @click="openPanelSearch" />
+          </div>
           <SearchOverlay
             v-if="showPanelSearch"
             ref="searchOverlayRef"
@@ -1122,6 +1152,10 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   padding-top: 16px;
 }
 
+.wt-tree {
+  position: relative;
+}
+
 .info-banner {
   display: flex;
   gap: 12px;
@@ -1331,6 +1365,19 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
 .flat-view {
   padding-top: 16px;
+  position: relative;
+}
+
+/* Floating action corner for the tabs that render their own markup rather
+   than an XmlViewer/JsonViewer (which position their own). */
+.panel-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .flat-paths-header {
