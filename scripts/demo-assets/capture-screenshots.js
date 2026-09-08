@@ -116,7 +116,7 @@ async function main() {
   // to their own "Compositions" tab (OEH-47) — switch to it so the
   // screenshot still shows the grouped composition list it's named for.
   await page.click('.tab-bar .tab:has-text("Compositions")');
-  await page.waitForTimeout(300);
+  await page.waitForSelector('.composition-item:has-text("Vital Signs")', { timeout: 5000 });
   await saveElementScreenshot(page, ".ehr-browser", "01-ehr-browser.webp");
 
   // ---- 02/03/03b: Composition Viewer — Pretty / FLAT / JSON ----
