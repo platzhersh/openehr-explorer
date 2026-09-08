@@ -11,7 +11,7 @@ const meta: Meta<typeof TerminologySystemSelect> = {
     docs: {
       description: {
         component:
-          "Terminology system picker used across the Terminology Browser's tabs. Shows a visible dropdown of the common systems the backend recognises by name (SNOMED CT, LOINC, ICD-10, ICD-11, ATC), plus a 'Custom…' option that reveals a free-text field for anything else — a raw canonical system URI, a national extension, or an identifier the dropdown doesn't know about. Replaces a plain `<input list>` datalist, which gives no visible affordance that suggestions exist.",
+          "Terminology system picker used across the Terminology Browser's tabs. A SearchableSelect over the common systems the backend recognises by name (SNOMED CT, LOINC, ICD-10, ICD-11, ATC), each shown with its canonical URI, plus a 'Custom…' option that reveals a free-text field for anything else — a raw canonical system URI, a national extension, or an identifier the dropdown doesn't know about. Replaces a plain `<input list>` datalist, which gives no visible affordance that suggestions exist.",
       },
     },
   },
@@ -47,8 +47,8 @@ export const SwitchToCustom: Story = {
   args: { modelValue: "SNOMED-CT" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const select = canvas.getByRole("combobox");
-    await userEvent.selectOptions(select, "Custom…");
+    await userEvent.click(canvas.getByRole("button", { name: /terminology system/i }));
+    await userEvent.click(await canvas.findByText("Custom…"));
     await expect(canvas.getByPlaceholderText(/canonical system uri/i)).toBeInTheDocument();
   },
 };

@@ -3,6 +3,7 @@ import { ref, computed, watch } from "vue";
 import { useServerStore, type ServerProfile, type ServerProfileInput } from "../stores/server";
 import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
+import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -244,6 +245,36 @@ async function testConnection() {
   }
 }
 
+/**
+ * Option lists for the form's three dropdowns. They're short and fixed, so
+ * the point of SearchableSelect here isn't filtering — it's that a native
+ * `<select>` renders the platform's own control (light popup, system font,
+ * OS-drawn chevron) in the middle of the app's dark chrome, and looks
+ * foreign next to the `.input` fields above and below it.
+ */
+const SERVER_TYPE_OPTIONS: SearchableSelectOption[] = [
+  { value: "ehrbase", label: "EHRBase" },
+  { value: "better_platform", label: "Better Platform" },
+  { value: "ferro_ehr", label: "FerroEHR" },
+  { value: "generic", label: "Generic openEHR REST" },
+];
+
+const AUTH_TYPE_OPTIONS: SearchableSelectOption[] = [
+  { value: "none", label: "None" },
+  { value: "basic", label: "Basic Auth" },
+  { value: "bearer", label: "Bearer Token" },
+];
+
+const ADMIN_AUTH_TYPE_OPTIONS: SearchableSelectOption[] = [
+  { value: "none_admin", label: "Same as above" },
+  { value: "basic", label: "Basic Auth" },
+  { value: "bearer", label: "Bearer Token" },
+];
+
+function setServerType(type: string | null) {
+  if (type) form.value.server_type = type as ServerProfileInput["server_type"];
+}
+
 function setAuthType(type: string) {
   if (type === "none") {
     form.value.auth_method = { type: "none" };
@@ -337,27 +368,23 @@ function handleClose() {
           </div>
 
           <div class="form-group">
-            <label for="server-type">Server Type</label>
-            <select id="server-type" class="input" v-model="form.server_type">
-              <option value="ehrbase">EHRBase</option>
-              <option value="better_platform">Better Platform</option>
-              <option value="ferro_ehr">FerroEHR</option>
-              <option value="generic">Generic openEHR REST</option>
-            </select>
+            <SearchableSelect
+              label="Server Type"
+              :options="SERVER_TYPE_OPTIONS"
+              :model-value="form.server_type"
+              search-placeholder="Filter server types..."
+              @update:model-value="setServerType"
+            />
           </div>
 
           <div class="form-group">
-            <label for="server-auth-type">Authentication</label>
-            <select
-              id="server-auth-type"
-              class="input"
-              :value="form.auth_method.type"
-              @change="setAuthType(($event.target as HTMLSelectElement).value)"
-            >
-              <option value="none">None</option>
-              <option value="basic">Basic Auth</option>
-              <option value="bearer">Bearer Token</option>
-            </select>
+            <SearchableSelect
+              label="Authentication"
+              :options="AUTH_TYPE_OPTIONS"
+              :model-value="form.auth_method.type"
+              search-placeholder="Filter auth methods..."
+              @update:model-value="(type) => type && setAuthType(type)"
+            />
           </div>
 
           <template v-if="form.auth_method.type === 'basic'">
@@ -404,17 +431,13 @@ function handleClose() {
           <template v-if="form.server_type === 'ehrbase' || form.server_type === 'ferro_ehr'">
             <hr class="form-divider" />
             <div class="form-group">
-              <label for="server-admin-auth-type">Admin Credentials (for EHR deletion)</label>
-              <select
-                id="server-admin-auth-type"
-                class="input"
-                :value="form.admin_auth_method ? form.admin_auth_method.type : 'none_admin'"
-                @change="setAdminAuthType(($event.target as HTMLSelectElement).value)"
-              >
-                <option value="none_admin">Same as above</option>
-                <option value="basic">Basic Auth</option>
-                <option value="bearer">Bearer Token</option>
-              </select>
+              <SearchableSelect
+                label="Admin Credentials (for EHR deletion)"
+                :options="ADMIN_AUTH_TYPE_OPTIONS"
+                :model-value="form.admin_auth_method ? form.admin_auth_method.type : 'none_admin'"
+                search-placeholder="Filter auth methods..."
+                @update:model-value="(type) => type && setAdminAuthType(type)"
+              />
             </div>
 
             <template v-if="form.admin_auth_method?.type === 'basic'">
@@ -558,7 +581,12 @@ function handleClose() {
 .form-group {
   margin-bottom: 12px;
 }
-.form-group label {
+.form-group label,
+/* SearchableSelect renders its own <label> (it owns the `for`/`id` pairing
+   with its trigger), and scoped styles don't reach inside a child
+   component — so match it explicitly rather than letting those three
+   dropdowns' labels fall back to unstyled body text. */
+.form-group :deep(.searchable-select-label) {
   display: block;
   font-size: 12px;
   font-weight: 600;
