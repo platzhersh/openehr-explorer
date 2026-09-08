@@ -11,10 +11,10 @@ name: Snapshot download totals
 # grows for free without spamming this repo's real commit history — no
 # one browses `data`, so a commit a day there costs nothing.
 #
-# docs/index.html fetches this file cross-origin straight off the `data`
-# branch's raw.githubusercontent.com URL (which sends
-# Access-Control-Allow-Origin: *), so no backend or CORS proxy is needed —
-# the docs site stays fully static.
+# The website's DownloadsSparkline.vue component fetches this file
+# cross-origin straight off the `data` branch's raw.githubusercontent.com
+# URL (which sends Access-Control-Allow-Origin: *), so no backend or CORS
+# proxy is needed — the site stays fully static.
 on:
   schedule:
     - cron: "0 6 * * *" # daily, 06:00 UTC

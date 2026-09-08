@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://openehr-explorer.dev/sitemap.xml

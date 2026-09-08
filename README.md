@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/og-image.png" alt="openEHR Explorer — Browse, query, and inspect any openEHR CDR, no curl required." width="600">
+  <img src="website/public/assets/og-image.png" alt="openEHR Explorer — Browse, query, and inspect any openEHR CDR, no curl required." width="600">
 </p>
 
 <p align="center">
@@ -30,17 +30,17 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Screen recording of openEHR Explorer: adding a server profile and testing the connection, browsing EHRs, inspecting a Web Template, and writing an AQL query with template-aware autocomplete" width="800">
+  <img src="website/public/assets/demo.gif" alt="Screen recording of openEHR Explorer: adding a server profile and testing the connection, browsing EHRs, inspecting a Web Template, and writing an AQL query with template-aware autocomplete" width="800">
 </p>
 
 <table>
   <tr>
-    <td><img src="docs/assets/screenshots/01-ehr-browser.webp" alt="EHR Browser with a list of EHRs and a selected EHR's compositions"></td>
-    <td><img src="docs/assets/screenshots/04-templates.webp" alt="Template Browser with an interactive OPT tree"></td>
+    <td><img src="website/public/assets/screenshots/01-ehr-browser.webp" alt="EHR Browser with a list of EHRs and a selected EHR's compositions"></td>
+    <td><img src="website/public/assets/screenshots/04-templates.webp" alt="Template Browser with an interactive OPT tree"></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/screenshots/02-composition-pretty.webp" alt="Composition Viewer's template-aware Pretty tab"></td>
-    <td><img src="docs/assets/screenshots/06-aql-runner.webp" alt="AQL Runner with a query and tabular results"></td>
+    <td><img src="website/public/assets/screenshots/02-composition-pretty.webp" alt="Composition Viewer's template-aware Pretty tab"></td>
+    <td><img src="website/public/assets/screenshots/06-aql-runner.webp" alt="AQL Runner with a query and tabular results"></td>
   </tr>
 </table>
 
