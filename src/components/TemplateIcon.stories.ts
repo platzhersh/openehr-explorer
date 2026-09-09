@@ -25,7 +25,7 @@ export const InBadge: Story = {
   render: () => ({
     components: { TemplateIcon },
     template: `
-      <div style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; background: rgba(100, 255, 218, 0.12); color: var(--color-primary);">
+      <div style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: rgba(100, 255, 218, 0.12); color: var(--color-primary);">
         <TemplateIcon />
       </div>
     `,

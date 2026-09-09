@@ -130,11 +130,13 @@ watch(
           class="stat-card"
           :class="{ loading: dashboardStore.loading && card.value === undefined }"
         >
+          <div class="stat-content">
+            <div class="stat-value">{{ formatCount(card.value) }}</div>
+            <div class="stat-label">{{ card.label }}</div>
+          </div>
           <div class="stat-icon">
             <component :is="card.icon" />
           </div>
-          <div class="stat-value">{{ formatCount(card.value) }}</div>
-          <div class="stat-label">{{ card.label }}</div>
         </router-link>
       </div>
 
@@ -229,7 +231,10 @@ watch(
 }
 
 .stat-card {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 20px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -250,9 +255,9 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  margin-bottom: 12px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   background: rgba(100, 255, 218, 0.12);
   color: var(--color-primary);
