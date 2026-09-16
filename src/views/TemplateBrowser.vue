@@ -20,6 +20,7 @@ import TemplateUploadZone from "../components/TemplateUploadZone.vue";
 import DownloadToast from "../components/DownloadToast.vue";
 import { useTemplateUpload } from "../composables/useTemplateUpload";
 import { useFileDownload } from "../composables/useFileDownload";
+import type { TemplateSummary } from "../stores/template";
 
 interface TermBinding {
   terminology: string;
@@ -140,10 +141,43 @@ function selectTemplate(id: string) {
   void analytics.track("template_inspected");
 }
 
+// Template list sorting — purely client-side since list_templates already
+// returns the server's full template list in one shot (unlike the EHR
+// browser's paginated, server-sorted list).
+type TemplateSortField = "created_timestamp" | "template_id" | "concept";
+const sortFieldOptions: { value: TemplateSortField; label: string }[] = [
+  { value: "created_timestamp", label: "Date created" },
+  { value: "template_id", label: "Template ID" },
+  { value: "concept", label: "Concept" },
+];
+const sortField = ref<TemplateSortField>("created_timestamp");
+const sortDir = ref<"asc" | "desc">("desc");
+
+function onToggleSortDir() {
+  sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+}
+
+function compareTemplates(a: TemplateSummary, b: TemplateSummary): number {
+  const field = sortField.value;
+  const av = a[field];
+  const bv = b[field];
+  // Templates missing the active sort field (e.g. no created_timestamp)
+  // sort to the end regardless of direction, rather than jumping to the
+  // top on a descending sort.
+  if (!av && !bv) return 0;
+  if (!av) return 1;
+  if (!bv) return -1;
+  const cmp = av.localeCompare(bv);
+  return sortDir.value === "asc" ? cmp : -cmp;
+}
+
 const filteredTemplates = computed(() => {
-  if (!templateFilterQuery.value) return templateStore.templates;
-  const q = templateFilterQuery.value.toLowerCase();
-  return templateStore.templates.filter((t) => t.template_id.toLowerCase().includes(q));
+  const templates = templateFilterQuery.value
+    ? templateStore.templates.filter((t) =>
+        t.template_id.toLowerCase().includes(templateFilterQuery.value.toLowerCase()),
+      )
+    : templateStore.templates;
+  return [...templates].sort(compareTemplates);
 });
 
 const flatPaths = computed(() => {
@@ -380,6 +414,27 @@ onUnmounted(() => {
           v-model="templateFilterQuery"
           placeholder="Filter templates..."
         />
+      </div>
+
+      <div class="sort-bar">
+        <label class="sort-label" for="template-sort-field">Sort by</label>
+        <select id="template-sort-field" class="input sort-select" v-model="sortField">
+          <option v-for="opt in sortFieldOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="btn btn-sm sort-dir-btn"
+          :title="
+            sortDir === 'asc'
+              ? 'Ascending — click for descending'
+              : 'Descending — click for ascending'
+          "
+          @click="onToggleSortDir"
+        >
+          {{ sortDir === "asc" ? "↑ Asc" : "↓ Desc" }}
+        </button>
       </div>
 
       <div v-if="templateStore.loading && !selectedTemplateId" class="loading">Loading...</div>
@@ -1035,6 +1090,25 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 }
 .search-input {
   width: 100%;
+}
+
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+.sort-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.sort-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  width: auto;
+}
+.sort-dir-btn {
+  white-space: nowrap;
 }
 
 .template-list {
