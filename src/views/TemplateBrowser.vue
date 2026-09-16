@@ -449,7 +449,14 @@ onUnmounted(() => {
             class="template-item"
             :class="{ active: tmpl.template_id === selectedTemplateId }"
           >
-            <div @click="selectTemplate(tmpl.template_id)" class="template-content">
+            <div
+              @click="selectTemplate(tmpl.template_id)"
+              @keydown.enter="selectTemplate(tmpl.template_id)"
+              @keydown.space.prevent="selectTemplate(tmpl.template_id)"
+              class="template-content"
+              role="button"
+              tabindex="0"
+            >
               <div class="template-id">{{ tmpl.template_id }}</div>
               <div v-if="tmpl.concept" class="template-concept">{{ tmpl.concept }}</div>
               <div v-if="tmpl.created_timestamp" class="template-date">
