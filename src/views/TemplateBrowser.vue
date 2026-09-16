@@ -396,7 +396,12 @@ onUnmounted(() => {
           >
             <div @click="selectTemplate(tmpl.template_id)" class="template-content">
               <div class="template-id">{{ tmpl.template_id }}</div>
-              <div v-if="tmpl.concept" class="template-concept">{{ tmpl.concept }}</div>
+              <div
+                v-if="tmpl.concept && tmpl.concept !== tmpl.template_id"
+                class="template-concept"
+              >
+                {{ tmpl.concept }}
+              </div>
               <div v-if="tmpl.created_timestamp" class="template-date">
                 {{ tmpl.created_timestamp }}
               </div>
