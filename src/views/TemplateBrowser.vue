@@ -167,7 +167,11 @@ function compareTemplates(a: TemplateSummary, b: TemplateSummary): number {
   if (!av && !bv) return 0;
   if (!av) return 1;
   if (!bv) return -1;
-  const cmp = av.localeCompare(bv);
+  // created_timestamp values may carry different UTC offsets (Z vs. e.g.
+  // +02:00), so lexical order doesn't always match chronological order —
+  // compare as instants instead of strings.
+  const cmp =
+    field === "created_timestamp" ? Date.parse(av) - Date.parse(bv) : av.localeCompare(bv);
   return sortDir.value === "asc" ? cmp : -cmp;
 }
 
