@@ -116,6 +116,16 @@ See the full, always-up-to-date **[Tool Comparison](https://openehr-explorer.dev
 - [Announcement on openEHR Discourse](https://discourse.openehr.org/t/openehr-explorer-a-cross-platform-desktop-cdr-browser-macos-windows-linux/17229) — introduction, background, and discussion
 - [openEHR Discourse](https://discourse.openehr.org/) — general openEHR community forum
 
+## Star History
+
+<a href="https://www.star-history.com/#platzhersh/openehr-explorer&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=platzhersh/openehr-explorer&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=platzhersh/openehr-explorer&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=platzhersh/openehr-explorer&type=Date" />
+  </picture>
+</a>
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE) for details.
