@@ -49,8 +49,8 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
       <sub>FerroEHR</sub>
     </td>
     <td align="center" width="25%">
-      <b>Any openEHR REST API</b><br>
-      <sub>Generic profile for other ITS-REST servers</sub>
+      <a href="https://specifications.openehr.org/releases/ITS-REST/latest/"><img src="website/public/assets/cdrs/openehr.svg" alt="openEHR" height="28"></a><br>
+      <sub>Any other openEHR REST server</sub>
     </td>
   </tr>
 </table>
