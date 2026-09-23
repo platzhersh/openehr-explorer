@@ -27,6 +27,34 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 - **Request Inspector** — View all HTTP traffic with request/response details, copy as curl
 - **Keyboard Shortcuts** — Navigate with Cmd+1-4, toggle inspector with Cmd+Shift+I, execute queries with Cmd+Enter
 
+## Supported CDRs
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <a href="https://ehrbase.org"><img src="website/public/assets/cdrs/ehrbase.png" alt="EHRbase" height="40"></a><br>
+      <sub>EHRbase</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://www.better.care/better-platform/"><img src="website/public/assets/cdrs/better.png" alt="Better Platform" height="40"></a><br>
+      <sub>Better Platform</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://github.com/rubentalstra/FerroEHR">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="website/public/assets/cdrs/ferroehr-dark.svg">
+          <img src="website/public/assets/cdrs/ferroehr-light.svg" alt="FerroEHR" height="40">
+        </picture>
+      </a><br>
+      <sub>FerroEHR</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://specifications.openehr.org/releases/ITS-REST/latest/"><img src="website/public/assets/cdrs/openehr.svg" alt="openEHR" height="28"></a><br>
+      <sub>Any other openEHR REST server</sub>
+    </td>
+  </tr>
+</table>
+
 ## Screenshots
 
 <p align="center">
