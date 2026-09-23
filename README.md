@@ -36,7 +36,7 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
       <sub>EHRbase</sub>
     </td>
     <td align="center" width="25%">
-      <a href="https://www.better.care/better-platform/"><b>Better Platform</b></a><br>
+      <a href="https://www.better.care/better-platform/"><img src="website/public/assets/cdrs/better.png" alt="Better Platform" height="40"></a><br>
       <sub>Better Platform</sub>
     </td>
     <td align="center" width="25%">
