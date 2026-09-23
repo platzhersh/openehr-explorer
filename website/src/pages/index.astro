@@ -16,6 +16,16 @@ import CodeBlock from "../components/vue/CodeBlock.vue";
 // so concatenation below always gets exactly one separating slash.
 const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
 
+// Every CDR a server profile can target (ServerType in
+// src-tauri/src/commands/server.rs). Entries without a `logo` render as
+// a text tile instead.
+const cdrs = [
+  { name: "EHRbase", url: "https://ehrbase.org", logo: "assets/cdrs/ehrbase.png" },
+  { name: "Better Platform", url: "https://www.better.care/better-platform/" },
+  { name: "FerroEHR", url: "https://github.com/rubentalstra/FerroEHR", logo: "assets/cdrs/ferroehr-light.svg" },
+  { name: "Any openEHR REST API", note: "Generic profile for other ITS‑REST servers" },
+];
+
 const features = [
   {
     icon: "🖥️",
@@ -148,6 +158,25 @@ const screenshots = [
       <h2 class="section-heading">Features</h2>
       <div class="features-grid">
         {features.map((f) => <FeatureCard icon={f.icon} title={f.title}>{f.body}</FeatureCard>)}
+      </div>
+    </section>
+
+    <section class="cdrs" id="supported-cdrs">
+      <h2 class="section-heading">Supported CDRs</h2>
+      <div class="cdr-grid">
+        {
+          cdrs.map((c) => {
+            const Tag = c.url ? "a" : "div";
+            return (
+              <Tag class="cdr-card" href={c.url} target={c.url ? "_blank" : undefined} rel={c.url ? "noopener noreferrer" : undefined}>
+                <div class="cdr-plate">
+                  {c.logo ? <img src={`${BASE}${c.logo}`} alt={c.name} loading="lazy" /> : <span class="cdr-wordmark">{c.name}</span>}
+                </div>
+                <span class="cdr-name">{c.note ?? c.name}</span>
+              </Tag>
+            );
+          })
+        }
       </div>
     </section>
 
@@ -349,6 +378,58 @@ const screenshots = [
     margin: 0 auto;
   }
 
+  .cdrs {
+    padding: 0 24px 80px;
+  }
+  .cdr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .cdr-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-decoration: none;
+    transition: border-color 0.2s;
+  }
+  a.cdr-card:hover {
+    border-color: var(--primary-dim);
+    text-decoration: none;
+  }
+  /* Vendor logos are drawn for light backgrounds, so they sit on a
+     light plate rather than directly on the dark surface. */
+  .cdr-plate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 96px;
+    padding: 16px;
+    background: #f7f8fa;
+    border-radius: var(--radius);
+  }
+  .cdr-plate img {
+    max-width: 100%;
+    max-height: 56px;
+  }
+  .cdr-wordmark {
+    color: #1a1a2e;
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  .cdr-name {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
   .quickstart {
     padding: 80px 24px;
   }
@@ -415,6 +496,12 @@ const screenshots = [
     }
     .hero-tagline {
       font-size: 1.15rem;
+    }
+    .cdr-plate {
+      padding: 12px;
+    }
+    .cdr-wordmark {
+      font-size: 1rem;
     }
     .features-grid {
       grid-template-columns: 1fr;
