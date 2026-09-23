@@ -27,6 +27,26 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.1",
+    date: "2026-09-23",
+    highlights: [
+      {
+        title: "Sort the template list",
+        description:
+          "Sort templates by creation date, template ID, or concept, in either direction. The list now shows the newest templates first by default.",
+        tourId: "templates",
+        routePath: "/templates",
+      },
+      {
+        title: "Dashboard icons",
+        description:
+          "The EHR, composition, and template counts on the dashboard now have icons, so you can tell them apart at a glance.",
+        tourId: "dashboard",
+        routePath: "/dashboard",
+      },
+    ],
+  },
+  {
     version: "0.9.0",
     date: "2026-09-07",
     highlights: [
