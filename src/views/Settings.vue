@@ -26,6 +26,7 @@ const form = ref<GlobalSettings>({
   tours_enabled: true,
   completed_tours: [],
   last_seen_version: null,
+  template_example_detail_level: "medium",
 });
 const saving = ref(false);
 const saveResult = ref<string | null>(null);
@@ -123,6 +124,29 @@ function viewWhatsNew() {
           <p class="form-help">
             Used for resolving external codes (SNOMED CT, LOINC, etc.) unless a server profile
             overrides it. Leave empty to disable code resolution globally.
+          </p>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Templates</h3>
+        <div class="section-divider"></div>
+
+        <div class="form-group">
+          <label for="example-detail-level">Template example detail level</label>
+          <select
+            id="example-detail-level"
+            class="input"
+            v-model="form.template_example_detail_level"
+          >
+            <option value="required">Required: mandatory data points only</option>
+            <option value="medium">Medium (default)</option>
+            <option value="full">Full: every data point</option>
+          </select>
+          <p class="form-help">
+            Sent as <code>detail_level</code> when fetching a template's example composition. The
+            openEHR REST spec defaults to <code>required</code>, which some CDRs (e.g. FerroEHR)
+            follow strictly. If a server rejects the parameter, the request is retried without it.
           </p>
         </div>
       </div>

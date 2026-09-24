@@ -6,6 +6,28 @@ use serde_json::Value;
 
 use super::server::{create_client, get_profile_by_id, make_request};
 use crate::inspector::send_instrumented;
+use crate::settings::load_settings;
+
+/// Builds the template example URL, with `detail_level` when given.
+fn template_example_url(base: &str, template_id: &str, detail_level: Option<&str>) -> String {
+    let mut url = format!(
+        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT",
+        base,
+        urlencoding::encode(template_id)
+    );
+    if let Some(level) = detail_level {
+        url.push_str("&detail_level=");
+        url.push_str(level);
+    }
+    url
+}
+
+/// Whether a failed example request is worth retrying without `detail_level`:
+/// a CDR that doesn't know the parameter (or the chosen value) rejects it
+/// as a bad request rather than ignoring it.
+fn should_retry_without_detail_level(status: u16) -> bool {
+    matches!(status, 400 | 422)
+}
 
 #[tauri::command]
 pub async fn get_template_example(
@@ -20,21 +42,29 @@ pub async fn get_template_example(
     // `detail_level` defaults to `required` per the Definition API spec (ITS-REST),
     // i.e. a minimal example with only mandatory data points. EHRBase doesn't
     // enforce that default and returns a fuller example regardless, but
-    // stricter CDRs (e.g. FerroEHR) do — so we ask for `medium` explicitly to
-    // get a realistic, committable example on every server, not just EHRBase.
-    let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT&detail_level=medium",
-        base,
-        urlencoding::encode(&template_id)
-    );
+    // stricter CDRs (e.g. FerroEHR) do — so we send the level from settings
+    // (default `medium`) explicitly to get a realistic example everywhere.
+    let detail_level = load_settings().template_example_detail_level;
 
-    let resp = send_instrumented(
-        &app,
-        &client,
-        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
-            .header("Accept", "application/json"),
-    )
+    let fetch = |url: String| {
+        send_instrumented(
+            &app,
+            &client,
+            make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+                .header("Accept", "application/json"),
+        )
+    };
+
+    let mut resp = fetch(template_example_url(
+        base,
+        &template_id,
+        Some(detail_level.as_str()),
+    ))
     .await?;
+
+    if should_retry_without_detail_level(resp.status) {
+        resp = fetch(template_example_url(base, &template_id, None)).await?;
+    }
 
     if !resp.is_success {
         return Err(format!("Server returned HTTP {}", resp.status));
@@ -339,6 +369,31 @@ pub async fn get_term_bindings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_template_example_url_with_detail_level() {
+        assert_eq!(
+            template_example_url("http://cdr", "My Template.v1", Some("medium")),
+            "http://cdr/rest/openehr/v1/definition/template/adl1.4/My%20Template.v1/example?format=FLAT&detail_level=medium"
+        );
+    }
+
+    #[test]
+    fn test_template_example_url_without_detail_level() {
+        assert_eq!(
+            template_example_url("http://cdr", "t", None),
+            "http://cdr/rest/openehr/v1/definition/template/adl1.4/t/example?format=FLAT"
+        );
+    }
+
+    #[test]
+    fn test_should_retry_without_detail_level() {
+        assert!(should_retry_without_detail_level(400));
+        assert!(should_retry_without_detail_level(422));
+        assert!(!should_retry_without_detail_level(200));
+        assert!(!should_retry_without_detail_level(404));
+        assert!(!should_retry_without_detail_level(500));
+    }
 
     #[test]
     fn test_normalise_term_code_bare_code() {
