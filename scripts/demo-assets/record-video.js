@@ -227,6 +227,10 @@ async function main() {
     deviceScaleFactor: 2, // supersampled capture for sharper downscaled text
     recordVideo: { dir: videoDir, size: VIEWPORT },
   });
+  const { version } = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  await context.addInitScript((v) => {
+    window.__DEMO_APP_VERSION__ = v;
+  }, version);
   await context.addInitScript({ path: MOCK_PATH });
   const page = await context.newPage();
 

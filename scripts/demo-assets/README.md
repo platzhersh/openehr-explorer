@@ -33,8 +33,12 @@ default `http://localhost:5173`.
   structure stay consistent across every generated asset. Edit fixture data
   here, not in the individual capture scripts.
 - `capture-screenshots.js` — walks through Servers → EHR Browser →
-  Composition Viewer (Pretty/FLAT/JSON) → Templates → AQL Runner, saving a
-  content-cropped `.webp` at each stop.
+  Composition Viewer (Pretty/FLAT/JSON) → Templates → AQL Runner → Request
+  Inspector, saving a content-cropped `.webp` at each stop (the Request
+  Inspector shots are full-window, since the drawer docks under the view).
+  `mock.js` emits a `cdr-inspector-entry` event for each mocked command
+  that would hit the CDR (see `describeRequest()`), which is what fills
+  the inspector's request log.
 - `record-video.js` — a slower, narrated walkthrough (Servers → EHR Browser
   → Templates → AQL Runner with autocomplete) captured as video and encoded
   to `demo.mp4` (h264) + `demo.gif` (palette-optimized, gifsicle-compressed)
@@ -54,11 +58,6 @@ default `http://localhost:5173`.
 
 ## Known limitations
 
-- The Composition Viewer's "Pretty" tab renders a couple of composite RM
-  attributes (`composer`, `origin`, event `time`) as `[object Object]` in
-  the fixture data — the tree renderer doesn't have special-case handling
-  for those the way it does for the archetyped content nodes. Cosmetic
-  only; doesn't affect the FLAT/JSON tabs or any other view.
 - `capture-screenshots.js` crops each screenshot to the lowest real content
   element it can find in the view (to avoid a screenshot full of empty
   space below a flex-stretched panel — see the comment above

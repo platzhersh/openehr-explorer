@@ -46,17 +46,21 @@ time touching this toolkit.
 npm run demo:screenshots
 ```
 
-Regenerates all 8 files in `website/public/assets/screenshots/`: `01-ehr-browser`,
+Regenerates all 10 files in `website/public/assets/screenshots/`: `01-ehr-browser`,
 `02-composition-pretty`, `03-composition-flat`, `03b-composition-json`,
-`04-templates`, `05-servers`, `06-aql-runner`, `07-aql-autocomplete`.
+`04-templates`, `05-servers`, `06-aql-runner`, `07-aql-autocomplete`,
+`08-request-inspector`, `08b-request-inspector-response`.
+
+The two `08*` shots are full-window captures of the Request Inspector
+drawer docked under the AQL Runner. Its log is populated by `mock.js`
+emitting a `cdr-inspector-entry` event for every mocked command that
+would hit the CDR, so a new CDR-facing command needs a case in
+`describeRequest()` there to show up in the log.
 
 Review each one before committing — `saveElementScreenshot()` in
 `capture-screenshots.js` crops to the lowest real content element it can
 find (to avoid empty space below a flex-stretched panel), which is a
-heuristic, not pixel-perfect. Known cosmetic issue: the Composition
-Viewer's Pretty tab shows `[object Object]` for a couple of composite RM
-attributes (`composer`, `origin`, event `time`) — see the README's "Known
-limitations" section before trying to "fix" this by chasing it as a bug.
+heuristic, not pixel-perfect.
 
 ## Step 2: Hero video + gif (if `$1` is `video`, `both`, or unset)
 

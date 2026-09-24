@@ -75,9 +75,24 @@ async function saveElementScreenshot(page, selector, filename) {
   console.log("saved:", filename);
 }
 
+// Full-viewport variant of saveElementScreenshot, for views that only make
+// sense in the context of the whole app window (e.g. the Request Inspector
+// drawer docked under the view that issued the requests).
+async function saveViewportScreenshot(page, filename) {
+  const pngPath = path.join(tmpDir, filename.replace(/\.webp$/, ".png"));
+  await page.screenshot({ path: pngPath });
+  const outPath = path.join(OUT_DIR, filename);
+  execFileSync(FFMPEG, ["-y", "-i", pngPath, "-lossless", "0", "-quality", "90", outPath], { stdio: "ignore" });
+  console.log("saved:", filename);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 2 });
+  const { version } = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  await page.addInitScript((v) => {
+    window.__DEMO_APP_VERSION__ = v;
+  }, version);
   await page.addInitScript({ path: MOCK_PATH });
 
   page.on("pageerror", (err) => console.error("[pageerror]", err.message));
@@ -117,6 +132,10 @@ async function main() {
   // screenshot still shows the grouped composition list it's named for.
   await page.click('.tab-bar .tab:has-text("Compositions")');
   await page.waitForSelector('.composition-item:has-text("Vital Signs")', { timeout: 5000 });
+  // Let the tab bar's 0.15s background transition finish, or the "Detail"
+  // tab is captured mid-fade and still looks selected.
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
   await saveElementScreenshot(page, ".ehr-browser", "01-ehr-browser.webp");
 
   // ---- 02/03/03b: Composition Viewer — Pretty / FLAT / JSON ----
@@ -129,6 +148,15 @@ async function main() {
   await page.waitForSelector(COMPOSITION_VIEWER, { timeout: 5000 });
   await page.waitForSelector(".tab-bar .tab:has-text(\"FLAT\"):not([disabled])", { timeout: 5000 });
   await page.waitForTimeout(500);
+  // The tree auto-collapses below depth 3, which hides the actual vital-sign
+  // values under the ITEM_TREE — expand every collapsed node so the Pretty
+  // tab shows the resolved labels next to their values.
+  const collapsedToggles = page.locator(`${COMPOSITION_VIEWER} .toggle`, { hasText: "\u25B6" });
+  while ((await collapsedToggles.count()) > 0) {
+    await collapsedToggles.first().click();
+  }
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(300);
   await saveElementScreenshot(page, COMPOSITION_VIEWER, "02-composition-pretty.webp");
 
   await page.click('.tab-bar .tab:has-text("FLAT")');
@@ -159,12 +187,12 @@ async function main() {
   await editor.click();
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.press("Backspace");
-  await page.keyboard.type(
+  const systolicQuery =
     `SELECT c/uid/value, o/data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude AS systolic\n` +
-      `FROM EHR e\n` +
-      `CONTAINS COMPOSITION c\n` +
-      `CONTAINS OBSERVATION o[${fixtures.vitalSignsArchetypeId}]`,
-  );
+    `FROM EHR e\n` +
+    `CONTAINS COMPOSITION c\n` +
+    `CONTAINS OBSERVATION o[${fixtures.vitalSignsArchetypeId}]`;
+  await page.keyboard.type(systolicQuery);
   await page.click('button:has-text("Run (Ctrl+Enter)")');
   await page.waitForTimeout(600);
   await saveElementScreenshot(page, ".aql-runner", "06-aql-runner.webp");
@@ -182,6 +210,33 @@ async function main() {
   );
   await page.waitForTimeout(500);
   await saveElementScreenshot(page, ".aql-runner", "07-aql-autocomplete.webp");
+
+  // ---- 08/08b: Request Inspector drawer, docked under the AQL Runner ----
+  // Every mocked command above that would hit the CDR also logged an entry
+  // (see logRequest() in mock.js), so the drawer already holds the whole
+  // session's traffic. Re-run the full query so the latest (auto-selected)
+  // entry is a complete AQL POST rather than the half-typed one above.
+  await page.keyboard.press("Escape");
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type(systolicQuery);
+  await page.click('button:has-text("Run (Ctrl+Enter)")');
+  await page.waitForTimeout(400);
+  // A taller window gives the half-height drawer room to show the request
+  // body/response JSON instead of just the headers.
+  await page.setViewportSize({ width: VIEWPORT.width, height: 1300 });
+  await page.click('.inspector-drawer .state-btn[title="Half height"]');
+  await page.waitForSelector(".inspector-content .log-entry.selected", { timeout: 5000 });
+  await page.click('.inspector-drawer .detail-tabs .tab-btn:has-text("Request")');
+  await page.click('.inspector-drawer .body-view-tabs .tab-btn-sm:has-text("Raw")');
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(400);
+  await saveViewportScreenshot(page, "08-request-inspector.webp");
+
+  await page.click('.inspector-drawer .detail-tabs .tab-btn:has-text("Response")');
+  await page.waitForTimeout(400);
+  await saveViewportScreenshot(page, "08b-request-inspector-response.webp");
 
   await browser.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });
