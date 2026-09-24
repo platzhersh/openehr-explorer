@@ -153,7 +153,17 @@
   };
 
   const TEMPLATE_OPT = {
-    [VITAL_SIGNS_TEMPLATE_ID]: `<?xml version="1.0" encoding="UTF-8"?>\n<template xmlns="openEHR/v1/Template">\n  <template_id><value>${VITAL_SIGNS_TEMPLATE_ID}</value></template_id>\n  <concept><value>${VITAL_SIGNS_NAME}</value></concept>\n</template>\n`,
+    [VITAL_SIGNS_TEMPLATE_ID]: `<?xml version="1.0" encoding="UTF-8"?>\n<template xmlns="openEHR/v1/Template">\n  <template_id><value>${VITAL_SIGNS_TEMPLATE_ID}</value></template_id>\n  <concept><value>${VITAL_SIGNS_NAME}</value></concept>\n` +
+      `  <description>\n` +
+      `    <original_author id="name">${DR_KESSLER}</original_author>\n` +
+      `    <original_author id="organisation">${SYSTEM_ID}</original_author>\n` +
+      `    <lifecycle_state>published</lifecycle_state>\n` +
+      `    <details>\n` +
+      `      <language><terminology_id><value>ISO_639-1</value></terminology_id><code_string>en</code_string></language>\n` +
+      `      <purpose>Records a routine set of vital signs observations during an encounter.</purpose>\n` +
+      `    </details>\n` +
+      `  </description>\n` +
+      `</template>\n`,
   };
 
   function vitalSignsElement(field) {
@@ -177,10 +187,15 @@
       archetype_id: { value: "openEHR-EHR-COMPOSITION.encounter.v1" },
       template_id: { value: VITAL_SIGNS_TEMPLATE_ID },
     },
-    composer: { name: DR_KESSLER },
+    // `_type` on every nested RM object, as in real canonical JSON — the
+    // Pretty tab only recurses into typed objects, so an untyped one would
+    // render as "[object Object]".
+    composer: { _type: "PARTY_IDENTIFIED", name: DR_KESSLER },
     context: {
-      start_time: { value: VITAL_SIGNS_TIME },
+      _type: "EVENT_CONTEXT",
+      start_time: { _type: "DV_DATE_TIME", value: VITAL_SIGNS_TIME },
       setting: {
+        _type: "DV_CODED_TEXT",
         value: "other care",
         defining_code: { terminology_id: { value: "openehr" }, code_string: "238" },
       },
@@ -192,13 +207,13 @@
         name: { value: VITAL_SIGNS_NAME },
         data: {
           _type: "HISTORY",
-          origin: { value: VITAL_SIGNS_TIME },
+          origin: { _type: "DV_DATE_TIME", value: VITAL_SIGNS_TIME },
           events: [
             {
               _type: "POINT_EVENT",
               archetype_node_id: "at0006",
               name: { value: "Any event" },
-              time: { value: VITAL_SIGNS_TIME },
+              time: { _type: "DV_DATE_TIME", value: VITAL_SIGNS_TIME },
               data: {
                 _type: "ITEM_TREE",
                 items: VITAL_SIGNS_FIELDS.map(vitalSignsElement),
@@ -285,7 +300,7 @@
       auth_method: publicAuth,
       admin_auth_method: input.admin_auth_method ? { type: input.admin_auth_method.type } : null,
       terminology_url: input.terminology_url || null,
-      credential_backend: "memory",
+      credential_backend: "os_keychain",
     };
   }
 
@@ -311,7 +326,10 @@
       };
     },
     get_app_version: function () {
-      return "0.5.0";
+      // Set by the capture scripts from package.json (see
+      // capture-screenshots.js / record-video.js) so the sidebar shows the
+      // version actually being released instead of a stale hardcoded one.
+      return window.__DEMO_APP_VERSION__ || "0.0.0";
     },
     "plugin:updater|check": function () {
       return null;
@@ -360,7 +378,7 @@
       };
     },
     get_credential_backend: function () {
-      return "memory";
+      return "os_keychain";
     },
 
     // -- ehrs --
@@ -368,7 +386,14 @@
       const offset = args.offset || 0;
       const limit = args.limit || 20;
       const page = EHRS.slice(offset, offset + limit);
-      return { ehrs: page, total: page.length + offset, offset: offset, limit: limit };
+      return {
+        ehrs: page,
+        total: page.length + offset,
+        offset: offset,
+        limit: limit,
+        sort_applied: true,
+        has_more: offset + limit < EHRS.length,
+      };
     },
     get_ehr_detail: function (args) {
       const detail = EHR_DETAILS[args.ehrId];
@@ -442,14 +467,172 @@
     },
   };
 
+  // ---- Request Inspector (ADR-0011) ----
+  // The real backend emits a `cdr-inspector-entry` event for every HTTP call
+  // it makes to the CDR. Mirror that here: each mocked command that would
+  // hit the CDR logs the request the Rust side would have sent (method,
+  // URL, headers, body) plus the fixture data it "got back", so the
+  // Request Inspector drawer has a realistic log to show.
+  const eventListeners = {};
+  let nextRequestId = 1;
+  const REDACTED = "[REDACTED]";
+
+  function activeBaseUrl() {
+    const profile = state.profiles.at(-1);
+    return profile?.base_url ?? "http://localhost:8080/ehrbase";
+  }
+
+  function emitEvent(event, payload) {
+    for (const handlerId of eventListeners[event] ?? []) {
+      callbacks[handlerId]?.({ event: event, id: 0, payload: payload });
+    }
+  }
+
+  function aqlResultSet(query, result) {
+    return {
+      meta: { _type: "RESULTSET", _executed_aql: query },
+      q: query,
+      columns: result.columns,
+      rows: result.rows,
+    };
+  }
+
+  const REST_BASE = "/rest/openehr/v1";
+  const AQL_PATH = `${REST_BASE}/query/aql`;
+  const TEMPLATES_PATH = `${REST_BASE}/definition/template/adl1.4`;
+  const MIME_JSON = "application/json";
+  const POST_JSON_HEADERS = { "content-type": MIME_JSON };
+
+  // One logged HTTP exchange with a JSON (or empty) request/response body.
+  function jsonExchange(method, path, status, responseBody, options) {
+    const opts = options ?? {};
+    return {
+      method: method,
+      path: path,
+      status: status,
+      request_headers: { accept: MIME_JSON, ...opts.requestHeaders },
+      request_body: opts.requestBody === undefined ? null : JSON.stringify(opts.requestBody, null, 2),
+      response_headers: { "content-type": MIME_JSON },
+      response_body: responseBody === null ? null : JSON.stringify(responseBody, null, 2),
+    };
+  }
+
+  function aqlPost(query, resultSet) {
+    return jsonExchange("POST", AQL_PATH, 200, resultSet, {
+      requestBody: { q: query },
+      requestHeaders: POST_JSON_HEADERS,
+    });
+  }
+
+  function listEhrsExchange(result) {
+    const q =
+      "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e ORDER BY e/time_created/value DESC OFFSET 0 LIMIT 21";
+    return aqlPost(
+      q,
+      aqlResultSet(q, {
+        columns: [
+          { name: "#0", path: "/ehr_id/value" },
+          { name: "#1", path: "/time_created/value" },
+          { name: "#2", path: "/system_id/value" },
+        ],
+        rows: result.ehrs.map(function (e) {
+          return [e.ehr_id, e.time_created, e.system_id];
+        }),
+      }),
+    );
+  }
+
+  function ehrExchange(result) {
+    return jsonExchange("GET", `${REST_BASE}/ehr/${result.ehr_id}`, 200, {
+      system_id: { value: result.system_id },
+      ehr_id: { value: result.ehr_id },
+      time_created: { value: result.time_created },
+      ehr_status: { id: { value: `${result.ehr_id}::${result.system_id}::1` }, namespace: "local", type: "EHR_STATUS" },
+    });
+  }
+
+  function templateOptExchange(templateId, optXml) {
+    return {
+      ...jsonExchange("GET", `${TEMPLATES_PATH}/${encodeURIComponent(templateId)}`, 200, null, {
+        requestHeaders: { accept: "application/xml" },
+      }),
+      response_headers: { "content-type": "application/xml" },
+      response_body: optXml,
+    };
+  }
+
+  // Maps a mocked command to the HTTP exchange the real backend performs
+  // for it (see src-tauri/src/commands/*.rs for the actual URLs). Returns
+  // null for commands that never touch the CDR (profiles, settings, ...).
+  function describeRequest(cmd, args, result) {
+    const ehrPath = `${REST_BASE}/ehr/${args.ehrId}`;
+    const compositionPath = `${ehrPath}/composition/${args.compositionUid}`;
+    switch (cmd) {
+      case "test_server_connection":
+      case "test_unsaved_connection":
+        return jsonExchange("GET", "/rest/status", 200, { ehrbase_version: "2.7.0", openehr_sdk_version: "2.19.0" });
+      case "list_ehrs":
+        return listEhrsExchange(result);
+      case "get_ehr_detail":
+        return ehrExchange(result);
+      case "get_directory":
+        return result
+          ? jsonExchange("GET", `${ehrPath}/directory`, 200, { _type: "FOLDER", ...result })
+          : jsonExchange("GET", `${ehrPath}/directory`, 204, null);
+      case "get_composition":
+        return jsonExchange("GET", compositionPath, 200, result);
+      case "get_composition_flat":
+        return jsonExchange("GET", `${compositionPath}?format=FLAT`, 200, result);
+      case "list_templates":
+        return jsonExchange("GET", TEMPLATES_PATH, 200, result);
+      case "get_web_template":
+        return jsonExchange("GET", `${TEMPLATES_PATH}/${encodeURIComponent(args.templateId)}`, 200, result, {
+          requestHeaders: { accept: "application/openehr.wt+json" },
+        });
+      case "get_template_opt":
+        return templateOptExchange(args.templateId, result);
+      case "execute_aql":
+        return aqlPost(args.query, aqlResultSet(args.query, result));
+      default:
+        return null;
+    }
+  }
+
+  function logRequest(cmd, args, result) {
+    const req = describeRequest(cmd, args, result);
+    if (!req) return;
+    const { path: reqPath, ...exchange } = req;
+    const id = nextRequestId++;
+    emitEvent("cdr-inspector-entry", {
+      ...exchange,
+      id: `req-${id}`,
+      timestamp_ms: Date.now(),
+      url: activeBaseUrl() + reqPath,
+      request_headers: { authorization: REDACTED, "user-agent": "openEHR-Explorer", ...exchange.request_headers },
+      // Deterministic but varied, so the log doesn't read as obviously fake.
+      duration_ms: 18 + ((id * 37) % 90),
+      body_truncated: false,
+    });
+  }
+
   function invoke(cmd, args) {
+    if (cmd === "plugin:event|listen") {
+      eventListeners[args.event] ??= [];
+      eventListeners[args.event].push(args.handler);
+      return Promise.resolve(args.handler);
+    }
+    if (cmd === "plugin:event|unlisten") {
+      return Promise.resolve(undefined);
+    }
     const handler = handlers[cmd];
     if (!handler) {
       console.warn("[demo-mock] unhandled invoke:", cmd, args);
       return Promise.resolve(undefined);
     }
     try {
-      return Promise.resolve(handler(args || {}));
+      const result = handler(args || {});
+      logRequest(cmd, args || {}, result);
+      return Promise.resolve(result);
     } catch (err) {
       // Real Tauri commands reject with a plain string (Rust's Err(String)
       // crosses the IPC boundary as-is) — the frontend does things like
