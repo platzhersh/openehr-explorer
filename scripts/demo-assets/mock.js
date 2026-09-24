@@ -476,18 +476,16 @@
   const eventListeners = {};
   let nextRequestId = 1;
   const REDACTED = "[REDACTED]";
-  const JSON_RESPONSE_HEADERS = { "content-type": "application/json" };
 
   function activeBaseUrl() {
-    const profile = state.profiles[state.profiles.length - 1];
-    return (profile && profile.base_url) || "http://localhost:8080/ehrbase";
+    const profile = state.profiles.at(-1);
+    return profile?.base_url ?? "http://localhost:8080/ehrbase";
   }
 
   function emitEvent(event, payload) {
-    (eventListeners[event] || []).forEach(function (handlerId) {
-      const cb = callbacks[handlerId];
-      if (cb) cb({ event: event, id: 0, payload: payload });
-    });
+    for (const handlerId of eventListeners[event] ?? []) {
+      callbacks[handlerId]?.({ event: event, id: 0, payload: payload });
+    }
   }
 
   function aqlResultSet(query, result) {
@@ -499,66 +497,102 @@
     };
   }
 
+  const REST_BASE = "/rest/openehr/v1";
+  const AQL_PATH = `${REST_BASE}/query/aql`;
+  const TEMPLATES_PATH = `${REST_BASE}/definition/template/adl1.4`;
+  const MIME_JSON = "application/json";
+  const POST_JSON_HEADERS = { "content-type": MIME_JSON };
+
+  // One logged HTTP exchange with a JSON (or empty) request/response body.
+  function jsonExchange(method, path, status, responseBody, options) {
+    const opts = options ?? {};
+    return {
+      method: method,
+      path: path,
+      status: status,
+      request_headers: { accept: MIME_JSON, ...opts.requestHeaders },
+      request_body: opts.requestBody === undefined ? null : JSON.stringify(opts.requestBody, null, 2),
+      response_headers: { "content-type": MIME_JSON },
+      response_body: responseBody === null ? null : JSON.stringify(responseBody, null, 2),
+    };
+  }
+
+  function aqlPost(query, resultSet) {
+    return jsonExchange("POST", AQL_PATH, 200, resultSet, {
+      requestBody: { q: query },
+      requestHeaders: POST_JSON_HEADERS,
+    });
+  }
+
+  function listEhrsExchange(result) {
+    const q =
+      "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e ORDER BY e/time_created/value DESC OFFSET 0 LIMIT 21";
+    return aqlPost(
+      q,
+      aqlResultSet(q, {
+        columns: [
+          { name: "#0", path: "/ehr_id/value" },
+          { name: "#1", path: "/time_created/value" },
+          { name: "#2", path: "/system_id/value" },
+        ],
+        rows: result.ehrs.map(function (e) {
+          return [e.ehr_id, e.time_created, e.system_id];
+        }),
+      }),
+    );
+  }
+
+  function ehrExchange(result) {
+    return jsonExchange("GET", `${REST_BASE}/ehr/${result.ehr_id}`, 200, {
+      system_id: { value: result.system_id },
+      ehr_id: { value: result.ehr_id },
+      time_created: { value: result.time_created },
+      ehr_status: { id: { value: `${result.ehr_id}::${result.system_id}::1` }, namespace: "local", type: "EHR_STATUS" },
+    });
+  }
+
+  function templateOptExchange(templateId, optXml) {
+    return {
+      ...jsonExchange("GET", `${TEMPLATES_PATH}/${encodeURIComponent(templateId)}`, 200, null, {
+        requestHeaders: { accept: "application/xml" },
+      }),
+      response_headers: { "content-type": "application/xml" },
+      response_body: optXml,
+    };
+  }
+
   // Maps a mocked command to the HTTP exchange the real backend performs
   // for it (see src-tauri/src/commands/*.rs for the actual URLs). Returns
   // null for commands that never touch the CDR (profiles, settings, ...).
   function describeRequest(cmd, args, result) {
-    const rest = "/rest/openehr/v1";
-    const json = function (method, path, status, body, requestBody, extraRequestHeaders) {
-      return {
-        method: method,
-        path: path,
-        status: status,
-        request_headers: Object.assign({ accept: "application/json" }, extraRequestHeaders || {}),
-        request_body: requestBody === undefined ? null : JSON.stringify(requestBody, null, 2),
-        response_headers: JSON_RESPONSE_HEADERS,
-        response_body: body === null ? null : JSON.stringify(body, null, 2),
-      };
-    };
-    const postJson = { "content-type": "application/json" };
+    const ehrPath = `${REST_BASE}/ehr/${args.ehrId}`;
+    const compositionPath = `${ehrPath}/composition/${args.compositionUid}`;
     switch (cmd) {
       case "test_server_connection":
       case "test_unsaved_connection":
-        return json("GET", "/rest/status", 200, { ehrbase_version: "2.7.0", openehr_sdk_version: "2.19.0" });
-      case "list_ehrs": {
-        const q = "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e ORDER BY e/time_created/value DESC OFFSET 0 LIMIT 21";
-        const body = aqlResultSet(q, {
-          columns: [{ name: "#0", path: "/ehr_id/value" }, { name: "#1", path: "/time_created/value" }, { name: "#2", path: "/system_id/value" }],
-          rows: result.ehrs.map(function (e) { return [e.ehr_id, e.time_created, e.system_id]; }),
-        });
-        return json("POST", rest + "/query/aql", 200, body, { q: q }, postJson);
-      }
+        return jsonExchange("GET", "/rest/status", 200, { ehrbase_version: "2.7.0", openehr_sdk_version: "2.19.0" });
+      case "list_ehrs":
+        return listEhrsExchange(result);
       case "get_ehr_detail":
-        return json("GET", rest + "/ehr/" + args.ehrId, 200, {
-          system_id: { value: result.system_id },
-          ehr_id: { value: result.ehr_id },
-          time_created: { value: result.time_created },
-          ehr_status: { id: { value: result.ehr_id + "::" + result.system_id + "::1" }, namespace: "local", type: "EHR_STATUS" },
-        });
+        return ehrExchange(result);
       case "get_directory":
         return result
-          ? json("GET", rest + "/ehr/" + args.ehrId + "/directory", 200, Object.assign({ _type: "FOLDER" }, result))
-          : json("GET", rest + "/ehr/" + args.ehrId + "/directory", 204, null);
+          ? jsonExchange("GET", `${ehrPath}/directory`, 200, { _type: "FOLDER", ...result })
+          : jsonExchange("GET", `${ehrPath}/directory`, 204, null);
       case "get_composition":
-        return json("GET", rest + "/ehr/" + args.ehrId + "/composition/" + args.compositionUid, 200, result);
+        return jsonExchange("GET", compositionPath, 200, result);
       case "get_composition_flat":
-        return json("GET", rest + "/ehr/" + args.ehrId + "/composition/" + args.compositionUid + "?format=FLAT", 200, result);
+        return jsonExchange("GET", `${compositionPath}?format=FLAT`, 200, result);
       case "list_templates":
-        return json("GET", rest + "/definition/template/adl1.4", 200, result);
+        return jsonExchange("GET", TEMPLATES_PATH, 200, result);
       case "get_web_template":
-        return json("GET", rest + "/definition/template/adl1.4/" + encodeURIComponent(args.templateId), 200, result, undefined, {
-          accept: "application/openehr.wt+json",
+        return jsonExchange("GET", `${TEMPLATES_PATH}/${encodeURIComponent(args.templateId)}`, 200, result, {
+          requestHeaders: { accept: "application/openehr.wt+json" },
         });
-      case "get_template_opt": {
-        const entry = json("GET", rest + "/definition/template/adl1.4/" + encodeURIComponent(args.templateId), 200, null, undefined, {
-          accept: "application/xml",
-        });
-        entry.response_headers = { "content-type": "application/xml" };
-        entry.response_body = result;
-        return entry;
-      }
+      case "get_template_opt":
+        return templateOptExchange(args.templateId, result);
       case "execute_aql":
-        return json("POST", rest + "/query/aql", 200, aqlResultSet(args.query, result), { q: args.query }, postJson);
+        return aqlPost(args.query, aqlResultSet(args.query, result));
       default:
         return null;
     }
@@ -567,17 +601,14 @@
   function logRequest(cmd, args, result) {
     const req = describeRequest(cmd, args, result);
     if (!req) return;
+    const { path: reqPath, ...exchange } = req;
     const id = nextRequestId++;
     emitEvent("cdr-inspector-entry", {
-      id: "req-" + id,
+      ...exchange,
+      id: `req-${id}`,
       timestamp_ms: Date.now(),
-      method: req.method,
-      url: activeBaseUrl() + req.path,
-      request_headers: Object.assign({ authorization: REDACTED, "user-agent": "openEHR-Explorer" }, req.request_headers),
-      request_body: req.request_body,
-      status: req.status,
-      response_headers: req.response_headers,
-      response_body: req.response_body,
+      url: activeBaseUrl() + reqPath,
+      request_headers: { authorization: REDACTED, "user-agent": "openEHR-Explorer", ...exchange.request_headers },
       // Deterministic but varied, so the log doesn't read as obviously fake.
       duration_ms: 18 + ((id * 37) % 90),
       body_truncated: false,
@@ -586,7 +617,8 @@
 
   function invoke(cmd, args) {
     if (cmd === "plugin:event|listen") {
-      (eventListeners[args.event] = eventListeners[args.event] || []).push(args.handler);
+      eventListeners[args.event] ??= [];
+      eventListeners[args.event].push(args.handler);
       return Promise.resolve(args.handler);
     }
     if (cmd === "plugin:event|unlisten") {
