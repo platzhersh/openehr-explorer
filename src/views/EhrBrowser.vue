@@ -200,8 +200,16 @@ async function fetchStatusVersions() {
   }
 }
 
+/** Switches the EHR detail tab from a user click, reporting the switch (not
+ *  a re-click on the tab that's already open) as `ehr_tab_viewed`. */
+function selectTab(tab: typeof activeTab.value) {
+  if (activeTab.value === tab) return;
+  activeTab.value = tab;
+  void analytics.track("ehr_tab_viewed", { tab });
+}
+
 function selectStatusHistoryTab() {
-  activeTab.value = "status";
+  selectTab("status");
   if (
     ehrId.value &&
     serverStore.activeServerId &&
@@ -227,6 +235,7 @@ async function viewStatusVersion(versionId: string) {
     if (requestId !== statusPreviewRequestId) return; // superseded by a newer request
     statusPreview.value = result;
     statusPreviewLabel.value = versionId;
+    void analytics.track("ehr_status_version_viewed", { mode: "version" });
   } catch (e) {
     if (requestId !== statusPreviewRequestId) return;
     statusPreviewError.value = String(e);
@@ -252,6 +261,7 @@ async function viewStatusAtTime() {
     if (requestId !== statusPreviewRequestId) return; // superseded by a newer request
     statusPreview.value = result;
     statusPreviewLabel.value = `At ${isoTime}`;
+    void analytics.track("ehr_status_version_viewed", { mode: "at_time" });
     if (statusPreview.value === null) {
       statusPreviewError.value = "No EHR_STATUS version was in effect at that time.";
     }
@@ -283,6 +293,7 @@ async function viewStatusContribution(versionId: string) {
     router.push({
       name: "contribution",
       params: { ehrId: ehrId.value, contributionUid },
+      state: { contributionSource: "ehr_status" },
     });
   } catch (e) {
     statusContributionError.value = String(e);
@@ -556,7 +567,7 @@ async function loadContributions() {
 }
 
 function selectContributionsTab() {
-  activeTab.value = "contributions";
+  selectTab("contributions");
   if (
     ehrId.value &&
     serverStore.activeServerId &&
@@ -582,6 +593,7 @@ function viewContributionForRow(row: ContributionRow) {
   router.push({
     name: "contribution",
     params: { ehrId: ehrId.value, contributionUid: row.contribution_uid },
+    state: { contributionSource: "ehr_contributions_tab" },
   });
 }
 
@@ -932,18 +944,21 @@ function executeSearch() {
   }
 
   showHistory.value = false;
-  runSearch(criteria);
+  runSearch(criteria, "search_box");
 }
 
 /** Shared tail of every search path (text box, Filters modal, chip removal):
  *  records the applied criteria and fires the backend query. */
-function runSearch(criteria: EhrSearchCriteria) {
+function runSearch(
+  criteria: EhrSearchCriteria,
+  via: "search_box" | "filter_modal" | "chip_removed",
+) {
   if (!serverStore.activeServerId) return;
   activeCriteria.value = criteria;
   // Feature-adoption ping only — never the query text itself or the raw
   // criteria. Users construct search queries with patient identifiers
   // encoded in the input, so the text is treated as PII and stays local.
-  void analytics.track("ehr_searched");
+  void analytics.track("ehr_searched", { via });
   ehrStore.searchEhrs(serverStore.activeServerId, criteria);
 }
 
@@ -953,7 +968,7 @@ function handleFilterModalApply(criteria: EhrSearchCriteria) {
   searchQuery.value = "";
   validationError.value = null;
   showFilterModal.value = false;
-  runSearch(criteria);
+  runSearch(criteria, "filter_modal");
 }
 
 /** Removes a single active filter chip and re-runs the search with what's
@@ -966,7 +981,7 @@ function removeFilterChip(key: keyof EhrSearchCriteria) {
   if (Object.keys(next).length === 0) {
     clearSearch();
   } else {
-    runSearch(next);
+    runSearch(next, "chip_removed");
   }
 }
 
@@ -1067,7 +1082,7 @@ function openComposition(comp: CompositionSummary) {
 }
 
 function selectDirectoryTab() {
-  activeTab.value = "directory";
+  selectTab("directory");
   // `directoryLoaded` (not `!!directory`) is what guards re-fetching: a
   // legitimate empty result ("no directory set") is a successful, stable
   // outcome that shouldn't be re-requested on every reselect, but a prior
@@ -1153,6 +1168,7 @@ function directoryRevisionIsCurrent(rev: DirectoryRevision): boolean {
 async function previewDirectoryRevision(rev: DirectoryRevision) {
   if (!serverStore.activeServerId || !ehrId.value) return;
   previewLabel.value = `Version ${rev.version_id}`;
+  void analytics.track("directory_history_viewed", { mode: "revision" });
   await ehrStore.previewDirectoryVersion(serverStore.activeServerId, ehrId.value, rev.version_id);
 }
 
@@ -1168,6 +1184,7 @@ async function submitDirectoryAtTime() {
   // so that's what's appended here rather than the browser's local offset.
   const versionAtTime = `${directoryAtTimeInput.value}:00Z`;
   previewLabel.value = `At ${versionAtTime}`;
+  void analytics.track("directory_history_viewed", { mode: "at_time" });
   await ehrStore.previewDirectoryAtTime(serverStore.activeServerId, ehrId.value, versionAtTime);
 }
 
@@ -1260,6 +1277,9 @@ async function saveDirectory() {
   directorySaveError.value = null;
   const wireFolder = toWireFolder(editableDirectory.value);
   const existingVersionUid = directoryVersionUid();
+  // Which editor the user had open when saving — tells us whether the raw
+  // JSON editor earns its place next to the tree editor.
+  const editor = showJsonEditor.value ? "json" : "tree";
   try {
     if (existingVersionUid) {
       await ehrStore.updateDirectory(
@@ -1268,10 +1288,10 @@ async function saveDirectory() {
         wireFolder,
         existingVersionUid,
       );
-      void analytics.track("directory_updated");
+      void analytics.track("directory_updated", { editor });
     } else {
       await ehrStore.createDirectory(serverStore.activeServerId, ehrId.value, wireFolder);
-      void analytics.track("directory_created");
+      void analytics.track("directory_created", { editor });
     }
     directoryEditMode.value = false;
     editableDirectory.value = null;
@@ -1366,12 +1386,14 @@ const sortUnsupportedTitle = "Sorting isn't supported by this server";
 function onSortFieldChange(field: string) {
   if (!serverStore.activeServerId) return;
   currentPage.value = 0;
+  void analytics.track("ehr_list_sorted", { field });
   void ehrStore.setSortBy(serverStore.activeServerId, field as EhrSortField);
 }
 
 function onToggleSortDir() {
   if (!serverStore.activeServerId) return;
   currentPage.value = 0;
+  void analytics.track("ehr_list_sorted", { field: ehrStore.sortBy });
   void ehrStore.toggleSortDir(serverStore.activeServerId);
 }
 
@@ -1435,6 +1457,7 @@ function lookupContribution() {
   router.push({
     name: "contribution",
     params: { ehrId: ehrId.value, contributionUid: uid },
+    state: { contributionSource: "manual_lookup" },
   });
 }
 
@@ -1484,9 +1507,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   {
     label: "Compositions",
     value: ehrStore.selectedEhr?.compositions.length,
-    onClick: () => {
-      activeTab.value = "compositions";
-    },
+    onClick: () => selectTab("compositions"),
   },
   {
     label: "Directory items",
@@ -1741,7 +1762,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
                 type="button"
                 class="tab"
                 :class="{ active: activeTab === 'detail' }"
-                @click="activeTab = 'detail'"
+                @click="selectTab('detail')"
               >
                 Detail
               </button>
@@ -1766,7 +1787,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
                 type="button"
                 class="tab"
                 :class="{ active: activeTab === 'compositions' }"
-                @click="activeTab = 'compositions'"
+                @click="selectTab('compositions')"
               >
                 Compositions
               </button>
@@ -1774,7 +1795,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
                 type="button"
                 class="tab"
                 :class="{ active: activeTab === 'json' }"
-                @click="activeTab = 'json'"
+                @click="selectTab('json')"
               >
                 JSON
               </button>

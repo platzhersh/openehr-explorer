@@ -32,6 +32,21 @@ export const TERMINOLOGY_SYSTEMS: TerminologySystemOption[] = [
 ];
 
 /**
+ * Collapse a user-entered system identifier to a fixed, analytics-safe key
+ * (ADR-0018: props must come from a known enum). Recognised shortcuts and
+ * their canonical URIs map to the shortcut's lowercased value (e.g.
+ * `"snomed-ct"`); anything else — including custom URLs, which could
+ * identify an organisation's private code system — becomes `"other"`.
+ */
+export function terminologySystemAnalyticsKey(system: string): string {
+  const needle = system.trim().toLowerCase();
+  const match = TERMINOLOGY_SYSTEMS.find(
+    (s) => s.value.toLowerCase() === needle || s.uri.toLowerCase() === needle,
+  );
+  return match ? match.value.toLowerCase() : "other";
+}
+
+/**
  * Look up a terminology code's display name via the configured FHIR terminology server.
  * Returns the preferred term string, or null if resolution is unavailable/fails.
  *

@@ -204,6 +204,7 @@ function confirmClear() {
 
 function doClear() {
   store.clear();
+  void analytics.track("inspector_cleared");
   showClearConfirm.value = false;
 }
 </script>
@@ -386,7 +387,11 @@ function doClear() {
               <div class="detail-section">
                 <div class="section-header">cURL Command</div>
                 <div class="curl-container">
-                  <BashViewer :code="curlCommand" copy-title="Copy as curl" />
+                  <BashViewer
+                    :code="curlCommand"
+                    copy-title="Copy as curl"
+                    @copied="analytics.track('inspector_curl_copied')"
+                  />
                 </div>
               </div>
             </template>

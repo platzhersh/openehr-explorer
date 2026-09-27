@@ -138,7 +138,7 @@ function selectTemplate(id: string) {
   router.push({ name: "template-detail", params: { templateId: id } });
   // Feature-adoption ping only — the template_id is an archetype identifier
   // that could be customer-specific, so it's deliberately NOT included.
-  void analytics.track("template_inspected");
+  void analytics.track("template_inspected", { view: activeTab.value });
 }
 
 // Template list sorting — purely client-side since list_templates already
@@ -155,7 +155,12 @@ const sortDir = ref<"asc" | "desc">("desc");
 
 function onToggleSortDir() {
   sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+  void analytics.track("template_list_sorted", { field: sortField.value });
 }
+
+watch(sortField, (field) => {
+  void analytics.track("template_list_sorted", { field });
+});
 
 function compareTemplates(a: TemplateSummary, b: TemplateSummary): number {
   const field = sortField.value;
@@ -230,6 +235,7 @@ const wtTree = computed(() => {
 });
 
 function createComposition(templateId: string) {
+  void analytics.track("compose_started_from_template");
   router.push({ name: "compose", params: { templateId } });
 }
 
@@ -257,6 +263,8 @@ async function downloadOpt() {
 // already open just refocuses the field (and restarts at the first match),
 // which is what pressing the shortcut again does in a browser too.
 function openPanelSearch() {
+  // Count opening the search, not every refocus of an already-open overlay.
+  if (!showPanelSearch.value) void analytics.track("tree_search_used", { view: "template" });
   showPanelSearch.value = true;
   currentMatchIndex.value = 0;
   nextTick(() => searchOverlayRef.value?.focus());
@@ -280,6 +288,14 @@ function closePanelSearch() {
 watch(activeTab, () => {
   closePanelSearch();
 });
+
+// Tracked on the tab buttons rather than in a watcher on `activeTab`, so the
+// programmatic OPT → Tree fallback in clearTemplateDetail doesn't count.
+function selectTab(view: typeof activeTab.value) {
+  if (activeTab.value === view) return;
+  activeTab.value = view;
+  void analytics.track("template_inspected", { view });
+}
 
 watch(selectedTemplateId, () => {
   closePanelSearch();
@@ -507,14 +523,14 @@ onUnmounted(() => {
               <button
                 class="tab"
                 :class="{ active: activeTab === 'tree' }"
-                @click="activeTab = 'tree'"
+                @click="selectTab('tree')"
               >
                 OPT Tree
               </button>
               <button
                 class="tab"
                 :class="{ active: activeTab === 'opt' }"
-                @click="activeTab = 'opt'"
+                @click="selectTab('opt')"
                 :disabled="!templateStore.selectedOpt"
               >
                 OPT XML
@@ -522,14 +538,14 @@ onUnmounted(() => {
               <button
                 class="tab"
                 :class="{ active: activeTab === 'json' }"
-                @click="activeTab = 'json'"
+                @click="selectTab('json')"
               >
                 Web Template
               </button>
               <button
                 class="tab"
                 :class="{ active: activeTab === 'flat' }"
-                @click="activeTab = 'flat'"
+                @click="selectTab('flat')"
               >
                 FLAT Paths
               </button>
@@ -637,6 +653,7 @@ onUnmounted(() => {
                     },
                   }"
                   title="Open in Terminology Browser"
+                  @click="analytics.track('terminology_template_link_followed')"
                 >
                   Describe →
                 </router-link>

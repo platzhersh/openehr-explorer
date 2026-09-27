@@ -26,12 +26,18 @@ const props = withDefaults(
   },
 );
 
+const emit = defineEmits<{
+  /** Fired after the text was written to the clipboard. */
+  copied: [];
+}>();
+
 const copied = ref(false);
 let resetTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function copy() {
   await navigator.clipboard.writeText(props.text);
   copied.value = true;
+  emit("copied");
   clearTimeout(resetTimer);
   resetTimer = setTimeout(() => (copied.value = false), 2000);
 }

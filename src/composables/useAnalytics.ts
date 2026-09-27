@@ -63,10 +63,14 @@ export type AnalyticsEvent =
   | "ehr_created"
   | "ehr_deleted"
   | "ehr_searched"
+  | "ehr_tab_viewed"
+  | "ehr_status_version_viewed"
+  | "ehr_list_sorted"
   // --- DIRECTORY (OEH-27) ---
   | "directory_created"
   | "directory_updated"
   | "directory_deleted"
+  | "directory_history_viewed"
   // --- composition ---
   | "composition_viewed"
   | "composition_created"
@@ -86,12 +90,19 @@ export type AnalyticsEvent =
   | "template_inspected"
   | "template_uploaded"
   | "template_opt_exported"
+  | "template_list_sorted"
+  | "compose_started_from_template"
   // --- terminology ---
   | "terminology_query_run"
+  | "terminology_template_link_followed"
   // --- settings / engagement ---
   | "settings_saved"
   | "documentation_opened"
   | "inspector_toggled"
+  | "inspector_curl_copied"
+  | "inspector_cleared"
+  | "server_switched"
+  | "tree_search_used"
   | "update_check_triggered"
   // --- feature tours / What's New (PRD-0018) ---
   /**

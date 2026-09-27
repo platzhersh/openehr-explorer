@@ -13,6 +13,7 @@ import {
   expandValueSet,
   validateCode,
   testSubsumption,
+  terminologySystemAnalyticsKey,
   type CodeDescription,
   type ValueSetExpansion,
   type CodeValidation,
@@ -93,6 +94,28 @@ const effectiveTerminologyUrl = computed(
 // magic string at each call site.
 const DEFAULT_SYSTEM = "SNOMED-CT";
 
+/**
+ * How a terminology query was started — reported on `terminology_query_run`
+ * so we can tell whether the "Try an example" shortcuts, the template deep
+ * link, and the expansion → lookup hop actually get used.
+ */
+type QuerySource = "manual" | "example" | "deep_link" | "from_expansion" | "preset";
+
+/** Report a finished query — on failure too, so a broken terminology server isn't invisible. */
+function trackQuery(
+  operation: TabId,
+  source: QuerySource,
+  outcome: "success" | "error",
+  system?: string,
+) {
+  void analytics.track("terminology_query_run", {
+    operation,
+    source,
+    outcome,
+    ...(system === undefined ? {} : { system: terminologySystemAnalyticsKey(system) }),
+  });
+}
+
 // --- Describe a Code -------------------------------------------------
 const lookupSystem = ref(DEFAULT_SYSTEM);
 const lookupCodeInput = ref("");
@@ -105,10 +128,10 @@ const canLookup = computed(() => !!lookupSystem.value.trim() && !!lookupCodeInpu
 function runLookupExample() {
   lookupSystem.value = DEFAULT_SYSTEM;
   lookupCodeInput.value = "91302008";
-  void runLookup();
+  void runLookup("example");
 }
 
-async function runLookup() {
+async function runLookup(source: QuerySource = "manual") {
   if (!serverStore.activeServerId || !canLookup.value || lookupLoading.value) return;
   lookupLoading.value = true;
   lookupError.value = null;
@@ -119,9 +142,10 @@ async function runLookup() {
       lookupSystem.value.trim(),
       lookupCodeInput.value.trim(),
     );
-    void analytics.track("terminology_query_run", { operation: "lookup" });
+    trackQuery("lookup", source, "success", lookupSystem.value);
   } catch (e) {
     lookupError.value = String(e);
+    trackQuery("lookup", source, "error", lookupSystem.value);
   } finally {
     lookupLoading.value = false;
   }
@@ -139,10 +163,10 @@ const canExpand = computed(() => !!expandUrl.value.trim());
 /** Fills in one of the well-known value set presets and runs it immediately. */
 function applyExpandPreset(url: string) {
   expandUrl.value = url;
-  void runExpand();
+  void runExpand("preset");
 }
 
-async function runExpand() {
+async function runExpand(source: QuerySource = "manual") {
   if (!serverStore.activeServerId || !canExpand.value || expandLoading.value) return;
   expandLoading.value = true;
   expandError.value = null;
@@ -154,9 +178,10 @@ async function runExpand() {
       expandFilter.value.trim() || undefined,
       expandCount.value || undefined,
     );
-    void analytics.track("terminology_query_run", { operation: "expand" });
+    trackQuery("expand", source, "success");
   } catch (e) {
     expandError.value = String(e);
+    trackQuery("expand", source, "error");
   } finally {
     expandLoading.value = false;
   }
@@ -178,10 +203,10 @@ function runValidateExample() {
   validateSystem.value = DEFAULT_SYSTEM;
   validateCodeInput.value = "386661006";
   validateValueSetUrl.value = "";
-  void runValidate();
+  void runValidate("example");
 }
 
-async function runValidate() {
+async function runValidate(source: QuerySource = "manual") {
   if (!serverStore.activeServerId || !canValidate.value || validateLoading.value) return;
   validateLoading.value = true;
   validateError.value = null;
@@ -193,9 +218,10 @@ async function runValidate() {
       validateCodeInput.value.trim(),
       validateValueSetUrl.value.trim() || undefined,
     );
-    void analytics.track("terminology_query_run", { operation: "validate" });
+    trackQuery("validate", source, "success", validateSystem.value);
   } catch (e) {
     validateError.value = String(e);
+    trackQuery("validate", source, "error", validateSystem.value);
   } finally {
     validateLoading.value = false;
   }
@@ -218,7 +244,7 @@ function runSubsumesExample() {
   subsumesSystem.value = DEFAULT_SYSTEM;
   subsumesCodeA.value = "64572001";
   subsumesCodeB.value = "195967001";
-  void runSubsumes();
+  void runSubsumes("example");
 }
 
 const SUBSUMPTION_EXPLANATIONS: Record<string, string> = {
@@ -228,7 +254,7 @@ const SUBSUMPTION_EXPLANATIONS: Record<string, string> = {
   "not-subsumed": "Neither code subsumes the other.",
 };
 
-async function runSubsumes() {
+async function runSubsumes(source: QuerySource = "manual") {
   if (!serverStore.activeServerId || !canSubsume.value || subsumesLoading.value) return;
   subsumesLoading.value = true;
   subsumesError.value = null;
@@ -240,9 +266,10 @@ async function runSubsumes() {
       subsumesCodeA.value.trim(),
       subsumesCodeB.value.trim(),
     );
-    void analytics.track("terminology_query_run", { operation: "subsumes" });
+    trackQuery("subsumes", source, "success", subsumesSystem.value);
   } catch (e) {
     subsumesError.value = String(e);
+    trackQuery("subsumes", source, "error", subsumesSystem.value);
   } finally {
     subsumesLoading.value = false;
   }
@@ -259,7 +286,7 @@ function applyRouteQuery() {
     activeTab.value = "lookup";
     lookupSystem.value = system;
     lookupCodeInput.value = code;
-    void runLookup();
+    void runLookup("deep_link");
   }
 }
 
@@ -303,7 +330,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
   activeTab.value = "lookup";
   if (concept.system) lookupSystem.value = concept.system;
   lookupCodeInput.value = concept.code;
-  void runLookup();
+  void runLookup("from_expansion");
 }
 </script>
 
@@ -385,7 +412,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
 
       <!-- Describe a Code -->
       <div v-if="activeTab === 'lookup'" class="tool-panel">
-        <form class="tool-form" @submit.prevent="runLookup">
+        <form class="tool-form" @submit.prevent="runLookup()">
           <div class="form-row">
             <TerminologySystemSelect v-model="lookupSystem" label="Terminology system" />
             <label>
@@ -448,7 +475,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
 
       <!-- Expand a Value Set -->
       <div v-if="activeTab === 'expand'" class="tool-panel">
-        <form class="tool-form" @submit.prevent="runExpand">
+        <form class="tool-form" @submit.prevent="runExpand()">
           <div class="form-row">
             <label class="grow">
               Value set URL
@@ -526,7 +553,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
 
       <!-- Validate Membership -->
       <div v-if="activeTab === 'validate'" class="tool-panel">
-        <form class="tool-form" @submit.prevent="runValidate">
+        <form class="tool-form" @submit.prevent="runValidate()">
           <div class="form-row">
             <TerminologySystemSelect v-model="validateSystem" label="Terminology system" />
             <label>
@@ -579,7 +606,7 @@ function useConceptInLookup(concept: TerminologyConcept) {
 
       <!-- Test Subsumption -->
       <div v-if="activeTab === 'subsumes'" class="tool-panel">
-        <form class="tool-form" @submit.prevent="runSubsumes">
+        <form class="tool-form" @submit.prevent="runSubsumes()">
           <div class="form-row">
             <TerminologySystemSelect v-model="subsumesSystem" label="Terminology system" />
             <label>

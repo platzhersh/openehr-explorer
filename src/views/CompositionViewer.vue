@@ -119,6 +119,7 @@ function handleKeydown(e: KeyboardEvent) {
 
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     e.preventDefault();
+    if (!showPanelSearch.value) void analytics.track("tree_search_used", { view: "composition" });
     showPanelSearch.value = true;
     currentMatchIndex.value = 0;
     nextTick(() => searchOverlayRef.value?.focus());
@@ -187,6 +188,7 @@ async function viewContribution(versionId: string) {
     router.push({
       name: "contribution",
       params: { ehrId: ehrId.value, contributionUid },
+      state: { contributionSource: "composition_version" },
     });
   } catch (e) {
     contributionLookupError.value = String(e);
