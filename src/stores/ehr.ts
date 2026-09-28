@@ -500,8 +500,8 @@ export const useEhrStore = defineStore("ehr", () => {
 
   /** Previews one historical DIRECTORY version by its version UID (from
    *  `directoryRevisionHistory`), without touching the live `directory`. */
-  /** Resolves `true` once the preview is shown; `false` if the request
-   *  failed or was superseded by a newer one. */
+  /** Resolves `true` once a preview is shown; `false` if the request
+   *  failed, found nothing, or was superseded by a newer one. */
   async function previewDirectoryVersion(
     serverId: string,
     ehrId: string,
@@ -518,7 +518,7 @@ export const useEhrStore = defineStore("ehr", () => {
       });
       if (requestId !== directoryPreviewRequestId) return false; // superseded by a newer request
       directoryVersionPreview.value = result;
-      return true;
+      return result !== null; // null = no DIRECTORY at that version/time (404)
     } catch (e) {
       if (requestId !== directoryPreviewRequestId) return false;
       directoryVersionPreview.value = null;
@@ -548,7 +548,7 @@ export const useEhrStore = defineStore("ehr", () => {
       });
       if (requestId !== directoryPreviewRequestId) return false; // superseded by a newer request
       directoryVersionPreview.value = result;
-      return true;
+      return result !== null; // null = no DIRECTORY at that version/time (404)
     } catch (e) {
       if (requestId !== directoryPreviewRequestId) return false;
       directoryVersionPreview.value = null;
