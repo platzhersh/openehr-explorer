@@ -500,7 +500,13 @@ export const useEhrStore = defineStore("ehr", () => {
 
   /** Previews one historical DIRECTORY version by its version UID (from
    *  `directoryRevisionHistory`), without touching the live `directory`. */
-  async function previewDirectoryVersion(serverId: string, ehrId: string, versionUid: string) {
+  /** Resolves `true` once a preview is shown; `false` if the request
+   *  failed, found nothing, or was superseded by a newer one. */
+  async function previewDirectoryVersion(
+    serverId: string,
+    ehrId: string,
+    versionUid: string,
+  ): Promise<boolean> {
     const requestId = ++directoryPreviewRequestId;
     directoryVersionPreviewLoading.value = true;
     directoryVersionPreviewError.value = null;
@@ -510,12 +516,14 @@ export const useEhrStore = defineStore("ehr", () => {
         ehrId,
         versionUid,
       });
-      if (requestId !== directoryPreviewRequestId) return; // superseded by a newer request
+      if (requestId !== directoryPreviewRequestId) return false; // superseded by a newer request
       directoryVersionPreview.value = result;
+      return result !== null; // null = no DIRECTORY at that version/time (404)
     } catch (e) {
-      if (requestId !== directoryPreviewRequestId) return;
+      if (requestId !== directoryPreviewRequestId) return false;
       directoryVersionPreview.value = null;
       directoryVersionPreviewError.value = String(e);
+      return false;
     } finally {
       if (requestId === directoryPreviewRequestId) directoryVersionPreviewLoading.value = false;
     }
@@ -524,7 +532,11 @@ export const useEhrStore = defineStore("ehr", () => {
   /** Previews the DIRECTORY as it stood at a given instant (ISO 8601,
    *  interpreted as UTC by the server), without touching the live
    *  `directory`. */
-  async function previewDirectoryAtTime(serverId: string, ehrId: string, versionAtTime: string) {
+  async function previewDirectoryAtTime(
+    serverId: string,
+    ehrId: string,
+    versionAtTime: string,
+  ): Promise<boolean> {
     const requestId = ++directoryPreviewRequestId;
     directoryVersionPreviewLoading.value = true;
     directoryVersionPreviewError.value = null;
@@ -534,12 +546,14 @@ export const useEhrStore = defineStore("ehr", () => {
         ehrId,
         versionAtTime,
       });
-      if (requestId !== directoryPreviewRequestId) return; // superseded by a newer request
+      if (requestId !== directoryPreviewRequestId) return false; // superseded by a newer request
       directoryVersionPreview.value = result;
+      return result !== null; // null = no DIRECTORY at that version/time (404)
     } catch (e) {
-      if (requestId !== directoryPreviewRequestId) return;
+      if (requestId !== directoryPreviewRequestId) return false;
       directoryVersionPreview.value = null;
       directoryVersionPreviewError.value = String(e);
+      return false;
     } finally {
       if (requestId === directoryPreviewRequestId) directoryVersionPreviewLoading.value = false;
     }

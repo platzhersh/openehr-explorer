@@ -25,11 +25,29 @@ watch(
   { immediate: true },
 );
 
+// Callers that navigate here pass `contributionSource` in the router's
+// history state (not the URL) so `contribution_viewed` can report which entry
+// point is used. Checked against a fixed list so only enum values ever reach
+// analytics; anything else (e.g. a reload, a deep link) reports "other".
+const CONTRIBUTION_SOURCES = [
+  "composition_version",
+  "ehr_status",
+  "ehr_contributions_tab",
+  "manual_lookup",
+];
+
+function contributionSource(): string {
+  const source: unknown = window.history.state?.contributionSource;
+  return typeof source === "string" && CONTRIBUTION_SOURCES.includes(source) ? source : "other";
+}
+
 async function load(serverId: string, ehr: string, uid: string) {
+  // Read before awaiting: a navigation during the fetch replaces history.state.
+  const from = contributionSource();
   await contributionStore.fetchContribution(serverId, ehr, uid);
   if (contributionStore.detail) {
     // Coarse feature-adoption ping only — no IDs. See useAnalytics guidelines.
-    void analytics.track("contribution_viewed");
+    void analytics.track("contribution_viewed", { from });
   }
 }
 

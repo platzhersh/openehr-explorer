@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useServerStore } from "../stores/server";
+import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 
 const serverStore = useServerStore();
+const analytics = useAnalytics();
+
+function switchServer(id: string | null) {
+  if (!id || id === serverStore.activeServerId) return;
+  serverStore.setActiveServer(id);
+  // Server type only — never the profile name or URL.
+  const serverType = serverStore.profiles.find((p) => p.id === id)?.server_type;
+  if (serverType) void analytics.track("server_switched", { server_type: serverType });
+}
 
 // Options for the server picker: one per profile, with a connected profile's
 // name suffixed "[ok]" the same way the old native <select> showed it.
@@ -32,7 +42,7 @@ const noOptionsText = computed(() =>
       :placeholder="serverStore.profiles.length === 0 ? 'No servers configured' : 'Select a server'"
       search-placeholder="Search servers..."
       :no-options-text="noOptionsText"
-      @update:model-value="(id) => id && serverStore.setActiveServer(id)"
+      @update:model-value="switchServer"
     />
     <div
       v-if="serverStore.activeServer"

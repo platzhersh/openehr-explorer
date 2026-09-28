@@ -24,13 +24,24 @@ const props = withDefaults(
   },
 );
 
+defineEmits<{
+  /** Re-emitted from the copy button once the command is on the clipboard. */
+  copied: [];
+}>();
+
 const lines = computed(() => parseBashLines(props.code));
 </script>
 
 <template>
   <div class="bash-viewer">
     <div v-if="showCopyButton" class="bv-copy-btn-wrap">
-      <CopyButton :text="code" :title="copyTitle" size="md" variant="bordered" />
+      <CopyButton
+        :text="code"
+        :title="copyTitle"
+        size="md"
+        variant="bordered"
+        @copied="$emit('copied')"
+      />
     </div>
 
     <div class="bv-scroll">

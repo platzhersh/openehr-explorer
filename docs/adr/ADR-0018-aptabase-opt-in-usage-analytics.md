@@ -182,7 +182,14 @@ gated; see the **Session-counter carveout** section above.
 | `ehr_browsed` | yes | — | Feature adoption |
 | `ehr_created` | yes | — | Write workflow adoption |
 | `ehr_deleted` | yes | — | Destructive-action signal |
-| `ehr_searched` | yes | — | Search-feature discovery |
+| `ehr_searched` | yes | `via` (`search_box`/`filter_modal`/`chip_removed`) | Search-feature discovery; text search vs. Filters modal |
+| `ehr_tab_viewed` | yes | `tab` (`detail`/`directory`/`status`/`compositions`/`json`/`contributions`) | Which EHR detail tabs get used |
+| `ehr_status_version_viewed` | yes | `mode` (`version`/`at_time`) | EHR_STATUS history adoption |
+| `ehr_list_sorted` | yes | `field` (`time_created`/`ehr_id`/`system_id`) | EHR list sorting adoption |
+| `directory_created` | yes | `editor` (`tree`/`json`) | DIRECTORY writes; tree vs. raw-JSON editor |
+| `directory_updated` | yes | `editor` (`tree`/`json`) | DIRECTORY writes; tree vs. raw-JSON editor |
+| `directory_history_viewed` | yes | `mode` (`revision`/`at_time`) | DIRECTORY version-history adoption |
+| `contribution_viewed` | yes | `from` (`composition_version`/`ehr_status`/`ehr_contributions_tab`/`manual_lookup`/`other`) | Which entry point leads to the Contribution viewer |
 | `composition_viewed` | yes | `format` (`pretty`/`json`/`flat`) | Preferred viewing format |
 | `composition_created` | yes | — | Write workflow adoption |
 | `composition_edited` | yes | — | Write workflow adoption |
@@ -192,11 +199,19 @@ gated; see the **Session-counter carveout** section above.
 | `aql_query_loaded` | yes | — | Query reuse |
 | `aql_query_deleted` | yes | — | Query-library cleanup |
 | `aql_results_exported` | yes | — | CSV export usage |
-| `template_inspected` | yes | — | Feature adoption |
+| `template_inspected` | yes | `view` (`tree`/`opt`/`json`/`flat`) | Feature adoption; preferred template view |
+| `template_list_sorted` | yes | `field` (`created_timestamp`/`template_id`/`concept`) | Template list sorting adoption |
+| `compose_started_from_template` | yes | — | Start of the template → composition funnel |
+| `terminology_query_run` | yes | `operation` (`lookup`/`expand`/`validate`/`subsumes`), `source` (`manual`/`example`/`deep_link`/`from_expansion`/`preset`), `outcome` (`success`/`error`), `system` (a known shortcut such as `snomed-ct`, else `other`; omitted for `expand`) | Terminology Browser usage, entry points, and failure rate |
+| `terminology_template_link_followed` | yes | — | Template Bound Concepts → Terminology Browser link |
 | `template_uploaded` | yes | — | Template-management writes |
 | `settings_saved` | yes | — | Settings-touch count |
 | `documentation_opened` | yes | — | Docs engagement (shortcut + sidebar) |
 | `inspector_toggled` | yes | `state` (`collapsed`/`half`/`expanded`) | Request-inspector usage |
+| `inspector_curl_copied` | yes | — | "Copy as curl" usage |
+| `inspector_cleared` | yes | — | Request-log clearing |
+| `server_switched` | yes | `server_type` | Multi-server usage |
+| `panel_search_used` | yes | `view` (`template`/`composition`), `tab` (the open tab, e.g. `tree`/`opt`/`json`/`flat` or `pretty`/`json`/`flat`/`versions`) | In-panel search (Ctrl/Cmd+F) adoption, per view tab |
 
 **Hard rules:**
 - Never include free-text fields (query text, template names, server URLs)
