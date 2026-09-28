@@ -42,10 +42,12 @@ function contributionSource(): string {
 }
 
 async function load(serverId: string, ehr: string, uid: string) {
+  // Read before awaiting: a navigation during the fetch replaces history.state.
+  const from = contributionSource();
   await contributionStore.fetchContribution(serverId, ehr, uid);
   if (contributionStore.detail) {
     // Coarse feature-adoption ping only — no IDs. See useAnalytics guidelines.
-    void analytics.track("contribution_viewed", { from: contributionSource() });
+    void analytics.track("contribution_viewed", { from });
   }
 }
 

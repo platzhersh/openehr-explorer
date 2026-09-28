@@ -264,7 +264,8 @@ async function downloadOpt() {
 // which is what pressing the shortcut again does in a browser too.
 function openPanelSearch() {
   // Count opening the search, not every refocus of an already-open overlay.
-  if (!showPanelSearch.value) void analytics.track("tree_search_used", { view: "template" });
+  if (!showPanelSearch.value)
+    void analytics.track("panel_search_used", { view: "template", tab: activeTab.value });
   showPanelSearch.value = true;
   currentMatchIndex.value = 0;
   nextTick(() => searchOverlayRef.value?.focus());

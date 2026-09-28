@@ -1168,8 +1168,12 @@ function directoryRevisionIsCurrent(rev: DirectoryRevision): boolean {
 async function previewDirectoryRevision(rev: DirectoryRevision) {
   if (!serverStore.activeServerId || !ehrId.value) return;
   previewLabel.value = `Version ${rev.version_id}`;
-  void analytics.track("directory_history_viewed", { mode: "revision" });
-  await ehrStore.previewDirectoryVersion(serverStore.activeServerId, ehrId.value, rev.version_id);
+  const shown = await ehrStore.previewDirectoryVersion(
+    serverStore.activeServerId,
+    ehrId.value,
+    rev.version_id,
+  );
+  if (shown) void analytics.track("directory_history_viewed", { mode: "revision" });
 }
 
 async function submitDirectoryAtTime() {
@@ -1184,8 +1188,12 @@ async function submitDirectoryAtTime() {
   // so that's what's appended here rather than the browser's local offset.
   const versionAtTime = `${directoryAtTimeInput.value}:00Z`;
   previewLabel.value = `At ${versionAtTime}`;
-  void analytics.track("directory_history_viewed", { mode: "at_time" });
-  await ehrStore.previewDirectoryAtTime(serverStore.activeServerId, ehrId.value, versionAtTime);
+  const shown = await ehrStore.previewDirectoryAtTime(
+    serverStore.activeServerId,
+    ehrId.value,
+    versionAtTime,
+  );
+  if (shown) void analytics.track("directory_history_viewed", { mode: "at_time" });
 }
 
 function openCompositionRef(objectRef: { id?: { value?: string } }) {

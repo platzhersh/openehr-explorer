@@ -211,7 +211,7 @@ gated; see the **Session-counter carveout** section above.
 | `inspector_curl_copied` | yes | — | "Copy as curl" usage |
 | `inspector_cleared` | yes | — | Request-log clearing |
 | `server_switched` | yes | `server_type` | Multi-server usage |
-| `tree_search_used` | yes | `view` (`template`/`composition`) | In-panel tree search (Ctrl/Cmd+F) adoption |
+| `panel_search_used` | yes | `view` (`template`/`composition`), `tab` (the open tab, e.g. `tree`/`opt`/`json`/`flat` or `pretty`/`json`/`flat`/`versions`) | In-panel search (Ctrl/Cmd+F) adoption, per view tab |
 
 **Hard rules:**
 - Never include free-text fields (query text, template names, server URLs)

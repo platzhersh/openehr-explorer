@@ -102,7 +102,7 @@ export type AnalyticsEvent =
   | "inspector_curl_copied"
   | "inspector_cleared"
   | "server_switched"
-  | "tree_search_used"
+  | "panel_search_used"
   | "update_check_triggered"
   // --- feature tours / What's New (PRD-0018) ---
   /**

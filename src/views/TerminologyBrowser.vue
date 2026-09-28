@@ -136,16 +136,19 @@ async function runLookup(source: QuerySource = "manual") {
   lookupLoading.value = true;
   lookupError.value = null;
   lookupResult.value = null;
+  // Captured once so the event reports the system actually queried, even if
+  // the field is edited while the request is in flight.
+  const system = lookupSystem.value.trim();
   try {
     lookupResult.value = await describeCode(
       serverStore.activeServerId,
-      lookupSystem.value.trim(),
+      system,
       lookupCodeInput.value.trim(),
     );
-    trackQuery("lookup", source, "success", lookupSystem.value);
+    trackQuery("lookup", source, "success", system);
   } catch (e) {
     lookupError.value = String(e);
-    trackQuery("lookup", source, "error", lookupSystem.value);
+    trackQuery("lookup", source, "error", system);
   } finally {
     lookupLoading.value = false;
   }
@@ -211,17 +214,20 @@ async function runValidate(source: QuerySource = "manual") {
   validateLoading.value = true;
   validateError.value = null;
   validateResult.value = null;
+  // Captured once so the event reports the system actually queried, even if
+  // the field is edited while the request is in flight.
+  const system = validateSystem.value.trim();
   try {
     validateResult.value = await validateCode(
       serverStore.activeServerId,
-      validateSystem.value.trim(),
+      system,
       validateCodeInput.value.trim(),
       validateValueSetUrl.value.trim() || undefined,
     );
-    trackQuery("validate", source, "success", validateSystem.value);
+    trackQuery("validate", source, "success", system);
   } catch (e) {
     validateError.value = String(e);
-    trackQuery("validate", source, "error", validateSystem.value);
+    trackQuery("validate", source, "error", system);
   } finally {
     validateLoading.value = false;
   }
@@ -259,17 +265,20 @@ async function runSubsumes(source: QuerySource = "manual") {
   subsumesLoading.value = true;
   subsumesError.value = null;
   subsumesResult.value = null;
+  // Captured once so the event reports the system actually queried, even if
+  // the field is edited while the request is in flight.
+  const system = subsumesSystem.value.trim();
   try {
     subsumesResult.value = await testSubsumption(
       serverStore.activeServerId,
-      subsumesSystem.value.trim(),
+      system,
       subsumesCodeA.value.trim(),
       subsumesCodeB.value.trim(),
     );
-    trackQuery("subsumes", source, "success", subsumesSystem.value);
+    trackQuery("subsumes", source, "success", system);
   } catch (e) {
     subsumesError.value = String(e);
-    trackQuery("subsumes", source, "error", subsumesSystem.value);
+    trackQuery("subsumes", source, "error", system);
   } finally {
     subsumesLoading.value = false;
   }

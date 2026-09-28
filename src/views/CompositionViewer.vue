@@ -119,7 +119,8 @@ function handleKeydown(e: KeyboardEvent) {
 
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     e.preventDefault();
-    if (!showPanelSearch.value) void analytics.track("tree_search_used", { view: "composition" });
+    if (!showPanelSearch.value)
+      void analytics.track("panel_search_used", { view: "composition", tab: activeTab.value });
     showPanelSearch.value = true;
     currentMatchIndex.value = 0;
     nextTick(() => searchOverlayRef.value?.focus());
