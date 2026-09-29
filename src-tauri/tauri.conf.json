@@ -35,6 +35,13 @@
       "icons/icon.ico"
     ],
     "homepage": "https://openehr-explorer.dev/",
+    "linux": {
+      "appimage": {
+        "files": {
+          ".DirIcon": "icons/256x256.png"
+        }
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15",
       "signingIdentity": null,
