@@ -2,6 +2,9 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+/** `detail_level` values of the ITS-REST template example endpoint. */
+export type ExampleDetailLevel = "required" | "medium" | "full";
+
 export interface GlobalSettings {
   version: number;
   terminology_server_url: string | null;
@@ -14,6 +17,8 @@ export interface GlobalSettings {
   completed_tours: string[];
   /** App version the What's New modal was last shown/acknowledged for. */
   last_seen_version: string | null;
+  /** `detail_level` requested when fetching a template's example composition. */
+  template_example_detail_level: ExampleDetailLevel;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -26,6 +31,7 @@ export const useSettingsStore = defineStore("settings", () => {
     tours_enabled: true,
     completed_tours: [],
     last_seen_version: null,
+    template_example_detail_level: "medium",
   });
   const loaded = ref(false);
 

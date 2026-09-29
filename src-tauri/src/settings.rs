@@ -44,6 +44,32 @@ pub struct GlobalSettings {
     /// records the current version as the baseline.
     #[serde(default)]
     pub last_seen_version: Option<String>,
+    /// `detail_level` requested from the Definition API's template example
+    /// endpoint. The spec defaults to `required` (mandatory data points
+    /// only), which strict CDRs such as FerroEHR honour, so we default to
+    /// `medium` for a more realistic example.
+    #[serde(default)]
+    pub template_example_detail_level: ExampleDetailLevel,
+}
+
+/// `detail_level` values accepted by the ITS-REST template example endpoint.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExampleDetailLevel {
+    Required,
+    #[default]
+    Medium,
+    Full,
+}
+
+impl ExampleDetailLevel {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Required => "required",
+            Self::Medium => "medium",
+            Self::Full => "full",
+        }
+    }
 }
 
 fn default_tours_enabled() -> bool {
@@ -69,6 +95,7 @@ impl Default for GlobalSettings {
             tours_enabled: true,
             completed_tours: Vec::new(),
             last_seen_version: None,
+            template_example_detail_level: ExampleDetailLevel::default(),
         }
     }
 }
@@ -140,4 +167,31 @@ pub async fn get_settings() -> Result<GlobalSettings, String> {
 pub async fn save_settings(settings: GlobalSettings) -> Result<GlobalSettings, String> {
     save_settings_to_disk(&settings)?;
     Ok(settings)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_example_detail_level_defaults_to_medium_when_missing() {
+        let settings: GlobalSettings = serde_json::from_str(r#"{"version":1}"#).unwrap();
+        assert_eq!(
+            settings.template_example_detail_level,
+            ExampleDetailLevel::Medium
+        );
+    }
+
+    #[test]
+    fn test_example_detail_level_round_trips_lowercase() {
+        let settings: GlobalSettings =
+            serde_json::from_str(r#"{"template_example_detail_level":"full"}"#).unwrap();
+        assert_eq!(
+            settings.template_example_detail_level,
+            ExampleDetailLevel::Full
+        );
+        let json = serde_json::to_value(&settings).unwrap();
+        assert_eq!(json["template_example_detail_level"], "full");
+        assert_eq!(ExampleDetailLevel::Required.as_str(), "required");
+    }
 }
