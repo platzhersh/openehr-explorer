@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import root from "../styles/tokens.css?inline";
+import medblocks from "../styles/medblocks-overrides.css?inline";
 
 // Guards the design tokens in src/styles/tokens.css against WCAG 2.x AA (ADR-0028).
 // Computed-style checks over real components run separately via
@@ -53,5 +54,28 @@ describe("primary-dim as a filled background", () => {
   // Borders/focus rings are UI components: WCAG 1.4.11 asks for 3:1.
   it("--color-primary-dim border on --color-bg", () => {
     expect(contrast(token("primary-dim"), token("bg"))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("medblocks-ui form inputs (Shoelace overrides)", () => {
+  // The Shoelace components only load from the CDN in the app/Storybook
+  // (ADR-0008), so axe can't see them offline — check the token pair here.
+  const slColor = (name: string): string => {
+    const m = medblocks.match(new RegExp(`--sl-color-${name}:\\s*(#[0-9a-fA-F]{6})`));
+    if (!m) throw new Error(`--sl-color-${name} not found in medblocks-overrides.css`);
+    return m[1]!;
+  };
+  const ref = (prop: string): string => {
+    const m = medblocks.match(new RegExp(`--sl-${prop}:\\s*var\\(--sl-color-([a-z0-9-]+)\\)`));
+    if (!m) throw new Error(`--sl-${prop} not found in medblocks-overrides.css`);
+    return slColor(m[1]!);
+  };
+  for (const bg of ["input-background-color", "input-background-color-hover"]) {
+    it(`placeholder on --sl-${bg}`, () => {
+      expect(contrast(ref("input-placeholder-color"), ref(bg))).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+  it("input text on input background", () => {
+    expect(contrast(ref("input-color"), ref("input-background-color"))).toBeGreaterThanOrEqual(4.5);
   });
 });
