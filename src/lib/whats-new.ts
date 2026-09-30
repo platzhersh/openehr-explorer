@@ -27,6 +27,24 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.2",
+    date: "2026-09-30",
+    highlights: [
+      {
+        title: "Easier-to-read text",
+        description:
+          "Text contrast has been raised across light and dark themes to meet WCAG AA, so labels and secondary text are clearer everywhere.",
+      },
+      {
+        title: "AQL editor remembers your query",
+        description:
+          "Your query is no longer lost when you switch to another view and come back to the AQL runner.",
+        tourId: "aql",
+        routePath: "/aql",
+      },
+    ],
+  },
+  {
     version: "0.9.1",
     date: "2026-09-23",
     highlights: [
