@@ -51,11 +51,10 @@ jobs:
           set -euo pipefail
 
           VERSION="${TAG_NAME#v}"
-          DEB_NAME="openEHR.Explorer_${VERSION}_amd64.deb"
+          ARCHES=(amd64 arm64)
           APT_REPO="platzhersh/apt-openehr-explorer"
-          POOL_PATH="pool/main/o/open-ehr-explorer/${DEB_NAME}"
+          POOL_DIR="pool/main/o/open-ehr-explorer"
           BRANCH="main"
-          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG_NAME}/${DEB_NAME}"
 
           # Import the signing key and resolve its key ID for --local-user.
           echo "$APT_SIGNING_PRIVATE_KEY" | gpg --batch --import
@@ -71,17 +70,21 @@ jobs:
           # --proto '=https' pins curl to HTTPS even across the redirect -L
           # follows (GitHub release asset downloads redirect through S3) —
           # without it, a redirect could send this download over plain HTTP.
-          max_attempts=20
-          attempt=1
-          until curl --proto '=https' -fsSL -o "/tmp/${DEB_NAME}" "$DOWNLOAD_URL" 2>/tmp/curl-download.log; do
-            if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "::error::${DEB_NAME} never appeared on release ${TAG_NAME} after ${max_attempts} attempts — check whether build-linux succeeded and uploaded it."
-              cat /tmp/curl-download.log
-              exit 1
-            fi
-            echo "::warning::${DEB_NAME} not yet attached to release ${TAG_NAME} (attempt ${attempt}/${max_attempts}); build-linux may still be running. Retrying in 30s."
-            attempt=$((attempt + 1))
-            sleep 30
+          for ARCH in "${ARCHES[@]}"; do
+            DEB_NAME="openEHR.Explorer_${VERSION}_${ARCH}.deb"
+            DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG_NAME}/${DEB_NAME}"
+            max_attempts=20
+            attempt=1
+            until curl --proto '=https' -fsSL -o "/tmp/${DEB_NAME}" "$DOWNLOAD_URL" 2>/tmp/curl-download.log; do
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error::${DEB_NAME} never appeared on release ${TAG_NAME} after ${max_attempts} attempts — check whether build-linux (${ARCH}) succeeded and uploaded it."
+                cat /tmp/curl-download.log
+                exit 1
+              fi
+              echo "::warning::${DEB_NAME} not yet attached to release ${TAG_NAME} (attempt ${attempt}/${max_attempts}); build-linux may still be running. Retrying in 30s."
+              attempt=$((attempt + 1))
+              sleep 30
+            done
           done
 
           # Rebuilds pool/ + the signed index from a fresh clone of the apt
@@ -111,20 +114,25 @@ jobs:
             SNAPSHOT_BASE_SHA=$(git rev-parse HEAD)
             SNAPSHOT_BASE_TREE_SHA=$(git rev-parse "HEAD^{tree}")
 
-            mkdir -p "$(dirname "$POOL_PATH")" dists/stable/main/binary-amd64
-            cp "/tmp/${DEB_NAME}" "$POOL_PATH"
+            mkdir -p "$POOL_DIR"
+            for ARCH in "${ARCHES[@]}"; do
+              mkdir -p "dists/stable/main/binary-${ARCH}"
+              cp "/tmp/openEHR.Explorer_${VERSION}_${ARCH}.deb" "$POOL_DIR/"
+            done
 
             # Rebuild the index from every .deb in the pool (not just the
             # new one), so older versions stay resolvable via apt.
-            apt-ftparchive packages pool > dists/stable/main/binary-amd64/Packages
-            gzip -9c dists/stable/main/binary-amd64/Packages > dists/stable/main/binary-amd64/Packages.gz
+            for ARCH in "${ARCHES[@]}"; do
+              apt-ftparchive --arch "$ARCH" packages pool > "dists/stable/main/binary-${ARCH}/Packages"
+              gzip -9c "dists/stable/main/binary-${ARCH}/Packages" > "dists/stable/main/binary-${ARCH}/Packages.gz"
+            done
 
             cat > /tmp/apt-ftparchive.conf <<EOF
             APT::FTPArchive::Release::Origin "openEHR Explorer";
             APT::FTPArchive::Release::Label "openEHR Explorer";
             APT::FTPArchive::Release::Suite "stable";
             APT::FTPArchive::Release::Codename "stable";
-            APT::FTPArchive::Release::Architectures "amd64";
+            APT::FTPArchive::Release::Architectures "amd64 arm64";
             APT::FTPArchive::Release::Components "main";
           EOF
             apt-ftparchive -c /tmp/apt-ftparchive.conf release dists/stable > dists/stable/Release
@@ -171,13 +179,17 @@ jobs:
               base_tree_sha="$SNAPSHOT_BASE_TREE_SHA"
 
               local files=(
-                "$POOL_PATH"
-                "dists/stable/main/binary-amd64/Packages"
-                "dists/stable/main/binary-amd64/Packages.gz"
                 "dists/stable/Release"
                 "dists/stable/Release.gpg"
                 "dists/stable/InRelease"
               )
+              for ARCH in "${ARCHES[@]}"; do
+                files+=(
+                  "$POOL_DIR/openEHR.Explorer_${VERSION}_${ARCH}.deb"
+                  "dists/stable/main/binary-${ARCH}/Packages"
+                  "dists/stable/main/binary-${ARCH}/Packages.gz"
+                )
+              done
 
               local tree_entries="[]"
               for f in "${files[@]}"; do

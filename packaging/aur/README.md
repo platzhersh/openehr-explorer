@@ -21,10 +21,14 @@ Linux account, which can't be delegated to a CI secret.
    match the new release tag, and update `sha256sums` to the new `.deb`'s
    digest:
    ```bash
-   curl --proto '=https' -fsSL -o /tmp/pkg.deb \
-     "https://github.com/platzhersh/openehr-explorer/releases/download/v<NEW_VERSION>/openEHR.Explorer_<NEW_VERSION>_amd64.deb"
-   sha256sum /tmp/pkg.deb
+   for arch in amd64 arm64; do
+     curl --proto '=https' -fsSL -o /tmp/pkg-$arch.deb \
+       "https://github.com/platzhersh/openehr-explorer/releases/download/v<NEW_VERSION>/openEHR.Explorer_<NEW_VERSION>_$arch.deb"
+     sha256sum /tmp/pkg-$arch.deb
+   done
    ```
+   Put the `amd64` digest in `sha256sums_x86_64` and the `arm64` digest in
+   `sha256sums_aarch64` (replacing the `SKIP` placeholder).
 2. Regenerate `.SRCINFO` (requires `makepkg`, i.e. run this step on Arch or
    in an `archlinux` container):
    ```bash

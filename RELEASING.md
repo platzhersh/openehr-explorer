@@ -73,7 +73,7 @@ jobs are the platform builds:
 |---|---|---|
 | `build-macos` | tag push (also every push/PR, but only uploads on a tag) | Universal DMG, code-signs if Apple secrets are configured, uploads DMG + updater artifacts to the GitHub Release |
 | `build-windows` | tag push, or manual `workflow_dispatch` with `build-windows: true` | NSIS installer, uploads to the Release, submits the installer to VirusTotal (tag pushes only) |
-| `build-linux` | tag push, or manual `workflow_dispatch` with `build-linux: true` | `.deb` + `.AppImage`, uploads to the Release |
+| `build-linux` | tag push, or manual `workflow_dispatch` with `build-linux: true` | `.deb` + `.AppImage` for amd64 and arm64 (matrix: `ubuntu-latest`, `ubuntu-24.04-arm`), uploads to the Release |
 | `publish-updater-manifest` | after all three builds, tag push only | Generates `latest.json` (used by the in-app Tauri updater) from the release assets and uploads it |
 | `publish-homebrew-cask` | after `build-macos`, tag push only | Pushes an updated Cask to `platzhersh/homebrew-openehr-explorer` (needs `HOMEBREW_TAP_TOKEN`; no-ops if unset) |
 | `publish-scoop-bucket` | after `build-windows`, tag push only | Pushes an updated manifest to `platzhersh/scoop-openehr-explorer` (needs `SCOOP_BUCKET_TOKEN`; no-ops if unset) |
