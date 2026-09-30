@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
+import { storeToRefs } from "pinia";
 import { useServerStore } from "../stores/server";
 import { useQueryStore, type SavedQuery, type StoredQuerySummary } from "../stores/query";
 import { useTemplateStore } from "../stores/template";
@@ -19,9 +20,8 @@ const serverStore = useServerStore();
 const queryStore = useQueryStore();
 const templateStore = useTemplateStore();
 
-const queryText = ref(
-  "SELECT e/ehr_id/value, c/uid/value, c/name/value\nFROM EHR e\nCONTAINS COMPOSITION c\nLIMIT 20",
-);
+// Kept in the query store so the editor content survives navigation.
+const { queryText } = storeToRefs(queryStore);
 const saveName = ref("");
 const showSaveDialog = ref(false);
 
