@@ -1567,7 +1567,6 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 }
 
 :deep(.wt-node-header.is-ancestor) {
-  opacity: 0.6;
   font-style: italic;
 }
 

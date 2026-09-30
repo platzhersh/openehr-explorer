@@ -259,7 +259,7 @@ const warningTooltip =
 }
 
 .tone-positive {
-  background: #28a745;
+  background: #1e7e34;
   color: #fff;
 }
 
@@ -434,7 +434,7 @@ const warningTooltip =
 }
 
 .lifecycle-popover .lifecycle-badge.tone-positive {
-  background: #28a745;
+  background: #1e7e34;
   color: #fff;
 }
 

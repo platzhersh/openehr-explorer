@@ -736,7 +736,7 @@ function doClear() {
 
 .method-get {
   background: rgba(100, 149, 237, 0.15);
-  color: #6495ed;
+  color: #93baf8;
 }
 .method-post {
   background: rgba(107, 255, 142, 0.15);
@@ -748,7 +748,7 @@ function doClear() {
 }
 .method-delete {
   background: rgba(255, 107, 107, 0.15);
-  color: #ff6b6b;
+  color: #ff9595;
 }
 .method-other {
   background: var(--color-surface);
@@ -775,20 +775,19 @@ function doClear() {
 
 .status-text {
   font-weight: 400;
-  opacity: 0.75;
 }
 
 .status-2xx {
   color: #6bff8e;
 }
 .status-3xx {
-  color: #6495ed;
+  color: #7aa7f5;
 }
 .status-4xx {
   color: #ffa500;
 }
 .status-5xx {
-  color: #ff6b6b;
+  color: #ff7b7b;
 }
 .status-other {
   color: var(--color-text-muted);

@@ -95,7 +95,6 @@ const lines = computed(() => parseBashLines(props.code));
   margin-right: 12px;
   text-align: right;
   color: var(--color-text-muted);
-  opacity: 0.6;
   user-select: none;
 }
 
@@ -104,7 +103,7 @@ const lines = computed(() => parseBashLines(props.code));
 }
 
 .bv-command {
-  color: #6495ed;
+  color: #7aa7f5;
   font-weight: 600;
 }
 .bv-flag {

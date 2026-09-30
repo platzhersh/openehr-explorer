@@ -247,7 +247,7 @@ watch(
   border-color: var(--color-primary-dim);
   background: var(--color-surface-hover);
 }
-.stat-card.loading {
+.stat-card.loading .stat-icon {
   opacity: 0.6;
 }
 

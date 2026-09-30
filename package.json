@@ -23,7 +23,8 @@
     "demo:screenshots": "node scripts/demo-assets/capture-screenshots.js",
     "demo:video": "node scripts/demo-assets/record-video.js",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:a11y": "node scripts/a11y-storybook.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.1",
@@ -45,6 +46,7 @@
     "vue-router": "4.6.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@storybook/addon-a11y": "10.5.10",
     "@storybook/addon-docs": "10.5.10",
     "@storybook/vue3-vite": "10.5.10",

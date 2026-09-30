@@ -284,7 +284,6 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   margin-right: 12px;
   text-align: right;
   color: var(--color-text-muted);
-  opacity: 0.6;
   user-select: none;
 }
 
@@ -293,7 +292,7 @@ const copyText = computed(() => xmlLinesToText(lines.value));
 }
 
 .xv-tag {
-  color: #6495ed;
+  color: #7aa7f5;
   font-weight: 600;
 }
 .xv-attr-name {
@@ -307,7 +306,7 @@ const copyText = computed(() => xmlLinesToText(lines.value));
   font-style: italic;
 }
 .xv-decl {
-  color: #ff6b6b;
+  color: #ff7b7b;
 }
 .xv-bracket,
 .xv-punct {
@@ -318,12 +317,15 @@ const copyText = computed(() => xmlLinesToText(lines.value));
 }
 
 .xv-match {
-  background: rgba(255, 217, 61, 0.3);
-  color: inherit;
+  /* Opaque equivalents of the former translucent highlights over the dark
+     viewer background, so contrast is computable statically (ADR-0028). */
+  background: #5f5333;
+  color: var(--color-text);
   border-radius: 2px;
 }
 .xv-match-current {
-  background: rgba(255, 140, 0, 0.5);
+  background: #8d5317;
+  color: #fff;
   outline: 1px solid rgba(255, 140, 0, 0.8);
 }
 </style>

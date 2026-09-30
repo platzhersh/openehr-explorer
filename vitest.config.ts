@@ -6,6 +6,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // contrast.test.ts reads src/styles/{tokens,medblocks-overrides}.css as text; by default Vitest
+    // stubs CSS imports to an empty string.
+    css: { include: [/tokens\.css/, /medblocks-overrides\.css/] },
     include: ["src/**/*.test.ts"],
   },
 });
