@@ -48,7 +48,46 @@ const stories = Object.values(index.entries).filter((e) => e.type === "story");
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const page = await (await browser.newContext()).newPage();
-const failures = new Map(); // "selector | fg/bg/ratio" -> Set(story ids)
+
+// Storybook only signals "rendered and play function done" over its channel.
+// Hook it before any page script runs (so an already-finished story can't be
+// missed) and record the outcome on window for waitForFunction below.
+await page.addInitScript(() => {
+  window.__sbOutcome = null;
+  const timer = setInterval(() => {
+    const channel = window.__STORYBOOK_ADDONS_CHANNEL__;
+    if (!channel) return;
+    clearInterval(timer);
+    channel.on("storyFinished", (e) => {
+      window.__sbOutcome ??= e?.status === "error" ? "error" : "ok";
+    });
+    for (const name of ["playFunctionThrewException", "storyThrewException", "storyErrored"]) {
+      channel.on(name, () => {
+        window.__sbOutcome = "error";
+      });
+    }
+  }, 0);
+});
+
+const playWarnings = []; // story ids whose play function threw
+const unsettled = []; // story ids that never finished rendering
+const failures = new Map(); // "rule: selector fg on bg (ratio)" -> Set(story ids)
+
+// Waits until the story is rendered and its play function has settled, then
+// scans whatever state it reached. Neither a throwing play function (e.g. the
+// Clipboard API in a headless browser) nor a story that never settles (e.g.
+// medblocks-ui's CDN script being slow or blocked, ADR-0008) fails the job:
+// both are reported as warnings, so the gate only fails on real contrast
+// violations and doesn't flake on unrelated interaction/network issues.
+async function waitForStory(id) {
+  try {
+    await page.waitForFunction(() => window.__sbOutcome !== null, null, { timeout: 8_000 });
+  } catch {
+    unsettled.push(id);
+    return;
+  }
+  if ((await page.evaluate(() => window.__sbOutcome)) === "error") playWarnings.push(id);
+}
 
 // Storybook's addon-a11y may still be mid-run in the iframe; retry if axe is busy.
 async function scan() {
@@ -67,7 +106,7 @@ for (const s of stories) {
   await page.goto(`${base}/iframe.html?id=${s.id}&viewMode=story&globals=a11y.manual:true`, {
     waitUntil: "load",
   });
-  await page.waitForTimeout(150);
+  await waitForStory(s.id);
   const violations = await scan();
   for (const v of violations) {
     for (const n of v.nodes) {
@@ -81,6 +120,16 @@ await browser.close();
 server.close();
 
 console.log(`Scanned ${stories.length} stories with rules: ${RULES.join(", ")}`);
+if (unsettled.length) {
+  console.warn(
+    `warning: ${unsettled.length} stories did not finish rendering in 8s; scanned as-is: ${unsettled.join(", ")}`,
+  );
+}
+if (playWarnings.length) {
+  console.warn(
+    `warning: ${playWarnings.length} play function(s) failed; the state reached was scanned anyway: ${playWarnings.join(", ")}`,
+  );
+}
 if (failures.size) {
   for (const [k, ids] of failures)
     console.log(

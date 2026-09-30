@@ -736,7 +736,7 @@ function doClear() {
 
 .method-get {
   background: rgba(100, 149, 237, 0.15);
-  color: #7aa7f5;
+  color: #93baf8;
 }
 .method-post {
   background: rgba(107, 255, 142, 0.15);
@@ -748,7 +748,7 @@ function doClear() {
 }
 .method-delete {
   background: rgba(255, 107, 107, 0.15);
-  color: #ff7b7b;
+  color: #ff9595;
 }
 .method-other {
   background: var(--color-surface);
