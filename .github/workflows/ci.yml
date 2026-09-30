@@ -340,8 +340,8 @@ jobs:
           # regardless of the stored mode, so an extracted tree cannot be used to check them.
           OFFSET=$(APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-offset)
           bad=$(unsquashfs -o "$OFFSET" -ll "$APPIMAGE" | awk '
-            $1 ~ /^d/ && (substr($1,8,1) != "r" || substr($1,10,1) != "x") { print }
-            $1 ~ /^-/ && (substr($1,8,1) != "r" || (substr($1,4,1) == "x" && substr($1,10,1) != "x")) { print }')
+            $1 ~ /^d/ && (substr($1,8,1) != "r" || substr($1,10,1) !~ /[xt]/) { print }
+            $1 ~ /^-/ && (substr($1,8,1) != "r" || ((substr($1,4,1) ~ /[xs]/ || substr($1,7,1) ~ /[xs]/) && substr($1,10,1) !~ /[xt]/)) { print }')
           if [ -n "$bad" ]; then
             echo "::error::Entries other users cannot read/execute (catalog sandbox would fail):"
             echo "$bad"
