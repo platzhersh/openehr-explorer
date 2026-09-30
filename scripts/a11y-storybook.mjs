@@ -141,10 +141,11 @@ if (playWarnings.length) {
   );
 }
 if (failures.size) {
-  for (const [k, ids] of failures)
-    console.log(
-      `\n✗ ${k}\n    e.g. ${[...ids].slice(0, 3).join(", ")}${ids.size > 3 ? ` (+${ids.size - 3} more)` : ""}`,
-    );
+  for (const [key, ids] of failures) {
+    const examples = [...ids].slice(0, 3).join(", ");
+    const more = ids.size > 3 ? ` (+${ids.size - 3} more)` : "";
+    console.log(`\n✗ ${key}\n    e.g. ${examples}${more}`);
+  }
   console.log(`\n${failures.size} distinct violation(s).`);
   process.exit(1);
 }

@@ -317,12 +317,14 @@ const copyText = computed(() => xmlLinesToText(lines.value));
 }
 
 .xv-match {
-  background: rgba(255, 217, 61, 0.3);
+  /* Opaque equivalents of the former translucent highlights over the dark
+     viewer background, so contrast is computable statically (ADR-0028). */
+  background: #5f5333;
   color: var(--color-text);
   border-radius: 2px;
 }
 .xv-match-current {
-  background: rgba(255, 140, 0, 0.5);
+  background: #8d5317;
   color: #fff;
   outline: 1px solid rgba(255, 140, 0, 0.8);
 }
