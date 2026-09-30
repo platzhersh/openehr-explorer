@@ -5,7 +5,7 @@
 //        A11Y_RULES=color-contrast,label npm run test:a11y   (override rules)
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -22,17 +22,25 @@ const TYPES = {
   ".png": "image/png",
 };
 
+// Loopback-only static server for the built Storybook. Responses are only
+// started after the file has been read, so a missing file is a clean 404
+// (writing headers before readFile made the error path crash the process).
 const server = createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname));
   try {
-    const file = join(ROOT, path.endsWith("/") ? `${path}index.html` : path);
-    if (!file.startsWith(ROOT)) throw new Error("outside root");
+    const { pathname } = new URL(req.url ?? "/", "http://localhost");
+    const requested = resolve(ROOT, `.${decodeURIComponent(pathname)}`);
+    const rel = relative(ROOT, requested);
+    if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("outside root");
+    const file = pathname.endsWith("/") ? join(requested, "index.html") : requested;
+    const body = await readFile(file);
     res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
-    res.end(await readFile(file));
+    res.end(body);
   } catch {
-    res.writeHead(404).end();
+    if (!res.headersSent) res.writeHead(404);
+    res.end();
   }
-}).listen(0);
+});
+await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 const index = JSON.parse(await readFile(join(ROOT, "index.json"), "utf8"));
