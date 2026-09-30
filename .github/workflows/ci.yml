@@ -322,18 +322,28 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
 
-      # Catch the AppImage catalog failures before publishing: a dangling .DirIcon
-      # and executables that other users cannot run.
+      # Catch the AppImage catalog failures before publishing: a dangling .DirIcon and
+      # files or directories that other users cannot read or execute. Keep this step
+      # last in the job (after any step that repacks the AppImage) so it checks the
+      # file that gets uploaded.
       - name: Verify AppImage contents
         run: |
           set -euo pipefail
+          sudo apt-get install -y squashfs-tools > /dev/null
           APPIMAGE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n 1)
+          # .DirIcon must resolve inside the AppImage
           rm -rf squashfs-root
           APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract > /dev/null
           test -e squashfs-root/.DirIcon || { echo "::error::.DirIcon is missing or a dangling symlink"; exit 1; }
-          bad=$(find squashfs-root -type f -perm -u=x ! -perm -o=x)
+          rm -rf squashfs-root
+          # Read modes from the squashfs itself: --appimage-extract creates directories as 0700
+          # regardless of the stored mode, so an extracted tree cannot be used to check them.
+          OFFSET=$(APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-offset)
+          bad=$(unsquashfs -o "$OFFSET" -ll "$APPIMAGE" | awk '
+            $1 ~ /^d/ && (substr($1,8,1) != "r" || substr($1,10,1) != "x") { print }
+            $1 ~ /^-/ && (substr($1,8,1) != "r" || (substr($1,4,1) == "x" && substr($1,10,1) != "x")) { print }')
           if [ -n "$bad" ]; then
-            echo "::error::Executables not runnable by other users:"
+            echo "::error::Entries other users cannot read/execute (catalog sandbox would fail):"
             echo "$bad"
             exit 1
           fi
