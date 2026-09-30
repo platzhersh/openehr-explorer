@@ -82,7 +82,9 @@ const failures = new Map(); // "rule: selector fg on bg (ratio)" -> Set(story id
 // fails the run in CI (or with A11Y_STRICT=1). Offline, where medblocks-ui's
 // CDN script (ADR-0008) is unreachable, it stays a warning so the scan is
 // still usable locally.
-const STRICT = Boolean(process.env.CI) || process.env.A11Y_STRICT === "1";
+// Env values are strings ("false" is truthy), so compare explicitly.
+const STRICT =
+  process.env.CI === "true" || process.env.CI === "1" || process.env.A11Y_STRICT === "1";
 async function waitForStory(id) {
   try {
     await page.waitForFunction(() => window.__sbOutcome !== null, null, { timeout: 15_000 });
@@ -93,7 +95,10 @@ async function waitForStory(id) {
   if ((await page.evaluate(() => window.__sbOutcome)) === "error") playWarnings.push(id);
 }
 
-// Storybook's addon-a11y may still be mid-run in the iframe; retry if axe is busy.
+/**
+ * Runs axe on the current story and returns its violations. Storybook's own
+ * addon-a11y may still be mid-run in the iframe, so retry if axe is busy.
+ */
 async function scan() {
   for (let attempt = 0; ; attempt++) {
     try {
