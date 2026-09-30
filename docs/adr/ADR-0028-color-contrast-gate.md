@@ -24,6 +24,7 @@ The dark theme's secondary text tokens were too dim. `--color-text-muted` (`#5a6
 
 - New components are covered automatically *if they have a story*. Views/states without stories are not scanned; add stories for new UI.
 - axe can't evaluate text over images/gradients ("incomplete"); those need manual review.
+- The scan waits for each story to settle (Storybook's `storyFinished` event). A story that never settles fails the run in CI (or with `A11Y_STRICT=1`) because it could pass vacuously; offline, where medblocks-ui's CDN script is unreachable, it is a warning. A throwing play function is always only a warning.
 - CI gains a Playwright Chromium install (~1 min).
 - Only `color-contrast` is gated. Other axe rules (labels, roles) can be enabled via `A11Y_RULES=...` once their existing violations are triaged.
 - The muted/secondary palette is lighter, so the visual hierarchy between `text`, `secondary` and `muted` is slightly flatter than before. This is the accepted cost.

@@ -74,14 +74,18 @@ const unsettled = []; // story ids that never finished rendering
 const failures = new Map(); // "rule: selector fg on bg (ratio)" -> Set(story ids)
 
 // Waits until the story is rendered and its play function has settled, then
-// scans whatever state it reached. Neither a throwing play function (e.g. the
-// Clipboard API in a headless browser) nor a story that never settles (e.g.
-// medblocks-ui's CDN script being slow or blocked, ADR-0008) fails the job:
-// both are reported as warnings, so the gate only fails on real contrast
-// violations and doesn't flake on unrelated interaction/network issues.
+// scans whatever state it reached. A throwing play function (e.g. the
+// Clipboard API in a headless browser) is only a warning: it's unrelated to
+// contrast and the DOM it reached is still scanned.
+//
+// A story that never settles could pass vacuously (half-rendered DOM), so it
+// fails the run in CI (or with A11Y_STRICT=1). Offline, where medblocks-ui's
+// CDN script (ADR-0008) is unreachable, it stays a warning so the scan is
+// still usable locally.
+const STRICT = Boolean(process.env.CI) || process.env.A11Y_STRICT === "1";
 async function waitForStory(id) {
   try {
-    await page.waitForFunction(() => window.__sbOutcome !== null, null, { timeout: 8_000 });
+    await page.waitForFunction(() => window.__sbOutcome !== null, null, { timeout: 15_000 });
   } catch {
     unsettled.push(id);
     return;
@@ -121,9 +125,10 @@ server.close();
 
 console.log(`Scanned ${stories.length} stories with rules: ${RULES.join(", ")}`);
 if (unsettled.length) {
-  console.warn(
-    `warning: ${unsettled.length} stories did not finish rendering in 8s; scanned as-is: ${unsettled.join(", ")}`,
+  console.log(
+    `${STRICT ? "error" : "warning"}: ${unsettled.length} stories did not finish rendering in 15s${STRICT ? "" : "; scanned as-is"}: ${unsettled.join(", ")}`,
   );
+  if (STRICT) process.exitCode = 1;
 }
 if (playWarnings.length) {
   console.warn(
