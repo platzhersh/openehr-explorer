@@ -48,7 +48,7 @@
     "@storybook/addon-a11y": "10.5.10",
     "@storybook/addon-docs": "10.5.10",
     "@storybook/vue3-vite": "10.5.10",
-    "@tauri-apps/cli": "2.11.1",
+    "@tauri-apps/cli": "2.11.5",
     "@vitejs/plugin-vue": "6.0.8",
     "oxfmt": "0.43.0",
     "oxlint": "1.58.0",
