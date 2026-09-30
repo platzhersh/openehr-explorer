@@ -33,7 +33,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       {
         title: "Easier-to-read text",
         description:
-          "Text contrast has been raised across light and dark themes to meet WCAG AA, so labels and secondary text are clearer everywhere.",
+          "Text contrast has been raised throughout the app to meet WCAG AA, so labels and secondary text are clearer everywhere.",
       },
       {
         title: "AQL editor remembers your query",
