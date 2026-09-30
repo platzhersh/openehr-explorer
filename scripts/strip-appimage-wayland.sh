@@ -36,7 +36,7 @@ rm -rf squashfs-root
 echo "Removing bundled Wayland libraries:"
 find squashfs-root -name 'libwayland-*' -print -delete
 
-curl -fsSL -o appimagetool \
+curl --proto "=https" --tlsv1.2 -fsSL -o appimagetool \
   "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${ARCH_NAME}.AppImage"
 echo "${APPIMAGETOOL_SHA256}  appimagetool" | sha256sum -c -
 chmod +x appimagetool
