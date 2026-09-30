@@ -139,12 +139,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.1_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.2_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.1_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.1_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.2_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.2_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -481,6 +481,13 @@ const navGroups = [
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.9.2 &mdash; Accessibility &amp; AQL Editor Fixes</h3>
+        <ul>
+          <li><strong>Accessible Contrast:</strong> Text colors throughout the app were raised to meet WCAG AA contrast, with an automated contrast check now gating every change</li>
+          <li><strong>AQL Editor Persistence:</strong> The AQL editor now keeps your query when you navigate to another view and back</li>
+          <li><strong>Linux AppImage:</strong> Fixed the AppImage icon symlink so the app displays correctly in Linux launchers and file managers</li>
+        </ul>
 
         <h3>v0.9.1 &mdash; Template Sorting &amp; Dashboard Polish</h3>
         <ul>
