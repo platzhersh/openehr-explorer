@@ -266,9 +266,17 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
 
   build-linux:
-    name: Build Linux (Tauri)
+    name: Build Linux (${{ matrix.arch }})
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-linux)
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
     steps:
@@ -307,21 +315,21 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v6
         with:
-          name: openehr-explorer-linux-deb
+          name: openehr-explorer-linux-${{ matrix.arch }}-deb
           path: src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v6
         with:
-          name: openehr-explorer-linux-appimage
+          name: openehr-explorer-linux-${{ matrix.arch }}-appimage
           path: src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
       - name: Upload Linux updater signature
         uses: actions/upload-artifact@v6
         with:
-          name: openehr-explorer-linux-updater
+          name: openehr-explorer-linux-${{ matrix.arch }}-updater
           path: src-tauri/target/release/bundle/appimage/*.AppImage.sig
           if-no-files-found: warn
 
@@ -380,16 +388,22 @@ jobs:
           MACOS_SIG_URL=$(asset_url ".app.tar.gz.sig")
           WINDOWS_URL=$(asset_url "-setup.exe")
           WINDOWS_SIG_URL=$(asset_url "-setup.exe.sig")
-          LINUX_URL=$(asset_url ".AppImage")
-          LINUX_SIG_URL=$(asset_url ".AppImage.sig")
+          # Tauri names Linux AppImages with the Debian-style arch (amd64)
+          # on x86_64 and "aarch64" on ARM64.
+          LINUX_URL=$(asset_url "_amd64.AppImage")
+          LINUX_SIG_URL=$(asset_url "_amd64.AppImage.sig")
+          LINUX_ARM_URL=$(asset_url "_aarch64.AppImage")
+          LINUX_ARM_SIG_URL=$(asset_url "_aarch64.AppImage.sig")
 
           MACOS_SIG=$(read_sig "$MACOS_SIG_URL")
           WINDOWS_SIG=$(read_sig "$WINDOWS_SIG_URL")
           LINUX_SIG=$(read_sig "$LINUX_SIG_URL")
+          LINUX_ARM_SIG=$(read_sig "$LINUX_ARM_SIG_URL")
 
           echo "macOS URL: $MACOS_URL"
           echo "Windows URL: $WINDOWS_URL"
-          echo "Linux URL: $LINUX_URL"
+          echo "Linux x86_64 URL: $LINUX_URL"
+          echo "Linux aarch64 URL: $LINUX_ARM_URL"
 
           # Build latest.json. Platforms without signatures are omitted so the
           # updater reports "no update" instead of failing verification.
@@ -403,6 +417,8 @@ jobs:
             --arg windows_sig "$WINDOWS_SIG" \
             --arg linux_url "$LINUX_URL" \
             --arg linux_sig "$LINUX_SIG" \
+            --arg linux_arm_url "$LINUX_ARM_URL" \
+            --arg linux_arm_sig "$LINUX_ARM_SIG" \
             '{
               version: $version,
               notes: $notes,
@@ -418,6 +434,9 @@ jobs:
                   } else {} end)
                 + (if ($linux_url != "" and $linux_sig != "") then {
                     "linux-x86_64": { signature: $linux_sig, url: $linux_url }
+                  } else {} end)
+                + (if ($linux_arm_url != "" and $linux_arm_sig != "") then {
+                    "linux-aarch64": { signature: $linux_arm_sig, url: $linux_arm_url }
                   } else {} end)
               )
             }' > latest.json

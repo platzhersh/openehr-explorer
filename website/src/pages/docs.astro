@@ -67,7 +67,10 @@ const navGroups = [
         <ul>
           <li><strong>macOS:</strong> macOS 12 (Monterey) or later</li>
           <li><strong>Windows:</strong> Windows 10 (version 1803) or later</li>
-          <li><strong>Linux:</strong> Ubuntu 22.04+, Fedora 37+, or equivalent (WebKit2GTK required)</li>
+          <li>
+            <strong>Linux:</strong> Ubuntu 22.04+, Fedora 37+, Arch / Omarchy, or equivalent (WebKit2GTK 4.1 required). Supported CPU architectures: x86_64 (amd64)
+            and ARM64 (aarch64)
+          </li>
           <li><strong>Disk space:</strong> ~10 MB</li>
         </ul>
         <p>
@@ -147,9 +150,41 @@ const navGroups = [
           segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.2_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.2_amd64.AppImage" }]}
         />
         <p>
-          An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
-          registration &mdash; currently paused archive-wide &mdash; reopens.
+          Both <code>.deb</code> (<code>amd64</code>, <code>arm64</code>) and <code>.AppImage</code> (<code>amd64</code>, <code>aarch64</code>) are published
+          for each release. Pick the file matching your CPU (<code>uname -m</code> prints <code>x86_64</code> or <code>aarch64</code>). The apt repository
+          serves both architectures automatically.
         </p>
+
+        <h4>Arch Linux / Omarchy</h4>
+        <p>
+          An AUR package (<code>open-ehr-explorer-bin</code>, <code>x86_64</code> and <code>aarch64</code>) is prepared and will be published once
+          <a href="https://aur.archlinux.org">AUR</a> account registration &mdash; currently paused archive-wide &mdash; reopens. Until then, use the AppImage
+          or build from source. Runtime dependency: <code>webkit2gtk-4.1</code> (and <code>gtk3</code>).
+        </p>
+        <CodeBlock
+          client:load
+          segments={[
+            { comment: "# Once published on the AUR:" },
+            { cmd: "yay -S open-ehr-explorer-bin" },
+            { comment: "# AppImage on Arch needs fuse2:" },
+            { cmd: "sudo pacman -S --needed webkit2gtk-4.1 fuse2" },
+          ]}
+        />
+        <p><strong>Build from source (Arch):</strong></p>
+        <CodeBlock
+          client:load
+          segments={[
+            { cmd: "sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl librsvg rustup nodejs npm" },
+            { cmd: "rustup default stable" },
+            { cmd: "git clone https://github.com/platzhersh/openehr-explorer && cd openehr-explorer" },
+            { cmd: "npm install && npm run tauri build" },
+          ]}
+        />
+        <p>
+          <strong>Blank window or EGL errors (Wayland / VMs such as UTM on Apple Silicon):</strong> WebKitGTK's DMA-BUF renderer can fail under Hyprland or in
+          virtual machines. Disable it with:
+        </p>
+        <CodeBlock client:load segments={[{ cmd: "WEBKIT_DISABLE_DMABUF_RENDERER=1 ./openEHR.Explorer_0.9.2_aarch64.AppImage" }]} />
       </section>
 
       <section id="first-connection">

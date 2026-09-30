@@ -89,15 +89,17 @@ scoop bucket add openehr-explorer https://github.com/platzhersh/scoop-openehr-ex
 scoop install openehr-explorer
 ```
 
-**Linux** — `.deb` (Debian/Ubuntu) or portable `.AppImage` (any distro):
+**Linux** (x86_64 and ARM64) — `.deb` (Debian/Ubuntu) or portable `.AppImage` (any distro). Use `amd64`/`arm64` for the `.deb` and `amd64`/`aarch64` for the `.AppImage`:
 
 ```bash
 # .deb
-sudo apt install ./openehr-explorer_<version>_amd64.deb
+sudo apt install ./openEHR.Explorer_<version>_<amd64|arm64>.deb
 
 # or .AppImage
-chmod +x openehr-explorer_<version>_amd64.AppImage && ./openehr-explorer_<version>_amd64.AppImage
+chmod +x openEHR.Explorer_<version>_<amd64|aarch64>.AppImage && ./openEHR.Explorer_<version>_<amd64|aarch64>.AppImage
 ```
+
+Arch / Omarchy users: see the [installation docs](https://openehr-explorer.dev/docs.html#installation).
 
 See the [installation docs](https://openehr-explorer.dev/docs.html#installation) for troubleshooting (unsigned builds, Gatekeeper/SmartScreen warnings).
 
