@@ -775,7 +775,6 @@ function doClear() {
 
 .status-text {
   font-weight: 400;
-  opacity: 0.75;
 }
 
 .status-2xx {
