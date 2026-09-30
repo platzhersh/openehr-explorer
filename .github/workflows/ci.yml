@@ -292,6 +292,18 @@ jobs:
 
       - run: npm ci
 
+      # Tauri caches its AppImage helpers with mode 770 and copies AppRun-x86_64
+      # into the AppImage as AppRun.wrapped, leaving it without "other" permissions.
+      # Sandboxed launchers (e.g. the AppImage catalog's firejail test) then fail with
+      # "Permission denied". Pre-seed the cache with a world-executable copy; Tauri
+      # reuses a cached helper instead of downloading it again.
+      - name: Pre-seed AppRun helper with correct permissions
+        run: |
+          mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/tauri"
+          curl -fsSL -o "${XDG_CACHE_HOME:-$HOME/.cache}/tauri/AppRun-x86_64" \
+            https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
+          chmod 755 "${XDG_CACHE_HOME:-$HOME/.cache}/tauri/AppRun-x86_64"
+
       - name: Build Tauri app
         run: |
           EXTRA_ARGS=""
@@ -303,6 +315,22 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
+
+      # Catch the AppImage catalog failures before publishing: a dangling .DirIcon
+      # and executables that other users cannot run.
+      - name: Verify AppImage contents
+        run: |
+          set -euo pipefail
+          APPIMAGE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n 1)
+          rm -rf squashfs-root
+          APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract > /dev/null
+          test -e squashfs-root/.DirIcon || { echo "::error::.DirIcon is missing or a dangling symlink"; exit 1; }
+          bad=$(find squashfs-root -type f -perm -u=x ! -perm -o=x)
+          if [ -n "$bad" ]; then
+            echo "::error::Executables not runnable by other users:"
+            echo "$bad"
+            exit 1
+          fi
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v6
