@@ -94,10 +94,6 @@ async function openChangelog() {
   text-overflow: ellipsis;
 }
 
-.update-current {
-  opacity: 0.8;
-}
-
 .changelog-link {
   background: none;
   border: none;
@@ -107,11 +103,10 @@ async function openChangelog() {
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  opacity: 0.9;
 }
 
 .changelog-link:hover {
-  opacity: 1;
+  text-decoration-thickness: 2px;
 }
 
 .update-actions {
@@ -123,11 +118,11 @@ async function openChangelog() {
 .update-actions .btn {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .update-actions .btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .update-actions .btn-primary {
@@ -144,7 +139,6 @@ async function openChangelog() {
 .update-progress,
 .update-error {
   font-size: 12px;
-  opacity: 0.95;
   flex-shrink: 0;
 }
 

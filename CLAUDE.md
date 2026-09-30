@@ -74,6 +74,12 @@ npm run build-storybook  # Build static Storybook (storybook-static/, gitignored
 ```
 Component stories live next to the component they document, e.g. `src/components/ToggleSwitch.vue` + `src/components/ToggleSwitch.stories.ts`. See ADR-0021 for scope and rationale.
 
+### Accessibility (contrast)
+```bash
+npm run build-storybook && npm run test:a11y   # axe-core color-contrast over every story (CI gate)
+```
+Theme tokens live in `src/styles/tokens.css`; `src/lib/contrast.test.ts` enforces WCAG AA on them. Never dim text with `opacity` — use `--color-text-secondary`/`--color-text-muted`. See ADR-0028.
+
 ### Type Checking
 ```bash
 npx vue-tsc --noEmit     # Type check Vue/TypeScript without emitting files

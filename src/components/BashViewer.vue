@@ -104,7 +104,7 @@ const lines = computed(() => parseBashLines(props.code));
 }
 
 .bv-command {
-  color: #6495ed;
+  color: #7aa7f5;
   font-weight: 600;
 }
 .bv-flag {

@@ -293,7 +293,7 @@ function credentialBackendLabel(backend: string): string {
 }
 .version-badge {
   background: var(--color-primary-dim);
-  color: var(--color-primary);
+  color: #fff;
   font-weight: 600;
 }
 .btn-active-toggle {

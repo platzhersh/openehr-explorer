@@ -186,7 +186,7 @@ function toggle() {
   color: #dbab79;
 }
 .value-null {
-  color: #5a6a8a;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 

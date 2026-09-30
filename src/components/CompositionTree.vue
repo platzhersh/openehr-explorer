@@ -427,12 +427,11 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 
 :deep(.rm-type) {
   font-size: 10px;
-  opacity: 0.6;
 }
 :deep(.archetype-id) {
   font-size: 10px;
   font-family: var(--font-mono);
-  opacity: 0.4;
+  color: var(--color-text-muted);
 }
 
 :deep(.term-badge) {
@@ -484,7 +483,6 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 }
 
 :deep(.tree-node-header.is-ancestor) {
-  opacity: 0.6;
   font-style: italic;
 }
 </style>

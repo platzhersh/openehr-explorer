@@ -427,7 +427,7 @@ const descriptionPreview = computed(() => {
 }
 
 .btn-text:hover {
-  color: var(--color-primary-dim);
+  color: var(--color-primary);
 }
 
 .technical-header {

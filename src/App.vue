@@ -293,6 +293,7 @@ watch(
 /* .btn, .badge, .input, .error-msg, .empty-state, etc. — a separate
    stylesheet (rather than inline here) so .storybook/preview.css can
    import the exact same file instead of duplicating it. */
+@import "./styles/tokens.css";
 @import "./styles/shared-utilities.css";
 
 *,
@@ -301,27 +302,6 @@ watch(
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
-
-:root {
-  --sidebar-width: 240px;
-  --color-bg: #1a1a2e;
-  --color-bg-secondary: #16213e;
-  --color-bg-tertiary: #0f3460;
-  --color-surface: #1e2a4a;
-  --color-surface-hover: #253456;
-  --color-border: #2a3a5c;
-  --color-text: #e0e0e0;
-  --color-text-secondary: #8892b0;
-  --color-text-muted: #5a6a8a;
-  --color-primary: #64ffda;
-  --color-primary-dim: #3d9e85;
-  --color-error: #ff6b6b;
-  --color-warning: #ffd93d;
-  --color-success: #6bff8e;
-  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --radius: 6px;
 }
 
 body {

@@ -1,0 +1,27 @@
+/*
+ * App design tokens — single source of truth, imported by src/App.vue,
+ * .storybook/preview.css and read by src/lib/contrast.test.ts.
+ *
+ * Text colors must reach WCAG AA (4.5:1) on every surface token below;
+ * the contrast test enforces this (see ADR-0028).
+ */
+:root {
+  --sidebar-width: 240px;
+  --color-bg: #1a1a2e;
+  --color-bg-secondary: #16213e;
+  --color-bg-tertiary: #0f3460;
+  --color-surface: #1e2a4a;
+  --color-surface-hover: #253456;
+  --color-border: #2a3a5c;
+  --color-text: #e0e0e0;
+  --color-text-secondary: #b4bedb;
+  --color-text-muted: #9aa6c6;
+  --color-primary: #64ffda;
+  --color-primary-dim: #2a7d68;
+  --color-error: #ff7b7b;
+  --color-warning: #ffd93d;
+  --color-success: #6bff8e;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --radius: 6px;
+}

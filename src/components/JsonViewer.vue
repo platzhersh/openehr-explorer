@@ -486,7 +486,6 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
   margin-right: 12px;
   text-align: right;
   color: var(--color-text-muted);
-  opacity: 0.6;
   user-select: none;
 }
 

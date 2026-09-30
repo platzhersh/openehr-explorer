@@ -52,6 +52,12 @@ jobs:
         working-directory: website
       - run: npm run build-storybook
 
+      # Contrast gate (ADR-0028): axe-core over every built story. Uses the
+      # Chromium that Playwright installs; the token-level check already
+      # ran above as part of `npm run test`.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:a11y
+
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
