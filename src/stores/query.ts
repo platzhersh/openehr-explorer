@@ -40,7 +40,13 @@ export interface StoredQueryDefinition {
   saved_time: string | null;
 }
 
+export const DEFAULT_AQL_QUERY =
+  "SELECT e/ehr_id/value, c/uid/value, c/name/value\nFROM EHR e\nCONTAINS COMPOSITION c\nLIMIT 20";
+
 export const useQueryStore = defineStore("query", () => {
+  // Editor text lives in the store (not the view) so it survives navigating
+  // away from the AQL Runner and back.
+  const queryText = ref(DEFAULT_AQL_QUERY);
   const result = ref<AqlResult | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -162,6 +168,7 @@ export const useQueryStore = defineStore("query", () => {
   }
 
   return {
+    queryText,
     result,
     loading,
     error,
