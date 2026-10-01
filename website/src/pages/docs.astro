@@ -139,12 +139,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.4_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.5_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.4_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.4_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.5_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.5_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -481,6 +481,11 @@ const navGroups = [
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.9.5 &mdash; Linux AppImage Build Fix</h3>
+        <ul>
+          <li><strong>Linux AppImage:</strong> Release builds now repack the AppImage reliably, so the Wayland fix from v0.9.4 ships in the published AppImage</li>
+        </ul>
 
         <h3>v0.9.4 &mdash; Linux AppImage &amp; Template Panel Fixes</h3>
         <ul>

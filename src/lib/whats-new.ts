@@ -27,6 +27,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.5",
+    date: "2026-10-01",
+    highlights: [
+      {
+        title: "Wayland fix now in the AppImage",
+        description:
+          "The published Linux AppImage is now repacked reliably, so it starts correctly on Wayland desktops.",
+      },
+    ],
+  },
+  {
     version: "0.9.4",
     date: "2026-10-01",
     highlights: [
