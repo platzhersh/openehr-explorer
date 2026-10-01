@@ -33,11 +33,13 @@ export const Default: Story = {};
 export const ShortcutHintsWhileModifierHeld: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // One shared instance so the release sees the pressed modifier.
+    const user = userEvent.setup({ document: canvasElement.ownerDocument });
     const isMac = /mac/i.test(navigator.platform || "");
-    await userEvent.keyboard(isMac ? "{Meta>}" : "{Control>}");
+    await user.keyboard(isMac ? "{Meta>}" : "{Control>}");
     await new Promise((r) => setTimeout(r, 500));
     await expect(canvas.getAllByText(/^(⌘|Ctrl\+)[1-6,]$/).length).toBe(7);
-    await userEvent.keyboard(isMac ? "{/Meta}" : "{/Control}");
+    await user.keyboard(isMac ? "{/Meta}" : "{/Control}");
     await expect(canvas.queryAllByText(/^(⌘|Ctrl\+)[1-6,]$/).length).toBe(0);
   },
 };
