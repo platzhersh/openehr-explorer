@@ -82,7 +82,7 @@ export const TOURS: Tour[] = [
       {
         target: '[data-tour="nav-tabs"]',
         title: "Find your way around",
-        body: "Browse EHRs and compositions, inspect templates, run AQL queries, and manage server profiles — each gets its own screen here, or jump straight there with Ctrl/Cmd+1 through 4.",
+        body: "Browse EHRs and compositions, inspect templates, run AQL queries, and manage server profiles — each gets its own screen here, or jump straight there with Ctrl/Cmd+1 through 6 (hold Ctrl/Cmd to see each tab's key).",
       },
       {
         target: '[data-tour="nav-docs"]',

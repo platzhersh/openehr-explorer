@@ -25,7 +25,7 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 - **Template Browser** — Inspect Web Template trees, view OPT XML, drag-and-drop upload
 - **AQL Query Runner** — Execute AQL queries with 3-layer autocomplete, tabular results, saved queries, CSV export
 - **Request Inspector** — View all HTTP traffic with request/response details, copy as curl
-- **Keyboard Shortcuts** — Navigate with Cmd+1-4, toggle inspector with Cmd+Shift+I, execute queries with Cmd+Enter
+- **Keyboard Shortcuts** — Navigate with Cmd+1-6 (hold Cmd to see the keys), toggle inspector with Cmd+Shift+I, execute queries with Cmd+Enter
 
 ## Supported CDRs
 
