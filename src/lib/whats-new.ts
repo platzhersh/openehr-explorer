@@ -27,6 +27,22 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.4",
+    date: "2026-10-01",
+    highlights: [
+      {
+        title: "More reliable Linux AppImage",
+        description:
+          "The AppImage now starts correctly on Wayland desktops, so Linux users can run the app without extra workarounds.",
+      },
+      {
+        title: "Steadier Template Browser",
+        description:
+          "The template panel no longer scrolls sideways, keeping long paths readable without horizontal scrolling.",
+      },
+    ],
+  },
+  {
     version: "0.9.3",
     date: "2026-10-01",
     highlights: [
