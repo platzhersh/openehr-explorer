@@ -27,6 +27,27 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.6",
+    date: "2026-10-01",
+    highlights: [
+      {
+        title: "Shortcut hints in the sidebar",
+        description:
+          "Hold Cmd (macOS) or Ctrl (Windows/Linux) for a moment and each sidebar tab shows its keyboard shortcut.",
+      },
+      {
+        title: "Tab shortcuts match the sidebar",
+        description:
+          "Ctrl/Cmd+number shortcuts now follow the exact order of the tabs in the sidebar.",
+      },
+      {
+        title: "Linux AppImage runs on older distros",
+        description:
+          "The AppImage is now built on Ubuntu 22.04, so it works on a wider range of Linux versions.",
+      },
+    ],
+  },
+  {
     version: "0.9.5",
     date: "2026-10-01",
     highlights: [

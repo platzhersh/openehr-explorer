@@ -139,12 +139,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.5_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.6_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.5_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.5_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.6_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.6_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -484,6 +484,13 @@ const navGroups = [
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.9.6 &mdash; Navigation Shortcut Hints</h3>
+        <ul>
+          <li><strong>Shortcut Hints:</strong> Hold Cmd (macOS) or Ctrl (Windows/Linux) for a moment and the sidebar overlays each tab&rsquo;s keyboard shortcut</li>
+          <li><strong>Synced Tab Shortcuts:</strong> Ctrl/Cmd+number shortcuts now always match the order of the tabs in the sidebar</li>
+          <li><strong>Linux AppImage:</strong> The AppImage is now built on Ubuntu 22.04 for broader compatibility with older Linux distributions</li>
+        </ul>
 
         <h3>v0.9.5 &mdash; Linux AppImage Build Fix</h3>
         <ul>
