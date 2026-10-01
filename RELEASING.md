@@ -116,7 +116,8 @@ attach anything to a GitHub Release, since that only happens on `refs/tags/*`.
 
 On a pull request, add the `build-windows` and/or `build-linux` label to run that
 build in the PR's pipeline (the same artifacts-only behavior applies). Labels
-need to exist in the repo first; adding one re-runs the PR's CI.
+need to exist in the repo first; adding one re-runs the PR's CI. Only PRs from
+branches in this repository are built; PRs from forks are skipped.
 
 ## Required secrets
 
