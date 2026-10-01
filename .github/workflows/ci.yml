@@ -38,6 +38,9 @@ jobs:
       - run: npm ci
       - run: npm run fmt:check
       - run: npm run lint
+      # Layout regression tests (e.g. template-layout.test.ts) render in real Chromium.
+      # Uses the local Playwright binary, whose exact version is pinned in package.json and the lockfile.
+      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run test
       - run: npm run build
 
@@ -55,8 +58,6 @@ jobs:
       # Contrast gate (ADR-0028): axe-core over every built story. Uses the
       # Chromium that Playwright installs; the token-level check already
       # ran above as part of `npm run test`.
-      # Uses the local Playwright binary, whose exact version is pinned in package.json and the lockfile.
-      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run test:a11y
 
   rust:
@@ -292,6 +293,24 @@ jobs:
 
       - run: npm ci
 
+      # Tauri caches its AppImage helpers with mode 770 and copies AppRun-x86_64
+      # into the AppImage as AppRun.wrapped, leaving it without "other" permissions.
+      # Sandboxed launchers (e.g. the AppImage catalog's firejail test) then fail with
+      # "Permission denied". Pre-seed the cache with a world-executable copy; Tauri
+      # reuses a cached helper instead of downloading it again.
+      # The download is pinned by SHA-256, so it is as trustworthy as Tauri's own
+      # hash-verified download. If Tauri ever changes this helper, the check fails
+      # loudly and the pinned hash needs updating.
+      - name: Pre-seed AppRun helper with correct permissions
+        run: |
+          set -euo pipefail
+          CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/tauri"
+          mkdir -p "$CACHE_DIR"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$CACHE_DIR/AppRun-x86_64" \
+            https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
+          echo "f30140a43a0a59e46db21bdefdf749b9e9f2c6946e92afabbacf98b8ae73fb4f  $CACHE_DIR/AppRun-x86_64" | sha256sum -c -
+          chmod 755 "$CACHE_DIR/AppRun-x86_64"
+
       - name: Build Tauri app
         run: |
           EXTRA_ARGS=""
@@ -311,6 +330,32 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # Catch the AppImage catalog failures before publishing: a dangling .DirIcon and
+      # files or directories that other users cannot read or execute. Keep this step
+      # last in the job (after any step that repacks the AppImage) so it checks the
+      # file that gets uploaded.
+      - name: Verify AppImage contents
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y squashfs-tools > /dev/null
+          APPIMAGE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n 1)
+          # .DirIcon must resolve inside the AppImage
+          rm -rf squashfs-root
+          APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract > /dev/null
+          test -e squashfs-root/.DirIcon || { echo "::error::.DirIcon is missing or a dangling symlink"; exit 1; }
+          rm -rf squashfs-root
+          # Read modes from the squashfs itself: --appimage-extract creates directories as 0700
+          # regardless of the stored mode, so an extracted tree cannot be used to check them.
+          OFFSET=$(APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-offset)
+          bad=$(unsquashfs -o "$OFFSET" -ll "$APPIMAGE" | awk '
+            $1 ~ /^d/ && (substr($1,8,1) != "r" || substr($1,10,1) !~ /[xt]/) { print }
+            $1 ~ /^-/ && (substr($1,8,1) != "r" || ((substr($1,4,1) ~ /[xs]/ || substr($1,7,1) ~ /[xs]/) && substr($1,10,1) !~ /[xt]/)) { print }')
+          if [ -n "$bad" ]; then
+            echo "::error::Entries other users cannot read/execute (catalog sandbox would fail):"
+            echo "$bad"
+            exit 1
+          fi
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v6
