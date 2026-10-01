@@ -1069,6 +1069,10 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
 
 .panel-right {
   flex: 1;
+  /* This panel never scrolls sideways: long paths are ellipsized instead.
+     Anything that still pokes out (e.g. a tooltip) is clipped rather than
+     producing a horizontal scrollbar. See template-layout.test.ts. */
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0 24px 24px;
 }
@@ -1344,6 +1348,21 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The copy button now sits at the row's right edge (the path fills the row).
+   Its tooltip is centered under the button by default and, although hidden,
+   still counts as scrollable overflow — which stretched the panel sideways.
+   Anchor it to the button's right edge so it grows inward instead. */
+:deep(.wt-node-header .copy-tooltip) {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+:deep(.wt-node-header .copy-icon-wrap:hover .copy-tooltip),
+:deep(.wt-node-header .copy-icon-wrap:focus-within .copy-tooltip),
+:deep(.wt-node-header .copy-tooltip.show) {
+  transform: translateY(0);
 }
 
 /* Terminology badges */
