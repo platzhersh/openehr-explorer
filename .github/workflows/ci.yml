@@ -274,7 +274,10 @@ jobs:
   build-linux:
     name: Build Linux (Tauri)
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-linux) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'build-linux'))
-    runs-on: ubuntu-latest
+    # Build on the oldest supported Ubuntu LTS: the AppImage bundles GTK/WebKit and links
+    # against the build machine's glibc, so a newer runner makes it fail on older systems
+    # (the AppImage catalog tests on 22.04 / glibc 2.35). The verify step below enforces it.
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
@@ -352,6 +355,19 @@ jobs:
           rm -rf squashfs-root
           APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract > /dev/null
           test -e squashfs-root/.DirIcon || { echo "::error::.DirIcon is missing or a dangling symlink"; exit 1; }
+          # No bundled binary or library may need a newer glibc than the oldest supported
+          # Ubuntu LTS (22.04 = glibc 2.35). Keep in sync with runs-on above.
+          MAX_GLIBC=2.35
+          maxglibc=$( (find squashfs-root -type f -exec objdump -T {} + 2>/dev/null || true) | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -n 1 || true)
+          echo "Highest glibc version required by the AppImage: ${maxglibc:-none}"
+          if [ -z "$maxglibc" ]; then
+            echo "::error::Could not determine the highest glibc version required by the AppImage."
+            exit 1
+          fi
+          if [ "$(printf '%s\n%s\n' "$maxglibc" "$MAX_GLIBC" | sort -V | tail -n 1)" != "$MAX_GLIBC" ]; then
+            echo "::error::AppImage needs glibc $maxglibc but must run on glibc $MAX_GLIBC (Ubuntu 22.04). Build on the oldest supported Ubuntu LTS."
+            exit 1
+          fi
           rm -rf squashfs-root
           # Read modes from the squashfs itself: --appimage-extract creates directories as 0700
           # regardless of the stored mode, so an extracted tree cannot be used to check them.
