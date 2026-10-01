@@ -21,11 +21,19 @@ Add global keyboard shortcuts that work from any view:
 
 | Shortcut | Action | Route |
 |----------|--------|-------|
-| `Ctrl/Cmd + 1` | Switch to EHR Browser | `/ehrs` |
-| `Ctrl/Cmd + 2` | Switch to Template Browser | `/templates` |
-| `Ctrl/Cmd + 3` | Switch to AQL Runner | `/aql` |
-| `Ctrl/Cmd + 4` | Switch to Server Manager | `/servers` |
+| `Ctrl/Cmd + 1` | Switch to Overview | `/dashboard` |
+| `Ctrl/Cmd + 2` | Switch to EHR Browser | `/ehrs` |
+| `Ctrl/Cmd + 3` | Switch to Template Browser | `/templates` |
+| `Ctrl/Cmd + 4` | Switch to AQL Runner | `/aql` |
+| `Ctrl/Cmd + 5` | Switch to Terminology Browser | `/terminology` |
+| `Ctrl/Cmd + 6` | Switch to Server Manager | `/servers` |
 | `Ctrl/Cmd + ,` | Open Settings | `/settings` |
+
+The number keys follow the sidebar tab order. Tabs and shortcuts are defined
+once in `src/lib/navShortcuts.ts` (OEH-98), so adding a tab automatically
+assigns it the next number (1–9). Holding `Ctrl/Cmd` for ~400 ms overlays each
+tab's key on the sidebar (`src/composables/useModifierHeld.ts`); the overlay
+clears on key release and window blur.
 
 ### Action Shortcuts
 
@@ -90,4 +98,5 @@ Industry standard across VS Code, Slack, Chrome, Figma, and most desktop applica
 - **Documentation:** `docs/docs.html` (Keyboard Shortcuts section)
 - **Files modified:**
   - `src/App.vue` (navigation shortcuts)
+  - `src/lib/navShortcuts.ts`, `src/composables/useModifierHeld.ts`, `src/components/AppSidebar.vue` (shared tab/shortcut list and Cmd-held hints, OEH-98)
   - `src/components/RequestInspector.vue` (inspector toggle)
