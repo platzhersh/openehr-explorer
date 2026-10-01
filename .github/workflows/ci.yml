@@ -355,6 +355,8 @@ jobs:
           rm -rf squashfs-root
           APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract > /dev/null
           test -e squashfs-root/.DirIcon || { echo "::error::.DirIcon is missing or a dangling symlink"; exit 1; }
+          # AppStream metainfo (carries the AppImageHub listing screenshot) must be shipped
+          compgen -G 'squashfs-root/usr/share/metainfo/*.metainfo.xml' > /dev/null || { echo "::error::AppStream metainfo is missing from the AppImage"; exit 1; }
           # No bundled binary or library may need a newer glibc than the oldest supported
           # Ubuntu LTS (22.04 = glibc 2.35). Keep in sync with runs-on above.
           MAX_GLIBC=2.35
