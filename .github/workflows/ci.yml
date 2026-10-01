@@ -38,6 +38,9 @@ jobs:
       - run: npm ci
       - run: npm run fmt:check
       - run: npm run lint
+      # Layout regression tests (e.g. template-layout.test.ts) render in real Chromium.
+      # Uses the local Playwright binary, whose exact version is pinned in package.json and the lockfile.
+      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run test
       - run: npm run build
 
@@ -55,8 +58,6 @@ jobs:
       # Contrast gate (ADR-0028): axe-core over every built story. Uses the
       # Chromium that Playwright installs; the token-level check already
       # ran above as part of `npm run test`.
-      # Uses the local Playwright binary, whose exact version is pinned in package.json and the lockfile.
-      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run test:a11y
 
   rust:
