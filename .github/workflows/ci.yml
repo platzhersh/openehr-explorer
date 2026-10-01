@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+    # `labeled` lets a maintainer add the `build-linux` / `build-windows` label to
+    # run that platform build on the PR (the build jobs are otherwise tag-only).
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       build-windows:
@@ -198,7 +201,7 @@ jobs:
 
   build-windows:
     name: Build Windows (Tauri)
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-windows)
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-windows) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-windows'))
     runs-on: windows-latest
     permissions:
       contents: write
@@ -246,6 +249,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: |
@@ -268,7 +272,7 @@ jobs:
 
   build-linux:
     name: Build Linux (Tauri)
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-linux)
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-linux) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-linux'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
