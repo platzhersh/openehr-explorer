@@ -1338,7 +1338,9 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--color-text-muted);
-  max-width: 300px;
+  /* Fill the available row width; only truncate when the path really doesn't fit */
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
