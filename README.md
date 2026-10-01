@@ -99,6 +99,8 @@ sudo apt install ./openehr-explorer_<version>_amd64.deb
 chmod +x openehr-explorer_<version>_amd64.AppImage && ./openehr-explorer_<version>_amd64.AppImage
 ```
 
+> **Ubuntu 24.04+:** running an AppImage requires `libfuse2t64` (`sudo apt install libfuse2t64`). On Ubuntu, prefer the `.deb`/APT install. AppImages released before the libwayland fix (≤ v0.9.2) crash on Ubuntu 26.04 with `EGL_BAD_PARAMETER`; workaround: `./*.AppImage --appimage-extract && rm -f squashfs-root/usr/lib/libwayland-* && ./squashfs-root/AppRun`.
+
 See the [installation docs](https://openehr-explorer.dev/docs.html#installation) for troubleshooting (unsigned builds, Gatekeeper/SmartScreen warnings).
 
 ## Prerequisites

@@ -323,6 +323,14 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APTABASE_APP_KEY: ${{ secrets.APTABASE_APP_KEY }}
 
+      # OEH-92: bundled libwayland breaks EGL on recent distros (Ubuntu 26.04).
+      # Repack before upload and re-sign so the updater signature stays valid.
+      - name: Strip bundled libwayland from AppImage
+        run: bash scripts/strip-appimage-wayland.sh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
       # Catch the AppImage catalog failures before publishing: a dangling .DirIcon and
       # files or directories that other users cannot read or execute. Keep this step
       # last in the job (after any step that repacks the AppImage) so it checks the
