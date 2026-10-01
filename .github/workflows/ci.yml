@@ -6,6 +6,10 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+    # `labeled` lets a maintainer add the `build-linux` / `build-windows` label to
+    # run that platform build on the PR (the build jobs are otherwise tag-only).
+    # Fork PRs are excluded: those jobs request `contents: write`.
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       build-windows:
@@ -198,7 +202,7 @@ jobs:
 
   build-windows:
     name: Build Windows (Tauri)
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-windows)
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-windows) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'build-windows'))
     runs-on: windows-latest
     permissions:
       contents: write
@@ -246,6 +250,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: |
@@ -268,7 +273,7 @@ jobs:
 
   build-linux:
     name: Build Linux (Tauri)
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-linux)
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.build-linux) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'build-linux'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -325,6 +330,9 @@ jobs:
 
       # OEH-92: bundled libwayland breaks EGL on recent distros (Ubuntu 26.04).
       # Repack before upload and re-sign so the updater signature stays valid.
+      - name: Install desktop-file-utils (required by appimagetool)
+        run: sudo apt-get install -y desktop-file-utils
+
       - name: Strip bundled libwayland from AppImage
         run: bash scripts/strip-appimage-wayland.sh
         env:
@@ -379,6 +387,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: |

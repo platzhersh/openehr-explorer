@@ -33,6 +33,10 @@ esac
 rm -rf squashfs-root
 "./$APPIMAGE" --appimage-extract >/dev/null
 
+# --appimage-extract creates directories as 0700; appimagetool packs modes as-is, and
+# the AppImage must stay readable/traversable by other users (catalog sandbox).
+chmod -R u=rwX,go=rX squashfs-root
+
 echo "Removing bundled Wayland libraries:"
 find squashfs-root -name 'libwayland-*' -print -delete
 

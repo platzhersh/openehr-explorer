@@ -72,8 +72,8 @@ jobs are the platform builds:
 | Job | Runs on | What it does |
 |---|---|---|
 | `build-macos` | tag push (also every push/PR, but only uploads on a tag) | Universal DMG, code-signs if Apple secrets are configured, uploads DMG + updater artifacts to the GitHub Release |
-| `build-windows` | tag push, or manual `workflow_dispatch` with `build-windows: true` | NSIS installer, uploads to the Release, submits the installer to VirusTotal (tag pushes only) |
-| `build-linux` | tag push, or manual `workflow_dispatch` with `build-linux: true` | `.deb` + `.AppImage`, uploads to the Release |
+| `build-windows` | tag push, manual `workflow_dispatch` with `build-windows: true`, or the `build-windows` label on a PR | NSIS installer, uploads to the Release, submits the installer to VirusTotal (tag pushes only) |
+| `build-linux` | tag push, manual `workflow_dispatch` with `build-linux: true`, or the `build-linux` label on a PR | `.deb` + `.AppImage`, uploads to the Release |
 | `publish-updater-manifest` | after all three builds, tag push only | Generates `latest.json` (used by the in-app Tauri updater) from the release assets and uploads it |
 | `publish-homebrew-cask` | after `build-macos`, tag push only | Pushes an updated Cask to `platzhersh/homebrew-openehr-explorer` (needs `HOMEBREW_TAP_TOKEN`; no-ops if unset) |
 | `publish-scoop-bucket` | after `build-windows`, tag push only | Pushes an updated manifest to `platzhersh/scoop-openehr-explorer` (needs `SCOOP_BUCKET_TOKEN`; no-ops if unset) |
@@ -113,6 +113,11 @@ release by running the `CI` workflow manually (`workflow_dispatch`) from the
 Actions tab, with `build-windows` and/or `build-linux` set to `true`. This
 builds the installers as workflow artifacts only — it does **not** create or
 attach anything to a GitHub Release, since that only happens on `refs/tags/*`.
+
+On a pull request, add the `build-windows` and/or `build-linux` label to run that
+build in the PR's pipeline (the same artifacts-only behavior applies). Labels
+need to exist in the repo first; adding one re-runs the PR's CI. Only PRs from
+branches in this repository are built; PRs from forks are skipped.
 
 ## Required secrets
 
