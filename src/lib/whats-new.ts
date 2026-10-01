@@ -27,6 +27,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.3",
+    date: "2026-10-01",
+    highlights: [
+      {
+        title: "Full template paths on wide screens",
+        description:
+          "Long paths in the Template Browser are no longer cut off early when the window is wide, so you can read the whole path.",
+      },
+    ],
+  },
+  {
     version: "0.9.2",
     date: "2026-09-30",
     highlights: [
