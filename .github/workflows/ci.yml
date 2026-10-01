@@ -360,7 +360,11 @@ jobs:
           MAX_GLIBC=2.35
           maxglibc=$( (find squashfs-root -type f -exec objdump -T {} + 2>/dev/null || true) | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -n 1 || true)
           echo "Highest glibc version required by the AppImage: ${maxglibc:-none}"
-          if [ -n "$maxglibc" ] && [ "$(printf '%s\n%s\n' "$maxglibc" "$MAX_GLIBC" | sort -V | tail -n 1)" != "$MAX_GLIBC" ]; then
+          if [ -z "$maxglibc" ]; then
+            echo "::error::Could not determine the highest glibc version required by the AppImage."
+            exit 1
+          fi
+          if [ "$(printf '%s\n%s\n' "$maxglibc" "$MAX_GLIBC" | sort -V | tail -n 1)" != "$MAX_GLIBC" ]; then
             echo "::error::AppImage needs glibc $maxglibc but must run on glibc $MAX_GLIBC (Ubuntu 22.04). Build on the oldest supported Ubuntu LTS."
             exit 1
           fi
