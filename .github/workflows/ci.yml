@@ -325,6 +325,9 @@ jobs:
 
       # OEH-92: bundled libwayland breaks EGL on recent distros (Ubuntu 26.04).
       # Repack before upload and re-sign so the updater signature stays valid.
+      - name: Install desktop-file-utils (required by appimagetool)
+        run: sudo apt-get install -y desktop-file-utils
+
       - name: Strip bundled libwayland from AppImage
         run: bash scripts/strip-appimage-wayland.sh
         env:
