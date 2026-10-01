@@ -3,17 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
       build-windows:
-        description: "Build Windows installer"
+        description: 'Build Windows installer'
         type: boolean
         default: false
       build-linux:
-        description: "Build Linux packages"
+        description: 'Build Linux packages'
         type: boolean
         default: false
 
