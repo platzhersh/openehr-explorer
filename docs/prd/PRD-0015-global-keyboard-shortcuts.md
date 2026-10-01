@@ -33,7 +33,7 @@ The number keys follow the sidebar tab order. Tabs and shortcuts are defined
 once in `src/lib/navShortcuts.ts` (OEH-98), so adding a tab automatically
 assigns it the next number (1–9). Holding `Ctrl/Cmd` for ~400 ms overlays each
 tab's key on the sidebar (`src/composables/useModifierHeld.ts`); the overlay
-clears on key release and window blur.
+clears on key release and window blur. The Request Inspector header also shows its own `⌘⇧I` / `Ctrl+Shift+I` hint while the modifier is held.
 
 ### Action Shortcuts
 
