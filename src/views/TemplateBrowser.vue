@@ -1365,6 +1365,22 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   transform: translateY(0);
 }
 
+/* Same for the [data-tooltip] chips on the buttons hugging the panel's right
+   edge (floating search button, header download button): centered under the
+   button they'd poke out of the panel. */
+.panel-header [data-tooltip]::after,
+:deep(.panel-actions [data-tooltip]::after) {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+.panel-header [data-tooltip]:hover::after,
+.panel-header [data-tooltip]:focus-visible::after,
+:deep(.panel-actions [data-tooltip]:hover::after),
+:deep(.panel-actions [data-tooltip]:focus-visible::after) {
+  transform: translateY(0);
+}
+
 /* Terminology badges */
 :deep(.term-badge) {
   font-size: 9px;

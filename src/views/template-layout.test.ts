@@ -6,7 +6,8 @@ import templateBrowserSfc from "./TemplateBrowser.vue?raw";
 
 // Regression guard for OEH-96: after OEH-95 removed the 300px cap on .aql-path, the
 // copy button (and its hidden tooltip) moved to the row's right edge and made the
-// Templates detail panel scroll sideways. This renders the *real* stylesheets of
+// Templates detail panel scroll sideways; the search/download buttons' centered
+// [data-tooltip] chips at the panel's right edge overflow the same way. This renders the *real* stylesheets of
 // TemplateBrowser.vue / CopyButton.vue in Chromium and asserts the panel has no
 // horizontal overflow however long the paths are.
 // Needs Chromium (CI installs it before `npm run test`); skipped locally if absent.
@@ -33,7 +34,10 @@ const row = (depth: number): string => `
   </div></div>`;
 const page = `<style>*{box-sizing:border-box}html,body{margin:0;height:100%}${css}</style>
   <div style="height:600px"><div class="template-browser"><div class="panel-left"></div>
-  <div class="panel-right"><div class="tree-view"><div class="wt-tree">
+  <div class="panel-right">
+  <div class="panel-header"><span>template.v1</span><button data-tooltip="Download OPT">d</button></div>
+  <div class="tree-view"><div class="wt-tree">
+  <div class="panel-actions"><button data-tooltip="Search tree (Ctrl+F)">s</button></div>
   ${row(0)}${row(1)}${row(3)}</div></div></div></div></div>`;
 
 let browser: Browser | undefined;
