@@ -19,6 +19,8 @@ import BashViewer from "./BashViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
 import DrawerStateIcon from "./DrawerStateIcon.vue";
 import CopyButton from "./CopyButton.vue";
+import { useModifierHeld } from "../composables/useModifierHeld";
+import { isMacPlatform } from "../lib/navShortcuts";
 
 type DrawerState = "collapsed" | "half" | "expanded";
 
@@ -29,6 +31,10 @@ const DRAWER_STATES: { state: DrawerState; label: string }[] = [
 ];
 
 const store = useInspectorStore();
+// Shortcut hint shown on the header while Cmd/Ctrl is held (OEH-98).
+const isMac = isMacPlatform();
+const inspectorShortcutLabel = isMac ? "⌘⇧I" : "Ctrl+Shift+I";
+const { held: modifierHeld } = useModifierHeld(isMac);
 const analytics = useAnalytics();
 const tourStore = useTourStore();
 
@@ -219,6 +225,9 @@ function doClear() {
           {{ store.entries.length }}
         </span>
         <span v-if="store.hasErrors && drawerState === 'collapsed'" class="error-dot" />
+        <kbd v-if="modifierHeld" class="shortcut-hint" aria-hidden="true">
+          {{ inspectorShortcutLabel }}
+        </kbd>
       </div>
       <div class="header-actions" @click.stop>
         <button
@@ -562,6 +571,18 @@ function doClear() {
   overflow: hidden;
   transition: height 0.2s ease;
   flex-shrink: 0;
+}
+
+.shortcut-hint {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .inspector-header {

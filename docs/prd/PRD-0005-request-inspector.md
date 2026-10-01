@@ -89,7 +89,7 @@ The Inspector is a **bottom drawer** that slides up from the bottom edge of the 
 **Functional Requirements:**
 
 - Drawer has three height states: **Collapsed** (tab bar only, ~32px), **Half** (split with main content, default), **Expanded** (full window height).
-- Toggle with keyboard shortcut `Cmd+Shift+L` (macOS) / `Ctrl+Shift+L` (Windows/Linux).
+- Toggle with keyboard shortcut `Cmd+Shift+I` (macOS) / `Ctrl+Shift+I` (Windows/Linux).
 - Drawer state (height) is persisted per-session in localStorage.
 - A red dot badge on the collapsed tab indicates the most recent request resulted in a 4xx or 5xx.
 
@@ -400,7 +400,7 @@ EHRBase can return large AQL result sets. Storing unlimited response bodies in t
 - [ ] Sensitive header redaction setting (Settings screen).
 - [ ] Response body truncation notice at 2 MB.
 - [ ] Error badge on collapsed drawer tab.
-- [ ] Keyboard shortcut `Cmd/Ctrl+Shift+L`.
+- [ ] Keyboard shortcut `Cmd/Ctrl+Shift+I`.
 
 **Deliverable:** Feature-complete Inspector ready for v0.2.0 release.
 

@@ -10,6 +10,7 @@ import { useUpdateStore } from "./stores/update";
 import { useTourStore } from "./stores/tour";
 import { useWhatsNewStore } from "./stores/whatsNew";
 import { useAnalytics } from "./composables/useAnalytics";
+import { pathForShortcutKey } from "./lib/navShortcuts";
 import AppSidebar from "./components/AppSidebar.vue";
 import ServerSwitcher from "./components/ServerSwitcher.vue";
 import RequestInspector from "./components/RequestInspector.vue";
@@ -53,30 +54,13 @@ function handleKeydown(e: KeyboardEvent) {
       openUrl("https://openehr-explorer.dev/docs.html");
       void analytics.track("documentation_opened");
     }
-    // Ctrl/Cmd + 1: Switch to EHR Browser
-    else if (e.key === "1") {
-      e.preventDefault();
-      router.push("/ehrs");
-    }
-    // Ctrl/Cmd + 2: Switch to Template Browser
-    else if (e.key === "2") {
-      e.preventDefault();
-      router.push("/templates");
-    }
-    // Ctrl/Cmd + 3: Switch to AQL Runner
-    else if (e.key === "3") {
-      e.preventDefault();
-      router.push("/aql");
-    }
-    // Ctrl/Cmd + 4: Switch to Server Manager
-    else if (e.key === "4") {
-      e.preventDefault();
-      router.push("/servers");
-    }
-    // Ctrl/Cmd + ,: Open Settings
-    else if (e.key === ",") {
-      e.preventDefault();
-      router.push("/settings");
+    // Ctrl/Cmd + 1..N: jump to the Nth sidebar tab; Ctrl/Cmd + ,: Settings
+    else {
+      const path = pathForShortcutKey(e.key);
+      if (path) {
+        e.preventDefault();
+        router.push(path);
+      }
     }
   }
 }

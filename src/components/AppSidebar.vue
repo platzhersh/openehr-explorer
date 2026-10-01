@@ -5,20 +5,22 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useWhatsNewStore } from "../stores/whatsNew";
+import { useModifierHeld } from "../composables/useModifierHeld";
+import {
+  isMacPlatform,
+  navItems,
+  SETTINGS_SHORTCUT_KEY,
+  shortcutKeyForIndex,
+} from "../lib/navShortcuts";
 
 const route = useRoute();
 const analytics = useAnalytics();
 const whatsNewStore = useWhatsNewStore();
 const appVersion = ref<string>("");
 
-const navItems = [
-  { path: "/dashboard", label: "Overview", icon: "O" },
-  { path: "/ehrs", label: "EHR Browser", icon: "H" },
-  { path: "/templates", label: "Templates", icon: "T" },
-  { path: "/aql", label: "AQL Runner", icon: "Q" },
-  { path: "/terminology", label: "Terminology", icon: "V" },
-  { path: "/servers", label: "Servers", icon: "S" },
-];
+const isMac = isMacPlatform();
+const modLabel = isMac ? "⌘" : "Ctrl+";
+const { held: modifierHeld } = useModifierHeld(isMac);
 
 function isActive(path: string): boolean {
   return route.path.startsWith(path);
@@ -50,7 +52,7 @@ onMounted(async () => {
   <nav class="sidebar-nav">
     <div class="nav-main" data-tour="nav-tabs">
       <router-link
-        v-for="item in navItems"
+        v-for="(item, index) in navItems"
         :key="item.path"
         :to="item.path"
         class="nav-item"
@@ -58,6 +60,9 @@ onMounted(async () => {
       >
         <span class="nav-icon">{{ item.icon }}</span>
         <span class="nav-label">{{ item.label }}</span>
+        <kbd v-if="modifierHeld" class="shortcut-hint" aria-hidden="true">
+          {{ modLabel }}{{ shortcutKeyForIndex(index) }}
+        </kbd>
       </router-link>
     </div>
     <div class="nav-bottom">
@@ -136,6 +141,9 @@ onMounted(async () => {
           </svg>
         </span>
         <span class="nav-label">Settings</span>
+        <kbd v-if="modifierHeld" class="shortcut-hint" aria-hidden="true">
+          {{ modLabel }}{{ SETTINGS_SHORTCUT_KEY }}
+        </kbd>
       </router-link>
     </div>
   </nav>
@@ -238,6 +246,19 @@ onMounted(async () => {
 .version-display:focus-visible {
   color: var(--color-primary);
   background: var(--color-surface);
+}
+
+.shortcut-hint {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .nav-divider {
