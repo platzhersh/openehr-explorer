@@ -382,6 +382,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: |
