@@ -139,12 +139,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.2_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.3_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.2_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.2_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.3_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.3_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -481,6 +481,11 @@ const navGroups = [
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.9.3 &mdash; Template Browser Path Fix</h3>
+        <ul>
+          <li><strong>Full Template Paths:</strong> Long paths in the Template Browser are no longer truncated early on wide screens, so the full path stays readable</li>
+        </ul>
 
         <h3>v0.9.2 &mdash; Accessibility &amp; AQL Editor Fixes</h3>
         <ul>
