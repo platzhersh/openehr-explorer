@@ -224,16 +224,18 @@ fatal reports) can replace it once the Tauri plugin exposes it.
 | Event | Gated? | Properties | Source |
 |---|---|---|---|
 | `panic` | yes | `location` (scrubbed `file:line`) | Rust panic hook (`src-tauri/src/crash_report.rs`) |
-| `js_error` | yes | `kind` (error class enum), `location` (scrubbed `file:line`) | `src/lib/errorReport.ts` |
-| `promise_rejected` | yes | `kind`, `location` | `src/lib/errorReport.ts` |
+| `js_error` | yes | `kind` (error class enum), `location` (scrubbed `basename:line`) | `src/lib/errorReport.ts` |
+| `promise_rejected` | yes | `kind`, `location` (scrubbed `basename:line`) | `src/lib/errorReport.ts` |
 
 - **Consent:** strictly opt-in, no carve-out. The Rust panic hook sits below the
   frontend gate, so `crash_report` keeps an atomic mirror of `analytics_enabled`,
   seeded at startup and refreshed in `save_settings`.
 - **Never the message.** Panic and error messages routinely embed server URLs,
   EHR IDs, AQL or JSON fragments. `kind` is mapped to a fixed enum
-  (`Error`/`TypeError`/…/`string`/`object`/`other`); `location` keeps only the
-  last three components of a relative path or cargo-registry dependency path.
+  (`Error`/`TypeError`/…/`string`/`object`/`other`); `location` is scrubbed
+  per source. Rust `panic`: the last three components of a relative path or
+  cargo-registry dependency path. Frontend `js_error` / `promise_rejected`: the
+  file basename plus line only (`scrubLocation()`), whatever the original path.
   Any other absolute path becomes `unknown`, so local usernames never leave the
   machine.
 - **Quota protection:** one `panic` per session; frontend events are deduped by
