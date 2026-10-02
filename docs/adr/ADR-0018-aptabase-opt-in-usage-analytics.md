@@ -233,9 +233,12 @@ fatal reports) can replace it once the Tauri plugin exposes it.
 - **Never the message.** Panic and error messages routinely embed server URLs,
   EHR IDs, AQL or JSON fragments. `kind` is mapped to a fixed enum
   (`Error`/`TypeError`/…/`string`/`object`/`other`); `location` keeps only the
-  trailing path components so local usernames never leave the machine.
+  last three components of a relative path or cargo-registry dependency path.
+  Any other absolute path becomes `unknown`, so local usernames never leave the
+  machine.
 - **Quota protection:** one `panic` per session; frontend events are deduped by
-  (event, kind, location) and capped at 10 per session.
+  (event, kind, location) and capped at 10 per session. The consent check runs
+  before the limiter, so opted-out errors never consume the budget.
 - App version and OS arrive via Aptabase's built-in session metadata.
 
 **Hard rules:**

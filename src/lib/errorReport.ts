@@ -10,6 +10,7 @@
 
 import type { App } from "vue";
 import { useAnalytics, type AnalyticsProps } from "../composables/useAnalytics";
+import { useSettingsStore } from "../stores/settings";
 
 export type ErrorEvent = "js_error" | "promise_rejected";
 
@@ -77,6 +78,9 @@ export function installErrorReporting(app?: App): void {
   const shouldSend = createErrorLimiter();
 
   function report(event: ErrorEvent, value: unknown, location: string) {
+    // Check consent first so opted-out errors never consume dedupe keys or
+    // the per-session cap (a later opt-in must still be able to report).
+    if (!useSettingsStore().settings.analytics_enabled) return;
     const props: AnalyticsProps = { kind: classifyError(value), location };
     if (!shouldSend(event, props)) return;
     // `track` is consent-gated and never throws.

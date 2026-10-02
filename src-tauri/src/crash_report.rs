@@ -28,17 +28,35 @@ pub fn should_report() -> bool {
     ANALYTICS_ENABLED.load(Ordering::Relaxed) && !REPORTED.swap(true, Ordering::Relaxed)
 }
 
-/// Reduce a panic source location to `last/three/components.rs:line`.
+/// Reduce a panic source location to a path that cannot contain a username.
 ///
-/// Absolute paths can contain the local username (`/home/<user>/.cargo/...`),
-/// so only the trailing components are kept.
+/// - Relative paths (our own crate, e.g. `src/commands/ehr.rs`) keep their
+///   last three components.
+/// - Dependency paths under a cargo registry (`.../registry/src/<index>/<crate>/...`)
+///   are reduced to `<crate>/...`, again the last three components.
+/// - Any other absolute path (Unix, Windows drive or UNC) becomes `unknown`,
+///   since `/home/<user>/main.rs` would leak the username.
 pub fn sanitize_location(file: &str, line: u32) -> String {
     let normalized = file.replace('\\', "/");
-    let parts: Vec<&str> = normalized.split('/').filter(|p| !p.is_empty()).collect();
+    let is_absolute = normalized.starts_with('/') || normalized.as_bytes().get(1) == Some(&b':');
+    let relevant = if is_absolute {
+        match normalized.split_once("/registry/src/") {
+            // Skip the registry index directory (`index.crates.io-<hash>`).
+            Some((_, rest)) => rest.split_once('/').map(|(_, crate_path)| crate_path),
+            None => None,
+        }
+    } else {
+        Some(normalized.as_str())
+    };
+    let Some(relevant) = relevant else {
+        return "unknown".to_string();
+    };
+    let parts: Vec<&str> = relevant.split('/').filter(|p| !p.is_empty()).collect();
     let start = parts.len().saturating_sub(KEPT_PATH_COMPONENTS);
-    let mut out = format!("{}:{}", parts[start..].join("/"), line);
-    out.truncate(MAX_LOCATION_LEN);
-    out
+    let out = format!("{}:{}", parts[start..].join("/"), line);
+    // Truncate on a char boundary: slicing mid-codepoint would panic inside
+    // the panic hook.
+    out.chars().take(MAX_LOCATION_LEN).collect()
 }
 
 #[cfg(test)]
@@ -46,10 +64,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keeps_only_trailing_path_components() {
+    fn keeps_only_trailing_components_of_relative_paths() {
+        assert_eq!(
+            sanitize_location("src-tauri/src/commands/ehr.rs", 42),
+            "src/commands/ehr.rs:42"
+        );
+        assert_eq!(sanitize_location("main.rs", 1), "main.rs:1");
+    }
+
+    #[test]
+    fn dependency_paths_drop_everything_before_the_crate() {
         assert_eq!(
             sanitize_location(
-                "/home/alice/.cargo/registry/src/x/reqwest-0.13/src/lib.rs",
+                "/home/alice/.cargo/registry/src/index.crates.io-abc/reqwest-0.13/src/lib.rs",
                 42
             ),
             "reqwest-0.13/src/lib.rs:42"
@@ -57,19 +84,23 @@ mod tests {
     }
 
     #[test]
-    fn handles_windows_paths_and_short_paths() {
+    fn other_absolute_paths_are_unknown() {
+        assert_eq!(sanitize_location("/home/alice/main.rs", 1), "unknown");
         assert_eq!(
-            sanitize_location(r"C:\Users\bob\proj\src-tauri\src\commands\ehr.rs", 7),
-            "src/commands/ehr.rs:7"
+            sanitize_location(r"C:\Users\bob\proj\main.rs", 7),
+            "unknown"
         );
-        assert_eq!(sanitize_location("main.rs", 1), "main.rs:1");
-        assert_eq!(sanitize_location("", 0), ":0");
+        assert_eq!(sanitize_location(r"\\server\share\x.rs", 7), "unknown");
     }
 
     #[test]
-    fn location_is_length_capped() {
+    fn location_is_length_capped_without_splitting_chars() {
         let long = format!("{}/x.rs", "a".repeat(500));
         assert!(sanitize_location(&long, 1).len() <= MAX_LOCATION_LEN);
+        // Multibyte char straddling the byte limit must not panic.
+        let multibyte = format!("{}é/x.rs", "a".repeat(MAX_LOCATION_LEN - 2));
+        let out = sanitize_location(&multibyte, 1);
+        assert!(out.chars().count() <= MAX_LOCATION_LEN);
     }
 
     #[test]
