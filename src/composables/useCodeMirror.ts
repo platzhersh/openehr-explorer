@@ -1,5 +1,5 @@
 import { ref, onMounted, onBeforeUnmount, watch, type Ref } from "vue";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { completionKeymap } from "@codemirror/autocomplete";
@@ -35,11 +35,13 @@ const darkTheme = EditorView.theme(
     ".cm-cursor": {
       borderLeftColor: "var(--color-text)",
     },
+    // --color-surface is nearly identical to --color-bg, so selections were
+    // invisible. Use a primary-tinted highlight; brighter when focused.
     ".cm-selectionBackground, ::selection": {
-      backgroundColor: "var(--color-surface) !important",
+      backgroundColor: "rgba(100, 255, 218, 0.18) !important",
     },
     "&.cm-focused .cm-selectionBackground, &.cm-focused ::selection": {
-      backgroundColor: "var(--color-surface) !important",
+      backgroundColor: "rgba(100, 255, 218, 0.35) !important",
     },
     ".cm-activeLine": {
       backgroundColor: "rgba(255, 255, 255, 0.03)",
@@ -115,6 +117,9 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
       aql(),
       aqlAutocomplete(options.completionConfig),
       history(),
+      // Render selection as CodeMirror layers so .cm-selectionBackground
+      // styles apply (the browser's native selection is hidden).
+      drawSelection(),
       syntaxHighlighting(aqlHighlightStyle),
       bracketMatching(),
       EditorView.lineWrapping,
