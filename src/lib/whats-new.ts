@@ -250,8 +250,8 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /**
- * Entries strictly newer than `lastSeenVersion`, oldest first (so a user who
- * skipped several releases sees them in chronological order). Returns all
+ * Entries strictly newer than `lastSeenVersion`, newest first (so a user who
+ * skipped several releases sees the latest changes at the top). Returns all
  * entries if `lastSeenVersion` is null — callers gate that case themselves
  * (a fresh install shouldn't be shown the full history, see `useWhatsNewStore`).
  */
@@ -259,5 +259,5 @@ export function getEntriesSince(lastSeenVersion: string | null): WhatsNewEntry[]
   const entries = lastSeenVersion
     ? WHATS_NEW.filter((e) => compareVersions(e.version, lastSeenVersion) > 0)
     : WHATS_NEW.slice();
-  return entries.sort((a, b) => compareVersions(a.version, b.version));
+  return entries.sort((a, b) => compareVersions(b.version, a.version));
 }
