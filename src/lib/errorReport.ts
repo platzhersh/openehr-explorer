@@ -38,7 +38,12 @@ export function classifyError(value: unknown): string {
   return "other";
 }
 
-/** `https://host/assets/index-ab12.js` + line 3 → `index-ab12.js:3`. */
+/**
+ * Return a basename and line, removing directories, query strings, and fragments.
+ * `https://host/assets/index-ab12.js` + line 3 → `index-ab12.js:3`.
+ * A missing or empty filename returns `unknown`; a missing or non-finite line
+ * becomes 0. The result is truncated to 80 UTF-16 code units, including the line.
+ */
 export function scrubLocation(filename: string | undefined, line: number | undefined): string {
   if (!filename) return "unknown";
   const segments = (filename.split(/[?#]/)[0] ?? "").split(/[\\/]/).filter(Boolean);
@@ -47,7 +52,11 @@ export function scrubLocation(filename: string | undefined, line: number | undef
   return out.slice(0, MAX_LOCATION_LEN);
 }
 
-/** Pull `file:line` out of the first stack frame of an Error, if any. */
+/**
+ * Return the scrubbed location from the first stack line ending in an integer
+ * line and column (with an optional closing parenthesis). Return `unknown` for
+ * non-Error values, missing stacks, or stacks without a matching line.
+ */
 export function locationFromError(value: unknown): string {
   if (!(value instanceof Error) || !value.stack) return "unknown";
   for (const frame of value.stack.split("\n")) {
@@ -62,7 +71,12 @@ export function locationFromError(value: unknown): string {
   return "unknown";
 }
 
-/** Per-session dedupe + cap. Exported factory so tests get a fresh state. */
+/**
+ * Create an independent limiter keyed by event, kind, and location. Its predicate
+ * records each accepted key and returns true only for new keys while below
+ * `max` (default 10); nonpositive limits reject every event. State lasts for the
+ * lifetime of the returned predicate. Exported factory so tests get a fresh state.
+ */
 export function createErrorLimiter(max = MAX_ERROR_EVENTS_PER_SESSION) {
   const seen = new Set<string>();
   return function shouldSend(event: ErrorEvent, props: AnalyticsProps): boolean {
@@ -74,9 +88,21 @@ export function createErrorLimiter(max = MAX_ERROR_EVENTS_PER_SESSION) {
   };
 }
 
+/**
+ * Install window error and unhandled-rejection listeners that report only with
+ * analytics consent, sharing a dedupe limit of 10 events per installation.
+ * If `app` is supplied, also wrap its Vue error handler and call the previous
+ * handler after reporting. Call once after installing Pinia; repeated calls add
+ * listeners and fresh limits, and no cleanup handle is returned.
+ */
 export function installErrorReporting(app?: App): void {
   const shouldSend = createErrorLimiter();
 
+  /**
+   * Submit the error kind and an already scrubbed location without awaiting
+   * delivery. Opted-out errors consume no quota; tracking rejections are ignored
+   * after the accepted event has consumed a slot.
+   */
   function report(event: ErrorEvent, value: unknown, location: string) {
     // Check consent first so opted-out errors never consume dedupe keys or
     // the per-session cap (a later opt-in must still be able to report).

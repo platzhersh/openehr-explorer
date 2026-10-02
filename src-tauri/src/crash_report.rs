@@ -23,12 +23,14 @@ pub fn set_enabled(enabled: bool) {
     ANALYTICS_ENABLED.store(enabled, Ordering::Relaxed);
 }
 
-/// `true` exactly once per session while consent is given.
+/// Claim the process's single panic-report slot when analytics consent is enabled.
+/// Returns `false` without consuming the slot when disabled, or if already claimed.
+/// Toggling consent does not reset the slot, even if sending the report fails.
 pub fn should_report() -> bool {
     ANALYTICS_ENABLED.load(Ordering::Relaxed) && !REPORTED.swap(true, Ordering::Relaxed)
 }
 
-/// Reduce a panic source location to a path that cannot contain a username.
+/// Reduce a panic source location to trailing path components and a line number.
 ///
 /// - Relative paths (our own crate, e.g. `src/commands/ehr.rs`) keep their
 ///   last three components.
@@ -36,6 +38,9 @@ pub fn should_report() -> bool {
 ///   are reduced to `<crate>/...`, again the last three components.
 /// - Any other absolute path (Unix, Windows drive or UNC) becomes `unknown`,
 ///   since `/home/<user>/main.rs` would leak the username.
+///
+/// Accepted paths have `:line` appended, then are truncated to 120 Unicode scalar
+/// values, which can truncate the line suffix. Retained components are not redacted.
 pub fn sanitize_location(file: &str, line: u32) -> String {
     let normalized = file.replace('\\', "/");
     let is_absolute = normalized.starts_with('/') || normalized.as_bytes().get(1) == Some(&b':');

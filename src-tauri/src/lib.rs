@@ -131,6 +131,13 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Initialize and run the desktop app, migrating stored credentials and loading
+/// panic-reporting consent from settings. Flush pending analytics events on exit.
+/// The caller must enter a Tokio runtime for the Aptabase plugin's background work.
+///
+/// # Panics
+/// Panics if Tauri application construction fails, including plugin or menu setup,
+/// or if the bundled About icon cannot be decoded.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Migrate any plaintext credentials from profiles.json to secure storage
