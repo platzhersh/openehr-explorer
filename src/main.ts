@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
+import { installErrorReporting } from "./lib/errorReport";
 import "./styles/medblocks-overrides.css";
 
 const router = createRouter({
@@ -94,4 +95,5 @@ const router = createRouter({
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);
+installErrorReporting(app);
 app.mount("#app");

@@ -1,4 +1,5 @@
 mod commands;
+pub mod crash_report;
 pub mod credentials;
 pub mod inspector;
 pub mod settings;
@@ -130,10 +131,20 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Initialize and run the desktop app, migrating stored credentials and loading
+/// panic-reporting consent from settings. Flush pending analytics events on exit.
+/// The caller must enter a Tokio runtime for the Aptabase plugin's background work.
+///
+/// # Panics
+/// Panics if Tauri application construction fails, including plugin or menu setup,
+/// or if the bundled About icon cannot be decoded.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Migrate any plaintext credentials from profiles.json to secure storage
     server::migrate_plaintext_credentials();
+
+    // Seed the panic hook's consent mirror before any plugin can panic.
+    crash_report::set_enabled(settings::load_settings().analytics_enabled);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -141,7 +152,22 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_aptabase::Builder::new(APTABASE_APP_KEY).build())
+        .plugin(
+            tauri_plugin_aptabase::Builder::new(APTABASE_APP_KEY)
+                // Consent-gated, once per session, location only (never the
+                // panic message) — see `crash_report` and ADR-0018.
+                .with_panic_hook(Box::new(|client, info, _msg| {
+                    if !crash_report::should_report() {
+                        return;
+                    }
+                    let location = info
+                        .location()
+                        .map(|l| crash_report::sanitize_location(l.file(), l.line()))
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let _ = client.track_event("panic", Some(serde_json::json!({ "location": location })));
+                }))
+                .build(),
+        )
         .manage(terminology::TerminologyCache::default())
         .setup(|app| {
             install_update_check_menu_item(app)?;

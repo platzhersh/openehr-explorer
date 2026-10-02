@@ -136,8 +136,15 @@ pub async fn get_settings() -> Result<GlobalSettings, String> {
     Ok(load_settings())
 }
 
+/// Persist settings to `settings.json`, then update panic-reporting consent and
+/// return the saved settings.
+///
+/// # Errors
+/// Returns serialization or file-write errors as strings. On failure, the
+/// panic-reporting consent mirror is left unchanged.
 #[tauri::command]
 pub async fn save_settings(settings: GlobalSettings) -> Result<GlobalSettings, String> {
     save_settings_to_disk(&settings)?;
+    crate::crash_report::set_enabled(settings.analytics_enabled);
     Ok(settings)
 }
