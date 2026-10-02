@@ -40,7 +40,8 @@ export function classifyError(value: unknown): string {
 /** `https://host/assets/index-ab12.js` + line 3 → `index-ab12.js:3`. */
 export function scrubLocation(filename: string | undefined, line: number | undefined): string {
   if (!filename) return "unknown";
-  const base = filename.split(/[?#]/)[0]?.split(/[\\/]/).filter(Boolean).pop() ?? "unknown";
+  const segments = (filename.split(/[?#]/)[0] ?? "").split(/[\\/]/).filter(Boolean);
+  const base = segments[segments.length - 1] ?? "unknown";
   const out = `${base}:${Number.isFinite(line) ? line : 0}`;
   return out.slice(0, MAX_LOCATION_LEN);
 }
@@ -48,10 +49,16 @@ export function scrubLocation(filename: string | undefined, line: number | undef
 /** Pull `file:line` out of the first stack frame of an Error, if any. */
 export function locationFromError(value: unknown): string {
   if (!(value instanceof Error) || !value.stack) return "unknown";
-  const match = /([^\s()/\\]+\.[a-z]+):(\d+):\d+\)?\s*$/im.exec(
-    value.stack.split("\n").find((l) => /:\d+:\d+/.test(l)) ?? "",
-  );
-  return match ? scrubLocation(match[1], Number(match[2])) : "unknown";
+  for (const frame of value.stack.split("\n")) {
+    // Frames end in `file:line:col` optionally followed by `)`.
+    const parts = frame.trim().replace(/\)$/, "").split(":");
+    const line = Number(parts[parts.length - 2]);
+    const column = Number(parts[parts.length - 1]);
+    if (parts.length < 3 || !Number.isInteger(line) || !Number.isInteger(column)) continue;
+    const file = parts.slice(0, -2).join(":");
+    return scrubLocation(file, line);
+  }
+  return "unknown";
 }
 
 /** Per-session dedupe + cap. Exported factory so tests get a fresh state. */
@@ -73,7 +80,9 @@ export function installErrorReporting(app?: App): void {
     const props: AnalyticsProps = { kind: classifyError(value), location };
     if (!shouldSend(event, props)) return;
     // `track` is consent-gated and never throws.
-    void useAnalytics().track(event, props);
+    useAnalytics()
+      .track(event, props)
+      .catch(() => {});
   }
 
   window.addEventListener("error", (e) => {
