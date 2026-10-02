@@ -79,6 +79,10 @@ export function locationFromError(value: unknown): string {
  */
 export function createErrorLimiter(max = MAX_ERROR_EVENTS_PER_SESSION) {
   const seen = new Set<string>();
+  /**
+   * Reserve quota for a new event/kind/location key and return true, even if
+   * delivery later fails. Return false for duplicates or when the limit is reached.
+   */
   return function shouldSend(event: ErrorEvent, props: AnalyticsProps): boolean {
     if (seen.size >= max) return false;
     const key = `${event}|${props.kind}|${props.location}`;
