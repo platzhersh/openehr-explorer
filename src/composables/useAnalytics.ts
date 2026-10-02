@@ -50,6 +50,12 @@ export type AnalyticsEvent =
    */
   | "session_started"
   | "app_launched"
+  // --- crash / error reports (ADR-0018). Consent-gated, deduped, capped per
+  // session. Props: `kind` (fixed enum) + `location` (scrubbed `file:line`);
+  // never the error message. Rust panics emit a `panic` event from the
+  // backend with only `location` (see `src-tauri/src/crash_report.rs`).
+  | "js_error"
+  | "promise_rejected"
   // --- server ---
   | "server_connected"
   | "server_profile_created"

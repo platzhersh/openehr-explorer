@@ -139,5 +139,6 @@ pub async fn get_settings() -> Result<GlobalSettings, String> {
 #[tauri::command]
 pub async fn save_settings(settings: GlobalSettings) -> Result<GlobalSettings, String> {
     save_settings_to_disk(&settings)?;
+    crate::crash_report::set_enabled(settings.analytics_enabled);
     Ok(settings)
 }

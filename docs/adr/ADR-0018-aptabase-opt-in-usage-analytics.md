@@ -213,6 +213,31 @@ gated; see the **Session-counter carveout** section above.
 | `server_switched` | yes | `server_type` | Multi-server usage |
 | `panel_search_used` | yes | `view` (`template`/`composition`), `tab` (the open tab, e.g. `tree`/`opt`/`json`/`flat` or `pretty`/`json`/`flat`/`versions`) | In-panel search (Ctrl/Cmd+F) adoption, per view tab |
 
+### Crash and error reports (OEH-101)
+
+Crashes and unexpected errors are reported as ordinary Aptabase events, using
+the plugin's `with_panic_hook` (Rust) and `window` `error` /
+`unhandledrejection` listeners plus `app.config.errorHandler` (frontend). This
+needs no beta API; Aptabase's newer `trackError` (stack traces, persisted
+fatal reports) can replace it once the Tauri plugin exposes it.
+
+| Event | Gated? | Properties | Source |
+|---|---|---|---|
+| `panic` | yes | `location` (scrubbed `file:line`) | Rust panic hook (`src-tauri/src/crash_report.rs`) |
+| `js_error` | yes | `kind` (error class enum), `location` (scrubbed `file:line`) | `src/lib/errorReport.ts` |
+| `promise_rejected` | yes | `kind`, `location` | `src/lib/errorReport.ts` |
+
+- **Consent:** strictly opt-in, no carve-out. The Rust panic hook sits below the
+  frontend gate, so `crash_report` keeps an atomic mirror of `analytics_enabled`,
+  seeded at startup and refreshed in `save_settings`.
+- **Never the message.** Panic and error messages routinely embed server URLs,
+  EHR IDs, AQL or JSON fragments. `kind` is mapped to a fixed enum
+  (`Error`/`TypeError`/…/`string`/`object`/`other`); `location` keeps only the
+  trailing path components so local usernames never leave the machine.
+- **Quota protection:** one `panic` per session; frontend events are deduped by
+  (event, kind, location) and capped at 10 per session.
+- App version and OS arrive via Aptabase's built-in session metadata.
+
 **Hard rules:**
 - Never include free-text fields (query text, template names, server URLs)
 - Never include identifiers (EHR IDs, composition UIDs, user names)
