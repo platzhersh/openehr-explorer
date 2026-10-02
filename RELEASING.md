@@ -40,6 +40,7 @@ that need to stay in sync:
 - `src-tauri/tauri.conf.json`
 - `website/src/pages/index.astro` (version badge)
 - `website/src/pages/docs.astro` (Linux AppImage/deb install snippet)
+- `src-tauri/linux/dev.openehr_explorer.Explorer.metainfo.xml` (AppStream screenshot URL, pinned to the release tag)
 
 **Step 2 — changelog entry.** Adds a new `<h3>` entry under
 `<section id="changelog">` in `website/src/pages/docs.astro`, following the existing

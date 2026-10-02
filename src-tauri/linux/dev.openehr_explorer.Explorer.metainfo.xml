@@ -3,7 +3,10 @@
   AppStream metadata, shipped inside the AppImage (bundle.linux.appimage.files in
   tauri.conf.json). AppImageHub shows the first screenshot below in its listing
   instead of an automatic screenshot of the first-run consent dialog.
-  The screenshot URL must stay reachable for as long as released AppImages exist.
+  The screenshot URL is pinned to the release tag (raw file content, not a github.com/blob
+  page), so it keeps working for as long as released AppImages exist. The /bump-version
+  command updates the tag; the tag is created at the end of that bump, so the URL only
+  resolves once the release is tagged.
 -->
 <component type="desktop-application">
   <id>dev.openehr_explorer.Explorer</id>
@@ -29,7 +32,7 @@
   </description>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://openehr-explorer.dev/assets/screenshots/01-ehr-browser.webp</image>
+      <image type="source">https://raw.githubusercontent.com/platzhersh/openehr-explorer/v0.9.6/website/public/assets/screenshots/01-ehr-browser.webp</image>
       <caption>The EHR Browser lists EHRs and the compositions of the selected EHR</caption>
     </screenshot>
   </screenshots>
