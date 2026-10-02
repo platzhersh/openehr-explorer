@@ -35,6 +35,13 @@
       "icons/icon.ico"
     ],
     "homepage": "https://openehr-explorer.dev/",
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/metainfo/dev.openehr_explorer.Explorer.metainfo.xml": "linux/dev.openehr_explorer.Explorer.metainfo.xml"
+        }
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15",
       "signingIdentity": null,

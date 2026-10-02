@@ -16,11 +16,12 @@ Update the version string in all of the following files (these are the exact fil
 5. `src-tauri/tauri.conf.json` — top-level `"version"`
 6. `website/src/pages/index.astro` — the `version-badge` paragraph (e.g. `v0.4.0 &middot; macOS …`)
 7. `website/src/pages/docs.astro` — the Debian/AppImage install snippets (`openEHR.Explorer_<version>_amd64.deb`/`.AppImage`)
+8. `src-tauri/linux/dev.openehr_explorer.Explorer.metainfo.xml` — the screenshot URL is pinned to the release tag (`.../openehr-explorer/v<version>/website/public/assets/screenshots/01-ehr-browser.webp`); replace `v<old-version>` with `v$1`. The tag is created at the end of the bump, so the URL resolves only once the release is tagged; it ships inside the AppImage and is what AppImageHub shows as the listing screenshot.
 
 Rules:
 - Only replace the current version with `$1`. Do NOT touch historical version references in `docs/prd/` or `docs/adr/` (these are intentional historical records).
 - Do not touch the `#changelog` section of `website/src/pages/docs.astro` here — that's Step 2, and lands in a separate commit.
-- After editing, run `git diff --stat` and confirm exactly 7 files changed, matching the stat of commit `287322b`.
+- After editing, run `git diff --stat` and confirm exactly 8 files changed: the 7 files of commit `287322b` plus the metainfo file.
 - Commit the changes with this message:
 
   ```

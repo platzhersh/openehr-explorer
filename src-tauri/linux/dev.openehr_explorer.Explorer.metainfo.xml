@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata, shipped inside the AppImage (bundle.linux.appimage.files in
+  tauri.conf.json). AppImageHub shows the first screenshot below in its listing
+  instead of an automatic screenshot of the first-run consent dialog.
+  The screenshot URL is pinned to the release tag (raw file content, not a github.com/blob
+  page), so it keeps working for as long as released AppImages exist. The /bump-version
+  command updates the tag; the tag is created at the end of that bump, so the URL only
+  resolves once the release is tagged.
+-->
+<component type="desktop-application">
+  <id>dev.openehr_explorer.Explorer</id>
+  <name>openEHR Explorer</name>
+  <summary>Browse, query, and inspect any openEHR CDR</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <url type="homepage">https://openehr-explorer.dev/</url>
+  <url type="bugtracker">https://github.com/platzhersh/openehr-explorer/issues</url>
+  <description>
+    <p>
+      A desktop application for browsing, querying, and inspecting openEHR CDR
+      instances such as EHRbase and Better Platform, built as a Postman alternative
+      for openEHR.
+    </p>
+    <ul>
+      <li>Save and switch between multiple CDR servers</li>
+      <li>Browse EHRs and compositions, with a template-aware viewer plus raw JSON and FLAT formats</li>
+      <li>Inspect Web Template trees and OPT XML</li>
+      <li>Run AQL queries with autocomplete, tabular results and CSV export</li>
+      <li>View all HTTP traffic and copy requests as curl</li>
+    </ul>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://raw.githubusercontent.com/platzhersh/openehr-explorer/v0.9.6/website/public/assets/screenshots/01-ehr-browser.webp</image>
+      <caption>The EHR Browser lists EHRs and the compositions of the selected EHR</caption>
+    </screenshot>
+  </screenshots>
+  <launchable type="desktop-id">openEHR Explorer.desktop</launchable>
+  <content_rating type="oars-1.1" />
+</component>
