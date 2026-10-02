@@ -235,9 +235,9 @@ fatal reports) can replace it once the Tauri plugin exposes it.
   (`Error`/`TypeError`/…/`string`/`object`/`other`); `location` is scrubbed
   per source. Rust `panic`: the last three components of a relative path or
   cargo-registry dependency path; any other absolute path becomes `unknown`.
-  Frontend `js_error` / `promise_rejected`: the
-  file basename plus line only (`scrubLocation()`), whatever the original path. Either way, local usernames never leave the
-  machine.
+  Frontend `js_error` / `promise_rejected`: the file basename plus line only
+  (`scrubLocation()`), whatever the original path. Either way, local usernames
+  never leave the machine.
 - **Quota protection:** one `panic` per session; frontend events are deduped by
   (event, kind, location) and capped at 10 per session. The consent check runs
   before the limiter, so opted-out errors never consume the budget.
