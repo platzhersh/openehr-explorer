@@ -139,12 +139,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.6_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.7_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.6_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.6_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.7_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.7_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -484,6 +484,13 @@ const navGroups = [
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.9.7 &mdash; Crash Reporting &amp; Editor Polish</h3>
+        <ul>
+          <li><strong>Opt-in Crash Reports:</strong> If you&rsquo;ve enabled anonymous usage analytics, crashes and unexpected errors are now reported too, helping us fix problems faster. Reports contain only a scrubbed code location and, for frontend errors, a bounded error type &mdash; never messages or data. Crash reports are only sent if you opt in; the single anonymous session-count ping sent per launch is unchanged</li>
+          <li><strong>AQL Editor:</strong> Selected text in the query editor is now clearly visible</li>
+          <li><strong>Linux Listing:</strong> The AppImage now ships with AppStream metadata and a screenshot for app store listings</li>
+        </ul>
 
         <h3>v0.9.6 &mdash; Navigation Shortcut Hints</h3>
         <ul>

@@ -14,7 +14,7 @@ Update the version string in all of the following files (these are the exact fil
 3. `src-tauri/Cargo.toml` — `[package]` → `version`
 4. `src-tauri/Cargo.lock` — the `[[package]]` entry for `name = "openehr-explorer"`
 5. `src-tauri/tauri.conf.json` — top-level `"version"`
-6. `website/src/pages/index.astro` — the `version-badge` paragraph (e.g. `v0.4.0 &middot; macOS …`)
+6. `website/src/pages/index.astro` — the `version-badge` paragraph (e.g. `v0.4.0 &middot; macOS …`) **and** the JSON-LD `"softwareVersion"` field in the page's structured data (two separate spots in the same file)
 7. `website/src/pages/docs.astro` — the Debian/AppImage install snippets (`openEHR.Explorer_<version>_amd64.deb`/`.AppImage`)
 8. `src-tauri/linux/dev.openehr_explorer.Explorer.metainfo.xml` — the screenshot URL is pinned to the release tag (`.../openehr-explorer/v<version>/website/public/assets/screenshots/01-ehr-browser.webp`); replace `v<old-version>` with `v$1`. The tag is created at the end of the bump, so the URL resolves only once the release is tagged; it ships inside the AppImage and is what AppImageHub shows as the listing screenshot.
 

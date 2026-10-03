@@ -27,6 +27,22 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.9.7",
+    date: "2026-10-03",
+    highlights: [
+      {
+        title: "Opt-in crash reporting",
+        description:
+          "If you've enabled anonymous usage analytics, crashes and unexpected errors are now reported too, so they get fixed faster. Crash reports contain only a scrubbed location and, for frontend errors, a bounded error type. A single anonymous session-count ping is still sent per launch, even if you opt out.",
+      },
+      {
+        title: "Visible text selection in the AQL editor",
+        description:
+          "Selected text in the query editor now stands out clearly, making it easier to copy or edit parts of a query.",
+      },
+    ],
+  },
+  {
     version: "0.9.6",
     date: "2026-10-01",
     highlights: [
