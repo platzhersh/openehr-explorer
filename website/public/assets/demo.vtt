@@ -1,13 +1,13 @@
 WEBVTT
 
-00:00:00.000 --> 00:00:09.109
+00:00:00.000 --> 00:00:08.791
 Add a server profile and test the connection
 
-00:00:09.109 --> 00:00:13.064
+00:00:08.791 --> 00:00:12.654
 Browse EHRs and drill into their compositions
 
-00:00:13.064 --> 00:00:17.094
+00:00:12.654 --> 00:00:16.652
 Inspect Web Templates as a readable tree
 
-00:00:17.094 --> 00:00:35.841
+00:00:16.652 --> 00:00:35.452
 Write AQL queries with template-aware autocomplete
