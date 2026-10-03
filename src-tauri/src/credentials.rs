@@ -303,14 +303,16 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Base64 decode error: {e}"))
 }
 
-/// Harden file permissions on a path (Unix only).
+/// Harden file permissions on a path (Unix only; no-op elsewhere).
+#[cfg(unix)]
 pub fn harden_file_permissions(path: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).ok();
-    }
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).ok();
 }
+
+/// Harden file permissions on a path (Unix only; no-op elsewhere).
+#[cfg(not(unix))]
+pub fn harden_file_permissions(_path: &std::path::Path) {}
 
 #[cfg(test)]
 mod tests {
