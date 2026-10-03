@@ -35,12 +35,14 @@ const { view, getValue, setValue } = useCodeMirror(containerEl, {
   onChange(value: string) {
     emit("update:modelValue", value);
   },
-  onFormat() {
-    // Format the current value
-    const currentValue = getValue();
-    const formatted = formatAql(currentValue);
-    setValue(formatted);
-  },
+  // No format shortcut on a read-only document.
+  onFormat: props.readOnly
+    ? undefined
+    : () => {
+        const currentValue = getValue();
+        const formatted = formatAql(currentValue);
+        setValue(formatted);
+      },
   completionConfig,
   readOnly: props.readOnly,
 });
