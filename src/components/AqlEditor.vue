@@ -9,6 +9,7 @@ const props = defineProps<{
   modelValue: string;
   templatePaths?: Map<string, AqlPathEntry[]>;
   allTemplatePaths?: AqlPathEntry[];
+  readOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -41,6 +42,7 @@ const { view, getValue, setValue } = useCodeMirror(containerEl, {
     setValue(formatted);
   },
   completionConfig,
+  readOnly: props.readOnly,
 });
 
 // Sync external value changes into editor
