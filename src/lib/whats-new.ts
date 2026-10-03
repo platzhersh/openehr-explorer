@@ -33,7 +33,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       {
         title: "Opt-in crash reporting",
         description:
-          "If you've enabled anonymous usage analytics, crashes and unexpected errors are now reported too, so they get fixed faster. Only the error type and a scrubbed location are sent, and nothing leaves your machine unless you opt in.",
+          "If you've enabled anonymous usage analytics, crashes and unexpected errors are now reported too, so they get fixed faster. Crash reports contain only a scrubbed location and, for frontend errors, a bounded error type. A single anonymous session-count ping is still sent per launch, even if you opt out.",
       },
       {
         title: "Visible text selection in the AQL editor",

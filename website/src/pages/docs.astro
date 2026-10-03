@@ -487,7 +487,7 @@ const navGroups = [
 
         <h3>v0.9.7 &mdash; Crash Reporting &amp; Editor Polish</h3>
         <ul>
-          <li><strong>Opt-in Crash Reports:</strong> If you&rsquo;ve enabled anonymous usage analytics, crashes and unexpected errors are now reported too, helping us fix problems faster. Only the error type and a scrubbed code location are sent &mdash; never messages or data &mdash; and nothing is sent unless you opt in</li>
+          <li><strong>Opt-in Crash Reports:</strong> If you&rsquo;ve enabled anonymous usage analytics, crashes and unexpected errors are now reported too, helping us fix problems faster. Reports contain only a scrubbed code location and, for frontend errors, a bounded error type &mdash; never messages or data. Crash reports are only sent if you opt in; the single anonymous session-count ping sent per launch is unchanged</li>
           <li><strong>AQL Editor:</strong> Selected text in the query editor is now clearly visible</li>
           <li><strong>Linux Listing:</strong> The AppImage now ships with AppStream metadata and a screenshot for app store listings</li>
         </ul>
