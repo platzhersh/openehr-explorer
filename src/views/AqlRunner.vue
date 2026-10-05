@@ -648,7 +648,9 @@ const editorStyle = computed(() => ({
   margin: 0 0 8px;
   max-height: 160px;
   overflow-y: auto;
-  background: var(--color-bg);
+  /* Same surface as the panel (no dark inset like an input) so it reads as
+     display-only rather than editable. */
+  background: var(--color-surface-hover);
   border: 1px dashed var(--color-border);
   border-radius: var(--radius);
   cursor: default;
@@ -663,6 +665,9 @@ const editorStyle = computed(() => ({
   min-height: 0;
   height: auto;
   overflow: visible;
+}
+.stored-query-aql :deep(.cm-editor) {
+  background: transparent;
 }
 .stored-query-aql :deep(.cm-content) {
   padding: 8px 0;
