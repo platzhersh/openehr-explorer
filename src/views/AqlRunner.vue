@@ -390,6 +390,7 @@ const editorStyle = computed(() => ({
                 <span v-if="queryStore.selectedStoredQuery.version" class="stored-version">
                   v{{ queryStore.selectedStoredQuery.version }}
                 </span>
+                <span class="stored-version stored-readonly">Read-only</span>
               </h3>
               <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
                 Close
@@ -648,8 +649,13 @@ const editorStyle = computed(() => ({
   max-height: 160px;
   overflow-y: auto;
   background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  border: 1px dashed var(--color-border);
   border-radius: var(--radius);
+  cursor: default;
+}
+.stored-readonly {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 /* Let the read-only editor size to its content instead of AqlEditor's
    120px minimum; the wrapper above scrolls past 160px. */
