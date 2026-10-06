@@ -390,14 +390,15 @@ const editorStyle = computed(() => ({
                 <span v-if="queryStore.selectedStoredQuery.version" class="stored-version">
                   v{{ queryStore.selectedStoredQuery.version }}
                 </span>
+                <span class="stored-version stored-readonly">Read-only</span>
               </h3>
               <button type="button" class="btn btn-sm" @click="queryStore.clearSelectedStoredQuery">
                 Close
               </button>
             </div>
-            <pre class="stored-query-aql">{{
-              queryStore.selectedStoredQuery.q || "(no AQL text returned by server)"
-            }}</pre>
+            <div class="stored-query-aql">
+              <AqlEditor :model-value="queryStore.selectedStoredQuery.q ?? ''" read-only />
+            </div>
             <div v-if="storedQueryParamNames.length" class="stored-query-params">
               <div v-for="p in storedQueryParamNames" :key="p" class="stored-query-param">
                 <label :for="`stored-param-${p}`">${{ p }}</label>
@@ -645,16 +646,31 @@ const editorStyle = computed(() => ({
 }
 .stored-query-aql {
   margin: 0 0 8px;
-  padding: 8px 12px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
   max-height: 160px;
   overflow-y: auto;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  /* Same surface as the panel (no dark inset like an input) so it reads as
+     display-only rather than editable. */
+  background: var(--color-surface-hover);
+  border: 1px dashed var(--color-border);
   border-radius: var(--radius);
+  cursor: default;
+}
+.stored-readonly {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Let the read-only editor size to its content instead of AqlEditor's
+   120px minimum; the wrapper above scrolls past 160px. */
+.stored-query-aql :deep(.codemirror-container) {
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+}
+.stored-query-aql :deep(.cm-editor) {
+  background: transparent;
+}
+.stored-query-aql :deep(.cm-content) {
+  padding: 8px 0;
 }
 .stored-query-params {
   display: flex;

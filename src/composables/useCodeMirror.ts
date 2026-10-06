@@ -14,6 +14,8 @@ export interface UseCodeMirrorOptions {
   onChange?: (value: string) => void;
   onFormat?: () => void;
   completionConfig: { value: AqlCompletionConfig };
+  /** Syntax-highlighted but not editable (text stays selectable/copyable). */
+  readOnly?: boolean;
 }
 
 /**
@@ -124,6 +126,12 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
       bracketMatching(),
       EditorView.lineWrapping,
       darkTheme,
+      EditorState.readOnly.of(options.readOnly ?? false),
+      // Also drop contenteditable so browsers/assistive tech don't treat it as
+      // editable; tabindex keeps it focusable for keyboard selection/copy.
+      ...(options.readOnly
+        ? [EditorView.editable.of(false), EditorView.contentAttributes.of({ tabindex: "0" })]
+        : []),
       // completionKeymap must come first so Enter/Escape/Arrow keys accept or
       // navigate an open suggestion popup before falling through to the
       // default editing bindings (e.g. Enter inserting a newline).
