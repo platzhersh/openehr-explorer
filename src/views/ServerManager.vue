@@ -193,7 +193,23 @@ async function openApiRoot(profile: ServerProfile) {
               class="card-test-result"
               :class="cardTestResult[profile.id].success ? 'success' : 'error'"
             >
-              {{ cardTestResult[profile.id].message }}
+              <span class="card-test-message">{{ cardTestResult[profile.id].message }}</span>
+              <button
+                type="button"
+                class="card-test-dismiss"
+                aria-label="Dismiss test result"
+                @click="delete cardTestResult[profile.id]"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                  <path
+                    d="M2 2l8 8M10 2l-8 8"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    fill="none"
+                  />
+                </svg>
+              </button>
             </div>
           </div>
           <div class="profile-actions">
@@ -380,16 +396,50 @@ async function openApiRoot(profile: ServerProfile) {
   font-weight: 600;
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
+/* Mirrors `.test-result` in ServerFormDialog.vue so the card and the dialog
+   present connection-test outcomes identically. */
 .card-test-result {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
   line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.card-test-message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.card-test-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin: 0 -4px 0 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: inherit;
+  cursor: pointer;
+}
+.card-test-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 .card-test-result.success {
+  background: rgba(107, 255, 142, 0.1);
   color: var(--color-success);
+  border: 1px solid var(--color-success);
 }
 .card-test-result.error {
+  background: rgba(255, 107, 107, 0.1);
   color: var(--color-error);
+  border: 1px solid var(--color-error);
 }
 .profile-actions {
   display: flex;
