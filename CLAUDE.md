@@ -168,6 +168,9 @@ Each server profile (`ServerProfile`) includes:
 
 When adding new API integrations, use the `server_type` to branch URL construction logic (see `src-tauri/src/commands/ehr.rs` for examples).
 
+### Expand/collapse carets
+Never draw a caret with a text glyph (`▶ ▼ ▾`). Use `src/components/CaretIcon.vue` (`direction="right"` = collapsed, `"down"` = expanded; decorative, so the toggle must expose `aria-expanded`), or `src/components/CollapsibleSection.vue` for a whole disclosure section (`v-model:open`, optional `summary`). A test (`caret-glyphs.test.ts`) enforces this.
+
 ### Web Template Processing
 The app fetches "Web Templates" (openEHR operational template JSON representation) and renders them as an interactive tree in `src/components/CompositionTree.vue`. The `src/lib/webtemplate.ts` module contains utilities for traversing and extracting FLAT paths from Web Template nodes.
 

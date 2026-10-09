@@ -3,6 +3,7 @@ import { inject, ref } from "vue";
 import type { CompositionOption, DirectoryMutations, EditableFolder } from "../lib/directoryEdit";
 import { DIRECTORY_MUTATIONS_KEY } from "../lib/directoryEdit";
 import DirectoryAddItemModal from "./DirectoryAddItemModal.vue";
+import CaretIcon from "./CaretIcon.vue";
 
 // Editable counterpart to DirectoryTree.vue — same FOLDER/OBJECT_REF
 // recursion, but bound to plain-field inputs instead of rendering the RM
@@ -84,7 +85,15 @@ function compositionLabel(uid: string): string {
 <template>
   <div class="dir-edit-node">
     <div class="dir-edit-row">
-      <button type="button" class="toggle" @click="toggle">{{ expanded ? "▼" : "▶" }}</button>
+      <button
+        type="button"
+        class="toggle"
+        :aria-expanded="expanded"
+        :aria-label="expanded ? 'Collapse folder' : 'Expand folder'"
+        @click="toggle"
+      >
+        <CaretIcon :direction="expanded ? 'down' : 'right'" :size="12" />
+      </button>
       <span class="folder-icon">📁</span>
       <input
         :value="folder.name"
@@ -168,12 +177,14 @@ function compositionLabel(uid: string): string {
 }
 
 .toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 20px;
-  font-size: 10px;
+  padding: 0;
   color: var(--color-text-muted);
   flex-shrink: 0;
-  text-align: center;
   border: none;
   background: none;
   cursor: pointer;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import CopyButton from "./CopyButton.vue";
+import CaretIcon from "./CaretIcon.vue";
 
 const props = defineProps<{
   label: string;
@@ -87,7 +88,9 @@ function toggle() {
 <template>
   <div class="tree-node" :class="{ 'search-match': matchesSearch }">
     <div class="node-row" @click="isExpandable ? toggle() : undefined">
-      <span v-if="isExpandable" class="toggle">{{ expanded ? "\u25BC" : "\u25B6" }}</span>
+      <span v-if="isExpandable" class="toggle"
+        ><CaretIcon :direction="expanded ? 'down' : 'right'" :size="12"
+      /></span>
       <span v-else class="toggle-placeholder" />
 
       <span class="node-label">{{ label }}</span>
@@ -143,12 +146,13 @@ function toggle() {
 }
 
 .toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 14px;
-  font-size: 10px;
   cursor: pointer;
   color: var(--color-text-muted);
   flex-shrink: 0;
-  text-align: center;
 }
 
 .toggle-placeholder {

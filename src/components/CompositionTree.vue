@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { resolveNodeLabel } from "../lib/webtemplate";
+import CaretIcon from "./CaretIcon.vue";
 
 interface Props {
   data: Record<string, unknown>;
@@ -295,7 +296,9 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 
       if (hasChildren) {
         headerChildren.push(
-          h("span", { class: "toggle", onClick: toggle }, collapsed.value ? "\u25B6" : "\u25BC"),
+          h("span", { class: "toggle", onClick: toggle }, [
+            h(CaretIcon, { direction: collapsed.value ? "right" : "down", size: 12 }),
+          ]),
         );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
@@ -410,10 +413,11 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 }
 
 :deep(.toggle) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
-  text-align: center;
   cursor: pointer;
-  font-size: 10px;
   color: var(--color-text-muted);
   user-select: none;
 }

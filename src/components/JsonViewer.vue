@@ -14,6 +14,7 @@
 import { computed, ref, watch } from "vue";
 import { useVirtualList } from "../composables/useVirtualList";
 import CopyButton from "./CopyButton.vue";
+import CaretIcon from "./CaretIcon.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -398,7 +399,7 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
             :aria-label="effectiveCollapsed.has(line.id) ? 'Expand' : 'Collapse'"
             @click="toggle(line.id)"
           >
-            {{ effectiveCollapsed.has(line.id) ? "▶" : "▼" }}
+            <CaretIcon :direction="effectiveCollapsed.has(line.id) ? 'right' : 'down'" :size="12" />
           </button>
           <span v-else class="jv-toggle-spacer" />
 
@@ -495,12 +496,11 @@ const copyText = computed(() => JSON.stringify(props.value, null, 2));
   height: 14px;
   margin-right: 2px;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
-  font: inherit;
-  font-size: 9px;
-  line-height: 1;
-  text-align: center;
   color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;

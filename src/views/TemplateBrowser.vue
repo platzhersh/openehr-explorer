@@ -793,6 +793,7 @@ onUnmounted(() => {
 
 <script lang="ts">
 import { defineComponent, h, reactive, ref as vueRef, type PropType, type VNode } from "vue";
+import CaretIcon from "../components/CaretIcon.vue";
 
 interface WtNodeType {
   id: string;
@@ -852,7 +853,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
               class: "toggle",
               onClick: () => (collapsed.value = !collapsed.value),
             },
-            collapsed.value ? "\u25B6" : "\u25BC",
+            [h(CaretIcon, { direction: collapsed.value ? "right" : "down", size: 12 })],
           ),
         );
       } else {
@@ -967,7 +968,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
               "aria-label": `${collapsed ? "Expand" : "Collapse"} ${node.name || node.id}`,
               onClick: toggle,
             },
-            collapsed ? "\u25B6" : "\u25BC",
+            [h(CaretIcon, { direction: collapsed ? "right" : "down", size: 12 })],
           ),
         );
       } else {
@@ -1324,10 +1325,11 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
   background: var(--color-surface);
 }
 :deep(.toggle) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
-  text-align: center;
   cursor: pointer;
-  font-size: 10px;
   color: var(--color-text-muted);
   user-select: none;
   background: none;
