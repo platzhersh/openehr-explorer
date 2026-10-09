@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { expect, userEvent, within } from "storybook/test";
 import JsonTreeNode from "./JsonTreeNode.vue";
 
 const meta: Meta<typeof JsonTreeNode> = {
@@ -91,5 +92,26 @@ export const WithSearchTermMatch: Story = {
     label: "systolic",
     value: { _type: "DV_QUANTITY", magnitude: 120, units: "mm[Hg]" },
     searchTerm: "systolic",
+  },
+};
+
+export const ToggleIsKeyboardAccessible: Story = {
+  args: {
+    label: "systolic",
+    value: { magnitude: 120, units: "mm[Hg]" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: /systolic/i });
+    const initial = toggle.getAttribute("aria-expanded");
+    // Keyboard: Enter and Space each flip the state exactly once.
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(toggle).toHaveAttribute("aria-expanded", initial === "true" ? "false" : "true");
+    await userEvent.keyboard(" ");
+    await expect(toggle).toHaveAttribute("aria-expanded", initial ?? "false");
+    // Mouse: one click flips once (the row's own click handler must not double-toggle).
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-expanded", initial === "true" ? "false" : "true");
   },
 };

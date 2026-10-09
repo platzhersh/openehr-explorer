@@ -849,9 +849,12 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
       if (hasChildren) {
         headerChildren.push(
           h(
-            "span",
+            "button",
             {
+              type: "button",
               class: "toggle",
+              "aria-expanded": !collapsed.value,
+              "aria-label": `${collapsed.value ? "Expand" : "Collapse"} ${node.name || node.id}`,
               onClick: () => (collapsed.value = !collapsed.value),
             },
             [h(CaretIcon, { direction: collapsed.value ? "right" : "down", size: 12 })],

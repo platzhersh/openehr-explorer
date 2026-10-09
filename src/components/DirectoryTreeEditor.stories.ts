@@ -1,5 +1,6 @@
 import type { Decorator, Meta, StoryObj } from "@storybook/vue3-vite";
 import { provide, reactive } from "vue";
+import { expect, within } from "storybook/test";
 import {
   addItem,
   addSubfolder,
@@ -102,5 +103,24 @@ export const NestedFolders: Story = {
         return root;
       })(),
     ),
+  },
+};
+
+export const FolderTogglesNameTheirFolder: Story = {
+  args: {
+    folder: reactive(
+      (() => {
+        const root = emptyFolder("Patient Records");
+        addSubfolder(root, "2026");
+        return root;
+      })(),
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Each toggle names its own folder, so screen-reader users can tell them apart.
+    const rootToggle = await canvas.findByRole("button", { name: /folder Patient Records/ });
+    await expect(rootToggle).toHaveAttribute("aria-expanded");
+    await expect(canvas.getByRole("button", { name: /folder 2026/ })).toBeInTheDocument();
   },
 };

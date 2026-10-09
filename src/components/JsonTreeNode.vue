@@ -88,9 +88,16 @@ function toggle() {
 <template>
   <div class="tree-node" :class="{ 'search-match': matchesSearch }">
     <div class="node-row" @click="isExpandable ? toggle() : undefined">
-      <span v-if="isExpandable" class="toggle"
-        ><CaretIcon :direction="expanded ? 'down' : 'right'" :size="12"
-      /></span>
+      <button
+        v-if="isExpandable"
+        type="button"
+        class="toggle"
+        :aria-expanded="expanded"
+        :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${label}`"
+        @click.stop="toggle"
+      >
+        <CaretIcon :direction="expanded ? 'down' : 'right'" :size="12" />
+      </button>
       <span v-else class="toggle-placeholder" />
 
       <span class="node-label">{{ label }}</span>
@@ -150,9 +157,19 @@ function toggle() {
   align-items: center;
   justify-content: center;
   width: 14px;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   cursor: pointer;
   color: var(--color-text-muted);
   flex-shrink: 0;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-radius: 3px;
 }
 
 .toggle-placeholder {

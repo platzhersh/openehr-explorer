@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { fn } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import DirectoryTree from "./DirectoryTree.vue";
 
 const meta: Meta<typeof DirectoryTree> = {
@@ -71,5 +71,22 @@ export const NestedFolders: Story = {
         },
       ],
     },
+  },
+};
+
+export const RowExposesExpandedState: Story = {
+  args: {
+    folder: {
+      name: { value: "Encounters" },
+      items: [],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const row = await canvas.findByRole("button", { name: /encounters/i });
+    const before = row.getAttribute("aria-expanded");
+    await expect(before === "true" || before === "false").toBe(true);
+    await userEvent.click(row);
+    await expect(row).toHaveAttribute("aria-expanded", before === "true" ? "false" : "true");
   },
 };
