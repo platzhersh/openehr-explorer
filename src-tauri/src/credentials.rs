@@ -162,13 +162,20 @@ impl CredentialManager {
         }
     }
 
-    /// Delete all secrets for a profile (password, token, admin_password, admin_token).
+    /// Delete all secrets for a profile (password, token, client_secret and the admin_ variants).
     pub fn delete_all_secrets(
         &self,
         profile_id: &str,
         config_dir: &std::path::Path,
     ) -> Result<(), String> {
-        for field in &["password", "token", "admin_password", "admin_token"] {
+        for field in &[
+            "password",
+            "token",
+            "client_secret",
+            "admin_password",
+            "admin_token",
+            "admin_client_secret",
+        ] {
             self.delete_secret(profile_id, field, config_dir)?;
         }
         Ok(())

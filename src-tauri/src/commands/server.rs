@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 
 use crate::credentials::{harden_file_permissions, CredentialManager, StorageBackend};
 use crate::inspector::send_instrumented;
+use crate::oauth::{self, ClientAuthStyle};
 
 // ---------------------------------------------------------------------------
 // Core types
@@ -150,8 +151,27 @@ pub enum ServerType {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuthMethod {
     None,
-    Basic { username: String, password: String },
-    Bearer { token: String },
+    Basic {
+        username: String,
+        password: String,
+    },
+    Bearer {
+        token: String,
+    },
+    /// OAuth2 client-credentials grant; the access token is fetched, cached and
+    /// renewed by the backend (see `oauth.rs`).
+    #[serde(rename = "oauth2_client_credentials")]
+    OAuth2ClientCredentials {
+        token_url: String,
+        client_id: String,
+        client_secret: String,
+        #[serde(default)]
+        audience: Option<String>,
+        #[serde(default)]
+        scope: Option<String>,
+        #[serde(default)]
+        client_auth: ClientAuthStyle,
+    },
 }
 
 /// Public auth representation — secrets replaced with boolean flags.
@@ -165,6 +185,15 @@ pub enum AuthMethodPublic {
     },
     Bearer {
         has_token: bool,
+    },
+    #[serde(rename = "oauth2_client_credentials")]
+    OAuth2ClientCredentials {
+        token_url: String,
+        client_id: String,
+        has_client_secret: bool,
+        audience: Option<String>,
+        scope: Option<String>,
+        client_auth: ClientAuthStyle,
     },
 }
 
@@ -208,8 +237,23 @@ pub struct StoredProfile {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StoredAuthMethod {
     None,
-    Basic { username: String },
+    Basic {
+        username: String,
+    },
     Bearer,
+    #[serde(rename = "oauth2_client_credentials")]
+    OAuth2ClientCredentials {
+        token_url: String,
+        client_id: String,
+        #[serde(default)]
+        has_client_secret: bool,
+        #[serde(default)]
+        audience: Option<String>,
+        #[serde(default)]
+        scope: Option<String>,
+        #[serde(default)]
+        client_auth: ClientAuthStyle,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,6 +321,7 @@ fn store_auth_secrets(
             // Clean up any previously stored secrets for this prefix
             mgr.delete_secret(profile_id, &format!("{prefix}password"), config_dir)?;
             mgr.delete_secret(profile_id, &format!("{prefix}token"), config_dir)?;
+            mgr.delete_secret(profile_id, &format!("{prefix}client_secret"), config_dir)?;
         }
         AuthMethod::Basic { password, .. } => {
             // Only update if a non-empty password was provided (empty = keep existing)
@@ -289,6 +334,7 @@ fn store_auth_secrets(
                 )?;
             }
             mgr.delete_secret(profile_id, &format!("{prefix}token"), config_dir)?;
+            mgr.delete_secret(profile_id, &format!("{prefix}client_secret"), config_dir)?;
         }
         AuthMethod::Bearer { token } => {
             // Only update if a non-empty token was provided (empty = keep existing)
@@ -301,6 +347,20 @@ fn store_auth_secrets(
                 )?;
             }
             mgr.delete_secret(profile_id, &format!("{prefix}password"), config_dir)?;
+            mgr.delete_secret(profile_id, &format!("{prefix}client_secret"), config_dir)?;
+        }
+        AuthMethod::OAuth2ClientCredentials { client_secret, .. } => {
+            // Only update if a non-empty secret was provided (empty = keep existing)
+            if !client_secret.is_empty() {
+                mgr.store_secret(
+                    profile_id,
+                    &format!("{prefix}client_secret"),
+                    client_secret.clone(),
+                    config_dir,
+                )?;
+            }
+            mgr.delete_secret(profile_id, &format!("{prefix}password"), config_dir)?;
+            mgr.delete_secret(profile_id, &format!("{prefix}token"), config_dir)?;
         }
     }
     Ok(())
@@ -331,6 +391,26 @@ fn resolve_auth_secrets(
                 .unwrap_or_default();
             Ok(AuthMethod::Bearer { token })
         }
+        StoredAuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            audience,
+            scope,
+            client_auth,
+            ..
+        } => {
+            let client_secret = mgr
+                .load_secret(profile_id, &format!("{prefix}client_secret"), config_dir)?
+                .unwrap_or_default();
+            Ok(AuthMethod::OAuth2ClientCredentials {
+                token_url: token_url.clone(),
+                client_id: client_id.clone(),
+                client_secret,
+                audience: audience.clone(),
+                scope: scope.clone(),
+                client_auth: *client_auth,
+            })
+        }
     }
 }
 
@@ -351,6 +431,21 @@ fn keep_stored_secret(
         AuthMethod::Bearer { token } if token.is_empty() => AuthMethod::Bearer {
             token: load("token")?.unwrap_or_default(),
         },
+        AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret,
+            audience,
+            scope,
+            client_auth,
+        } if client_secret.is_empty() => AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret: load("client_secret")?.unwrap_or_default(),
+            audience,
+            scope,
+            client_auth,
+        },
         other => other,
     })
 }
@@ -363,6 +458,21 @@ fn to_stored_auth(auth: &AuthMethod) -> StoredAuthMethod {
             username: username.clone(),
         },
         AuthMethod::Bearer { .. } => StoredAuthMethod::Bearer,
+        AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret,
+            audience,
+            scope,
+            client_auth,
+        } => StoredAuthMethod::OAuth2ClientCredentials {
+            token_url: token_url.clone(),
+            client_id: client_id.clone(),
+            has_client_secret: !client_secret.is_empty(),
+            audience: audience.clone(),
+            scope: scope.clone(),
+            client_auth: *client_auth,
+        },
     }
 }
 
@@ -378,6 +488,21 @@ fn to_public_auth(auth: &AuthMethod) -> AuthMethodPublic {
         },
         AuthMethod::Bearer { token } => AuthMethodPublic::Bearer {
             has_token: !token.is_empty(),
+        },
+        AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret,
+            audience,
+            scope,
+            client_auth,
+        } => AuthMethodPublic::OAuth2ClientCredentials {
+            token_url: token_url.clone(),
+            client_id: client_id.clone(),
+            has_client_secret: !client_secret.is_empty(),
+            audience: audience.clone(),
+            scope: scope.clone(),
+            client_auth: *client_auth,
         },
     }
 }
@@ -555,6 +680,26 @@ fn build_request(
         AuthMethod::None => req,
         AuthMethod::Basic { username, password } => req.basic_auth(username, Some(password)),
         AuthMethod::Bearer { token } => req.bearer_auth(token),
+        // The token is attached asynchronously in `send_instrumented`; the
+        // marker tells it which cached client configuration to use.
+        AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret,
+            audience,
+            scope,
+            client_auth,
+        } => {
+            let key = oauth::register(&oauth::OAuthConfig {
+                token_url: token_url.clone(),
+                client_id: client_id.clone(),
+                client_secret: client_secret.clone(),
+                audience: audience.clone(),
+                scope: scope.clone(),
+                client_auth: *client_auth,
+            });
+            req.header(oauth::MARKER_HEADER, key)
+        }
     }
 }
 
@@ -600,6 +745,7 @@ pub async fn save_server_profile(
         // Clean up admin secrets if admin auth is removed
         mgr.delete_secret(&profile.id, "admin_password", &config_dir)?;
         mgr.delete_secret(&profile.id, "admin_token", &config_dir)?;
+        mgr.delete_secret(&profile.id, "admin_client_secret", &config_dir)?;
     }
 
     let mut profiles = load_stored_profiles();
@@ -670,6 +816,33 @@ pub async fn set_default_server_profile(id: String) -> Result<Vec<ServerProfileP
     to_public_profiles(mgr, &profiles, &config_dir)
 }
 
+/// Report the outcome of the API step. For OAuth2 profiles the token step has
+/// already succeeded by the time a response exists (a failed token request
+/// returns its own error naming the token endpoint), so say so.
+fn connection_result(
+    auth: &AuthMethod,
+    resp: &crate::inspector::InstrumentedResponse,
+) -> Result<String, String> {
+    let oauth = matches!(auth, AuthMethod::OAuth2ClientCredentials { .. });
+    if resp.is_success {
+        Ok(if oauth {
+            format!(
+                "Token acquired; connected successfully (HTTP {})",
+                resp.status
+            )
+        } else {
+            format!("Connected successfully (HTTP {})", resp.status)
+        })
+    } else if oauth {
+        Err(format!(
+            "Token acquired, but the API request failed: server returned HTTP {}",
+            resp.status
+        ))
+    } else {
+        Err(format!("Server returned HTTP {}", resp.status))
+    }
+}
+
 #[tauri::command]
 pub async fn test_server_connection(
     app: tauri::AppHandle,
@@ -686,11 +859,7 @@ pub async fn test_server_connection(
     )
     .await?;
 
-    if resp.is_success {
-        Ok(format!("Connected successfully (HTTP {})", resp.status))
-    } else {
-        Err(format!("Server returned HTTP {}", resp.status))
-    }
+    connection_result(&profile.auth_method, &resp)
 }
 
 #[tauri::command]
@@ -717,11 +886,7 @@ pub async fn test_unsaved_connection(
     )
     .await?;
 
-    if resp.is_success {
-        Ok(format!("Connected successfully (HTTP {})", resp.status))
-    } else {
-        Err(format!("Server returned HTTP {}", resp.status))
-    }
+    connection_result(&full.auth_method, &resp)
 }
 
 #[tauri::command]
@@ -1168,4 +1333,171 @@ pub fn make_request(
 
 pub fn create_client(profile: &ServerProfile) -> reqwest::Client {
     build_client(profile)
+}
+
+#[cfg(test)]
+mod oauth2_auth_tests {
+    use super::*;
+
+    fn oauth_auth() -> AuthMethod {
+        AuthMethod::OAuth2ClientCredentials {
+            token_url: "https://t.auth.prod.cadasto.io/oauth/token".into(),
+            client_id: "cid".into(),
+            client_secret: "super-secret".into(),
+            audience: Some("https://t.api.prod.cadasto.io/openehr/v1".into()),
+            scope: Some("api.read api.write".into()),
+            client_auth: ClientAuthStyle::Basic,
+        }
+    }
+
+    #[test]
+    fn full_auth_round_trips() {
+        let json = serde_json::to_string(&oauth_auth()).unwrap();
+        assert!(json.contains(r#""type":"oauth2_client_credentials""#));
+        let back: AuthMethod = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(back, AuthMethod::OAuth2ClientCredentials { client_secret, .. } if client_secret == "super-secret")
+        );
+    }
+
+    #[test]
+    fn optional_fields_and_client_auth_default() {
+        let a: AuthMethod = serde_json::from_str(
+            r#"{"type":"oauth2_client_credentials","token_url":"https://x/t","client_id":"c","client_secret":"s"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            a,
+            AuthMethod::OAuth2ClientCredentials {
+                audience: None,
+                scope: None,
+                client_auth: ClientAuthStyle::Basic,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn stored_form_has_no_secret() {
+        let stored = to_stored_auth(&oauth_auth());
+        let json = serde_json::to_string(&stored).unwrap();
+        assert!(!json.contains("super-secret"));
+        assert!(!json.contains("\"client_secret\":"));
+        assert!(json.contains(r#""has_client_secret":true"#));
+        let back: StoredAuthMethod = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            back,
+            StoredAuthMethod::OAuth2ClientCredentials {
+                has_client_secret: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn public_form_has_no_secret() {
+        let json = serde_json::to_string(&to_public_auth(&oauth_auth())).unwrap();
+        assert!(!json.contains("super-secret"));
+        assert!(json.contains(r#""has_client_secret":true"#));
+        assert!(json.contains("cadasto.io/oauth/token"));
+    }
+
+    #[test]
+    fn stored_secret_flag_reflects_an_empty_secret() {
+        let AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            audience,
+            scope,
+            client_auth,
+            ..
+        } = oauth_auth()
+        else {
+            unreachable!()
+        };
+        let empty = AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret: String::new(),
+            audience,
+            scope,
+            client_auth,
+        };
+        assert!(matches!(
+            to_public_auth(&empty),
+            AuthMethodPublic::OAuth2ClientCredentials {
+                has_client_secret: false,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn keep_stored_secret_fills_an_empty_client_secret() {
+        let AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            audience,
+            scope,
+            client_auth,
+            ..
+        } = oauth_auth()
+        else {
+            unreachable!()
+        };
+        let blank = AuthMethod::OAuth2ClientCredentials {
+            token_url,
+            client_id,
+            client_secret: String::new(),
+            audience,
+            scope,
+            client_auth,
+        };
+        let out = keep_stored_secret(blank, |k| {
+            assert_eq!(k, "client_secret");
+            Ok(Some("stored".into()))
+        })
+        .unwrap();
+        assert!(
+            matches!(out, AuthMethod::OAuth2ClientCredentials { client_secret, .. } if client_secret == "stored")
+        );
+        let typed = keep_stored_secret(oauth_auth(), |_| panic!("storage consulted")).unwrap();
+        assert!(
+            matches!(typed, AuthMethod::OAuth2ClientCredentials { client_secret, .. } if client_secret == "super-secret")
+        );
+    }
+
+    #[test]
+    fn legacy_auth_variants_still_deserialize() {
+        for json in [
+            r#"{"type":"none"}"#,
+            r#"{"type":"basic","username":"u","password":"p"}"#,
+            r#"{"type":"bearer","token":"t"}"#,
+        ] {
+            serde_json::from_str::<AuthMethod>(json).unwrap();
+        }
+        for json in [
+            r#"{"type":"none"}"#,
+            r#"{"type":"basic","username":"u"}"#,
+            r#"{"type":"bearer"}"#,
+        ] {
+            serde_json::from_str::<StoredAuthMethod>(json).unwrap();
+        }
+    }
+
+    #[test]
+    fn oauth_requests_carry_only_the_internal_marker() {
+        let client = reqwest::Client::new();
+        let req = build_request(
+            &client,
+            reqwest::Method::GET,
+            "http://localhost/x",
+            &oauth_auth(),
+        )
+        .build()
+        .unwrap();
+        assert!(req.headers().contains_key(oauth::MARKER_HEADER));
+        assert!(!req.headers().contains_key("authorization"));
+        assert!(!format!("{:?}", req.headers()).contains("super-secret"));
+    }
 }
