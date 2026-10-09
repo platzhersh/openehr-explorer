@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { apiRoot, customApiPrefixLabel, DEFAULT_API_PATH_PREFIX } from "./apiPath";
+import {
+  apiRoot,
+  CADASTO_API_PATH_PREFIX,
+  customApiPrefixLabel,
+  DEFAULT_API_PATH_PREFIX,
+  defaultApiPathPrefix,
+} from "./apiPath";
 
 describe("apiRoot", () => {
   it("defaults to /rest/openehr/v1 when no prefix is set", () => {
@@ -42,5 +48,33 @@ describe("customApiPrefixLabel", () => {
   it("shows an explicit empty prefix as '/'", () => {
     expect(customApiPrefixLabel("")).toBe("/");
     expect(customApiPrefixLabel("/")).toBe("/");
+  });
+});
+
+describe("server type defaults", () => {
+  it("uses /openehr/v1 for Cadasto and the REST default otherwise", () => {
+    expect(CADASTO_API_PATH_PREFIX).toBe("/openehr/v1");
+    expect(defaultApiPathPrefix("cadasto")).toBe("/openehr/v1");
+    expect(defaultApiPathPrefix("ehrbase")).toBe("/rest/openehr/v1");
+    expect(defaultApiPathPrefix(undefined)).toBe("/rest/openehr/v1");
+  });
+
+  it("builds the Cadasto API root from a blank prefix", () => {
+    expect(apiRoot("https://cdr.example.com", null, "cadasto")).toBe(
+      "https://cdr.example.com/openehr/v1",
+    );
+  });
+
+  it("lets an explicit prefix win over the type default", () => {
+    expect(apiRoot("https://cdr.example.com", "/rest/openehr/v1", "cadasto")).toBe(
+      "https://cdr.example.com/rest/openehr/v1",
+    );
+  });
+
+  it("labels a prefix only when it differs from the type's default", () => {
+    expect(customApiPrefixLabel(null, "cadasto")).toBeNull();
+    expect(customApiPrefixLabel("/openehr/v1", "cadasto")).toBeNull();
+    expect(customApiPrefixLabel("/openehr/v1", "ehrbase")).toBe("/openehr/v1");
+    expect(customApiPrefixLabel("/rest/openehr/v1", "cadasto")).toBe("/rest/openehr/v1");
   });
 });

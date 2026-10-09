@@ -46,7 +46,7 @@ defineEmits<{
             </li>
             <li>
               The CDR platform type (<em>ehrbase</em> / <em>better_platform</em> /
-              <em>ferro_ehr</em> / <em>generic</em>)
+              <em>ferro_ehr</em> / <em>cadasto</em> / <em>generic</em>)
             </li>
           </ul>
         </div>
