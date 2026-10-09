@@ -19,6 +19,7 @@ export const SAMPLE_EHRBASE_PROFILE: ServerProfile = {
   auth_method: { type: "basic", username: "ehrbase-user", has_password: true },
   admin_auth_method: null,
   terminology_url: null,
+  api_path_prefix: null,
   credential_backend: "encrypted_file",
   is_default: true,
 };

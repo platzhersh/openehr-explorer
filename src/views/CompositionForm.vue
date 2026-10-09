@@ -2,6 +2,7 @@
 import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
+import { apiPathPrefix } from "../lib/apiPath";
 import { useEhrStore } from "../stores/ehr";
 import { useTemplateStore } from "../stores/template";
 import { useCompositionStore } from "../stores/composition";
@@ -545,12 +546,12 @@ function buildRequestUrl(templateId: string): { method: string; url: string } {
   if (isEditMode.value) {
     return {
       method: "PUT",
-      url: `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`,
+      url: `${apiPathPrefix(serverStore.activeServer?.api_path_prefix)}/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`,
     };
   }
   return {
     method: "POST",
-    url: `/rest/openehr/v1/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`,
+    url: `${apiPathPrefix(serverStore.activeServer?.api_path_prefix)}/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`,
   };
 }
 

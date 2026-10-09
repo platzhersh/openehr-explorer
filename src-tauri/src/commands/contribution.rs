@@ -49,12 +49,10 @@ pub async fn get_contribution(
 ) -> Result<ContributionDetail, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
-    let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/contribution/{}",
-        base, ehr_id, contribution_uid
-    );
+    let url = format!("{}/ehr/{}/contribution/{}", base, ehr_id, contribution_uid);
 
     let resp = send_instrumented(
         &app,
