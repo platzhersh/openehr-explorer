@@ -5,6 +5,7 @@ import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 import LockIcon from "./LockIcon.vue";
+import CollapsibleSection from "./CollapsibleSection.vue";
 import { apiRoot, DEFAULT_API_PATH_PREFIX } from "../lib/apiPath";
 import { useEscapeKey } from "../composables/useEscapeKey";
 
@@ -400,20 +401,12 @@ useEscapeKey(() => props.open, handleClose);
             </div>
           </div>
 
-          <div class="advanced-section">
-            <button
-              type="button"
-              class="advanced-toggle"
-              :aria-expanded="showAdvanced"
-              aria-controls="server-advanced-settings"
-              @click="showAdvanced = !showAdvanced"
-            >
-              <span class="advanced-chevron" :class="{ open: showAdvanced }" aria-hidden="true">
-                ▸
-              </span>
-              Advanced settings
-            </button>
-            <div v-if="showAdvanced" id="server-advanced-settings" class="form-group">
+          <CollapsibleSection
+            v-model:open="showAdvanced"
+            title="Advanced settings"
+            class="advanced-section"
+          >
+            <div class="form-group">
               <label for="server-api-path-prefix">API Path Prefix (optional)</label>
               <input
                 id="server-api-path-prefix"
@@ -431,7 +424,7 @@ useEscapeKey(() => props.open, handleClose);
                 Requests go to: <code>{{ apiRootPreview }}/ehr</code>
               </p>
             </div>
-          </div>
+          </CollapsibleSection>
 
           <div class="form-group">
             <SearchableSelect
@@ -671,40 +664,7 @@ useEscapeKey(() => props.open, handleClose);
   margin-bottom: 16px;
 }
 
-.advanced-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  background: none;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.advanced-toggle:hover {
-  color: var(--color-text);
-}
-
-.advanced-chevron {
-  display: inline-block;
-  transition: transform 0.15s ease;
-}
-
-.advanced-chevron.open {
-  transform: rotate(90deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .advanced-chevron {
-    transition: none;
-  }
-}
-
-.advanced-section .form-group {
-  margin-top: 10px;
+.advanced-section :deep(.form-group) {
   margin-bottom: 0;
 }
 

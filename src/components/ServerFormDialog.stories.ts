@@ -80,6 +80,13 @@ export const NewProfileAdvancedCollapsed: Story = {
     const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(canvas.queryByTestId("api-root-preview")).toBeNull();
+  },
+};
+
+export const EscapeClosesDialog: Story = {
+  render: render(null),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
     // Escape inside the dialog closes it (keyboard counterpart of the overlay click).
     await userEvent.click(await canvas.findByLabelText("Name"));
     await userEvent.keyboard("{Escape}");
