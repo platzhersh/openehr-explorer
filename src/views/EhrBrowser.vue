@@ -18,6 +18,7 @@ import DirectoryTreeEditor from "../components/DirectoryTreeEditor.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import FilterIcon from "../components/FilterIcon.vue";
 import PlusIcon from "../components/PlusIcon.vue";
+import DismissibleError from "../components/DismissibleError.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import EhrListItem from "../components/EhrListItem.vue";
@@ -1655,9 +1656,12 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
       <div v-if="ehrStore.searchLoading || ehrStore.loading" class="loading">
         <span class="spinner"></span> Loading...
       </div>
-      <div v-else-if="!ehrStore.searchActive && ehrStore.error" class="error-msg">
+      <DismissibleError
+        v-else-if="!ehrStore.searchActive && ehrStore.error"
+        @dismiss="ehrStore.error = null"
+      >
         {{ ehrStore.error }}
-      </div>
+      </DismissibleError>
       <div v-else-if="!serverStore.activeServerId" class="empty-state">
         <h3>No server selected</h3>
         <p>Configure a server in the Servers tab.</p>

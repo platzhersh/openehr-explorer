@@ -12,6 +12,7 @@ import SearchOverlay from "../components/SearchOverlay.vue";
 import SearchButton from "../components/SearchButton.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
+import DismissibleError from "../components/DismissibleError.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
@@ -459,9 +460,9 @@ onUnmounted(() => {
       </div>
 
       <div v-if="templateStore.loading && !selectedTemplateId" class="loading">Loading...</div>
-      <div v-else-if="templateStore.error" class="error-msg">
+      <DismissibleError v-else-if="templateStore.error" @dismiss="templateStore.error = null">
         {{ templateStore.error }}
-      </div>
+      </DismissibleError>
       <div v-else>
         <div class="template-list">
           <div
