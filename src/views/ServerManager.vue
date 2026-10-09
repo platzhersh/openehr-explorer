@@ -380,16 +380,24 @@ async function openApiRoot(profile: ServerProfile) {
   font-weight: 600;
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
+/* Mirrors `.test-result` in ServerFormDialog.vue so the card and the dialog
+   present connection-test outcomes identically. */
 .card-test-result {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
   line-height: 1.4;
 }
 .card-test-result.success {
+  background: rgba(107, 255, 142, 0.1);
   color: var(--color-success);
+  border: 1px solid var(--color-success);
 }
 .card-test-result.error {
+  background: rgba(255, 107, 107, 0.1);
   color: var(--color-error);
+  border: 1px solid var(--color-error);
 }
 .profile-actions {
   display: flex;
