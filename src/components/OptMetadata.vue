@@ -221,86 +221,89 @@ const descriptionPreview = computed(() => {
         </button>
       </h3>
 
-      <div v-if="metadataExpanded" id="opt-metadata-content" class="metadata-content">
-        <!-- Primary Metadata -->
-        <div class="metadata-section">
-          <div v-if="metadata.lifecycleStatePresent" class="metadata-row">
-            <span class="metadata-label">Lifecycle:</span>
-            <LifecycleBadge :value="metadata.lifecycleState" />
-          </div>
-
-          <div v-if="authorDisplay" class="metadata-row">
-            <span class="metadata-label">Author:</span>
-            <span class="metadata-value">
-              <a
-                v-if="metadata.originalAuthor.email"
-                :href="`mailto:${metadata.originalAuthor.email}`"
-                class="author-link"
-              >
-                {{ authorDisplay }}
-              </a>
-              <span v-else>{{ authorDisplay }}</span>
-              <span v-if="metadata.originalAuthor.email" class="author-email">
-                {{ metadata.originalAuthor.email }}
-              </span>
-            </span>
-          </div>
-
-          <div v-if="metadata.originalAuthor.date" class="metadata-row">
-            <span class="metadata-label">Date:</span>
-            <span class="metadata-value">{{ metadata.originalAuthor.date }}</span>
-          </div>
-
-          <div v-if="metadata.otherContributors.length > 0" class="metadata-row">
-            <span class="metadata-label">Contributors:</span>
-            <span class="metadata-value">{{ metadata.otherContributors.join(", ") }}</span>
-          </div>
-
-          <div
-            v-if="
-              metadata.otherDetails.custodian_organisation &&
-              metadata.otherDetails.custodian_organisation !== metadata.originalAuthor.organisation
-            "
-            class="metadata-row"
-          >
-            <span class="metadata-label">Custodian:</span>
-            <span class="metadata-value">{{ metadata.otherDetails.custodian_organisation }}</span>
-          </div>
-
-          <div v-if="metadata.otherDetails.original_publisher" class="metadata-row">
-            <span class="metadata-label">Publisher:</span>
-            <span class="metadata-value">{{ metadata.otherDetails.original_publisher }}</span>
-          </div>
-        </div>
-
-        <!-- Description/Purpose -->
-        <div v-if="shouldShowDescription" class="metadata-section">
-          <div class="description-container">
-            <div class="description-text" :class="{ expanded: descriptionExpanded }">
-              {{ descriptionExpanded ? metadata.details : descriptionPreview }}
+      <div v-show="metadataExpanded" id="opt-metadata-content" class="metadata-content">
+        <template v-if="metadataExpanded">
+          <!-- Primary Metadata -->
+          <div class="metadata-section">
+            <div v-if="metadata.lifecycleStatePresent" class="metadata-row">
+              <span class="metadata-label">Lifecycle:</span>
+              <LifecycleBadge :value="metadata.lifecycleState" />
             </div>
-            <button
-              v-if="metadata.details && metadata.details.length > 150"
-              class="btn-text"
-              @click="descriptionExpanded = !descriptionExpanded"
+
+            <div v-if="authorDisplay" class="metadata-row">
+              <span class="metadata-label">Author:</span>
+              <span class="metadata-value">
+                <a
+                  v-if="metadata.originalAuthor.email"
+                  :href="`mailto:${metadata.originalAuthor.email}`"
+                  class="author-link"
+                >
+                  {{ authorDisplay }}
+                </a>
+                <span v-else>{{ authorDisplay }}</span>
+                <span v-if="metadata.originalAuthor.email" class="author-email">
+                  {{ metadata.originalAuthor.email }}
+                </span>
+              </span>
+            </div>
+
+            <div v-if="metadata.originalAuthor.date" class="metadata-row">
+              <span class="metadata-label">Date:</span>
+              <span class="metadata-value">{{ metadata.originalAuthor.date }}</span>
+            </div>
+
+            <div v-if="metadata.otherContributors.length > 0" class="metadata-row">
+              <span class="metadata-label">Contributors:</span>
+              <span class="metadata-value">{{ metadata.otherContributors.join(", ") }}</span>
+            </div>
+
+            <div
+              v-if="
+                metadata.otherDetails.custodian_organisation &&
+                metadata.otherDetails.custodian_organisation !==
+                  metadata.originalAuthor.organisation
+              "
+              class="metadata-row"
             >
-              {{ descriptionExpanded ? "Show less" : "Show more..." }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Technical Metadata (Collapsible) -->
-        <div v-if="technicalMetadata.length > 0" class="metadata-section">
-          <CollapsibleSection v-model:open="technicalExpanded" title="Technical Metadata">
-            <div v-for="item in technicalMetadata" :key="item.label" class="technical-row">
-              <span class="technical-key">{{ item.label }}:</span>
-              <span class="technical-value" :class="{ monospace: item.monospace }">
-                {{ item.value }}
-              </span>
-              <CopyButton v-if="item.monospace && item.value" :text="item.value" />
+              <span class="metadata-label">Custodian:</span>
+              <span class="metadata-value">{{ metadata.otherDetails.custodian_organisation }}</span>
             </div>
-          </CollapsibleSection>
-        </div>
+
+            <div v-if="metadata.otherDetails.original_publisher" class="metadata-row">
+              <span class="metadata-label">Publisher:</span>
+              <span class="metadata-value">{{ metadata.otherDetails.original_publisher }}</span>
+            </div>
+          </div>
+
+          <!-- Description/Purpose -->
+          <div v-if="shouldShowDescription" class="metadata-section">
+            <div class="description-container">
+              <div class="description-text" :class="{ expanded: descriptionExpanded }">
+                {{ descriptionExpanded ? metadata.details : descriptionPreview }}
+              </div>
+              <button
+                v-if="metadata.details && metadata.details.length > 150"
+                class="btn-text"
+                @click="descriptionExpanded = !descriptionExpanded"
+              >
+                {{ descriptionExpanded ? "Show less" : "Show more..." }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Technical Metadata (Collapsible) -->
+          <div v-if="technicalMetadata.length > 0" class="metadata-section">
+            <CollapsibleSection v-model:open="technicalExpanded" title="Technical Metadata">
+              <div v-for="item in technicalMetadata" :key="item.label" class="technical-row">
+                <span class="technical-key">{{ item.label }}:</span>
+                <span class="technical-value" :class="{ monospace: item.monospace }">
+                  {{ item.value }}
+                </span>
+                <CopyButton v-if="item.monospace && item.value" :text="item.value" />
+              </div>
+            </CollapsibleSection>
+          </div>
+        </template>
       </div>
     </div>
   </div>

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { expect, userEvent, within } from "storybook/test";
 import OptMetadata from "./OptMetadata.vue";
 
 const meta: Meta<typeof OptMetadata> = {
@@ -66,4 +67,21 @@ export const MinimalMetadata: Story = {
 
 export const NoMetadata: Story = {
   args: { optXml: NO_DESCRIPTION_OPT_XML },
+};
+
+export const CollapsedKeepsControlledRegion: Story = {
+  args: { optXml: FULL_OPT_XML },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: /template metadata/i });
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // aria-controls keeps pointing at a real (hidden, empty) element while collapsed.
+    const id = toggle.getAttribute("aria-controls")!;
+    const region = canvasElement.querySelector(`#${id}`);
+    await expect(region).not.toBeNull();
+    await expect(region).not.toBeVisible();
+    await expect(canvas.queryByText(/Lifecycle:/)).toBeNull();
+  },
 };

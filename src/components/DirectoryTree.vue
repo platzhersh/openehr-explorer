@@ -70,7 +70,7 @@ function onItemClick(objectRef: ObjectRef) {
 
 <template>
   <div class="dir-node">
-    <button type="button" class="dir-row" @click="toggle">
+    <button type="button" class="dir-row" :aria-expanded="expanded" @click="toggle">
       <span class="toggle"><CaretIcon :direction="expanded ? 'down' : 'right'" :size="12" /></span>
       <span class="folder-icon">📁</span>
       <span class="folder-label">{{ label }}</span>

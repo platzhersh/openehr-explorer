@@ -296,9 +296,17 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
 
       if (hasChildren) {
         headerChildren.push(
-          h("span", { class: "toggle", onClick: toggle }, [
-            h(CaretIcon, { direction: collapsed.value ? "right" : "down", size: 12 }),
-          ]),
+          h(
+            "button",
+            {
+              type: "button",
+              class: "toggle",
+              "aria-expanded": !collapsed.value,
+              "aria-label": `${collapsed.value ? "Expand" : "Collapse"} ${node.label}`,
+              onClick: toggle,
+            },
+            [h(CaretIcon, { direction: collapsed.value ? "right" : "down", size: 12 })],
+          ),
         );
       } else {
         headerChildren.push(h("span", { class: "toggle-spacer" }));
@@ -417,9 +425,18 @@ const TreeNodeComponent: ReturnType<typeof defineComponent> = defineComponent({
   align-items: center;
   justify-content: center;
   width: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   cursor: pointer;
   color: var(--color-text-muted);
   user-select: none;
+}
+:deep(.toggle:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-radius: 3px;
 }
 :deep(.toggle-spacer) {
   width: 16px;

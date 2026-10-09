@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { expect, userEvent, within } from "storybook/test";
 import { SAMPLE_COMPOSITION } from "../lib/storybook-fixtures";
 import CompositionTree from "./CompositionTree.vue";
 
@@ -47,5 +48,22 @@ export const EmptyObject: Story = {
   args: {
     data: {},
     webTemplate: null,
+  },
+};
+
+export const TogglesAreKeyboardAccessible: Story = {
+  args: {
+    data: SAMPLE_COMPOSITION,
+    webTemplate: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggles = await canvas.findAllByRole("button", { name: /^(Expand|Collapse) /i });
+    await expect(toggles.length).toBeGreaterThan(1);
+    const toggle = toggles[0]!;
+    const before = toggle.getAttribute("aria-expanded");
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(toggle).toHaveAttribute("aria-expanded", before === "true" ? "false" : "true");
   },
 };

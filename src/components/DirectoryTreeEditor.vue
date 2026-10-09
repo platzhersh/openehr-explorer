@@ -89,7 +89,7 @@ function compositionLabel(uid: string): string {
         type="button"
         class="toggle"
         :aria-expanded="expanded"
-        :aria-label="expanded ? 'Collapse folder' : 'Expand folder'"
+        :aria-label="`${expanded ? 'Collapse' : 'Expand'} folder ${folder.name}`"
         @click="toggle"
       >
         <CaretIcon :direction="expanded ? 'down' : 'right'" :size="12" />
