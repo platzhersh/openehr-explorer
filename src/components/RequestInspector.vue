@@ -5,8 +5,8 @@ import {
   extractPath,
   generateCurl,
   formatTimestamp,
-  statusClass,
-  statusText,
+  entryStatusClass,
+  entryStatusLabel,
   methodClass,
 } from "../stores/inspector";
 import type { RequestLogEntry } from "../stores/inspector";
@@ -290,15 +290,14 @@ function doClear() {
               {{ extractPath(entry.url) }}
             </span>
             <span
-              :class="['entry-status', statusClass(entry.status)]"
-              :title="`${entry.status} ${statusText(entry.status)}`.trim()"
+              :class="['entry-status', entryStatusClass(entry)]"
+              :title="entry.error ?? entryStatusLabel(entry)"
             >
-              {{ entry.status
-              }}<span v-if="statusText(entry.status)" class="status-text">{{
-                ` ${statusText(entry.status)}`
-              }}</span>
+              {{ entryStatusLabel(entry) }}
             </span>
-            <span class="entry-duration">{{ entry.duration_ms }}ms</span>
+            <span class="entry-duration">{{
+              entry.state === "pending" ? "…" : `${entry.duration_ms}ms`
+            }}</span>
           </div>
           <div v-if="store.filteredEntries.length === 0" class="log-empty">
             {{ store.entries.length === 0 ? "No requests yet" : "No matches" }}
@@ -338,7 +337,9 @@ function doClear() {
                   <span class="summary-label">URL</span>
                   <span class="summary-value mono">{{ selected.url }}</span>
                   <span class="summary-label">Duration</span>
-                  <span class="summary-value">{{ selected.duration_ms }}ms</span>
+                  <span class="summary-value">{{
+                    selected.state === "pending" ? "In progress…" : `${selected.duration_ms}ms`
+                  }}</span>
                   <span class="summary-label">Time</span>
                   <span class="summary-value">{{ formatTimestamp(selected.timestamp_ms) }}</span>
                 </div>
@@ -411,12 +412,13 @@ function doClear() {
                 <div class="section-header">Summary</div>
                 <div class="summary-grid">
                   <span class="summary-label">Status</span>
-                  <span :class="['summary-value', statusClass(selected.status)]">
-                    {{ selected.status
-                    }}<span v-if="statusText(selected.status)">{{
-                      ` ${statusText(selected.status)}`
-                    }}</span>
+                  <span :class="['summary-value', entryStatusClass(selected)]">
+                    {{ entryStatusLabel(selected) }}
                   </span>
+                  <template v-if="selected.error">
+                    <span class="summary-label">Error</span>
+                    <span class="summary-value mono status-5xx">{{ selected.error }}</span>
+                  </template>
                   <span class="summary-label">Content-Type</span>
                   <span class="summary-value mono">{{
                     selected.response_headers["content-type"] || "N/A"
@@ -810,6 +812,10 @@ function doClear() {
 }
 .status-5xx {
   color: #ff7b7b;
+}
+.status-pending {
+  color: var(--color-text-secondary);
+  font-style: italic;
 }
 .status-other {
   color: var(--color-text-muted);
