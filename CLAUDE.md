@@ -164,6 +164,7 @@ Vue Router defined in `src/main.ts`:
 Each server profile (`ServerProfile`) includes:
 - `server_type`: `"ehrbase" | "better_platform" | "ferro_ehr" | "generic"` — determines API path conventions
 - `auth_method`: `{ type: "none" | "basic" | "bearer", ... }` — discriminated union for auth
+- `api_path_prefix` (optional): path appended to `base_url` to reach the openEHR REST root; `None` → `/rest/openehr/v1`. Always build openEHR resource URLs from `profile.api_root()` (never hardcode `/rest/openehr/v1`); vendor-specific non-openEHR endpoints (EHRBase `/rest/admin`, `/rest/status`) still hang off `base_url`.
 
 When adding new API integrations, use the `server_type` to branch URL construction logic (see `src-tauri/src/commands/ehr.rs` for examples).
 

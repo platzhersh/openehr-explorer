@@ -99,8 +99,9 @@ pub async fn execute_aql(
 ) -> Result<AqlResult, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
+    let url = format!("{}/query/aql", base);
 
     let start = std::time::Instant::now();
 
@@ -212,8 +213,9 @@ pub async fn list_stored_queries(
 ) -> Result<Vec<StoredQuerySummary>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-    let url = format!("{}/rest/openehr/v1/definition/query", base);
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
+    let url = format!("{}/definition/query", base);
 
     let resp = send_instrumented(
         &app,
@@ -267,10 +269,11 @@ pub async fn get_stored_query_definition(
 ) -> Result<StoredQueryDefinition, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let mut url = format!(
-        "{}/rest/openehr/v1/definition/query/{}",
+        "{}/definition/query/{}",
         base,
         urlencoding::encode(&qualified_query_name)
     );
@@ -326,10 +329,11 @@ pub async fn execute_stored_query(
 ) -> Result<AqlResult, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let mut url = format!(
-        "{}/rest/openehr/v1/query/{}",
+        "{}/query/{}",
         base,
         urlencoding::encode(&qualified_query_name)
     );

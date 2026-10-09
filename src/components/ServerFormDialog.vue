@@ -5,6 +5,8 @@ import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 import LockIcon from "./LockIcon.vue";
+import CollapsibleSection from "./CollapsibleSection.vue";
+import { apiRoot, customApiPrefixLabel, DEFAULT_API_PATH_PREFIX } from "../lib/apiPath";
 import { useEscapeKey } from "../composables/useEscapeKey";
 
 const props = defineProps<{
@@ -22,6 +24,30 @@ const settingsStore = useSettingsStore();
 const analytics = useAnalytics();
 
 const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_server_url || "");
+
+// Blank input means "use the default prefix" (null), which is distinct from an
+// explicit "/" (the base URL already is the API root).
+const apiPathPrefixInput = computed({
+  // A saved empty string means "no prefix"; show it as "/" so it isn't mistaken
+  // for the blank default-prefix state (and silently reset on the next save).
+  get: () => (form.value.api_path_prefix === "" ? "/" : (form.value.api_path_prefix ?? "")),
+  set: (value: string) => {
+    form.value.api_path_prefix = value.trim() === "" ? null : value;
+  },
+});
+
+const apiRootPreview = computed(() =>
+  apiRoot(form.value.base_url || "http://localhost:8080", form.value.api_path_prefix),
+);
+
+// Advanced settings always start collapsed (a custom prefix is also shown as a
+// badge on the profile's card, so it isn't hidden from view).
+const showAdvanced = ref(false);
+
+// Current prefix, shown on the collapsed "Advanced settings" row.
+const apiPrefixSummary = computed(
+  () => customApiPrefixLabel(form.value.api_path_prefix) ?? `${DEFAULT_API_PATH_PREFIX} (default)`,
+);
 
 const editingExistingId = ref<string | null>(null);
 const testResult = ref<string | null>(null);
@@ -112,8 +138,10 @@ function initNewForm() {
     server_type: "ehrbase",
     auth_method: { type: "basic", username: "", password: "" },
     terminology_url: null,
+    api_path_prefix: null,
   };
   editingExistingId.value = null;
+  showAdvanced.value = false;
   testResult.value = null;
   testError.value = null;
   urlValidationError.value = null;
@@ -133,8 +161,10 @@ function initEditForm(profile: ServerProfile) {
       ? publicAuthToInput(profile.admin_auth_method)
       : null,
     terminology_url: profile.terminology_url || null,
+    api_path_prefix: profile.api_path_prefix ?? null,
   };
   editingExistingId.value = profile.id;
+  showAdvanced.value = false;
   testResult.value = null;
   testError.value = null;
   urlValidationError.value = null;
@@ -376,6 +406,32 @@ useEscapeKey(() => props.open, handleClose);
             </div>
           </div>
 
+          <CollapsibleSection
+            v-model:open="showAdvanced"
+            title="Advanced settings"
+            :summary="apiPrefixSummary"
+            class="advanced-section"
+          >
+            <div class="form-group">
+              <label for="server-api-path-prefix">API Path Prefix (optional)</label>
+              <input
+                id="server-api-path-prefix"
+                class="input"
+                v-model="apiPathPrefixInput"
+                :placeholder="DEFAULT_API_PATH_PREFIX"
+              />
+              <p class="form-help">
+                Path appended to the Base URL to reach the openEHR REST API. Leave empty for
+                <code>{{ DEFAULT_API_PATH_PREFIX }}</code> (EHRBase, Better Platform). Use a custom
+                path such as <code>/openehr/v1</code> if your server exposes the API elsewhere, or
+                <code>/</code> if the Base URL already is the API root.
+              </p>
+              <p class="form-help api-root-preview" data-testid="api-root-preview">
+                Requests go to: <code>{{ apiRootPreview }}/ehr</code>
+              </p>
+            </div>
+          </CollapsibleSection>
+
           <div class="form-group">
             <SearchableSelect
               label="Server Type"
@@ -610,11 +666,25 @@ useEscapeKey(() => props.open, handleClose);
   width: 100%;
 }
 
+.advanced-section {
+  margin-bottom: 16px;
+}
+
+.advanced-section :deep(.form-group) {
+  margin-bottom: 0;
+}
+
 .form-help {
   margin-top: 4px;
   font-size: 12px;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+.form-help code {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .secure-hint {

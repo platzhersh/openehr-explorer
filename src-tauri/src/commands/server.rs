@@ -25,8 +25,77 @@ pub struct ServerProfile {
     pub admin_auth_method: Option<AuthMethod>,
     #[serde(default)]
     pub terminology_url: Option<String>,
+    /// Path appended to `base_url` to reach the openEHR REST API root.
+    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    #[serde(default)]
+    pub api_path_prefix: Option<String>,
     #[serde(default)]
     pub is_default: bool,
+}
+
+/// API path used when a profile doesn't set `api_path_prefix`. This is the
+/// EHRBase / Better Platform convention, not something the openEHR REST spec
+/// mandates — see OEH-104.
+pub const DEFAULT_API_PATH_PREFIX: &str = "/rest/openehr/v1";
+
+/// Normalizes a user-supplied prefix: trims whitespace, ensures a single
+/// leading `/`, drops trailing `/`. `None` (field left blank in the UI) keeps
+/// meaning "use the default"; an explicit empty or `/` value is preserved as an
+/// empty string, meaning "no prefix — `base_url` is itself the API root".
+pub fn normalize_api_path_prefix(prefix: Option<String>) -> Option<String> {
+    let prefix = prefix?;
+    let inner = prefix.trim().trim_matches('/');
+    Some(if inner.is_empty() {
+        String::new()
+    } else {
+        format!("/{}", inner)
+    })
+}
+
+/// Joins `base_url` and an API path prefix into the openEHR REST API root.
+pub fn join_api_root(base_url: &str, prefix: Option<&str>) -> String {
+    let prefix = prefix.unwrap_or(DEFAULT_API_PATH_PREFIX);
+    let prefix = prefix.trim_matches('/');
+    let base = base_url.trim_end_matches('/');
+    if prefix.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}/{}", base, prefix)
+    }
+}
+
+impl ServerProfile {
+    /// The openEHR REST API root (e.g. `https://host/rest/openehr/v1`), with no
+    /// trailing slash. Spec-defined resource paths (`/ehr`, `/query/aql`, …) are
+    /// appended to this.
+    pub fn api_root(&self) -> String {
+        join_api_root(&self.base_url, self.api_path_prefix.as_deref())
+    }
+}
+
+impl From<ServerProfileInput> for ServerProfile {
+    /// Converts an unsaved/inbound profile, normalizing the API path prefix the
+    /// same way `save_server_profile` does so a connection test exercises exactly
+    /// what would be stored.
+    fn from(input: ServerProfileInput) -> Self {
+        ServerProfile {
+            id: input.id,
+            name: input.name,
+            base_url: input.base_url,
+            server_type: input.server_type,
+            auth_method: input.auth_method,
+            admin_auth_method: input.admin_auth_method,
+            terminology_url: input.terminology_url,
+            api_path_prefix: normalize_api_path_prefix(input.api_path_prefix),
+            is_default: false,
+        }
+    }
+}
+
+/// The URL "Test Connection" requests: the template list, a cheap
+/// authenticated GET every openEHR CDR serves.
+fn connection_test_url(profile: &ServerProfile) -> String {
+    format!("{}/definition/template/adl1.4", profile.api_root())
 }
 
 /// Public profile returned over IPC — secrets are replaced with flags.
@@ -41,6 +110,10 @@ pub struct ServerProfilePublic {
     pub admin_auth_method: Option<AuthMethodPublic>,
     #[serde(default)]
     pub terminology_url: Option<String>,
+    /// Path appended to `base_url` to reach the openEHR REST API root.
+    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    #[serde(default)]
+    pub api_path_prefix: Option<String>,
     pub credential_backend: String,
     #[serde(default)]
     pub is_default: bool,
@@ -58,6 +131,10 @@ pub struct ServerProfileInput {
     pub admin_auth_method: Option<AuthMethod>,
     #[serde(default)]
     pub terminology_url: Option<String>,
+    /// Path appended to `base_url` to reach the openEHR REST API root.
+    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    #[serde(default)]
+    pub api_path_prefix: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +195,10 @@ pub struct StoredProfile {
     pub admin_auth_method: Option<StoredAuthMethod>,
     #[serde(default)]
     pub terminology_url: Option<String>,
+    /// Path appended to `base_url` to reach the openEHR REST API root.
+    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    #[serde(default)]
+    pub api_path_prefix: Option<String>,
     #[serde(default)]
     pub is_default: bool,
 }
@@ -328,6 +409,7 @@ fn load_resolved_profile(
         auth_method,
         admin_auth_method,
         terminology_url: stored.terminology_url.clone(),
+        api_path_prefix: stored.api_path_prefix.clone(),
         is_default: stored.is_default,
     })
 }
@@ -346,6 +428,7 @@ fn to_public_profile(profile: &ServerProfile, backend: &StorageBackend) -> Serve
         auth_method: to_public_auth(&profile.auth_method),
         admin_auth_method: profile.admin_auth_method.as_ref().map(to_public_auth),
         terminology_url: profile.terminology_url.clone(),
+        api_path_prefix: profile.api_path_prefix.clone(),
         credential_backend: backend_str.to_string(),
         is_default: profile.is_default,
     }
@@ -395,6 +478,7 @@ pub fn migrate_plaintext_credentials() {
                         auth_method: to_stored_auth(&full.auth_method),
                         admin_auth_method: full.admin_auth_method.as_ref().map(to_stored_auth),
                         terminology_url: full.terminology_url,
+                        api_path_prefix: full.api_path_prefix,
                         is_default: full.is_default,
                     });
                     needs_rewrite = true;
@@ -515,6 +599,7 @@ pub async fn save_server_profile(
         auth_method: to_stored_auth(&profile.auth_method),
         admin_auth_method: profile.admin_auth_method.as_ref().map(to_stored_auth),
         terminology_url: profile.terminology_url,
+        api_path_prefix: normalize_api_path_prefix(profile.api_path_prefix),
         is_default,
     };
 
@@ -571,10 +656,7 @@ pub async fn test_server_connection(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&profile_id)?;
     let client = build_client(&profile);
-    let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4",
-        profile.base_url.trim_end_matches('/')
-    );
+    let url = connection_test_url(&profile);
 
     let resp = send_instrumented(
         &app,
@@ -595,21 +677,9 @@ pub async fn test_unsaved_connection(
     app: tauri::AppHandle,
     profile: ServerProfileInput,
 ) -> Result<String, String> {
-    let full = ServerProfile {
-        id: profile.id,
-        name: profile.name,
-        base_url: profile.base_url,
-        server_type: profile.server_type,
-        auth_method: profile.auth_method,
-        admin_auth_method: profile.admin_auth_method,
-        terminology_url: profile.terminology_url,
-        is_default: false,
-    };
+    let full = ServerProfile::from(profile);
     let client = build_client(&full);
-    let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4",
-        full.base_url.trim_end_matches('/')
-    );
+    let url = connection_test_url(&full);
 
     let resp = send_instrumented(
         &app,
@@ -777,6 +847,185 @@ fn parse_ferroehr_status_json(body: &str) -> Result<ServerVersionInfo, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        connection_test_url, join_api_root, normalize_api_path_prefix, to_public_profile,
+        AuthMethod, ServerProfile, ServerProfileInput, ServerType, StoredProfile,
+        DEFAULT_API_PATH_PREFIX,
+    };
+    use crate::credentials::StorageBackend;
+
+    fn input(base_url: &str, prefix: Option<&str>) -> ServerProfileInput {
+        ServerProfileInput {
+            id: "1".into(),
+            name: "n".into(),
+            base_url: base_url.into(),
+            server_type: ServerType::Generic,
+            auth_method: AuthMethod::None,
+            admin_auth_method: None,
+            terminology_url: None,
+            api_path_prefix: prefix.map(String::from),
+        }
+    }
+
+    /// Regression guard for OEH-104: openEHR resource URLs must be built from
+    /// `ServerProfile::api_root()`. A literal `/rest/openehr/v1` in non-test code
+    /// of the command modules would silently ignore a profile's prefix.
+    #[test]
+    fn command_modules_do_not_hardcode_the_api_prefix() {
+        let sources = [
+            ("composition.rs", include_str!("composition.rs")),
+            ("contribution.rs", include_str!("contribution.rs")),
+            ("ehr.rs", include_str!("ehr.rs")),
+            ("query.rs", include_str!("query.rs")),
+            ("template.rs", include_str!("template.rs")),
+        ];
+        for (name, src) in sources {
+            let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+            for (i, line) in production.lines().enumerate() {
+                let is_comment = line.trim_start().starts_with("//");
+                assert!(
+                    is_comment || !line.contains("/rest/openehr/v1"),
+                    "{name}:{} hardcodes /rest/openehr/v1; use profile.api_root()",
+                    i + 1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn connection_test_url_uses_default_prefix() {
+        let p = ServerProfile::from(input("https://cdr.example.com/", None));
+        assert_eq!(
+            connection_test_url(&p),
+            "https://cdr.example.com/rest/openehr/v1/definition/template/adl1.4"
+        );
+    }
+
+    #[test]
+    fn connection_test_url_uses_custom_prefix() {
+        let p = ServerProfile::from(input("https://cdr.example.com", Some("openehr/v1/")));
+        assert_eq!(
+            connection_test_url(&p),
+            "https://cdr.example.com/openehr/v1/definition/template/adl1.4"
+        );
+    }
+
+    #[test]
+    fn connection_test_url_with_slash_prefix_treats_base_url_as_api_root() {
+        let p = ServerProfile::from(input("https://cdr.example.com/openehr/v1/", Some("/")));
+        assert_eq!(p.api_path_prefix, Some(String::new()));
+        assert_eq!(
+            connection_test_url(&p),
+            "https://cdr.example.com/openehr/v1/definition/template/adl1.4"
+        );
+    }
+
+    #[test]
+    fn explicit_empty_prefix_survives_storage_round_trip() {
+        // `Some("")` ("base URL is the API root") must not collapse into `None`
+        // ("use the default") when written to and read back from profiles.json.
+        let mut stored: StoredProfile = serde_json::from_str(
+            r#"{"id":"1","name":"n","base_url":"http://x","server_type":"generic","auth_method":{"type":"none"},"api_path_prefix":""}"#,
+        )
+        .unwrap();
+        assert_eq!(stored.api_path_prefix, Some(String::new()));
+        let json = serde_json::to_string(&stored).unwrap();
+        let back: StoredProfile = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.api_path_prefix, Some(String::new()));
+
+        stored.api_path_prefix = None;
+        let back: StoredProfile =
+            serde_json::from_str(&serde_json::to_string(&stored).unwrap()).unwrap();
+        assert_eq!(back.api_path_prefix, None);
+    }
+
+    #[test]
+    fn saving_an_edited_empty_prefix_keeps_it_empty() {
+        // The edit form shows a stored "" as "/", which normalizes back to "".
+        assert_eq!(
+            normalize_api_path_prefix(Some(String::new())),
+            Some(String::new())
+        );
+        assert_eq!(
+            normalize_api_path_prefix(Some("/".into())),
+            Some(String::new())
+        );
+    }
+
+    #[test]
+    fn public_profile_exposes_the_prefix_unchanged() {
+        for prefix in [None, Some(String::new()), Some("/openehr/v1".to_string())] {
+            let mut p = ServerProfile::from(input("http://x", None));
+            p.api_path_prefix = prefix.clone();
+            let public = to_public_profile(&p, &StorageBackend::EncryptedFile);
+            assert_eq!(public.api_path_prefix, prefix);
+        }
+    }
+
+    #[test]
+    fn api_root_defaults_to_rest_openehr_v1() {
+        assert_eq!(DEFAULT_API_PATH_PREFIX, "/rest/openehr/v1");
+        assert_eq!(
+            join_api_root("https://cdr.example.com", None),
+            "https://cdr.example.com/rest/openehr/v1"
+        );
+        assert_eq!(
+            join_api_root("https://cdr.example.com/", None),
+            "https://cdr.example.com/rest/openehr/v1"
+        );
+    }
+
+    #[test]
+    fn api_root_uses_custom_prefix() {
+        assert_eq!(
+            join_api_root("https://cdr.example.com/", Some("/openehr/v1")),
+            "https://cdr.example.com/openehr/v1"
+        );
+        assert_eq!(
+            join_api_root("https://cdr.example.com", Some("openehr/v1/")),
+            "https://cdr.example.com/openehr/v1"
+        );
+    }
+
+    #[test]
+    fn api_root_empty_prefix_means_base_url_is_the_root() {
+        assert_eq!(
+            join_api_root("https://cdr.example.com/openehr/v1/", Some("")),
+            "https://cdr.example.com/openehr/v1"
+        );
+    }
+
+    #[test]
+    fn normalize_prefix_cleans_user_input() {
+        assert_eq!(normalize_api_path_prefix(None), None);
+        // An explicit empty/"/" prefix means "base URL is the API root" and must
+        // survive a save → edit → save round trip (it is not the same as unset).
+        assert_eq!(
+            normalize_api_path_prefix(Some("   ".into())),
+            Some(String::new())
+        );
+        assert_eq!(
+            normalize_api_path_prefix(Some(String::new())),
+            Some(String::new())
+        );
+        assert_eq!(
+            normalize_api_path_prefix(Some(" openehr/v1/ ".into())),
+            Some("/openehr/v1".to_string())
+        );
+        assert_eq!(
+            normalize_api_path_prefix(Some("/".into())),
+            Some(String::new())
+        );
+    }
+
+    #[test]
+    fn legacy_profile_without_prefix_still_deserializes() {
+        let json = r#"{"id":"1","name":"n","base_url":"http://x","server_type":"ehrbase","auth_method":{"type":"none"}}"#;
+        let p: super::ServerProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(p.api_path_prefix, None);
+        assert_eq!(p.api_root(), "http://x/rest/openehr/v1");
+    }
+
     use super::*;
 
     #[test]

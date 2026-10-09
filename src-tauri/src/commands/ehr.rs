@@ -158,8 +158,9 @@ pub async fn list_ehrs(
 ) -> Result<EhrListResponse, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
+    let url = format!("{}/query/aql", base);
 
     // Request one extra row beyond `limit` so we can tell whether another
     // page exists (see `has_more` below) without a separate COUNT query.
@@ -248,10 +249,11 @@ pub async fn get_ehr_detail(
 ) -> Result<EhrDetail, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     // Fetch EHR status
-    let status_url = format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id);
+    let status_url = format!("{}/ehr/{}", base, ehr_id);
     let ehr_resp = send_instrumented(
         &app,
         &client,
@@ -319,7 +321,7 @@ pub async fn get_ehr_detail(
         ehr_id
     );
 
-    let query_url = format!("{}/rest/openehr/v1/query/aql", base);
+    let query_url = format!("{}/query/aql", base);
     let comp_resp = send_instrumented(
         &app,
         &client,
@@ -448,7 +450,8 @@ pub async fn create_ehr(
 ) -> Result<CreateEhrResponse, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let ehr_status = build_ehr_status_json(&request);
 
@@ -467,7 +470,7 @@ pub async fn create_ehr(
         ehr_status
     };
 
-    let url = format!("{}/rest/openehr/v1/ehr", base);
+    let url = format!("{}/ehr", base);
     let resp = send_instrumented(
         &app,
         &client,
@@ -523,10 +526,11 @@ pub async fn update_ehr_status(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     // First, fetch current EHR status to get the version UID
-    let get_url = format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id);
+    let get_url = format!("{}/ehr/{}/ehr_status", base, ehr_id);
     let get_resp = send_instrumented(
         &app,
         &client,
@@ -579,7 +583,7 @@ pub async fn update_ehr_status(
     }
 
     // PUT request with If-Match header
-    let put_url = format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id);
+    let put_url = format!("{}/ehr/{}/ehr_status", base, ehr_id);
     let put_resp = send_instrumented(
         &app,
         &client,
@@ -614,7 +618,8 @@ pub async fn delete_ehr(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     // The standard openEHR REST API does not support DELETE on EHR.
     // EHRBase provides an admin API for EHR deletion.
@@ -625,7 +630,12 @@ pub async fn delete_ehr(
                 .as_ref()
                 .unwrap_or(&profile.auth_method);
             (
-                format!("{}/rest/admin/ehr/{}", base, ehr_id),
+                // EHRbase mounts its admin API beside, not under, the openEHR REST root.
+                format!(
+                    "{}/rest/admin/ehr/{}",
+                    profile.base_url.trim_end_matches('/'),
+                    ehr_id
+                ),
                 admin_auth.clone(),
             )
         }
@@ -636,13 +646,10 @@ pub async fn delete_ehr(
                 .admin_auth_method
                 .as_ref()
                 .unwrap_or(&profile.auth_method);
-            (
-                format!("{}/rest/openehr/v1/admin/ehr/{}", base, ehr_id),
-                admin_auth.clone(),
-            )
+            (format!("{}/admin/ehr/{}", base, ehr_id), admin_auth.clone())
         }
         _ => (
-            format!("{}/rest/openehr/v1/ehr/{}", base, ehr_id),
+            format!("{}/ehr/{}", base, ehr_id),
             profile.auth_method.clone(),
         ),
     };
@@ -678,8 +685,8 @@ fn build_directory_url(
     version_at_time: Option<&str>,
 ) -> String {
     let path = match version_uid {
-        Some(uid) => format!("{}/rest/openehr/v1/ehr/{}/directory/{}", base, ehr_id, uid),
-        None => format!("{}/rest/openehr/v1/ehr/{}/directory", base, ehr_id),
+        Some(uid) => format!("{}/ehr/{}/directory/{}", base, ehr_id, uid),
+        None => format!("{}/ehr/{}/directory", base, ehr_id),
     };
 
     match version_at_time {
@@ -746,7 +753,8 @@ pub async fn get_directory(
 ) -> Result<Option<Value>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = build_directory_url(base, &ehr_id, None, version_at_time.as_deref());
     fetch_directory(&app, &client, &url, &profile.auth_method).await
@@ -764,7 +772,8 @@ pub async fn get_directory_version(
 ) -> Result<Option<Value>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = build_directory_url(base, &ehr_id, Some(&version_uid), None);
     fetch_directory(&app, &client, &url, &profile.auth_method).await
@@ -788,7 +797,8 @@ pub async fn create_directory(
 ) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
     let url = build_directory_url(base, &ehr_id, None, None);
 
     let resp = send_instrumented(
@@ -828,7 +838,8 @@ pub async fn update_directory(
 ) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
     let url = build_directory_url(base, &ehr_id, None, None);
 
     let resp = send_instrumented(
@@ -891,7 +902,8 @@ pub async fn delete_directory(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
     let url = build_directory_delete_url(base, &ehr_id, &preceding_version_uid);
 
     let resp = send_instrumented(
@@ -925,8 +937,8 @@ fn build_ehr_status_url(
     version_at_time: Option<&str>,
 ) -> String {
     let path = match version_uid {
-        Some(uid) => format!("{}/rest/openehr/v1/ehr/{}/ehr_status/{}", base, ehr_id, uid),
-        None => format!("{}/rest/openehr/v1/ehr/{}/ehr_status", base, ehr_id),
+        Some(uid) => format!("{}/ehr/{}/ehr_status/{}", base, ehr_id, uid),
+        None => format!("{}/ehr/{}/ehr_status", base, ehr_id),
     };
 
     match version_at_time {
@@ -986,7 +998,8 @@ pub async fn get_ehr_status(
 ) -> Result<Option<Value>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = build_ehr_status_url(base, &ehr_id, None, version_at_time.as_deref());
     fetch_ehr_status(&app, &client, &url, &profile.auth_method).await
@@ -1003,7 +1016,8 @@ pub async fn get_ehr_status_version(
 ) -> Result<Option<Value>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = build_ehr_status_url(base, &ehr_id, Some(&version_uid), None);
     fetch_ehr_status(&app, &client, &url, &profile.auth_method).await
@@ -1147,10 +1161,11 @@ pub async fn get_ehr_status_versions(
 ) -> Result<Vec<RevisionHistoryEntry>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/versioned_ehr_status/revision_history",
+        "{}/ehr/{}/versioned_ehr_status/revision_history",
         base, ehr_id
     );
     fetch_revision_history(&app, &client, &url, &profile.auth_method).await
@@ -1166,10 +1181,11 @@ pub async fn get_directory_versions(
 ) -> Result<Vec<RevisionHistoryEntry>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/versioned_directory/revision_history",
+        "{}/ehr/{}/versioned_directory/revision_history",
         base, ehr_id
     );
     fetch_revision_history(&app, &client, &url, &profile.auth_method).await
@@ -1223,10 +1239,11 @@ pub async fn get_ehr_status_version_contribution(
 ) -> Result<Option<String>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/versioned_ehr_status/version/{}",
+        "{}/ehr/{}/versioned_ehr_status/version/{}",
         base, ehr_id, version_uid
     );
     fetch_version_contribution(&app, &client, &url, &profile.auth_method).await
@@ -1246,10 +1263,11 @@ pub async fn get_directory_version_contribution(
 ) -> Result<Option<String>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/versioned_directory/version/{}",
+        "{}/ehr/{}/versioned_directory/version/{}",
         base, ehr_id, version_uid
     );
     fetch_version_contribution(&app, &client, &url, &profile.auth_method).await
@@ -1696,8 +1714,9 @@ pub async fn search_ehrs(
 ) -> Result<EhrSearchResponse, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
-    let url = format!("{}/rest/openehr/v1/query/aql", base);
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
+    let url = format!("{}/query/aql", base);
 
     // A genuine *partial* ehr_id_prefix (i.e. not a full, valid EHR ID) has
     // no working AQL predicate on EHRBase — see the doc comment on
@@ -2432,7 +2451,12 @@ mod tests {
 
     #[test]
     fn test_build_directory_url_latest() {
-        let url = build_directory_url("https://cdr.example.com", "ehr-123", None, None);
+        let url = build_directory_url(
+            "https://cdr.example.com/rest/openehr/v1",
+            "ehr-123",
+            None,
+            None,
+        );
         assert_eq!(
             url,
             "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory"
@@ -2442,7 +2466,7 @@ mod tests {
     #[test]
     fn test_build_directory_url_specific_version() {
         let url = build_directory_url(
-            "https://cdr.example.com",
+            "https://cdr.example.com/rest/openehr/v1",
             "ehr-123",
             Some("uid::system::1"),
             None,
@@ -2455,8 +2479,11 @@ mod tests {
 
     #[test]
     fn test_build_directory_delete_url() {
-        let url =
-            build_directory_delete_url("https://cdr.example.com", "ehr-123", "uid::system::1");
+        let url = build_directory_delete_url(
+            "https://cdr.example.com/rest/openehr/v1",
+            "ehr-123",
+            "uid::system::1",
+        );
         assert_eq!(
             url,
             "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/directory?version_uid=uid%3A%3Asystem%3A%3A1"
@@ -2466,7 +2493,7 @@ mod tests {
     #[test]
     fn test_build_directory_url_at_time() {
         let url = build_directory_url(
-            "https://cdr.example.com",
+            "https://cdr.example.com/rest/openehr/v1",
             "ehr-123",
             None,
             Some("2026-08-25T12:00:00Z"),
@@ -2549,7 +2576,12 @@ mod tests {
 
     #[test]
     fn test_build_ehr_status_url_latest() {
-        let url = build_ehr_status_url("https://cdr.example.com", "ehr-123", None, None);
+        let url = build_ehr_status_url(
+            "https://cdr.example.com/rest/openehr/v1",
+            "ehr-123",
+            None,
+            None,
+        );
         assert_eq!(
             url,
             "https://cdr.example.com/rest/openehr/v1/ehr/ehr-123/ehr_status"
@@ -2559,7 +2591,7 @@ mod tests {
     #[test]
     fn test_build_ehr_status_url_specific_version() {
         let url = build_ehr_status_url(
-            "https://cdr.example.com",
+            "https://cdr.example.com/rest/openehr/v1",
             "ehr-123",
             Some("uid::system::1"),
             None,
@@ -2573,7 +2605,7 @@ mod tests {
     #[test]
     fn test_build_ehr_status_url_at_time() {
         let url = build_ehr_status_url(
-            "https://cdr.example.com",
+            "https://cdr.example.com/rest/openehr/v1",
             "ehr-123",
             None,
             Some("2026-08-25T12:00:00Z"),

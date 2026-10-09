@@ -53,12 +53,10 @@ pub async fn get_composition(
 ) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
-    let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/composition/{}",
-        base, ehr_id, composition_uid
-    );
+    let url = format!("{}/ehr/{}/composition/{}", base, ehr_id, composition_uid);
 
     let resp = send_instrumented(
         &app,
@@ -87,12 +85,10 @@ pub async fn get_composition_flat(
 ) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
-    let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/composition/{}",
-        base, ehr_id, composition_uid
-    );
+    let url = format!("{}/ehr/{}/composition/{}", base, ehr_id, composition_uid);
 
     let resp = send_instrumented(
         &app,
@@ -123,10 +119,11 @@ pub async fn get_composition_versions(
 ) -> Result<Vec<CompositionVersion>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/versioned_composition/{}/revision_history",
+        "{}/ehr/{}/versioned_composition/{}/revision_history",
         base, ehr_id, versioned_object_uid
     );
 
@@ -227,10 +224,11 @@ pub async fn get_composition_version_contribution(
 ) -> Result<Option<String>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/versioned_composition/{}/version/{}",
+        "{}/ehr/{}/versioned_composition/{}/version/{}",
         base, ehr_id, versioned_object_uid, version_uid
     );
 
@@ -270,11 +268,12 @@ pub async fn create_composition(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     // EHRBase requires template_id as query parameter for FLAT format
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/composition?templateId={}",
+        "{}/ehr/{}/composition?templateId={}",
         base,
         ehr_id,
         urlencoding::encode(&template_id)
@@ -350,7 +349,8 @@ pub async fn update_composition(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     // composition_uid is the full versioned uid ("<uuid>::<system>::<version>"),
     // matching what If-Match needs — but the PUT path parameter is the plain
@@ -364,7 +364,7 @@ pub async fn update_composition(
         .unwrap_or(&composition_uid);
 
     let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/composition/{}",
+        "{}/ehr/{}/composition/{}",
         base, ehr_id, versioned_object_uid
     );
 
@@ -437,12 +437,10 @@ pub async fn delete_composition(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
-    let url = format!(
-        "{}/rest/openehr/v1/ehr/{}/composition/{}",
-        base, ehr_id, composition_uid
-    );
+    let url = format!("{}/ehr/{}/composition/{}", base, ehr_id, composition_uid);
 
     let resp = send_instrumented(
         &app,

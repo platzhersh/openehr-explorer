@@ -31,6 +31,19 @@ const INSECURE_PROFILE: ServerProfile = {
   is_default: true,
 };
 
+const CUSTOM_PREFIX_PROFILE: ServerProfile = {
+  id: "profile-custom-prefix",
+  name: "Generic CDR (custom API path)",
+  base_url: "https://cdr.example.com",
+  server_type: "generic",
+  auth_method: { type: "none" },
+  admin_auth_method: null,
+  terminology_url: null,
+  api_path_prefix: "/openehr/v1",
+  credential_backend: "encrypted_file",
+  is_default: false,
+};
+
 // Keyed by profile id so the mocked get_server_version handler can return
 // the right version per card (ServerManager fetches one per profile on mount).
 const VERSION_BY_PROFILE: Record<string, ServerVersionInfo> = {
@@ -45,6 +58,9 @@ const VERSION_BY_PROFILE: Record<string, ServerVersionInfo> = {
     postgres_version: null,
   },
 };
+
+// URLs the mocked opener plugin was asked to open (see CustomApiPathPrefix).
+const OPENED_URLS: string[] = [];
 
 interface StoryState {
   profiles?: ServerProfile[];
@@ -66,6 +82,10 @@ function withStores(state: StoryState = {}) {
         if (cmd === "get_server_version") {
           const profileId = (payload as { profileId?: string } | undefined)?.profileId;
           return profileId ? (VERSION_BY_PROFILE[profileId] ?? null) : null;
+        }
+        if (cmd === "plugin:opener|open_url") {
+          OPENED_URLS.push(String((payload as { url?: string } | undefined)?.url));
+          return;
         }
         if (cmd === "test_server_connection") {
           if (state.testConnectionFails) {
@@ -165,5 +185,27 @@ export const TestConnectionFailed: Story = {
         story: 'Clicks "Test" on the first profile card and shows the resulting error message.',
       },
     },
+  },
+};
+
+export const CustomApiPathPrefix: Story = {
+  render: withStores({ profiles: [EHRBASE_PROFILE, CUSTOM_PREFIX_PROFILE] }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A profile that overrides the API path prefix shows it as a badge on its card; profiles using the default `/rest/openehr/v1` show nothing.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const badge = await canvas.findByText("/openehr/v1");
+    await expect(canvas.queryByText("/rest/openehr/v1")).toBeNull();
+    // The badge is a link to the full API root; clicking opens it in the system browser.
+    await expect(badge).toHaveAttribute("href", "https://cdr.example.com/openehr/v1");
+    OPENED_URLS.length = 0;
+    await userEvent.click(badge);
+    await expect(OPENED_URLS).toEqual(["https://cdr.example.com/openehr/v1"]);
   },
 };

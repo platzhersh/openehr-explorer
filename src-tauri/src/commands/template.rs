@@ -15,7 +15,8 @@ pub async fn get_template_example(
 ) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     // `detail_level` defaults to `required` per the Definition API spec (ITS-REST),
     // i.e. a minimal example with only mandatory data points. EHRBase doesn't
@@ -23,7 +24,7 @@ pub async fn get_template_example(
     // stricter CDRs (e.g. FerroEHR) do — so we ask for `medium` explicitly to
     // get a realistic, committable example on every server, not just EHRBase.
     let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4/{}/example?format=FLAT&detail_level=medium",
+        "{}/definition/template/adl1.4/{}/example?format=FLAT&detail_level=medium",
         base,
         urlencoding::encode(&template_id)
     );
@@ -58,9 +59,10 @@ pub async fn list_templates(
 ) -> Result<Vec<TemplateSummary>, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
-    let url = format!("{}/rest/openehr/v1/definition/template/adl1.4", base);
+    let url = format!("{}/definition/template/adl1.4", base);
 
     let resp = send_instrumented(
         &app,
@@ -117,10 +119,11 @@ pub async fn get_web_template(
 ) -> Result<Value, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4/{}",
+        "{}/definition/template/adl1.4/{}",
         base,
         urlencoding::encode(&template_id)
     );
@@ -151,10 +154,11 @@ pub async fn get_template_opt(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
     let url = format!(
-        "{}/rest/openehr/v1/definition/template/adl1.4/{}",
+        "{}/definition/template/adl1.4/{}",
         base,
         urlencoding::encode(&template_id)
     );
@@ -185,9 +189,10 @@ pub async fn upload_template(
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
-    let base = profile.base_url.trim_end_matches('/');
+    let api_root = profile.api_root();
+    let base = api_root.as_str();
 
-    let url = format!("{}/rest/openehr/v1/definition/template/adl1.4", base);
+    let url = format!("{}/definition/template/adl1.4", base);
 
     let resp = send_instrumented(
         &app,
