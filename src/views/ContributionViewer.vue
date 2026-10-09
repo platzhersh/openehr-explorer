@@ -29,16 +29,16 @@ watch(
 // history state (not the URL) so `contribution_viewed` can report which entry
 // point is used. Checked against a fixed list so only enum values ever reach
 // analytics; anything else (e.g. a reload, a deep link) reports "other".
-const CONTRIBUTION_SOURCES = [
+const CONTRIBUTION_SOURCES = new Set([
   "composition_version",
   "ehr_status",
   "ehr_contributions_tab",
   "manual_lookup",
-];
+]);
 
 function contributionSource(): string {
   const source: unknown = window.history.state?.contributionSource;
-  return typeof source === "string" && CONTRIBUTION_SOURCES.includes(source) ? source : "other";
+  return typeof source === "string" && CONTRIBUTION_SOURCES.has(source) ? source : "other";
 }
 
 async function load(serverId: string, ehr: string, uid: string) {

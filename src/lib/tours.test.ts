@@ -16,7 +16,7 @@ describe("tours", () => {
   it("every non-global tour has at least one route name; global tours have none", () => {
     for (const tour of TOURS) {
       if (tour.global) {
-        expect(tour.routeNames.length).toBe(0);
+        expect(tour.routeNames).toHaveLength(0);
       } else {
         expect(tour.routeNames.length).toBeGreaterThan(0);
       }

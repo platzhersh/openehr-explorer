@@ -20,6 +20,7 @@ import FilterIcon from "../components/FilterIcon.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
+import EhrListItem from "../components/EhrListItem.vue";
 import RefreshButton from "../components/RefreshButton.vue";
 import {
   addItem as addDirectoryItem,
@@ -415,7 +416,7 @@ async function mapWithConcurrency<T, R>(
     while (nextIndex < items.length) {
       const index = nextIndex++;
       try {
-        results[index] = { status: "fulfilled", value: await fn(items[index]) };
+        results[index] = { status: "fulfilled", value: await fn(items[index]) }; // NOSONAR: each worker is sequential by design; that bounds concurrency
       } catch (reason) {
         results[index] = { status: "rejected", reason };
       }
@@ -1669,25 +1670,13 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
           <p><a href="#" @click.prevent="clearSearch">Clear search</a></p>
         </div>
         <div v-else class="ehr-list">
-          <div
+          <EhrListItem
             v-for="ehr in ehrStore.searchResults"
             :key="ehr.ehr_id"
-            class="ehr-item"
-            :class="{ active: ehr.ehr_id === ehrId }"
-            @click="selectEhr(ehr.ehr_id)"
-          >
-            <div class="ehr-id">
-              <span class="id-text">{{ ehr.ehr_id }}</span>
-              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
-            </div>
-            <div class="ehr-meta">
-              <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
-              <span v-if="ehr.subject_id" class="meta-item">Subject: {{ ehr.subject_id }}</span>
-              <span v-if="ehr.subject_namespace" class="meta-item"
-                >NS: {{ ehr.subject_namespace }}</span
-              >
-            </div>
-          </div>
+            :ehr="ehr"
+            :active="ehr.ehr_id === ehrId"
+            @select="selectEhr"
+          />
         </div>
       </div>
 
@@ -1729,22 +1718,13 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
         </div>
 
         <div class="ehr-list">
-          <div
+          <EhrListItem
             v-for="ehr in ehrStore.ehrs"
             :key="ehr.ehr_id"
-            class="ehr-item"
-            :class="{ active: ehr.ehr_id === ehrId }"
-            @click="selectEhr(ehr.ehr_id)"
-          >
-            <div class="ehr-id">
-              <span class="id-text">{{ ehr.ehr_id }}</span>
-              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
-            </div>
-            <div class="ehr-meta">
-              <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
-              <span v-if="ehr.subject_id" class="meta-item">Subject: {{ ehr.subject_id }}</span>
-            </div>
-          </div>
+            :ehr="ehr"
+            :active="ehr.ehr_id === ehrId"
+            @select="selectEhr"
+          />
         </div>
 
         <div class="pagination">
@@ -2385,8 +2365,13 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
     />
 
     <!-- EHR Delete Confirmation Dialog -->
-    <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
-      <div class="dialog" @click.stop>
+    <div
+      v-if="showDeleteDialog"
+      class="dialog-overlay"
+      @click="showDeleteDialog = false"
+      @keydown.esc="showDeleteDialog = false"
+    >
+      <div class="dialog" @click.stop @keydown.esc.stop="showDeleteDialog = false">
         <h3>Delete EHR</h3>
         <p>
           This action cannot be undone. This will permanently delete the EHR and all its
@@ -2437,8 +2422,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
       v-if="showDeleteDirectoryDialog"
       class="dialog-overlay"
       @click="showDeleteDirectoryDialog = false"
+      @keydown.esc="showDeleteDirectoryDialog = false"
     >
-      <div class="dialog" @click.stop>
+      <div class="dialog" @click.stop @keydown.esc.stop="showDeleteDirectoryDialog = false">
         <h3>Delete Directory</h3>
         <p>
           This removes the entire DIRECTORY folder structure for this EHR. This action cannot be
@@ -2890,39 +2876,6 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
 }
 .empty-state a:hover {
   text-decoration: underline;
-}
-
-.ehr-item {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.ehr-item:hover {
-  background: var(--color-surface);
-}
-.ehr-item.active {
-  background: var(--color-surface);
-  border-left: 3px solid var(--color-primary);
-}
-
-.ehr-id {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.id-text {
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-.ehr-meta {
-  margin-top: 4px;
-  display: flex;
-  gap: 12px;
-}
-.meta-item {
-  font-size: 11px;
-  color: var(--color-text-muted);
 }
 
 .pagination {

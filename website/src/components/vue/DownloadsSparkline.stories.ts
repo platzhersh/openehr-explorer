@@ -33,7 +33,8 @@ export const Populated: Story = {
     components: { DownloadsSparkline },
     setup() {
       const originalFetch = window.fetch;
-      window.fetch = async () => new Response(JSON.stringify(MOCK_HISTORY), { status: 200 });
+      window.fetch = () =>
+        Promise.resolve(new Response(JSON.stringify(MOCK_HISTORY), { status: 200 }));
       onUnmounted(() => {
         window.fetch = originalFetch;
       });

@@ -183,3 +183,30 @@ select.input {
   margin-bottom: 8px;
   color: var(--color-text-secondary);
 }
+
+/* Stretched-button row pattern: a real <button class="row-action"> inside a
+   `position: relative` row makes the whole row clickable and keyboard
+   focusable. Sibling controls (copy/delete/etc.) add `.row-control` so they
+   stay above the stretched hit area. Avoids role="button" on a <div>. */
+.row-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row-action::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.row-action:focus-visible::after {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.row-control {
+  position: relative;
+  z-index: 1;
+}

@@ -102,21 +102,21 @@ async function waitForStory(id) {
 async function scan() {
   for (let attempt = 0; ; attempt++) {
     try {
-      return (await new AxeBuilder({ page }).include("#storybook-root").withRules(RULES).analyze())
+      return (await new AxeBuilder({ page }).include("#storybook-root").withRules(RULES).analyze()) // NOSONAR: sequential on one shared page / retry loop
         .violations;
     } catch (e) {
       if (attempt >= 5 || !/already running/.test(String(e))) throw e;
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(300); // NOSONAR: sequential on one shared page / retry loop
     }
   }
 }
 
 for (const s of stories) {
-  await page.goto(`${base}/iframe.html?id=${s.id}&viewMode=story&globals=a11y.manual:true`, {
+  await page.goto(`${base}/iframe.html?id=${s.id}&viewMode=story&globals=a11y.manual:true`, { // NOSONAR: sequential on one shared page / retry loop
     waitUntil: "load",
   });
-  await waitForStory(s.id);
-  const violations = await scan();
+  await waitForStory(s.id); // NOSONAR: sequential on one shared page / retry loop
+  const violations = await scan(); // NOSONAR: sequential on one shared page / retry loop
   for (const v of violations) {
     for (const n of v.nodes) {
       const d = n.any[0]?.data ?? {};
