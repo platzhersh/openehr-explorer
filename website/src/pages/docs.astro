@@ -485,6 +485,17 @@ const navGroups = [
       <section id="changelog">
         <h2>Changelog</h2>
 
+        <h3>v0.10.0 &mdash; Custom API Paths &amp; Inspector Visibility</h3>
+        <ul>
+          <li><strong>Configurable API Path:</strong> Each server profile can now set its own openEHR REST API path prefix, so servers that don&rsquo;t expose <code>/rest/openehr/v1</code> work out of the box</li>
+          <li><strong>Request Inspector:</strong> In-flight and failed requests now show up in the inspector, not just completed ones</li>
+          <li><strong>Dismissible Errors:</strong> Request error banners and the server card connection test result can now be dismissed</li>
+          <li><strong>Connection Testing:</strong> Testing a saved server from the edit dialog now uses the stored password or token, and the card result matches the dialog</li>
+          <li><strong>AQL Highlighting:</strong> Stored queries are now syntax-highlighted</li>
+          <li><strong>Accessibility:</strong> Tree toggles are real buttons that announce their expanded state, and expand/collapse carets are drawn consistently</li>
+          <li><strong>Dialogs:</strong> Escape now closes dialogs even when focus stays on the button that opened them</li>
+        </ul>
+
         <h3>v0.9.7 &mdash; Crash Reporting &amp; Editor Polish</h3>
         <ul>
           <li><strong>Opt-in Crash Reports:</strong> If you&rsquo;ve enabled anonymous usage analytics, crashes and unexpected errors are now reported too, helping us fix problems faster. Reports contain only a scrubbed code location and, for frontend errors, a bounded error type &mdash; never messages or data. Crash reports are only sent if you opt in; the single anonymous session-count ping sent per launch is unchanged</li>
