@@ -334,6 +334,27 @@ fn resolve_auth_secrets(
     }
 }
 
+/// Fills an empty password/token in an inbound auth from the stored secret, the
+/// same "empty = keep existing" rule `save_server_profile` applies. Without it,
+/// testing a saved profile from the edit dialog (whose secret fields are
+/// intentionally blank) would send no credentials and fail with 401 even though
+/// the stored ones work.
+fn keep_stored_secret(
+    auth: AuthMethod,
+    load: impl Fn(&str) -> Result<Option<String>, String>,
+) -> Result<AuthMethod, String> {
+    Ok(match auth {
+        AuthMethod::Basic { username, password } if password.is_empty() => AuthMethod::Basic {
+            username,
+            password: load("password")?.unwrap_or_default(),
+        },
+        AuthMethod::Bearer { token } if token.is_empty() => AuthMethod::Bearer {
+            token: load("token")?.unwrap_or_default(),
+        },
+        other => other,
+    })
+}
+
 /// Convert an AuthMethod to its stored (secret-free) representation.
 fn to_stored_auth(auth: &AuthMethod) -> StoredAuthMethod {
     match auth {
@@ -677,7 +698,15 @@ pub async fn test_unsaved_connection(
     app: tauri::AppHandle,
     profile: ServerProfileInput,
 ) -> Result<String, String> {
-    let full = ServerProfile::from(profile);
+    let mut full = ServerProfile::from(profile);
+    // Editing a saved profile leaves secret fields blank ("leave empty to keep"),
+    // so fall back to the stored secret like `save_server_profile` does.
+    let config_dir = get_config_dir();
+    let mgr = cred_manager();
+    let profile_id = full.id.clone();
+    full.auth_method = keep_stored_secret(full.auth_method, |key| {
+        mgr.load_secret(&profile_id, key, &config_dir)
+    })?;
     let client = build_client(&full);
     let url = connection_test_url(&full);
 
@@ -848,9 +877,9 @@ fn parse_ferroehr_status_json(body: &str) -> Result<ServerVersionInfo, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        connection_test_url, join_api_root, normalize_api_path_prefix, to_public_profile,
-        AuthMethod, ServerProfile, ServerProfileInput, ServerType, StoredProfile,
-        DEFAULT_API_PATH_PREFIX,
+        connection_test_url, join_api_root, keep_stored_secret, normalize_api_path_prefix,
+        to_public_profile, AuthMethod, ServerProfile, ServerProfileInput, ServerType,
+        StoredProfile, DEFAULT_API_PATH_PREFIX,
     };
     use crate::credentials::StorageBackend;
 
@@ -890,6 +919,77 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn keep_stored_secret_fills_an_empty_password_from_storage() {
+        let auth = AuthMethod::Basic {
+            username: "u".into(),
+            password: String::new(),
+        };
+        let out = keep_stored_secret(auth, |key| {
+            assert_eq!(key, "password");
+            Ok(Some("stored-pw".into()))
+        })
+        .unwrap();
+        match out {
+            AuthMethod::Basic { username, password } => {
+                assert_eq!(username, "u");
+                assert_eq!(password, "stored-pw");
+            }
+            other => panic!("unexpected auth: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn keep_stored_secret_fills_an_empty_token_from_storage() {
+        let out = keep_stored_secret(
+            AuthMethod::Bearer {
+                token: String::new(),
+            },
+            |key| {
+                assert_eq!(key, "token");
+                Ok(Some("stored-token".into()))
+            },
+        )
+        .unwrap();
+        assert!(matches!(out, AuthMethod::Bearer { token } if token == "stored-token"));
+    }
+
+    #[test]
+    fn keep_stored_secret_prefers_a_newly_typed_secret() {
+        // A non-empty secret in the form wins; storage must not even be consulted.
+        let basic = AuthMethod::Basic {
+            username: "u".into(),
+            password: "typed".into(),
+        };
+        let out = keep_stored_secret(basic, |_| panic!("storage consulted")).unwrap();
+        assert!(matches!(out, AuthMethod::Basic { password, .. } if password == "typed"));
+        let bearer = AuthMethod::Bearer {
+            token: "typed".into(),
+        };
+        let out = keep_stored_secret(bearer, |_| panic!("storage consulted")).unwrap();
+        assert!(matches!(out, AuthMethod::Bearer { token } if token == "typed"));
+        let out = keep_stored_secret(AuthMethod::None, |_| panic!("storage consulted")).unwrap();
+        assert!(matches!(out, AuthMethod::None));
+    }
+
+    #[test]
+    fn keep_stored_secret_for_a_new_profile_stays_empty() {
+        let auth = AuthMethod::Basic {
+            username: "u".into(),
+            password: String::new(),
+        };
+        let out = keep_stored_secret(auth, |_| Ok(None)).unwrap();
+        assert!(matches!(out, AuthMethod::Basic { password, .. } if password.is_empty()));
+    }
+
+    #[test]
+    fn keep_stored_secret_propagates_storage_errors() {
+        let auth = AuthMethod::Bearer {
+            token: String::new(),
+        };
+        assert!(keep_stored_secret(auth, |_| Err("keychain locked".into())).is_err());
     }
 
     #[test]
