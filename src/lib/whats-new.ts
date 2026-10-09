@@ -27,6 +27,39 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.10.0",
+    date: "2026-10-09",
+    highlights: [
+      {
+        title: "Custom API path per server",
+        description:
+          "Server profiles now have an optional REST API path prefix, so CDRs that don't serve openEHR under /rest/openehr/v1 can be connected.",
+        tourId: "servers",
+        routePath: "/servers",
+      },
+      {
+        title: "Failed and pending requests in the Inspector",
+        description:
+          "The Request Inspector now shows requests that are still in flight or that failed, so you can see what went wrong instead of an empty log.",
+        tourId: "inspector",
+      },
+      {
+        title: "Dismissible error banners",
+        description:
+          "Request errors and server connection test results can now be dismissed with one click.",
+      },
+      {
+        title: "Syntax-highlighted saved queries",
+        description: "Stored AQL queries are now shown with syntax highlighting.",
+      },
+      {
+        title: "Better keyboard and screen reader support",
+        description:
+          "Tree toggles are real buttons that announce whether they're expanded, and Escape reliably closes dialogs.",
+      },
+    ],
+  },
+  {
     version: "0.9.7",
     date: "2026-10-03",
     highlights: [

@@ -139,12 +139,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.9.7_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.10.0_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.9.7_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.9.7_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.10.0_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.10.0_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -484,6 +484,17 @@ const navGroups = [
 
       <section id="changelog">
         <h2>Changelog</h2>
+
+        <h3>v0.10.0 &mdash; Custom API Paths &amp; Inspector Visibility</h3>
+        <ul>
+          <li><strong>Configurable API Path:</strong> Each server profile can now set its own openEHR REST API path prefix, so servers that don&rsquo;t expose <code>/rest/openehr/v1</code> work out of the box</li>
+          <li><strong>Request Inspector:</strong> In-flight and failed requests now show up in the inspector, not just completed ones</li>
+          <li><strong>Dismissible Errors:</strong> Request error banners and the server card connection test result can now be dismissed</li>
+          <li><strong>Connection Testing:</strong> Testing a saved server from the edit dialog now uses the stored password or token, and the card result matches the dialog</li>
+          <li><strong>AQL Highlighting:</strong> Stored queries are now syntax-highlighted</li>
+          <li><strong>Accessibility:</strong> Tree toggles are real buttons that announce their expanded state, and expand/collapse carets are drawn consistently</li>
+          <li><strong>Dialogs:</strong> Escape now closes dialogs even when focus stays on the button that opened them</li>
+        </ul>
 
         <h3>v0.9.7 &mdash; Crash Reporting &amp; Editor Polish</h3>
         <ul>
