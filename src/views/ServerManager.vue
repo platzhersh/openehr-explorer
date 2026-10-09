@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { apiRoot, customApiPrefixLabel } from "../lib/apiPath";
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
@@ -117,6 +118,15 @@ function credentialBackendLabel(backend: string): string {
       return backend;
   }
 }
+
+// Opens a profile's full API root (base URL + prefix) in the system browser.
+async function openApiRoot(profile: ServerProfile) {
+  try {
+    await openUrl(apiRoot(profile.base_url, profile.api_path_prefix));
+  } catch (e) {
+    cardTestResult.value[profile.id] = { success: false, message: `Could not open browser: ${e}` };
+  }
+}
 </script>
 
 <template>
@@ -147,13 +157,15 @@ function credentialBackendLabel(backend: string): string {
             <div class="profile-meta">
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
-              <span
+              <a
                 v-if="customApiPrefixLabel(profile.api_path_prefix)"
                 class="badge prefix-badge"
-                :data-tooltip="`Custom API path prefix — requests go to ${apiRoot(profile.base_url, profile.api_path_prefix)}`"
+                :href="apiRoot(profile.base_url, profile.api_path_prefix)"
+                :data-tooltip="`Custom API path prefix — opens ${apiRoot(profile.base_url, profile.api_path_prefix)} in your browser`"
+                @click.prevent="openApiRoot(profile)"
               >
                 {{ customApiPrefixLabel(profile.api_path_prefix) }}
-              </span>
+              </a>
               <span
                 v-if="serverStore.versionInfo[profile.id]?.server_version"
                 class="badge version-badge"
@@ -299,8 +311,38 @@ function credentialBackendLabel(backend: string): string {
   gap: 6px;
   flex-wrap: wrap;
 }
+/* Badges are labels, not text to select or click: arrow cursor, no selection.
+   The prefix badge is the one link, and keeps its pointer. */
+.profile-meta .badge {
+  user-select: none;
+  cursor: default;
+}
+.profile-meta .prefix-badge {
+  cursor: pointer;
+}
 .prefix-badge {
   font-family: var(--font-mono);
+  text-decoration: none;
+}
+.prefix-badge:hover,
+.prefix-badge:focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+/* The URL in the tooltip can be long: anchor it to the badge's left edge
+   (the default centering pokes out of the card) and let it wrap. */
+.prefix-badge[data-tooltip]::after {
+  left: 0;
+  transform: translateY(-2px);
+  font-family: var(--font-sans);
+  width: max-content;
+  max-width: min(480px, 70vw);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.prefix-badge[data-tooltip]:hover::after,
+.prefix-badge[data-tooltip]:focus-visible::after {
+  transform: translateY(0);
 }
 .version-badge {
   background: var(--color-primary-dim);

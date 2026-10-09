@@ -59,6 +59,9 @@ const VERSION_BY_PROFILE: Record<string, ServerVersionInfo> = {
   },
 };
 
+// URLs the mocked opener plugin was asked to open (see CustomApiPathPrefix).
+const OPENED_URLS: string[] = [];
+
 interface StoryState {
   profiles?: ServerProfile[];
   /** `test_server_connection` rejects instead of resolving, for the play-function stories. */
@@ -79,6 +82,10 @@ function withStores(state: StoryState = {}) {
         if (cmd === "get_server_version") {
           const profileId = (payload as { profileId?: string } | undefined)?.profileId;
           return profileId ? (VERSION_BY_PROFILE[profileId] ?? null) : null;
+        }
+        if (cmd === "plugin:opener|open_url") {
+          OPENED_URLS.push(String((payload as { url?: string } | undefined)?.url));
+          return;
         }
         if (cmd === "test_server_connection") {
           if (state.testConnectionFails) {
@@ -193,7 +200,12 @@ export const CustomApiPathPrefix: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByText("/openehr/v1")).toBeInTheDocument();
+    const badge = await canvas.findByText("/openehr/v1");
     await expect(canvas.queryByText("/rest/openehr/v1")).toBeNull();
+    // The badge is a link to the full API root; clicking opens it in the system browser.
+    await expect(badge).toHaveAttribute("href", "https://cdr.example.com/openehr/v1");
+    OPENED_URLS.length = 0;
+    await userEvent.click(badge);
+    await expect(OPENED_URLS).toEqual(["https://cdr.example.com/openehr/v1"]);
   },
 };
