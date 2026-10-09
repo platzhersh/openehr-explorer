@@ -11,7 +11,7 @@
   <a href="https://openehr-explorer.dev/"><img src="https://img.shields.io/badge/docs-openehr--explorer.dev-blue" alt="Documentation"></a>
 </p>
 
-A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, etc.) — a Postman alternative built specifically for openEHR.
+A cross-platform desktop application for browsing, querying, and inspecting openEHR CDR instances (EHRBase, Better Platform, FerroEHR, Cadasto, etc.) — a Postman alternative built specifically for openEHR.
 
 Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 
@@ -49,7 +49,7 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
       <sub>FerroEHR</sub>
     </td>
     <td align="center" width="20%">
-      <a href="https://cadasto.com"><b>Cadasto</b></a><br>
+      <a href="https://cadasto.com"><img src="website/public/assets/cdrs/cadasto.png" alt="Cadasto" height="40"></a><br>
       <sub>Cadasto</sub>
     </td>
     <td align="center" width="20%">
