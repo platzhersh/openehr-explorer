@@ -545,7 +545,7 @@ function resolveSubmitTemplateId(): string {
 // Full API root (base URL + prefix), same as the backend's `api_root()`.
 function activeApiRoot(): string {
   const server = serverStore.activeServer;
-  return server ? apiRoot(server.base_url, server.api_path_prefix) : "";
+  return server ? apiRoot(server.base_url, server.api_path_prefix, server.server_type) : "";
 }
 
 function buildRequestUrl(templateId: string): { method: string; url: string } {

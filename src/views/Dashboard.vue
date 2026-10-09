@@ -102,8 +102,8 @@ watch(
       <template v-if="serverStore.profiles.length === 0">
         <h3>Welcome to openEHR Explorer</h3>
         <p>
-          Connect your first openEHR CDR — EHRBase, Better Platform, FerroEHR, or any generic
-          openEHR REST server — to see live EHR, composition, and template counts here.
+          Connect your first openEHR CDR — EHRBase, Better Platform, FerroEHR, Cadasto, or any
+          generic openEHR REST server — to see live EHR, composition, and template counts here.
         </p>
         <button type="button" class="btn btn-primary" @click="router.push('/servers')">
           + Add Your First Server

@@ -126,6 +126,27 @@ export const CustomPrefixForCadasto: Story = {
   },
 };
 
+export const CadastoTypeUsesItsOwnDefault: Story = {
+  render: render({ ...CADASTO_PROFILE, server_type: "cadasto", api_path_prefix: null }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A Cadasto profile with no prefix override: the type's default `/openehr/v1` applies, so it is neither flagged as custom nor requires configuration.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
+    await expect(toggle).toHaveTextContent("/openehr/v1 (default)");
+    await userEvent.click(toggle);
+    await expect(await canvas.findByTestId("api-root-preview")).toHaveTextContent(
+      "https://cdr.example.com/openehr/v1/ehr",
+    );
+  },
+};
+
 export const CustomPrefixExpanded: Story = {
   render: render(CADASTO_PROFILE),
   play: async ({ canvasElement }) => {

@@ -8,7 +8,7 @@ export interface ServerProfile {
   id: string;
   name: string;
   base_url: string;
-  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
+  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "cadasto" | "generic";
   auth_method:
     | { type: "none" }
     | { type: "basic"; username: string; has_password: boolean }
@@ -30,7 +30,7 @@ export interface ServerProfileInput {
   id: string;
   name: string;
   base_url: string;
-  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
+  server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "cadasto" | "generic";
   auth_method:
     | { type: "none" }
     | { type: "basic"; username: string; password: string }

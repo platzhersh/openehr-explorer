@@ -77,7 +77,7 @@ export const TOURS: Tour[] = [
       {
         target: '[data-tour="server-select"]',
         title: "Pick your server",
-        body: "Every screen works against whichever server profile is selected here. Add EHRBase, Better Platform, FerroEHR, or any generic openEHR REST server from the Server Manager, then switch between them any time.",
+        body: "Every screen works against whichever server profile is selected here. Add EHRBase, Better Platform, FerroEHR, Cadasto, or any generic openEHR REST server from the Server Manager, then switch between them any time.",
       },
       {
         target: '[data-tour="nav-tabs"]',
@@ -261,7 +261,7 @@ export const TOURS: Tour[] = [
       {
         target: '[data-tour="server-add"]',
         title: "Connect a CDR",
-        body: "Add a server profile for EHRBase, Better Platform, FerroEHR, or any generic openEHR REST server.",
+        body: "Add a server profile for EHRBase, Better Platform, FerroEHR, Cadasto, or any generic openEHR REST server.",
       },
     ],
   },

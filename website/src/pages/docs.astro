@@ -71,8 +71,8 @@ const navGroups = [
           <li><strong>Disk space:</strong> ~10 MB</li>
         </ul>
         <p>
-          You will also need access to an openEHR CDR instance (such as <a href="https://ehrbase.org" target="_blank" rel="noopener">EHRBase</a> or
-          Better Platform) to connect to. The app does not include a built-in CDR.
+          You will also need access to an openEHR CDR instance (such as <a href="https://ehrbase.org" target="_blank" rel="noopener">EHRBase</a>,
+          Better Platform, FerroEHR or <a href="https://cadasto.com" target="_blank" rel="noopener">Cadasto</a>) to connect to. The app does not include a built-in CDR.
         </p>
       </section>
 
@@ -160,7 +160,7 @@ const navGroups = [
           <li>Click <strong>"+ Add Server"</strong>.</li>
           <li>Enter a display name (e.g., "Local EHRBase").</li>
           <li>Enter the base URL of your CDR (e.g., <code>http://localhost:8080/ehrbase</code>).</li>
-          <li>Select the server type: <strong>EHRBase</strong>, <strong>Better Platform</strong>, or <strong>Generic</strong>.</li>
+          <li>Select the server type: <strong>EHRBase</strong>, <strong>Better Platform</strong>, <strong>FerroEHR</strong>, <strong>Cadasto</strong>, or <strong>Generic</strong>.</li>
           <li>
             Choose an authentication method:
             <ul>
@@ -194,7 +194,7 @@ const navGroups = [
         <h2>Server Manager</h2>
         <p>The Server Manager lets you create, edit, and delete server profiles. Each profile stores a connection configuration for a specific openEHR CDR instance.</p>
         <ul>
-          <li>Supports <strong>EHRBase</strong>, <strong>Better Platform</strong>, and generic openEHR REST servers.</li>
+          <li>Supports <strong>EHRBase</strong>, <strong>Better Platform</strong>, <strong>FerroEHR</strong>, <strong>Cadasto</strong>, and generic openEHR REST servers.</li>
           <li>Each profile stores: display name, base URL, server type, and authentication method.</li>
           <li><strong>Test Connection</strong> validates the configuration before saving.</li>
           <li>Switch between servers instantly using the sidebar dropdown — no restart needed.</li>
@@ -206,7 +206,7 @@ const navGroups = [
         <ul>
           <li><strong>EHRBase:</strong> Fetches version from <code>GET /rest/status</code> (displays <code>ehrbase_version</code>)</li>
           <li><strong>Better Platform:</strong> Fetches version from <code>OPTIONS /rest/v1</code> (displays <code>solutionVersion</code>)</li>
-          <li><strong>Generic:</strong> Version detection not available — liveness check only</li>
+          <li><strong>Cadasto, Generic:</strong> Version detection not available — liveness check only</li>
         </ul>
         <p>Click the <strong>"Test"</strong> button on any profile card to verify connectivity and refresh the version number.</p>
       </section>
@@ -419,6 +419,7 @@ const navGroups = [
           <tbody>
             <tr><td>EHRBase</td><td><code>/rest/openehr/v1/</code></td><td><code>http://localhost:8080/ehrbase/rest/openehr/v1/ehr</code></td></tr>
             <tr><td>Better Platform</td><td><code>/rest/v1/</code></td><td><code>https://better.example.com/rest/v1/ehr</code></td></tr>
+            <tr><td>Cadasto</td><td><code>/openehr/v1/</code></td><td><code>https://cdr.example.com/openehr/v1/ehr</code></td></tr>
             <tr><td>Generic</td><td>Configurable</td><td>Depends on CDR vendor</td></tr>
           </tbody>
         </table>

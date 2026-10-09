@@ -6,7 +6,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 import LockIcon from "./LockIcon.vue";
 import CollapsibleSection from "./CollapsibleSection.vue";
-import { apiRoot, customApiPrefixLabel, DEFAULT_API_PATH_PREFIX } from "../lib/apiPath";
+import { apiRoot, customApiPrefixLabel, defaultApiPathPrefix } from "../lib/apiPath";
 import { useEscapeKey } from "../composables/useEscapeKey";
 
 const props = defineProps<{
@@ -36,8 +36,15 @@ const apiPathPrefixInput = computed({
   },
 });
 
+// What an unset prefix resolves to for the selected server type.
+const typeDefaultPrefix = computed(() => defaultApiPathPrefix(form.value.server_type));
+
 const apiRootPreview = computed(() =>
-  apiRoot(form.value.base_url || "http://localhost:8080", form.value.api_path_prefix),
+  apiRoot(
+    form.value.base_url || "http://localhost:8080",
+    form.value.api_path_prefix,
+    form.value.server_type,
+  ),
 );
 
 // Advanced settings always start collapsed (a custom prefix is also shown as a
@@ -46,7 +53,9 @@ const showAdvanced = ref(false);
 
 // Current prefix, shown on the collapsed "Advanced settings" row.
 const apiPrefixSummary = computed(
-  () => customApiPrefixLabel(form.value.api_path_prefix) ?? `${DEFAULT_API_PATH_PREFIX} (default)`,
+  () =>
+    customApiPrefixLabel(form.value.api_path_prefix, form.value.server_type) ??
+    `${typeDefaultPrefix.value} (default)`,
 );
 
 const editingExistingId = ref<string | null>(null);
@@ -288,6 +297,7 @@ const SERVER_TYPE_OPTIONS: SearchableSelectOption[] = [
   { value: "ehrbase", label: "EHRBase" },
   { value: "better_platform", label: "Better Platform" },
   { value: "ferro_ehr", label: "FerroEHR" },
+  { value: "cadasto", label: "Cadasto" },
   { value: "generic", label: "Generic openEHR REST" },
 ];
 
@@ -418,12 +428,13 @@ useEscapeKey(() => props.open, handleClose);
                 id="server-api-path-prefix"
                 class="input"
                 v-model="apiPathPrefixInput"
-                :placeholder="DEFAULT_API_PATH_PREFIX"
+                :placeholder="typeDefaultPrefix"
               />
               <p class="form-help">
                 Path appended to the Base URL to reach the openEHR REST API. Leave empty for
-                <code>{{ DEFAULT_API_PATH_PREFIX }}</code> (EHRBase, Better Platform). Use a custom
-                path such as <code>/openehr/v1</code> if your server exposes the API elsewhere, or
+                <code>{{ typeDefaultPrefix }}</code
+                >, the default for this server type. Use a custom path (for example
+                <code>/openehr/v1</code>) if your server exposes the API elsewhere, or
                 <code>/</code> if the Base URL already is the API root.
               </p>
               <p class="form-help api-root-preview" data-testid="api-root-preview">

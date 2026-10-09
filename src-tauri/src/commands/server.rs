@@ -26,7 +26,8 @@ pub struct ServerProfile {
     #[serde(default)]
     pub terminology_url: Option<String>,
     /// Path appended to `base_url` to reach the openEHR REST API root.
-    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    /// `None` means the server type's default (`/rest/openehr/v1`, or `/openehr/v1`
+    /// for Cadasto); see [`ServerType::default_api_path_prefix`].
     #[serde(default)]
     pub api_path_prefix: Option<String>,
     #[serde(default)]
@@ -37,6 +38,9 @@ pub struct ServerProfile {
 /// EHRBase / Better Platform convention, not something the openEHR REST spec
 /// mandates — see OEH-104.
 pub const DEFAULT_API_PATH_PREFIX: &str = "/rest/openehr/v1";
+
+/// Cadasto serves the openEHR REST API directly under `/openehr/v1`.
+pub const CADASTO_API_PATH_PREFIX: &str = "/openehr/v1";
 
 /// Normalizes a user-supplied prefix: trims whitespace, ensures a single
 /// leading `/`, drops trailing `/`. `None` (field left blank in the UI) keeps
@@ -69,7 +73,11 @@ impl ServerProfile {
     /// trailing slash. Spec-defined resource paths (`/ehr`, `/query/aql`, …) are
     /// appended to this.
     pub fn api_root(&self) -> String {
-        join_api_root(&self.base_url, self.api_path_prefix.as_deref())
+        let prefix = self
+            .api_path_prefix
+            .as_deref()
+            .unwrap_or_else(|| self.server_type.default_api_path_prefix());
+        join_api_root(&self.base_url, Some(prefix))
     }
 }
 
@@ -111,7 +119,8 @@ pub struct ServerProfilePublic {
     #[serde(default)]
     pub terminology_url: Option<String>,
     /// Path appended to `base_url` to reach the openEHR REST API root.
-    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    /// `None` means the server type's default (`/rest/openehr/v1`, or `/openehr/v1`
+    /// for Cadasto); see [`ServerType::default_api_path_prefix`].
     #[serde(default)]
     pub api_path_prefix: Option<String>,
     pub credential_backend: String,
@@ -132,7 +141,8 @@ pub struct ServerProfileInput {
     #[serde(default)]
     pub terminology_url: Option<String>,
     /// Path appended to `base_url` to reach the openEHR REST API root.
-    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    /// `None` means the server type's default (`/rest/openehr/v1`, or `/openehr/v1`
+    /// for Cadasto); see [`ServerType::default_api_path_prefix`].
     #[serde(default)]
     pub api_path_prefix: Option<String>,
 }
@@ -143,7 +153,24 @@ pub enum ServerType {
     Ehrbase,
     BetterPlatform,
     FerroEhr,
+    /// Cadasto (Code24 B.V.). Behaves like `Generic` today; the only
+    /// difference is its API path default (`/openehr/v1`, no `/rest/`).
+    Cadasto,
     Generic,
+}
+
+impl ServerType {
+    /// The API path prefix used when a profile doesn't set `api_path_prefix`.
+    /// An explicit prefix on the profile always wins over this.
+    pub fn default_api_path_prefix(&self) -> &'static str {
+        match self {
+            ServerType::Cadasto => CADASTO_API_PATH_PREFIX,
+            ServerType::Ehrbase
+            | ServerType::BetterPlatform
+            | ServerType::FerroEhr
+            | ServerType::Generic => DEFAULT_API_PATH_PREFIX,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,7 +223,8 @@ pub struct StoredProfile {
     #[serde(default)]
     pub terminology_url: Option<String>,
     /// Path appended to `base_url` to reach the openEHR REST API root.
-    /// `None` means [`DEFAULT_API_PATH_PREFIX`] (`/rest/openehr/v1`).
+    /// `None` means the server type's default (`/rest/openehr/v1`, or `/openehr/v1`
+    /// for Cadasto); see [`ServerType::default_api_path_prefix`].
     #[serde(default)]
     pub api_path_prefix: Option<String>,
     #[serde(default)]
@@ -785,8 +813,8 @@ pub async fn get_server_version(
             }
             parse_ferroehr_status_json(&resp.body)
         }
-        ServerType::Generic => {
-            Err("Version detection is not available for generic openEHR servers".to_string())
+        ServerType::Generic | ServerType::Cadasto => {
+            Err("Version detection is not available for this server type".to_string())
         }
     }
 }
@@ -990,6 +1018,65 @@ mod tests {
             token: String::new(),
         };
         assert!(keep_stored_secret(auth, |_| Err("keychain locked".into())).is_err());
+    }
+
+    #[test]
+    fn default_prefix_depends_on_server_type() {
+        assert_eq!(ServerType::Cadasto.default_api_path_prefix(), "/openehr/v1");
+        for t in [
+            ServerType::Ehrbase,
+            ServerType::BetterPlatform,
+            ServerType::FerroEhr,
+            ServerType::Generic,
+        ] {
+            assert_eq!(t.default_api_path_prefix(), DEFAULT_API_PATH_PREFIX);
+        }
+    }
+
+    #[test]
+    fn cadasto_profile_uses_its_default_prefix_when_unset() {
+        let mut p = ServerProfile::from(input("https://cdr.example.com/", None));
+        p.server_type = ServerType::Cadasto;
+        assert_eq!(p.api_root(), "https://cdr.example.com/openehr/v1");
+        assert_eq!(
+            connection_test_url(&p),
+            "https://cdr.example.com/openehr/v1/definition/template/adl1.4"
+        );
+    }
+
+    #[test]
+    fn an_explicit_prefix_wins_over_the_server_type_default() {
+        let mut p = ServerProfile::from(input("https://cdr.example.com", Some("/custom/api")));
+        p.server_type = ServerType::Cadasto;
+        assert_eq!(p.api_root(), "https://cdr.example.com/custom/api");
+        // An explicit empty prefix still means "base URL is the API root".
+        let mut p = ServerProfile::from(input("https://cdr.example.com/openehr/v1", Some("/")));
+        p.server_type = ServerType::Cadasto;
+        assert_eq!(p.api_root(), "https://cdr.example.com/openehr/v1");
+    }
+
+    #[test]
+    fn other_server_types_keep_the_rest_default() {
+        for t in [
+            ServerType::Ehrbase,
+            ServerType::BetterPlatform,
+            ServerType::FerroEhr,
+        ] {
+            let mut p = ServerProfile::from(input("https://cdr.example.com", None));
+            p.server_type = t;
+            assert_eq!(p.api_root(), "https://cdr.example.com/rest/openehr/v1");
+        }
+    }
+
+    #[test]
+    fn cadasto_server_type_round_trips_through_json() {
+        let json = r#"{"id":"1","name":"n","base_url":"http://x","server_type":"cadasto","auth_method":{"type":"none"}}"#;
+        let p: ServerProfile = serde_json::from_str(json).unwrap();
+        assert!(matches!(p.server_type, ServerType::Cadasto));
+        assert_eq!(p.api_path_prefix, None);
+        assert_eq!(p.api_root(), "http://x/openehr/v1");
+        let back = serde_json::to_string(&p.server_type).unwrap();
+        assert_eq!(back, "\"cadasto\"");
     }
 
     #[test]

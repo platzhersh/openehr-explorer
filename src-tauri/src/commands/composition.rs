@@ -21,9 +21,10 @@ use crate::inspector::send_instrumented;
 fn flat_composition_content_type(server_type: &ServerType) -> &'static str {
     match server_type {
         ServerType::FerroEhr => "application/openehr.wt.flat+json",
-        ServerType::Ehrbase | ServerType::BetterPlatform | ServerType::Generic => {
-            "application/openehr.wt.flat.schema+json"
-        }
+        ServerType::Ehrbase
+        | ServerType::BetterPlatform
+        | ServerType::Generic
+        | ServerType::Cadasto => "application/openehr.wt.flat.schema+json",
     }
 }
 

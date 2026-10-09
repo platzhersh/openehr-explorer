@@ -122,7 +122,7 @@ function credentialBackendLabel(backend: string): string {
 // Opens a profile's full API root (base URL + prefix) in the system browser.
 async function openApiRoot(profile: ServerProfile) {
   try {
-    await openUrl(apiRoot(profile.base_url, profile.api_path_prefix));
+    await openUrl(apiRoot(profile.base_url, profile.api_path_prefix, profile.server_type));
   } catch (e) {
     cardTestResult.value[profile.id] = { success: false, message: `Could not open browser: ${e}` };
   }
@@ -158,13 +158,13 @@ async function openApiRoot(profile: ServerProfile) {
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
               <a
-                v-if="customApiPrefixLabel(profile.api_path_prefix)"
+                v-if="customApiPrefixLabel(profile.api_path_prefix, profile.server_type)"
                 class="badge prefix-badge"
-                :href="apiRoot(profile.base_url, profile.api_path_prefix)"
-                :data-tooltip="`Custom API path prefix — opens ${apiRoot(profile.base_url, profile.api_path_prefix)} in your browser`"
+                :href="apiRoot(profile.base_url, profile.api_path_prefix, profile.server_type)"
+                :data-tooltip="`Custom API path prefix — opens ${apiRoot(profile.base_url, profile.api_path_prefix, profile.server_type)} in your browser`"
                 @click.prevent="openApiRoot(profile)"
               >
-                {{ customApiPrefixLabel(profile.api_path_prefix) }}
+                {{ customApiPrefixLabel(profile.api_path_prefix, profile.server_type) }}
               </a>
               <span
                 v-if="serverStore.versionInfo[profile.id]?.server_version"
