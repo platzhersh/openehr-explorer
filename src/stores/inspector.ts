@@ -37,12 +37,7 @@ export const useInspectorStore = defineStore("inspector", () => {
         return false;
       }
       if (filterStatusClass.value.length > 0) {
-        const cls =
-          entry.state === "pending"
-            ? "pending"
-            : entry.state === "failed"
-              ? "failed"
-              : `${Math.floor(entry.status / 100)}xx`;
+        const cls = entryFilterClass(entry);
         if (!filterStatusClass.value.includes(cls)) return false;
       }
       if (filterText.value) {
@@ -209,6 +204,11 @@ const HTTP_STATUS_TEXT: Record<number, string> = {
 
 export function statusText(status: number): string {
   return HTTP_STATUS_TEXT[status] ?? "";
+}
+
+function entryFilterClass(entry: RequestLogEntry): string {
+  if (entry.state !== "complete") return entry.state;
+  return `${Math.floor(entry.status / 100)}xx`;
 }
 
 export function entryStatusClass(entry: RequestLogEntry): string {
