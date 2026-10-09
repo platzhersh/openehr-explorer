@@ -21,6 +21,7 @@ import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import EhrListItem from "../components/EhrListItem.vue";
+import { useEscapeKey } from "../composables/useEscapeKey";
 import RefreshButton from "../components/RefreshButton.vue";
 import {
   addItem as addDirectoryItem,
@@ -66,6 +67,8 @@ const editableDirectory = ref<EditableFolder | null>(null);
 const directorySaving = ref(false);
 const directorySaveError = ref<string | null>(null);
 const showDeleteDirectoryDialog = ref(false);
+useEscapeKey(showDeleteDialog, () => (showDeleteDialog.value = false));
+useEscapeKey(showDeleteDirectoryDialog, () => (showDeleteDirectoryDialog.value = false));
 const deletingDirectory = ref(false);
 const deleteDirectoryError = ref<string | null>(null);
 
@@ -2369,9 +2372,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
       v-if="showDeleteDialog"
       class="dialog-overlay"
       @click="showDeleteDialog = false"
-      @keydown.esc="showDeleteDialog = false"
+      @keydown.esc.prevent="showDeleteDialog = false"
     >
-      <div class="dialog" @click.stop @keydown.esc.stop="showDeleteDialog = false">
+      <div class="dialog" @click.stop @keydown.esc.stop.prevent="showDeleteDialog = false">
         <h3>Delete EHR</h3>
         <p>
           This action cannot be undone. This will permanently delete the EHR and all its
@@ -2422,9 +2425,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
       v-if="showDeleteDirectoryDialog"
       class="dialog-overlay"
       @click="showDeleteDirectoryDialog = false"
-      @keydown.esc="showDeleteDirectoryDialog = false"
+      @keydown.esc.prevent="showDeleteDirectoryDialog = false"
     >
-      <div class="dialog" @click.stop @keydown.esc.stop="showDeleteDirectoryDialog = false">
+      <div class="dialog" @click.stop @keydown.esc.stop.prevent="showDeleteDirectoryDialog = false">
         <h3>Delete Directory</h3>
         <p>
           This removes the entire DIRECTORY folder structure for this EHR. This action cannot be
