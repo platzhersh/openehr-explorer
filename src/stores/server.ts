@@ -3,21 +3,47 @@ import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+export type ClientAuthStyle = "basic" | "body";
+
+/** Public auth returned from the backend — secrets are replaced by flags. */
+export type AuthMethodPublic =
+  | { type: "none" }
+  | { type: "basic"; username: string; has_password: boolean }
+  | { type: "bearer"; has_token: boolean }
+  | {
+      type: "oauth2_client_credentials";
+      token_url: string;
+      client_id: string;
+      has_client_secret: boolean;
+      audience?: string | null;
+      scope?: string | null;
+      client_auth: ClientAuthStyle;
+    };
+
+/** Auth sent to the backend on save/test — includes secret values. */
+export type AuthMethodInput =
+  | { type: "none" }
+  | { type: "basic"; username: string; password: string }
+  | { type: "bearer"; token: string }
+  | {
+      type: "oauth2_client_credentials";
+      token_url: string;
+      client_id: string;
+      /** Empty on an existing profile = keep the stored secret. */
+      client_secret: string;
+      audience?: string | null;
+      scope?: string | null;
+      client_auth: ClientAuthStyle;
+    };
+
 /** Public profile returned from the backend — secrets are NOT included. */
 export interface ServerProfile {
   id: string;
   name: string;
   base_url: string;
   server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
-  auth_method:
-    | { type: "none" }
-    | { type: "basic"; username: string; has_password: boolean }
-    | { type: "bearer"; has_token: boolean };
-  admin_auth_method?:
-    | { type: "none" }
-    | { type: "basic"; username: string; has_password: boolean }
-    | { type: "bearer"; has_token: boolean }
-    | null;
+  auth_method: AuthMethodPublic;
+  admin_auth_method?: AuthMethodPublic | null;
   terminology_url?: string | null;
   /** Path appended to base_url to reach the openEHR REST root. null/empty → DEFAULT_API_PATH_PREFIX. */
   api_path_prefix?: string | null;
@@ -31,15 +57,8 @@ export interface ServerProfileInput {
   name: string;
   base_url: string;
   server_type: "ehrbase" | "better_platform" | "ferro_ehr" | "generic";
-  auth_method:
-    | { type: "none" }
-    | { type: "basic"; username: string; password: string }
-    | { type: "bearer"; token: string };
-  admin_auth_method?:
-    | { type: "none" }
-    | { type: "basic"; username: string; password: string }
-    | { type: "bearer"; token: string }
-    | null;
+  auth_method: AuthMethodInput;
+  admin_auth_method?: AuthMethodInput | null;
   terminology_url?: string | null;
   /** Path appended to base_url to reach the openEHR REST root. null/empty → DEFAULT_API_PATH_PREFIX. */
   api_path_prefix?: string | null;

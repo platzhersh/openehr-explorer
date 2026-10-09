@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { apiRoot, customApiPrefixLabel } from "../lib/apiPath";
+import { authLabel } from "../lib/oauth";
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
@@ -156,7 +157,7 @@ async function openApiRoot(profile: ServerProfile) {
             <div class="profile-url">{{ profile.base_url }}</div>
             <div class="profile-meta">
               <span class="badge">{{ profile.server_type }}</span>
-              <span class="badge">{{ profile.auth_method.type }}</span>
+              <span class="badge">{{ authLabel(profile.auth_method) }}</span>
               <a
                 v-if="customApiPrefixLabel(profile.api_path_prefix)"
                 class="badge prefix-badge"

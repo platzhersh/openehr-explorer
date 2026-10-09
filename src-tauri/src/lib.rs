@@ -2,6 +2,7 @@ mod commands;
 pub mod crash_report;
 pub mod credentials;
 pub mod inspector;
+pub mod oauth;
 pub mod settings;
 
 use commands::{composition, contribution, dashboard, ehr, query, server, template, terminology};
