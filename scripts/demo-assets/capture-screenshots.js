@@ -152,8 +152,8 @@ async function main() {
   // values under the ITEM_TREE — expand every collapsed node so the Pretty
   // tab shows the resolved labels next to their values.
   const collapsedToggles = page.locator(`${COMPOSITION_VIEWER} .toggle`, { hasText: "\u25B6" });
-  while ((await collapsedToggles.count()) > 0) {
-    await collapsedToggles.first().click();
+  while ((await collapsedToggles.count()) > 0) { // NOSONAR: each click changes the DOM the next count() reads
+    await collapsedToggles.first().click(); // NOSONAR: each click changes the DOM the next count() reads
   }
   await page.mouse.move(0, 0);
   await page.waitForTimeout(300);

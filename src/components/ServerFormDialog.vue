@@ -6,6 +6,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 import LockIcon from "./LockIcon.vue";
 import { apiRoot, DEFAULT_API_PATH_PREFIX } from "../lib/apiPath";
+import { useEscapeKey } from "../composables/useEscapeKey";
 
 const props = defineProps<{
   open: boolean;
@@ -352,10 +353,17 @@ function handleClose() {
   testError.value = null;
   emit("close");
 }
+
+useEscapeKey(() => props.open, handleClose);
 </script>
 
 <template>
-  <div v-if="open" class="dialog-overlay" @click.self="handleClose" @keydown.esc="handleClose">
+  <div
+    v-if="open"
+    class="dialog-overlay"
+    @click.self="handleClose"
+    @keydown.esc.prevent="handleClose"
+  >
     <div class="dialog">
       <div class="dialog-header">
         <h2>{{ editingExistingId ? "Edit" : "Add" }} Server Profile</h2>

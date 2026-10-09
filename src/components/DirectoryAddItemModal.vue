@@ -18,6 +18,7 @@
  */
 import { ref, watch } from "vue";
 import type { CompositionOption } from "../lib/directoryEdit";
+import { useEscapeKey } from "../composables/useEscapeKey";
 
 const props = defineProps<{
   open: boolean;
@@ -78,10 +79,17 @@ function addManualReference() {
 function handleClose() {
   emit("close");
 }
+
+useEscapeKey(() => props.open, handleClose);
 </script>
 
 <template>
-  <div v-if="open" class="dialog-overlay" @click.self="handleClose">
+  <div
+    v-if="open"
+    class="dialog-overlay"
+    @click.self="handleClose"
+    @keydown.esc.prevent="handleClose"
+  >
     <div class="dialog">
       <div class="dialog-header">
         <h2>Add item reference</h2>

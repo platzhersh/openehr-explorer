@@ -11,6 +11,7 @@
  */
 import { ref, watch } from "vue";
 import type { EhrSearchCriteria } from "../stores/ehr";
+import { useEscapeKey } from "../composables/useEscapeKey";
 
 const props = defineProps<{
   open: boolean;
@@ -115,10 +116,17 @@ function handleClear() {
 function handleClose() {
   emit("close");
 }
+
+useEscapeKey(() => props.open, handleClose);
 </script>
 
 <template>
-  <div v-if="open" class="dialog-overlay" @click.self="handleClose">
+  <div
+    v-if="open"
+    class="dialog-overlay"
+    @click.self="handleClose"
+    @keydown.esc.prevent="handleClose"
+  >
     <div class="dialog">
       <div class="dialog-header">
         <h2>Filter EHRs</h2>

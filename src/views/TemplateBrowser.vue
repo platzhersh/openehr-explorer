@@ -819,6 +819,14 @@ function isCollapsedByDefault(depth: number): boolean {
   return depth > 2;
 }
 
+/** AQL path label + copy button shown in a tree node header. */
+function aqlPathVNodes(aqlPath: string): VNode[] {
+  return [
+    h("span", { class: "aql-path" }, aqlPath),
+    h(CopyButton, { text: aqlPath, title: "Copy AQL path" }),
+  ];
+}
+
 const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
   name: "WtTreeNode",
   props: {
@@ -880,8 +888,7 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
       }
 
       if (node.aqlPath) {
-        headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
+        headerChildren.push(...aqlPathVNodes(node.aqlPath));
       }
 
       elements.push(
@@ -1002,8 +1009,7 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
       }
 
       if (node.aqlPath) {
-        headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
+        headerChildren.push(...aqlPathVNodes(node.aqlPath));
       }
 
       elements.push(
