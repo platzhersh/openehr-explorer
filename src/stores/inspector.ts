@@ -59,6 +59,8 @@ export const useInspectorStore = defineStore("inspector", () => {
     // The backend emits the same id twice (pending, then final) — update in place.
     const idx = entries.value.findIndex((e) => e.id === entry.id);
     if (idx !== -1) {
+      // IPC ordering isn't guaranteed: never let a late "pending" clobber a final state.
+      if (entry.state === "pending" && entries.value[idx].state !== "pending") return;
       entries.value[idx] = entry;
       return;
     }
