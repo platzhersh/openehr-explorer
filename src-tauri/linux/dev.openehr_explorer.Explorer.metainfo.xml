@@ -32,7 +32,7 @@
   </description>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://raw.githubusercontent.com/platzhersh/openehr-explorer/v0.9.7/website/public/assets/screenshots/01-ehr-browser.webp</image>
+      <image type="source">https://raw.githubusercontent.com/platzhersh/openehr-explorer/v0.10.0/website/public/assets/screenshots/01-ehr-browser.webp</image>
       <caption>The EHR Browser lists EHRs and the compositions of the selected EHR</caption>
     </screenshot>
   </screenshots>

@@ -3024,7 +3024,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-explorer"
-version = "0.9.7"
+version = "0.10.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
