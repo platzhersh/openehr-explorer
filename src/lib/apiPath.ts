@@ -25,9 +25,3 @@ export function apiRoot(baseUrl: string, prefix?: string | null): string {
   const trimmed = trimSlashes((prefix ?? DEFAULT_API_PATH_PREFIX).trim(), true, true);
   return trimmed ? `${base}/${trimmed}` : base;
 }
-
-/** Path-only form of the API root prefix, e.g. "/rest/openehr/v1" (or "" when none). */
-export function apiPathPrefix(prefix?: string | null): string {
-  const trimmed = trimSlashes((prefix ?? DEFAULT_API_PATH_PREFIX).trim(), true, true);
-  return trimmed ? `/${trimmed}` : "";
-}

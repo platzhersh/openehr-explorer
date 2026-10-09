@@ -2,7 +2,7 @@
 import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useServerStore } from "../stores/server";
-import { apiPathPrefix } from "../lib/apiPath";
+import { apiRoot } from "../lib/apiPath";
 import { useEhrStore } from "../stores/ehr";
 import { useTemplateStore } from "../stores/template";
 import { useCompositionStore } from "../stores/composition";
@@ -542,16 +542,22 @@ function resolveSubmitTemplateId(): string {
 // 404s ("only UUID-type versionedObjectUids are supported") if the
 // ::system::version suffix is left on; that full string belongs in If-Match
 // instead. Mirrors update_composition's versioned_object_uid.
+// Full API root (base URL + prefix), same as the backend's `api_root()`.
+function activeApiRoot(): string {
+  const server = serverStore.activeServer;
+  return server ? apiRoot(server.base_url, server.api_path_prefix) : "";
+}
+
 function buildRequestUrl(templateId: string): { method: string; url: string } {
   if (isEditMode.value) {
     return {
       method: "PUT",
-      url: `${apiPathPrefix(serverStore.activeServer?.api_path_prefix)}/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`,
+      url: `${activeApiRoot()}/ehr/${selectedEhrId.value}/composition/${props.compositionUid?.split("::")[0]}`,
     };
   }
   return {
     method: "POST",
-    url: `${apiPathPrefix(serverStore.activeServer?.api_path_prefix)}/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`,
+    url: `${activeApiRoot()}/ehr/${selectedEhrId.value}/composition?templateId=${encodeURIComponent(templateId)}`,
   };
 }
 

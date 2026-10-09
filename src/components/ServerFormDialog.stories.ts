@@ -18,6 +18,14 @@ const CADASTO_PROFILE: ServerProfile = {
   is_default: false,
 };
 
+const API_ROOT_PROFILE: ServerProfile = {
+  ...CADASTO_PROFILE,
+  id: "profile-api-root",
+  name: "API root in Base URL",
+  base_url: "https://cdr.example.com/openehr/v1",
+  api_path_prefix: "",
+};
+
 function render(profile: ServerProfile | null) {
   return () => ({
     components: { ServerFormDialog },
@@ -122,6 +130,25 @@ export const PreviewFollowsInput: Story = {
     await userEvent.type(prefix, "/");
     await expect(canvas.getByTestId("api-root-preview")).toHaveTextContent(
       "http://localhost:8080/ehrbase/ehr",
+    );
+  },
+};
+
+export const EmptyPrefixShownAsSlash: Story = {
+  render: render(API_ROOT_PROFILE),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A saved empty prefix (the Base URL already is the API root) is shown as `/`, not as the blank default state, so re-saving the profile doesn't reset it.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByLabelText("API Path Prefix (optional)")).toHaveValue("/");
+    await expect(canvas.getByTestId("api-root-preview")).toHaveTextContent(
+      "https://cdr.example.com/openehr/v1/ehr",
     );
   },
 };

@@ -27,7 +27,9 @@ const globalTerminologyUrl = computed(() => settingsStore.settings.terminology_s
 // Blank input means "use the default prefix" (null), which is distinct from an
 // explicit "/" (the base URL already is the API root).
 const apiPathPrefixInput = computed({
-  get: () => form.value.api_path_prefix ?? "",
+  // A saved empty string means "no prefix"; show it as "/" so it isn't mistaken
+  // for the blank default-prefix state (and silently reset on the next save).
+  get: () => (form.value.api_path_prefix === "" ? "/" : (form.value.api_path_prefix ?? "")),
   set: (value: string) => {
     form.value.api_path_prefix = value.trim() === "" ? null : value;
   },
