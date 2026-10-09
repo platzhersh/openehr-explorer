@@ -6,7 +6,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
 import LockIcon from "./LockIcon.vue";
 import CollapsibleSection from "./CollapsibleSection.vue";
-import { apiRoot, DEFAULT_API_PATH_PREFIX } from "../lib/apiPath";
+import { apiRoot, customApiPrefixLabel, DEFAULT_API_PATH_PREFIX } from "../lib/apiPath";
 import { useEscapeKey } from "../composables/useEscapeKey";
 
 const props = defineProps<{
@@ -43,6 +43,11 @@ const apiRootPreview = computed(() =>
 // Advanced settings always start collapsed (a custom prefix is also shown as a
 // badge on the profile's card, so it isn't hidden from view).
 const showAdvanced = ref(false);
+
+// Current prefix, shown on the collapsed "Advanced settings" row.
+const apiPrefixSummary = computed(
+  () => customApiPrefixLabel(form.value.api_path_prefix) ?? `${DEFAULT_API_PATH_PREFIX} (default)`,
+);
 
 const editingExistingId = ref<string | null>(null);
 const testResult = ref<string | null>(null);
@@ -404,6 +409,7 @@ useEscapeKey(() => props.open, handleClose);
           <CollapsibleSection
             v-model:open="showAdvanced"
             title="Advanced settings"
+            :summary="apiPrefixSummary"
             class="advanced-section"
           >
             <div class="form-group">

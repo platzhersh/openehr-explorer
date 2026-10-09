@@ -80,6 +80,8 @@ export const NewProfileAdvancedCollapsed: Story = {
     const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(canvas.queryByTestId("api-root-preview")).toBeNull();
+    // The collapsed row summarizes the current prefix.
+    await expect(toggle).toHaveTextContent("/rest/openehr/v1 (default)");
   },
 };
 
@@ -119,7 +121,16 @@ export const CustomPrefixForCadasto: Story = {
     const canvas = within(canvasElement);
     const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(toggle);
+    // A custom prefix is visible on the collapsed row without opening it.
+    await expect(toggle).toHaveTextContent("/openehr/v1");
+  },
+};
+
+export const CustomPrefixExpanded: Story = {
+  render: render(CADASTO_PROFILE),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: /advanced settings/i }));
     await expect(await canvas.findByTestId("api-root-preview")).toHaveTextContent(
       "https://cdr.example.com/openehr/v1/ehr",
     );

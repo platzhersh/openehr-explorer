@@ -94,3 +94,32 @@ export const CustomTitleSlot: Story = {
       </div>`,
   }),
 };
+
+export const WithSummary: Story = {
+  args: { summary: "/rest/openehr/v1 (default)" },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "`summary` shows the current value on the toggle row while collapsed, so the setting is visible without opening the section. It disappears when expanded.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("/rest/openehr/v1 (default)")).toBeInTheDocument();
+    await userEvent.click(await canvas.findByRole("button", { name: /advanced settings/i }));
+    await expect(canvas.queryByText("/rest/openehr/v1 (default)")).toBeNull();
+  },
+};
+
+export const ControlledBodyStaysReferenced: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
+    // aria-controls always points at a real element, even while collapsed.
+    const id = toggle.getAttribute("aria-controls");
+    await expect(id).toBeTruthy();
+    await expect(canvasElement.querySelector(`#${id}`)).not.toBeNull();
+  },
+};

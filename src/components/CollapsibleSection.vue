@@ -7,15 +7,22 @@
 //
 // Bind with `v-model:open`; leave it unbound for an uncontrolled section that
 // manages its own state. The body is not rendered while collapsed, so nothing
-// inside it is focusable or announced.
+// inside it is focusable or announced; its (empty, hidden) container stays in
+// the DOM so the toggle's `aria-controls` always points at a real element.
+// Expanded content is indented under a thin rule so it reads as "inside" the
+// section. `summary` (or the `summary` slot) is a short value shown on the
+// toggle row while collapsed, so the current setting is visible without
+// opening the section.
 import { useId } from "vue";
 
 withDefaults(
   defineProps<{
     /** Label shown next to the caret. Use the `title` slot for richer content. */
     title?: string;
+    /** Short current-value hint shown next to the title while collapsed. */
+    summary?: string;
   }>(),
-  { title: "" },
+  { title: "", summary: "" },
 );
 
 const open = defineModel<boolean>("open", { default: false });
@@ -48,9 +55,12 @@ const contentId = `collapsible-${useId()}`;
         />
       </svg>
       <slot name="title">{{ title }}</slot>
+      <span v-if="!open && (summary || $slots.summary)" class="collapsible-summary">
+        <slot name="summary">{{ summary }}</slot>
+      </span>
     </button>
-    <div v-if="open" :id="contentId" class="collapsible-content">
-      <slot />
+    <div v-show="open" :id="contentId" class="collapsible-content">
+      <slot v-if="open" />
     </div>
   </div>
 </template>
@@ -90,8 +100,21 @@ const contentId = `collapsible-${useId()}`;
   transform: rotate(90deg);
 }
 
+.collapsible-summary {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Thin rule under the caret's centre (caret is 14px wide) + indent, so the
+   content visibly belongs to the toggle above it. */
 .collapsible-content {
-  margin-top: 10px;
+  margin-top: 8px;
+  margin-left: 6px;
+  padding-left: 16px;
+  border-left: 2px solid var(--color-border);
 }
 
 @media (prefers-reduced-motion: reduce) {
