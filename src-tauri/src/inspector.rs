@@ -51,9 +51,37 @@ pub async fn send_instrumented(
     client: &reqwest::Client,
     builder: reqwest::RequestBuilder,
 ) -> Result<InstrumentedResponse, String> {
-    let request = builder
-        .build()
-        .map_err(|e| format!("Failed to build request: {}", e))?;
+    let request = match builder.build() {
+        Ok(r) => r,
+        Err(e) => {
+            // Nothing was sent (e.g. an unparseable URL), but still surface the
+            // attempt in the inspector. Request details aren't available here.
+            let message = format!("Failed to build request: {}", e);
+            let entry = RequestLogEntry {
+                id: Uuid::new_v4().to_string(),
+                timestamp_ms: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                method: "N/A".to_string(),
+                url: e
+                    .url()
+                    .map(|u| u.to_string())
+                    .unwrap_or_else(|| "(invalid request)".to_string()),
+                request_headers: HashMap::new(),
+                request_body: None,
+                status: 0,
+                response_headers: HashMap::new(),
+                response_body: None,
+                duration_ms: 0,
+                body_truncated: false,
+                state: "failed",
+                error: Some(message.clone()),
+            };
+            let _ = app.emit("cdr-inspector-entry", &entry);
+            return Err(message);
+        }
+    };
 
     // Capture request details before sending
     let method = request.method().to_string();
