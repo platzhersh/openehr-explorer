@@ -14,6 +14,8 @@ export interface RequestLogEntry {
   response_body: string | null;
   duration_ms: number;
   body_truncated: boolean;
+  state: "pending" | "complete" | "failed";
+  error: string | null;
 }
 
 const MAX_ENTRIES = 500;
@@ -35,7 +37,12 @@ export const useInspectorStore = defineStore("inspector", () => {
         return false;
       }
       if (filterStatusClass.value.length > 0) {
-        const cls = `${Math.floor(entry.status / 100)}xx`;
+        const cls =
+          entry.state === "pending"
+            ? "pending"
+            : entry.state === "failed"
+              ? "failed"
+              : `${Math.floor(entry.status / 100)}xx`;
         if (!filterStatusClass.value.includes(cls)) return false;
       }
       if (filterText.value) {
@@ -50,10 +57,16 @@ export const useInspectorStore = defineStore("inspector", () => {
   const hasErrors = computed(() => {
     if (entries.value.length === 0) return false;
     const latest = entries.value[0];
-    return latest.status >= 400;
+    return latest.state === "failed" || latest.status >= 400;
   });
 
   function addEntry(entry: RequestLogEntry) {
+    // The backend emits the same id twice (pending, then final) — update in place.
+    const idx = entries.value.findIndex((e) => e.id === entry.id);
+    if (idx !== -1) {
+      entries.value[idx] = entry;
+      return;
+    }
     entries.value.unshift(entry);
     if (entries.value.length > MAX_ENTRIES) {
       entries.value = entries.value.slice(0, MAX_ENTRIES);
@@ -196,6 +209,18 @@ const HTTP_STATUS_TEXT: Record<number, string> = {
 
 export function statusText(status: number): string {
   return HTTP_STATUS_TEXT[status] ?? "";
+}
+
+export function entryStatusClass(entry: RequestLogEntry): string {
+  if (entry.state === "pending") return "status-pending";
+  if (entry.state === "failed") return "status-5xx";
+  return statusClass(entry.status);
+}
+
+export function entryStatusLabel(entry: RequestLogEntry): string {
+  if (entry.state === "pending") return "Pending";
+  if (entry.state === "failed") return "Failed";
+  return `${entry.status} ${statusText(entry.status)}`.trim();
 }
 
 export function statusClass(status: number): string {

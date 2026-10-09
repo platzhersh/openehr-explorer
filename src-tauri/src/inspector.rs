@@ -20,6 +20,10 @@ pub struct RequestLogEntry {
     pub response_body: Option<String>,
     pub duration_ms: u64,
     pub body_truncated: bool,
+    /// `"pending"` while in flight, `"complete"` once a response arrived,
+    /// `"failed"` when no response was received (see `error`).
+    pub state: &'static str,
+    pub error: Option<String>,
 }
 
 pub struct InstrumentedResponse {
@@ -64,14 +68,48 @@ pub async fn send_instrumented(
         .and_then(|b| b.as_bytes())
         .map(|b| String::from_utf8_lossy(b).to_string());
 
+    let id = Uuid::new_v4().to_string();
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    let mut entry = RequestLogEntry {
+        id,
+        timestamp_ms,
+        method,
+        url,
+        request_headers: redact_headers(&request_headers),
+        request_body,
+        status: 0,
+        response_headers: HashMap::new(),
+        response_body: None,
+        duration_ms: 0,
+        body_truncated: false,
+        state: "pending",
+        error: None,
+    };
+
+    // Emit event (best-effort — don't fail the request if emit fails). The
+    // pending entry lets the Request Inspector show in-flight requests; the
+    // final emit below reuses the same id so the frontend updates it in place.
+    let _ = app.emit("cdr-inspector-entry", &entry);
+
     let start = Instant::now();
 
-    let response = client
-        .execute(request)
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+    let fail = |entry: &mut RequestLogEntry, message: String| -> String {
+        entry.duration_ms = start.elapsed().as_millis() as u64;
+        entry.state = "failed";
+        entry.error = Some(message.clone());
+        let _ = app.emit("cdr-inspector-entry", &*entry);
+        message
+    };
 
-    let duration_ms = start.elapsed().as_millis() as u64;
+    let response = match client.execute(request).await {
+        Ok(r) => r,
+        Err(e) => return Err(fail(&mut entry, format!("Request failed: {}", e))),
+    };
+
     let status = response.status().as_u16();
     let is_success = response.status().is_success();
 
@@ -81,10 +119,19 @@ pub async fn send_instrumented(
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("[binary]").to_string()))
         .collect();
 
-    let body_bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response body: {}", e))?;
+    let body_bytes = match response.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            entry.status = status;
+            entry.response_headers = redact_headers(&response_headers);
+            return Err(fail(
+                &mut entry,
+                format!("Failed to read response body: {}", e),
+            ));
+        }
+    };
+
+    let duration_ms = start.elapsed().as_millis() as u64;
 
     // The full body is what command handlers parse as JSON — truncating it
     // would hand them invalid JSON on large-but-legitimate responses (e.g. a
@@ -98,26 +145,12 @@ pub async fn send_instrumented(
         body.clone()
     };
 
-    let timestamp_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-
-    let entry = RequestLogEntry {
-        id: Uuid::new_v4().to_string(),
-        timestamp_ms,
-        method,
-        url,
-        request_headers: redact_headers(&request_headers),
-        request_body,
-        status,
-        response_headers: redact_headers(&response_headers),
-        response_body: Some(log_body),
-        duration_ms,
-        body_truncated,
-    };
-
-    // Emit event (best-effort — don't fail the request if emit fails)
+    entry.status = status;
+    entry.response_headers = redact_headers(&response_headers);
+    entry.response_body = Some(log_body);
+    entry.duration_ms = duration_ms;
+    entry.body_truncated = body_truncated;
+    entry.state = "complete";
     let _ = app.emit("cdr-inspector-entry", &entry);
 
     Ok(InstrumentedResponse {

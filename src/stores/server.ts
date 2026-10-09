@@ -175,9 +175,11 @@ export const useServerStore = defineStore("server", () => {
 
   async function startTrackingRequests() {
     if (unlistenRequests) return;
-    unlistenRequests = await listen<{ url: string; status: number }>(
+    unlistenRequests = await listen<{ url: string; status: number; state: string }>(
       "cdr-inspector-entry",
       (event) => {
+        // In-flight and transport-failed entries carry no HTTP status.
+        if (event.payload.state !== "complete") return;
         updateConnectionFromRequest(event.payload.url, event.payload.status);
       },
     );
