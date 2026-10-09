@@ -25,3 +25,14 @@ export function apiRoot(baseUrl: string, prefix?: string | null): string {
   const trimmed = trimSlashes((prefix ?? DEFAULT_API_PATH_PREFIX).trim(), true, true);
   return trimmed ? `${base}/${trimmed}` : base;
 }
+
+/**
+ * Label for a profile's prefix when it differs from the default, else `null`.
+ * An explicit empty prefix ("base URL is the API root") is shown as `/`.
+ */
+export function customApiPrefixLabel(prefix?: string | null): string | null {
+  if (prefix == null) return null;
+  const trimmed = trimSlashes(prefix.trim(), true, true);
+  const normalized = trimmed ? `/${trimmed}` : "/";
+  return normalized === DEFAULT_API_PATH_PREFIX ? null : normalized;
+}

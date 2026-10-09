@@ -31,6 +31,19 @@ const INSECURE_PROFILE: ServerProfile = {
   is_default: true,
 };
 
+const CUSTOM_PREFIX_PROFILE: ServerProfile = {
+  id: "profile-custom-prefix",
+  name: "Generic CDR (custom API path)",
+  base_url: "https://cdr.example.com",
+  server_type: "generic",
+  auth_method: { type: "none" },
+  admin_auth_method: null,
+  terminology_url: null,
+  api_path_prefix: "/openehr/v1",
+  credential_backend: "encrypted_file",
+  is_default: false,
+};
+
 // Keyed by profile id so the mocked get_server_version handler can return
 // the right version per card (ServerManager fetches one per profile on mount).
 const VERSION_BY_PROFILE: Record<string, ServerVersionInfo> = {
@@ -165,5 +178,22 @@ export const TestConnectionFailed: Story = {
         story: 'Clicks "Test" on the first profile card and shows the resulting error message.',
       },
     },
+  },
+};
+
+export const CustomApiPathPrefix: Story = {
+  render: withStores({ profiles: [EHRBASE_PROFILE, CUSTOM_PREFIX_PROFILE] }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A profile that overrides the API path prefix shows it as a badge on its card; profiles using the default `/rest/openehr/v1` show nothing.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText("/openehr/v1")).toBeInTheDocument();
+    await expect(canvas.queryByText("/rest/openehr/v1")).toBeNull();
   },
 };

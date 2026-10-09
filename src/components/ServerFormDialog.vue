@@ -400,16 +400,6 @@ useEscapeKey(() => props.open, handleClose);
             </div>
           </div>
 
-          <div class="form-group">
-            <SearchableSelect
-              label="Server Type"
-              :options="SERVER_TYPE_OPTIONS"
-              :model-value="form.server_type"
-              search-placeholder="Filter server types..."
-              @update:model-value="setServerType"
-            />
-          </div>
-
           <div class="advanced-section">
             <button
               type="button"
@@ -441,6 +431,16 @@ useEscapeKey(() => props.open, handleClose);
                 Requests go to: <code>{{ apiRootPreview }}/ehr</code>
               </p>
             </div>
+          </div>
+
+          <div class="form-group">
+            <SearchableSelect
+              label="Server Type"
+              :options="SERVER_TYPE_OPTIONS"
+              :model-value="form.server_type"
+              search-placeholder="Filter server types..."
+              @update:model-value="setServerType"
+            />
           </div>
 
           <div class="form-group">

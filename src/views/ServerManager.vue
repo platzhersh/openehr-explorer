@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiRoot, customApiPrefixLabel } from "../lib/apiPath";
 import { ref, onMounted } from "vue";
 import { useServerStore, type ServerProfile } from "../stores/server";
 import { useAnalytics } from "../composables/useAnalytics";
@@ -147,6 +148,13 @@ function credentialBackendLabel(backend: string): string {
               <span class="badge">{{ profile.server_type }}</span>
               <span class="badge">{{ profile.auth_method.type }}</span>
               <span
+                v-if="customApiPrefixLabel(profile.api_path_prefix)"
+                class="badge prefix-badge"
+                :data-tooltip="`Custom API path prefix — requests go to ${apiRoot(profile.base_url, profile.api_path_prefix)}`"
+              >
+                {{ customApiPrefixLabel(profile.api_path_prefix) }}
+              </span>
+              <span
                 v-if="serverStore.versionInfo[profile.id]?.server_version"
                 class="badge version-badge"
                 :data-tooltip="`Server version ${serverStore.versionInfo[profile.id]?.server_version ?? ''}`"
@@ -290,6 +298,9 @@ function credentialBackendLabel(backend: string): string {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+.prefix-badge {
+  font-family: var(--font-mono);
 }
 .version-badge {
   background: var(--color-primary-dim);
