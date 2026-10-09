@@ -20,6 +20,7 @@ import FilterIcon from "../components/FilterIcon.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
+import EhrListItem from "../components/EhrListItem.vue";
 import RefreshButton from "../components/RefreshButton.vue";
 import {
   addItem as addDirectoryItem,
@@ -1669,26 +1670,13 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
           <p><a href="#" @click.prevent="clearSearch">Clear search</a></p>
         </div>
         <div v-else class="ehr-list">
-          <div
+          <EhrListItem
             v-for="ehr in ehrStore.searchResults"
             :key="ehr.ehr_id"
-            class="ehr-item"
-            :class="{ active: ehr.ehr_id === ehrId }"
-          >
-            <div class="ehr-id">
-              <button type="button" class="id-text row-action" @click="selectEhr(ehr.ehr_id)">
-                {{ ehr.ehr_id }}
-              </button>
-              <CopyButton class="row-control" :text="ehr.ehr_id" title="Copy full ID" @click.stop />
-            </div>
-            <div class="ehr-meta">
-              <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
-              <span v-if="ehr.subject_id" class="meta-item">Subject: {{ ehr.subject_id }}</span>
-              <span v-if="ehr.subject_namespace" class="meta-item"
-                >NS: {{ ehr.subject_namespace }}</span
-              >
-            </div>
-          </div>
+            :ehr="ehr"
+            :active="ehr.ehr_id === ehrId"
+            @select="selectEhr"
+          />
         </div>
       </div>
 
@@ -1730,23 +1718,13 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
         </div>
 
         <div class="ehr-list">
-          <div
+          <EhrListItem
             v-for="ehr in ehrStore.ehrs"
             :key="ehr.ehr_id"
-            class="ehr-item"
-            :class="{ active: ehr.ehr_id === ehrId }"
-          >
-            <div class="ehr-id">
-              <button type="button" class="id-text row-action" @click="selectEhr(ehr.ehr_id)">
-                {{ ehr.ehr_id }}
-              </button>
-              <CopyButton class="row-control" :text="ehr.ehr_id" title="Copy full ID" @click.stop />
-            </div>
-            <div class="ehr-meta">
-              <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
-              <span v-if="ehr.subject_id" class="meta-item">Subject: {{ ehr.subject_id }}</span>
-            </div>
-          </div>
+            :ehr="ehr"
+            :active="ehr.ehr_id === ehrId"
+            @select="selectEhr"
+          />
         </div>
 
         <div class="pagination">
@@ -2898,40 +2876,6 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
 }
 .empty-state a:hover {
   text-decoration: underline;
-}
-
-.ehr-item {
-  position: relative;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.ehr-item:hover {
-  background: var(--color-surface);
-}
-.ehr-item.active {
-  background: var(--color-surface);
-  border-left: 3px solid var(--color-primary);
-}
-
-.ehr-id {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.id-text {
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-.ehr-meta {
-  margin-top: 4px;
-  display: flex;
-  gap: 12px;
-}
-.meta-item {
-  font-size: 11px;
-  color: var(--color-text-muted);
 }
 
 .pagination {
