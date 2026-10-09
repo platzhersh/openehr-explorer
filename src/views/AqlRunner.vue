@@ -13,6 +13,7 @@ import DeleteButton from "../components/DeleteButton.vue";
 import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
 import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
+import DismissibleError from "../components/DismissibleError.vue";
 
 const analytics = useAnalytics();
 
@@ -492,7 +493,9 @@ const editorStyle = computed(() => ({
         <!-- Results -->
         <div class="results-section">
           <div v-if="queryStore.loading" class="loading">Executing query...</div>
-          <div v-else-if="queryStore.error" class="error-msg">{{ queryStore.error }}</div>
+          <DismissibleError v-else-if="queryStore.error" @dismiss="queryStore.error = null">{{
+            queryStore.error
+          }}</DismissibleError>
           <div v-else-if="queryStore.result" class="results">
             <div class="results-header">
               <span class="results-info">

@@ -7,6 +7,7 @@ import { useAnalytics } from "../composables/useAnalytics";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import RefreshButton from "../components/RefreshButton.vue";
 import DatabaseIcon from "../components/DatabaseIcon.vue";
+import DismissibleError from "../components/DismissibleError.vue";
 import DocumentIcon from "../components/DocumentIcon.vue";
 import TemplateIcon from "../components/TemplateIcon.vue";
 
@@ -118,9 +119,9 @@ watch(
     </div>
 
     <template v-else>
-      <div v-if="dashboardStore.error" class="error-msg">
+      <DismissibleError v-if="dashboardStore.error" @dismiss="dashboardStore.error = null">
         Failed to load counts: {{ dashboardStore.error }}
-      </div>
+      </DismissibleError>
 
       <div class="stat-grid" data-tour="dashboard-stats">
         <router-link
