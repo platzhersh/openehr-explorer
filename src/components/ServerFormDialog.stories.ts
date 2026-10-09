@@ -111,12 +111,15 @@ export const CustomPrefixForCadasto: Story = {
     docs: {
       description: {
         story:
-          "A Generic profile for a CDR that serves the API at `<server>/openehr/v1` — no `/rest/` segment. Because the profile overrides the default prefix, Advanced settings starts expanded.",
+          "A Generic profile for a CDR that serves the API at `<server>/openehr/v1` — no `/rest/` segment. Advanced settings starts collapsed even though the profile overrides the default prefix.",
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
     await expect(await canvas.findByTestId("api-root-preview")).toHaveTextContent(
       "https://cdr.example.com/openehr/v1/ehr",
     );
@@ -153,6 +156,7 @@ export const EmptyPrefixShownAsSlash: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: /advanced settings/i }));
     await expect(await canvas.findByLabelText("API Path Prefix (optional)")).toHaveValue("/");
     await expect(canvas.getByTestId("api-root-preview")).toHaveTextContent(
       "https://cdr.example.com/openehr/v1/ehr",

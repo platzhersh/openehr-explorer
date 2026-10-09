@@ -40,8 +40,8 @@ const apiRootPreview = computed(() =>
   apiRoot(form.value.base_url || "http://localhost:8080", form.value.api_path_prefix),
 );
 
-// Advanced settings stay collapsed unless the profile already overrides one,
-// so a non-default value is never hidden from the person editing it.
+// Advanced settings always start collapsed (a custom prefix is also shown as a
+// badge on the profile's card, so it isn't hidden from view).
 const showAdvanced = ref(false);
 
 const editingExistingId = ref<string | null>(null);
@@ -159,7 +159,7 @@ function initEditForm(profile: ServerProfile) {
     api_path_prefix: profile.api_path_prefix ?? null,
   };
   editingExistingId.value = profile.id;
-  showAdvanced.value = profile.api_path_prefix != null;
+  showAdvanced.value = false;
   testResult.value = null;
   testError.value = null;
   urlValidationError.value = null;
