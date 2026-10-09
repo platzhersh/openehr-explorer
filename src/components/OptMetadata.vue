@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import LifecycleBadge from "./LifecycleBadge.vue";
 import CopyButton from "./CopyButton.vue";
+import CaretIcon from "./CaretIcon.vue";
+import CollapsibleSection from "./CollapsibleSection.vue";
 
 interface OptMetadata {
   originalAuthor: {
@@ -206,12 +208,20 @@ const descriptionPreview = computed(() => {
     </div>
 
     <div v-else class="metadata-container">
-      <div class="metadata-header" @click="metadataExpanded = !metadataExpanded">
-        <span class="header-icon">{{ metadataExpanded ? "▼" : "▶" }}</span>
-        <h3>Template Metadata</h3>
-      </div>
+      <h3 class="metadata-heading">
+        <button
+          type="button"
+          class="metadata-header"
+          :aria-expanded="metadataExpanded"
+          aria-controls="opt-metadata-content"
+          @click="metadataExpanded = !metadataExpanded"
+        >
+          <CaretIcon :direction="metadataExpanded ? 'down' : 'right'" :size="12" />
+          Template Metadata
+        </button>
+      </h3>
 
-      <div v-if="metadataExpanded" class="metadata-content">
+      <div v-if="metadataExpanded" id="opt-metadata-content" class="metadata-content">
         <!-- Primary Metadata -->
         <div class="metadata-section">
           <div v-if="metadata.lifecycleStatePresent" class="metadata-row">
@@ -281,12 +291,7 @@ const descriptionPreview = computed(() => {
 
         <!-- Technical Metadata (Collapsible) -->
         <div v-if="technicalMetadata.length > 0" class="metadata-section">
-          <div class="technical-header" @click="technicalExpanded = !technicalExpanded">
-            <span class="toggle-icon">{{ technicalExpanded ? "▼" : "▶" }}</span>
-            <span class="technical-label">Technical Metadata</span>
-          </div>
-
-          <div v-if="technicalExpanded" class="technical-content">
+          <CollapsibleSection v-model:open="technicalExpanded" title="Technical Metadata">
             <div v-for="item in technicalMetadata" :key="item.label" class="technical-row">
               <span class="technical-key">{{ item.label }}:</span>
               <span class="technical-value" :class="{ monospace: item.monospace }">
@@ -294,7 +299,7 @@ const descriptionPreview = computed(() => {
               </span>
               <CopyButton v-if="item.monospace && item.value" :text="item.value" />
             </div>
-          </div>
+          </CollapsibleSection>
         </div>
       </div>
     </div>
@@ -324,14 +329,29 @@ const descriptionPreview = computed(() => {
   overflow: hidden;
 }
 
+.metadata-heading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* The heading's toggle is a real button (keyboard + aria-expanded); it keeps
+   the full-width header bar look. */
 .metadata-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid var(--color-border);
   transition: background 0.15s;
 }
 
@@ -339,17 +359,9 @@ const descriptionPreview = computed(() => {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.header-icon {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  width: 12px;
-}
-
-.metadata-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+.metadata-header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .metadata-content {
@@ -428,37 +440,6 @@ const descriptionPreview = computed(() => {
 
 .btn-text:hover {
   color: var(--color-primary);
-}
-
-.technical-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 0;
-  cursor: pointer;
-  user-select: none;
-}
-
-.technical-header:hover .technical-label {
-  color: var(--color-text);
-}
-
-.toggle-icon {
-  font-size: 9px;
-  color: var(--color-text-muted);
-  width: 12px;
-}
-
-.technical-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  transition: color 0.15s;
-}
-
-.technical-content {
-  padding-left: 18px;
-  margin-top: 8px;
 }
 
 .technical-row {

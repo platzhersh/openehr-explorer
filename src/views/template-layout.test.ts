@@ -27,7 +27,7 @@ const env =
 const longPath = `/context/other_context[at0001]/items[openEHR-EHR-CLUSTER.${"case_identification_".repeat(60)}.v1]`;
 const row = (depth: number): string => `
   <div class="wt-node"><div class="wt-node-header" style="padding-left:${depth * 20}px">
-    <span class="toggle">▼</span><span class="wt-name">Case identification</span>
+    <span class="toggle"><svg width="12" height="12" viewBox="0 0 16 16"></svg></span><span class="wt-name">Case identification</span>
     <span class="badge rm-type">CLUSTER</span><span class="aql-path">${longPath}</span>
     <span class="copy-icon-wrap"><button class="copy-icon-btn">c</button>
     <span class="copy-tooltip">Copy AQL path</span></span>

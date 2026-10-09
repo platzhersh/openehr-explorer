@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import CaretIcon from "./CaretIcon.vue";
 
 // The openEHR DIRECTORY resource is a FOLDER tree: each FOLDER has a name,
 // optional nested `folders`, and `items` (OBJECT_REFs pointing at versioned
@@ -70,7 +71,7 @@ function onItemClick(objectRef: ObjectRef) {
 <template>
   <div class="dir-node">
     <button type="button" class="dir-row" @click="toggle">
-      <span class="toggle">{{ expanded ? "▼" : "▶" }}</span>
+      <span class="toggle"><CaretIcon :direction="expanded ? 'down' : 'right'" :size="12" /></span>
       <span class="folder-icon">📁</span>
       <span class="folder-label">{{ label }}</span>
       <span class="folder-meta">{{ childCount }}</span>
@@ -127,11 +128,12 @@ function onItemClick(objectRef: ObjectRef) {
 }
 
 .toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 12px;
-  font-size: 10px;
   color: var(--color-text-muted);
   flex-shrink: 0;
-  text-align: center;
 }
 
 .folder-icon {

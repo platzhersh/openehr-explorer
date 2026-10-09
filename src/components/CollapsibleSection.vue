@@ -14,6 +14,7 @@
 // toggle row while collapsed, so the current setting is visible without
 // opening the section.
 import { useId } from "vue";
+import CaretIcon from "./CaretIcon.vue";
 
 withDefaults(
   defineProps<{
@@ -38,22 +39,7 @@ const contentId = `collapsible-${useId()}`;
       :aria-controls="contentId"
       @click="open = !open"
     >
-      <svg
-        class="collapsible-caret"
-        :class="{ open }"
-        viewBox="0 0 16 16"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M6 3.5 10.5 8 6 12.5"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <CaretIcon :direction="open ? 'down' : 'right'" />
       <slot name="title">{{ title }}</slot>
       <span v-if="!open && (summary || $slots.summary)" class="collapsible-summary">
         <slot name="summary">{{ summary }}</slot>
@@ -89,17 +75,6 @@ const contentId = `collapsible-${useId()}`;
   outline-offset: 2px;
 }
 
-.collapsible-caret {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  transition: transform 0.15s ease;
-}
-
-.collapsible-caret.open {
-  transform: rotate(90deg);
-}
-
 .collapsible-summary {
   margin-left: 6px;
   color: var(--color-text-muted);
@@ -115,11 +90,5 @@ const contentId = `collapsible-${useId()}`;
   margin-left: 6px;
   padding-left: 16px;
   border-left: 2px solid var(--color-border);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .collapsible-caret {
-    transition: none;
-  }
 }
 </style>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CaretIcon from "./CaretIcon.vue";
 /**
  * SearchableSelect — a `<select>`-like dropdown with a filter text field,
  * for option lists where scanning by eye doesn't scale (opaque EHR UUIDs,
@@ -219,7 +220,9 @@ onUnmounted(() => {
           }}</slot>
           <span v-else class="searchable-select-placeholder">{{ placeholder }}</span>
         </span>
-        <span class="searchable-select-arrow" aria-hidden="true">▾</span>
+        <span class="searchable-select-arrow" aria-hidden="true"
+          ><CaretIcon direction="down" :size="12"
+        /></span>
       </button>
       <button
         v-if="clearable && selectedOption && !disabled"
@@ -373,9 +376,10 @@ onUnmounted(() => {
 }
 
 .searchable-select-arrow {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
   color: var(--color-text-muted);
-  font-size: 10px;
 }
 
 .searchable-select-panel {
