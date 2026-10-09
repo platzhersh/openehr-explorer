@@ -355,7 +355,7 @@ function handleClose() {
 </script>
 
 <template>
-  <div v-if="open" class="dialog-overlay" @click.self="handleClose">
+  <div v-if="open" class="dialog-overlay" @click.self="handleClose" @keydown.esc="handleClose">
     <div class="dialog">
       <div class="dialog-header">
         <h2>{{ editingExistingId ? "Edit" : "Add" }} Server Profile</h2>
@@ -423,9 +423,9 @@ function handleClose() {
               />
               <p class="form-help">
                 Path appended to the Base URL to reach the openEHR REST API. Leave empty for
-                <code>{{ DEFAULT_API_PATH_PREFIX }}</code> (EHRBase, Better Platform). Use
-                <code>/openehr/v1</code> for servers like Cadasto, or <code>/</code> if the Base URL
-                already is the API root.
+                <code>{{ DEFAULT_API_PATH_PREFIX }}</code> (EHRBase, Better Platform). Use a custom
+                path such as <code>/openehr/v1</code> if your server exposes the API elsewhere, or
+                <code>/</code> if the Base URL already is the API root.
               </p>
               <p class="form-help api-root-preview" data-testid="api-root-preview">
                 Requests go to: <code>{{ apiRootPreview }}/ehr</code>

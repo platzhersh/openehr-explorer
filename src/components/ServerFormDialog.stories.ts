@@ -35,7 +35,7 @@ function render(profile: ServerProfile | null) {
       });
       return { profile, open };
     },
-    template: `<ServerFormDialog :open="open" :profile="profile" />`,
+    template: `<ServerFormDialog :open="open" :profile="profile" @close="open = false" />`,
   });
 }
 
@@ -72,6 +72,10 @@ export const NewProfileAdvancedCollapsed: Story = {
     const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(canvas.queryByTestId("api-root-preview")).toBeNull();
+    // Escape inside the dialog closes it (keyboard counterpart of the overlay click).
+    await userEvent.click(await canvas.findByLabelText("Name"));
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByText("Add Server Profile")).toBeNull();
   },
 };
 
