@@ -90,9 +90,7 @@ pub async fn send_with_emitter(
             "OAuth2 configuration for this request is no longer available".to_string()
         })?;
 
-    let token = entry
-        .token(None, |cfg| fetch_token(emit, client, cfg))
-        .await?;
+    let token = entry.token(None, |cfg| fetch_token(emit, cfg)).await?;
     let retry = request.try_clone();
     set_bearer(&mut request, &token)?;
     let resp = execute_logged(emit, client, request, false).await?;
@@ -105,7 +103,7 @@ pub async fn send_with_emitter(
         return Ok(resp);
     };
     let fresh = entry
-        .token(Some(&token), |cfg| fetch_token(emit, client, cfg))
+        .token(Some(&token), |cfg| fetch_token(emit, cfg))
         .await?;
     set_bearer(&mut retry, &fresh)?;
     execute_logged(emit, client, retry, false).await
@@ -125,9 +123,19 @@ fn set_bearer(request: &mut reqwest::Request, token: &str) -> Result<(), String>
 /// secret and the returned access token redacted.
 async fn fetch_token(
     emit: Emit<'_>,
-    client: &reqwest::Client,
     cfg: oauth::OAuthConfig,
 ) -> Result<oauth::CachedToken, String> {
+    // Fail closed: the backend never sends credentials over plain http to a
+    // non-loopback host, whatever the profile (UI, IPC or hand-edited) says.
+    oauth::validate_token_url(&cfg.token_url)?;
+    // Never follow redirects: a 307/308 would replay the POST (and, for
+    // `ClientAuthStyle::Body`, the client secret) to another endpoint.
+    let client = &reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to build token client: {e}"))?;
     let mut req = client
         .post(cfg.token_url.trim())
         .header(reqwest::header::ACCEPT, "application/json")
@@ -390,7 +398,9 @@ mod oauth_tests {
                         headers: head.to_lowercase(),
                         body,
                     });
-                    let (status, payload) = if path == "/token" {
+                    let (status, payload) = if path == "/redirect" {
+                        (307, String::new())
+                    } else if path == "/token" {
                         if token_error {
                             (
                                 400,
@@ -419,7 +429,7 @@ mod oauth_tests {
                         }
                     };
                     let resp = format!(
-                        "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
+                        "HTTP/1.1 {status} X\r\nlocation: /token\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
                         payload.len()
                     );
                     let _ = sock.write_all(resp.as_bytes()).await;
@@ -607,5 +617,46 @@ mod oauth_tests {
         assert!(all.contains("/token"), "token request is its own entry");
         assert!(!all.contains(&urlencoding::encode(&secret).to_string()));
         assert!(!all.contains("tok1"), "access token must be redacted");
+    }
+
+    #[tokio::test]
+    async fn plain_http_token_url_on_a_public_host_is_rejected_before_sending() {
+        let a = crate::commands::server::AuthMethod::OAuth2ClientCredentials {
+            token_url: "http://auth.example.com/token".into(),
+            client_id: "c".into(),
+            client_secret: "public-http-secret".into(),
+            audience: None,
+            scope: None,
+            client_auth: oauth::ClientAuthStyle::Body,
+        };
+        let client = reqwest::Client::new();
+        let req = crate::commands::server::make_request(
+            &client,
+            reqwest::Method::GET,
+            "http://127.0.0.1:1/api",
+            &a,
+        );
+        let err = send_with_emitter(&|_| {}, &client, req)
+            .await
+            .err()
+            .unwrap();
+        assert!(err.contains("https"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_redirects_are_not_followed() {
+        let mock = spawn_mock(1, 3600, false).await;
+        let mut a = auth(&mock.base, oauth::ClientAuthStyle::Body);
+        if let crate::commands::server::AuthMethod::OAuth2ClientCredentials { token_url, .. } =
+            &mut a
+        {
+            *token_url = format!("{}/redirect", mock.base);
+        }
+        let err = call(&mock, &a).await.err().unwrap();
+        assert!(err.contains("307"), "{err}");
+        assert!(
+            mock.token_calls().is_empty(),
+            "redirect target must not be hit"
+        );
     }
 }

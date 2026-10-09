@@ -1,5 +1,5 @@
 //! OAuth2 client-credentials support: token cache with single-flight refresh,
-//! token-request construction and error mapping. See OEH-111 / ADR-0030.
+//! token-request construction and error mapping. See OEH-111 / ADR-0029.
 //!
 //! This module is transport-agnostic: the actual HTTP call (and its Request
 //! Inspector logging) is injected by the caller, which keeps the cache logic
