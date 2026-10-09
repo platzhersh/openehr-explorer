@@ -57,10 +57,29 @@ const meta: Meta<typeof ServerFormDialog> = {
 export default meta;
 type Story = StoryObj<typeof ServerFormDialog>;
 
-export const NewProfileDefaultPrefix: Story = {
+export const NewProfileAdvancedCollapsed: Story = {
+  render: render(null),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Default state: the API Path Prefix lives under a collapsed **Advanced settings** disclosure.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: /advanced settings/i });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.queryByTestId("api-root-preview")).toBeNull();
+  },
+};
+
+export const NewProfileAdvancedExpanded: Story = {
   render: render(null),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: /advanced settings/i }));
     await expect(await canvas.findByTestId("api-root-preview")).toHaveTextContent(
       "http://localhost:8080/ehrbase/rest/openehr/v1/ehr",
     );
@@ -73,7 +92,7 @@ export const CustomPrefixForCadasto: Story = {
     docs: {
       description: {
         story:
-          "A Generic profile for a CDR that serves the API at `<server>/openehr/v1` — no `/rest/` segment.",
+          "A Generic profile for a CDR that serves the API at `<server>/openehr/v1` — no `/rest/` segment. Because the profile overrides the default prefix, Advanced settings starts expanded.",
       },
     },
   },
@@ -89,6 +108,7 @@ export const PreviewFollowsInput: Story = {
   render: render(null),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: /advanced settings/i }));
     const prefix = await canvas.findByLabelText("API Path Prefix (optional)");
     await userEvent.type(prefix, "openehr/v1");
     await expect(canvas.getByTestId("api-root-preview")).toHaveTextContent(

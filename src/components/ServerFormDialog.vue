@@ -36,6 +36,10 @@ const apiRootPreview = computed(() =>
   apiRoot(form.value.base_url || "http://localhost:8080", form.value.api_path_prefix),
 );
 
+// Advanced settings stay collapsed unless the profile already overrides one,
+// so a non-default value is never hidden from the person editing it.
+const showAdvanced = ref(false);
+
 const editingExistingId = ref<string | null>(null);
 const testResult = ref<string | null>(null);
 const testError = ref<string | null>(null);
@@ -128,6 +132,7 @@ function initNewForm() {
     api_path_prefix: null,
   };
   editingExistingId.value = null;
+  showAdvanced.value = false;
   testResult.value = null;
   testError.value = null;
   urlValidationError.value = null;
@@ -150,6 +155,7 @@ function initEditForm(profile: ServerProfile) {
     api_path_prefix: profile.api_path_prefix ?? null,
   };
   editingExistingId.value = profile.id;
+  showAdvanced.value = profile.api_path_prefix != null;
   testResult.value = null;
   testError.value = null;
   urlValidationError.value = null;
@@ -394,23 +400,37 @@ function handleClose() {
             />
           </div>
 
-          <div class="form-group">
-            <label for="server-api-path-prefix">API Path Prefix (optional)</label>
-            <input
-              id="server-api-path-prefix"
-              class="input"
-              v-model="apiPathPrefixInput"
-              :placeholder="DEFAULT_API_PATH_PREFIX"
-            />
-            <p class="form-help">
-              Path appended to the Base URL to reach the openEHR REST API. Leave empty for
-              <code>{{ DEFAULT_API_PATH_PREFIX }}</code> (EHRBase, Better Platform). Use
-              <code>/openehr/v1</code> for servers like Cadasto, or <code>/</code> if the Base URL
-              already is the API root.
-            </p>
-            <p class="form-help api-root-preview" data-testid="api-root-preview">
-              Requests go to: <code>{{ apiRootPreview }}/ehr</code>
-            </p>
+          <div class="advanced-section">
+            <button
+              type="button"
+              class="advanced-toggle"
+              :aria-expanded="showAdvanced"
+              aria-controls="server-advanced-settings"
+              @click="showAdvanced = !showAdvanced"
+            >
+              <span class="advanced-chevron" :class="{ open: showAdvanced }" aria-hidden="true">
+                ▸
+              </span>
+              Advanced settings
+            </button>
+            <div v-if="showAdvanced" id="server-advanced-settings" class="form-group">
+              <label for="server-api-path-prefix">API Path Prefix (optional)</label>
+              <input
+                id="server-api-path-prefix"
+                class="input"
+                v-model="apiPathPrefixInput"
+                :placeholder="DEFAULT_API_PATH_PREFIX"
+              />
+              <p class="form-help">
+                Path appended to the Base URL to reach the openEHR REST API. Leave empty for
+                <code>{{ DEFAULT_API_PATH_PREFIX }}</code> (EHRBase, Better Platform). Use
+                <code>/openehr/v1</code> for servers like Cadasto, or <code>/</code> if the Base URL
+                already is the API root.
+              </p>
+              <p class="form-help api-root-preview" data-testid="api-root-preview">
+                Requests go to: <code>{{ apiRootPreview }}/ehr</code>
+              </p>
+            </div>
           </div>
 
           <div class="form-group">
@@ -635,6 +655,47 @@ function handleClose() {
 }
 .form-group .input {
   width: 100%;
+}
+
+.advanced-section {
+  margin-bottom: 16px;
+}
+
+.advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.advanced-toggle:hover {
+  color: var(--color-text);
+}
+
+.advanced-chevron {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.advanced-chevron.open {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .advanced-chevron {
+    transition: none;
+  }
+}
+
+.advanced-section .form-group {
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 .form-help {
