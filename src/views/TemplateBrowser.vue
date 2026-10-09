@@ -880,8 +880,10 @@ const WtTreeNode: ReturnType<typeof defineComponent> = defineComponent({
       }
 
       if (node.aqlPath) {
-        headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
+        headerChildren.push(
+          h("span", { class: "aql-path" }, node.aqlPath),
+          h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }),
+        );
       }
 
       elements.push(
@@ -1002,8 +1004,10 @@ const WtTreeNodeFiltered: ReturnType<typeof defineComponent> = defineComponent({
       }
 
       if (node.aqlPath) {
-        headerChildren.push(h("span", { class: "aql-path" }, node.aqlPath));
-        headerChildren.push(h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }));
+        headerChildren.push(
+          h("span", { class: "aql-path" }, node.aqlPath),
+          h(CopyButton, { text: node.aqlPath, title: "Copy AQL path" }),
+        );
       }
 
       elements.push(

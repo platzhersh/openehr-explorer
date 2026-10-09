@@ -92,7 +92,7 @@ export interface CodeDescription {
  * terminology server configured, network error, 404, …) rather than
  * resolving to `null` — the caller is expected to show the error.
  */
-export async function describeCode(
+export function describeCode(
   serverId: string,
   system: string,
   code: string,
@@ -116,7 +116,7 @@ export interface ValueSetExpansion {
  * (or FHIR ValueSet id); `filter` narrows by display text for large value
  * sets; `count` caps how many concepts come back.
  */
-export async function expandValueSet(
+export function expandValueSet(
   serverId: string,
   valueSet: string,
   filter?: string,
@@ -141,7 +141,7 @@ export interface CodeValidation {
  * when `valueSet` is given) or simply valid in a code system
  * (`CodeSystem/$validate-code` otherwise).
  */
-export async function validateCode(
+export function validateCode(
   serverId: string,
   system: string,
   code: string,
@@ -164,7 +164,7 @@ export interface SubsumptionResult {
  * system via `CodeSystem/$subsumes` — one of `equivalent`, `subsumes`,
  * `subsumed-by`, or `not-subsumed`.
  */
-export async function testSubsumption(
+export function testSubsumption(
   serverId: string,
   system: string,
   codeA: string,

@@ -70,7 +70,7 @@ export const useTourStore = defineStore("tour", () => {
   function next() {
     if (!activeTour.value) return;
     if (isLastStep.value) {
-      finish();
+      void finish();
     } else {
       stepIndex.value += 1;
     }

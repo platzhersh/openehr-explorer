@@ -34,12 +34,12 @@ export interface XmlLine {
 // plus `:` for namespace prefixes (e.g. `xs:string`, common in OPT Schema
 // output). This is the fix for the namespaced-tag regression described in
 // OEH-35 — one of the two duplicated `highlightXml()` copies omitted `:`.
-const NAME = "[\\w:.-]+";
-const ATTR = `${NAME}\\s*=\\s*(?:"[^"]*"|'[^']*')`;
-const TAG = `<\\/?${NAME}(?:\\s+${ATTR})*\\s*\\/?>`;
-const SPECIAL_OR_TAG_RE = new RegExp(`(<\\?[\\s\\S]*?\\?>)|(<!--[\\s\\S]*?-->)|(${TAG})`, "g");
-const TAG_PARTS_RE = new RegExp(`^(<\\/?)(${NAME})([\\s\\S]*?)(\\/?>)$`);
-const ATTR_RE = new RegExp(`(${NAME})(\\s*=\\s*)("[^"]*"|'[^']*')`, "g");
+const NAME = String.raw`[\w:.-]+`;
+const ATTR = String.raw`${NAME}\s*=\s*(?:"[^"]*"|'[^']*')`;
+const TAG = String.raw`<\/?${NAME}(?:\s+${ATTR})*\s*\/?>`;
+const SPECIAL_OR_TAG_RE = new RegExp(String.raw`(<\?[\s\S]*?\?>)|(<!--[\s\S]*?-->)|(${TAG})`, "g");
+const TAG_PARTS_RE = new RegExp(String.raw`^(<\/?)(${NAME})([\s\S]*?)(\/?>)$`);
+const ATTR_RE = new RegExp(String.raw`(${NAME})(\s*=\s*)("[^"]*"|'[^']*')`, "g");
 
 interface TagGroup {
   openBracket: string; // "<" | "</"
@@ -116,8 +116,7 @@ function tokenizeTag(tag: string, out: XmlToken[]): TagGroup {
   }
 
   const [, openBracket, tagName, attrsRaw, closeBracket] = parts;
-  out.push({ type: "bracket", text: openBracket });
-  out.push({ type: "tag", text: tagName });
+  out.push({ type: "bracket", text: openBracket }, { type: "tag", text: tagName });
 
   let cursor = 0;
   ATTR_RE.lastIndex = 0;
@@ -127,9 +126,11 @@ function tokenizeTag(tag: string, out: XmlToken[]): TagGroup {
       out.push({ type: "punct", text: attrsRaw.slice(cursor, match.index) });
     }
     const [whole, name, eq, value] = match;
-    out.push({ type: "attr-name", text: name });
-    out.push({ type: "punct", text: eq });
-    out.push({ type: "attr-value", text: value });
+    out.push(
+      { type: "attr-name", text: name },
+      { type: "punct", text: eq },
+      { type: "attr-value", text: value },
+    );
     cursor = match.index + whole.length;
   }
   if (cursor < attrsRaw.length) {

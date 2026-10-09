@@ -309,7 +309,11 @@ const editorStyle = computed(() => ({
               v-for="sq in visibleSavedQueries"
               :key="sq.id"
               class="saved-item"
+              role="button"
+              tabindex="0"
               @click="loadQuery(sq)"
+              @keydown.enter.self="loadQuery(sq)"
+              @keydown.space.self.prevent="loadQuery(sq)"
             >
               <div class="saved-name">{{ sq.name }}</div>
               <DeleteButton title="Delete saved query" @click.stop="deleteSavedQuery(sq.id)" />
@@ -348,7 +352,11 @@ const editorStyle = computed(() => ({
                       sq.qualified_query_name &&
                     queryStore.selectedStoredQuery?.version === sq.version,
                 }"
+                role="button"
+                tabindex="0"
                 @click="selectStoredQuery(sq)"
+                @keydown.enter.self="selectStoredQuery(sq)"
+                @keydown.space.self.prevent="selectStoredQuery(sq)"
               >
                 <div class="saved-name">
                   {{ sq.qualified_query_name }}

@@ -415,7 +415,7 @@ async function mapWithConcurrency<T, R>(
     while (nextIndex < items.length) {
       const index = nextIndex++;
       try {
-        results[index] = { status: "fulfilled", value: await fn(items[index]) };
+        results[index] = { status: "fulfilled", value: await fn(items[index]) }; // NOSONAR: each worker is sequential by design; that bounds concurrency
       } catch (reason) {
         results[index] = { status: "rejected", reason };
       }
@@ -1674,7 +1674,11 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             :key="ehr.ehr_id"
             class="ehr-item"
             :class="{ active: ehr.ehr_id === ehrId }"
+            role="button"
+            tabindex="0"
             @click="selectEhr(ehr.ehr_id)"
+            @keydown.enter.self="selectEhr(ehr.ehr_id)"
+            @keydown.space.self.prevent="selectEhr(ehr.ehr_id)"
           >
             <div class="ehr-id">
               <span class="id-text">{{ ehr.ehr_id }}</span>
@@ -2385,8 +2389,13 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
     />
 
     <!-- EHR Delete Confirmation Dialog -->
-    <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
-      <div class="dialog" @click.stop>
+    <div
+      v-if="showDeleteDialog"
+      class="dialog-overlay"
+      @click="showDeleteDialog = false"
+      @keydown.esc="showDeleteDialog = false"
+    >
+      <div class="dialog" @click.stop @keydown.esc.stop="showDeleteDialog = false">
         <h3>Delete EHR</h3>
         <p>
           This action cannot be undone. This will permanently delete the EHR and all its
@@ -2437,8 +2446,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
       v-if="showDeleteDirectoryDialog"
       class="dialog-overlay"
       @click="showDeleteDirectoryDialog = false"
+      @keydown.esc="showDeleteDirectoryDialog = false"
     >
-      <div class="dialog" @click.stop>
+      <div class="dialog" @click.stop @keydown.esc.stop="showDeleteDirectoryDialog = false">
         <h3>Delete Directory</h3>
         <p>
           This removes the entire DIRECTORY folder structure for this EHR. This action cannot be

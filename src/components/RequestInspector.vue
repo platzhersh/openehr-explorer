@@ -218,7 +218,15 @@ function doClear() {
 <template>
   <div class="inspector-drawer" :style="{ height: drawerHeight }">
     <!-- Header bar -->
-    <div class="inspector-header" data-tour="inspector-header" @click="toggleDrawer">
+    <div
+      class="inspector-header"
+      data-tour="inspector-header"
+      role="button"
+      tabindex="0"
+      @click="toggleDrawer"
+      @keydown.enter.self="toggleDrawer"
+      @keydown.space.self.prevent="toggleDrawer"
+    >
       <div class="header-left">
         <span class="header-title">Request Inspector</span>
         <span v-if="store.entries.length > 0" class="entry-count-badge">
@@ -229,7 +237,7 @@ function doClear() {
           {{ inspectorShortcutLabel }}
         </kbd>
       </div>
-      <div class="header-actions" @click.stop>
+      <div class="header-actions" @click.stop @keydown.stop>
         <button
           type="button"
           class="tour-trigger-btn"
