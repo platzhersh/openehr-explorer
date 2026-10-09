@@ -1674,15 +1674,12 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             :key="ehr.ehr_id"
             class="ehr-item"
             :class="{ active: ehr.ehr_id === ehrId }"
-            role="button"
-            tabindex="0"
-            @click="selectEhr(ehr.ehr_id)"
-            @keydown.enter.self="selectEhr(ehr.ehr_id)"
-            @keydown.space.self.prevent="selectEhr(ehr.ehr_id)"
           >
             <div class="ehr-id">
-              <span class="id-text">{{ ehr.ehr_id }}</span>
-              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
+              <button type="button" class="id-text row-action" @click="selectEhr(ehr.ehr_id)">
+                {{ ehr.ehr_id }}
+              </button>
+              <CopyButton class="row-control" :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
               <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
@@ -1738,11 +1735,12 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
             :key="ehr.ehr_id"
             class="ehr-item"
             :class="{ active: ehr.ehr_id === ehrId }"
-            @click="selectEhr(ehr.ehr_id)"
           >
             <div class="ehr-id">
-              <span class="id-text">{{ ehr.ehr_id }}</span>
-              <CopyButton :text="ehr.ehr_id" title="Copy full ID" @click.stop />
+              <button type="button" class="id-text row-action" @click="selectEhr(ehr.ehr_id)">
+                {{ ehr.ehr_id }}
+              </button>
+              <CopyButton class="row-control" :text="ehr.ehr_id" title="Copy full ID" @click.stop />
             </div>
             <div class="ehr-meta">
               <span v-if="ehr.time_created" class="meta-item">{{ ehr.time_created }}</span>
@@ -2903,6 +2901,7 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
 }
 
 .ehr-item {
+  position: relative;
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;

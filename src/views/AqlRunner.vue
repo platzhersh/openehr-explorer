@@ -305,18 +305,15 @@ const editorStyle = computed(() => ({
               paddingBottom: `${savedBottomPadding}px`,
             }"
           >
-            <div
-              v-for="sq in visibleSavedQueries"
-              :key="sq.id"
-              class="saved-item"
-              role="button"
-              tabindex="0"
-              @click="loadQuery(sq)"
-              @keydown.enter.self="loadQuery(sq)"
-              @keydown.space.self.prevent="loadQuery(sq)"
-            >
-              <div class="saved-name">{{ sq.name }}</div>
-              <DeleteButton title="Delete saved query" @click.stop="deleteSavedQuery(sq.id)" />
+            <div v-for="sq in visibleSavedQueries" :key="sq.id" class="saved-item">
+              <button type="button" class="saved-name row-action" @click="loadQuery(sq)">
+                {{ sq.name }}
+              </button>
+              <DeleteButton
+                class="row-control"
+                title="Delete saved query"
+                @click.stop="deleteSavedQuery(sq.id)"
+              />
             </div>
           </div>
           <div v-if="queryStore.savedQueries.length === 0" class="empty-state">
@@ -352,16 +349,11 @@ const editorStyle = computed(() => ({
                       sq.qualified_query_name &&
                     queryStore.selectedStoredQuery?.version === sq.version,
                 }"
-                role="button"
-                tabindex="0"
-                @click="selectStoredQuery(sq)"
-                @keydown.enter.self="selectStoredQuery(sq)"
-                @keydown.space.self.prevent="selectStoredQuery(sq)"
               >
-                <div class="saved-name">
+                <button type="button" class="saved-name row-action" @click="selectStoredQuery(sq)">
                   {{ sq.qualified_query_name }}
                   <span v-if="sq.version" class="stored-version">v{{ sq.version }}</span>
-                </div>
+                </button>
               </div>
             </div>
             <div v-if="queryStore.storedQueries.length === 0" class="empty-state">
@@ -601,6 +593,7 @@ const editorStyle = computed(() => ({
 }
 
 .saved-item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
