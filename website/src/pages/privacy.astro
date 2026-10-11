@@ -21,8 +21,9 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <h2>Summary</h2>
       <p>
         openEHR Explorer is a desktop application that runs entirely on your machine. There is no openEHR Explorer account, no backend service operated
-        by this project, and no patient or clinical data is ever sent to us. The only data that can leave your machine, other than your own requests
-        to the servers you configure, is the optional analytics described below.
+        by this project, and no patient or clinical data is ever sent to us. Other than your own requests to the servers you configure and update
+        checks, the only data that can leave your machine is the anonymous analytics described below: a minimal launch ping that is sent even if you
+        decline, plus usage and crash data that is sent only if you opt in.
       </p>
     </section>
 
@@ -105,9 +106,9 @@ import SimpleFooter from "../components/SimpleFooter.astro";
     <section>
       <h2>Code signing</h2>
       <p>
-        Windows installers are signed with a certificate provided by the <a href="https://signpath.org/" target="_blank" rel="noopener noreferrer"
-          >SignPath Foundation</a
-        >. Signing does not involve any user data.
+        Where code signing is enabled for a release, Windows installers are signed with a certificate provided by the
+        <a href="https://signpath.org/" target="_blank" rel="noopener noreferrer">SignPath Foundation</a>. Releases without a signature may show a
+        Windows SmartScreen warning. Signing does not involve any user data.
       </p>
     </section>
 
