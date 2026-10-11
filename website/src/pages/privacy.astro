@@ -82,8 +82,9 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <h3>Sent only if you opt in</h3>
       <ul>
         <li>
-          <strong>Feature usage events</strong>, for example that an AQL query was run or a view was opened. Properties are fixed values such as a server
-          type, or the app version and operating system.
+          <strong>Usage data</strong>: the app version, operating system and architecture; which features you use (for example that an AQL query was
+          run or a composition was viewed); and the CDR platform type (<code>ehrbase</code>, <code>better_platform</code>, <code>ferro_ehr</code> or
+          <code>generic</code>).
         </li>
         <li>
           <strong>Crash and error reports</strong>: an error category and a scrubbed code location (a file name and line number). Error messages are
@@ -93,8 +94,8 @@ import SimpleFooter from "../components/SimpleFooter.astro";
 
       <h3>Never sent</h3>
       <p>
-        By design, analytics events contain no free text (such as query text, template names or server URLs), no identifiers (such as EHR IDs,
-        composition UIDs or user names), and no clinical data of any kind. The design is documented in
+        Analytics events never contain server URLs, credentials, patient data, EHR IDs, composition content, query text, template content or anything
+        you type. The design is documented in
         <a href="https://github.com/platzhersh/openehr-explorer/blob/main/docs/adr/ADR-0018-aptabase-opt-in-usage-analytics.md">ADR-0018</a> and the
         source code is open for inspection. How Aptabase handles data it receives is described in
         <a href="https://aptabase.com/legal/privacy" target="_blank" rel="noopener noreferrer">its privacy policy</a>.

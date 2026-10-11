@@ -43,9 +43,10 @@ trust, and doesn't address any of the above.
 ## Decision
 
 Authenticode-sign the Windows NSIS installer in CI using
-[SignPath.io](https://signpath.io/solutions/open-source-community)'s free
-code-signing program for open-source projects, via SignPath's official
-GitHub Actions integration
+the [SignPath Foundation](https://signpath.org/)'s free code-signing
+program for open-source projects (certificate issued by the Foundation,
+signing performed on the [SignPath.io](https://signpath.io/) platform), via
+SignPath's official GitHub Actions integration
 ([`signpath/github-action-submit-signing-request`](https://github.com/SignPath/github-action-submit-signing-request)).
 
 SignPath was chosen over Azure Trusted Signing (the other option
@@ -67,9 +68,15 @@ transparency scan stays in place regardless of signing status.
 CI cannot create the SignPath account or approve OSS enrollment itself;
 these steps need a project admin:
 
-1. Register at [signpath.io](https://signpath.io) and apply for the free
-   open-source tier for `platzhersh/openehr-explorer`. Approval is a
-   manual review on SignPath's side.
+1. Apply to the [SignPath Foundation](https://signpath.org/) (the
+   **Apply** button on signpath.org) for free open-source code signing for
+   `platzhersh/openehr-explorer`. The application asks for a download page
+   that mentions the SignPath Foundation
+   (<https://openehr-explorer.dev/docs.html#code-signing>) and a privacy
+   policy (<https://openehr-explorer.dev/privacy.html>). Approval is a
+   manual review on the Foundation's side; once approved, the project is
+   set up on the SignPath.io platform (organization, project, policies,
+   API token) for the steps below.
 2. Install the SignPath GitHub App on the repository so SignPath can trust
    builds originating from it.
 3. In the SignPath dashboard, create a project (slug: `openehr-explorer`,
@@ -184,7 +191,8 @@ current release's hash.
 
 ## References
 
-- [SignPath — Free code signing for open-source projects](https://signpath.io/solutions/open-source-community)
+- [SignPath Foundation — free code signing for open-source projects](https://signpath.org/)
+- [SignPath.io — signing platform](https://signpath.io/)
 - [SignPath GitHub Actions integration docs](https://docs.signpath.io/trusted-build-systems/github)
 - [`signpath/github-action-submit-signing-request`](https://github.com/SignPath/github-action-submit-signing-request)
 - [SignPath GitHub Actions demo project](https://github.com/SignPath/github-actions-demo)
