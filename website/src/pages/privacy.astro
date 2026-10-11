@@ -76,16 +76,18 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <p>
         A single <code>session_started</code> event is sent once per launch, after you have answered the consent dialog. Its only property is your choice
         (<code>consent: "yes"</code> or <code>"no"</code>). It exists so the project can tell how many people use the app compared with how many opt in.
-        Aptabase's built-in session metadata, including the app version and operating system, accompanies it. If you quit before answering the dialog,
-        nothing is sent.
+        Like every event, it is sent by Aptabase's client library together with standard system information: the app version, operating system name and
+        version, your system language setting (locale), the name and version of the web view engine, whether it is a debug build, the library version, a
+        timestamp, and a random session ID that is not stored on your machine and changes after four hours of inactivity. As with any internet request,
+        Aptabase's servers also receive your IP address. If you quit before answering the dialog, nothing is sent.
       </p>
 
       <h3>Sent only if you opt in</h3>
       <ul>
         <li>
-          <strong>Usage data</strong>: the app version, operating system and architecture; which features you use (for example that an AQL query was
-          run or a composition was viewed); and the CDR platform type (<code>ehrbase</code>, <code>better_platform</code>, <code>ferro_ehr</code> or
-          <code>generic</code>).
+          <strong>Usage data</strong>: an <code>app_launched</code> event with the app version and your platform string; which features you use (for
+          example that an AQL query was run or a composition was viewed); and the CDR platform type (<code>ehrbase</code>,
+          <code>better_platform</code>, <code>ferro_ehr</code> or <code>generic</code>). These events carry the same system information as above.
         </li>
         <li>
           <strong>Crash and error reports</strong>: an error category and a scrubbed code location (a file name and line number). Error messages are
