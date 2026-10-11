@@ -209,24 +209,27 @@ function viewWhatsNew() {
           <p class="form-help">
             When enabled, openEHR Explorer sends coarse-grained, anonymous feature-usage events to
             <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a> (a
-            privacy-first, GDPR-compliant analytics service). We collect: app version, OS and
-            architecture, which features are used (e.g. <em>aql_executed</em>,
-            <em>composition_viewed</em>), and the CDR platform type
-            (<em>ehrbase</em>/<em>better_platform</em>/<em>ferro_ehr</em>/<em>generic</em>). If the
-            app crashes or hits an unexpected error, we also receive the error type and the source
-            file and line where it happened &mdash; never the error message itself.
+            privacy-first, GDPR-compliant analytics service). We collect: which features are used
+            (e.g. <em>aql_executed</em>, <em>composition_viewed</em>), the CDR platform type
+            (<em>ehrbase</em>/<em>better_platform</em>/<em>ferro_ehr</em>/<em>generic</em>), and
+            standard system info that accompanies every event: app version, OS name and version,
+            language, and webview engine version. If the app crashes or hits an unexpected error, we
+            also receive the error type and the source file and line where it happened &mdash; never
+            the error message itself.
           </p>
           <p class="form-help">
             We <strong>never</strong> collect server URLs, credentials, patient data, EHR IDs,
-            composition content, query text, template content, or anything you type. No cookies, no
-            fingerprinting, no IP logging. Default is <strong>off</strong>.
+            composition content, query text, template content, or anything you type. Your IP address
+            reaches Aptabase's server with each request; per Aptabase's published policy it is not
+            stored, and no cookies are used. Default is <strong>off</strong>.
           </p>
           <p class="form-help">
             <strong>One exception:</strong> regardless of this toggle, the app sends a single
             <em>session_started</em> ping once per launch so the project can count total sessions
-            and see how many users opt in. That ping contains only your consent choice (<em>yes</em>
-            or <em>no</em>) and nothing else &mdash; no version, OS, or feature usage. When you
-            toggle this off, <strong>all other</strong> event collection stops immediately.
+            and see how many users opt in. Its only property is your consent choice (<em>yes</em> or
+            <em>no</em>), with no feature usage; like every event it also carries the standard
+            system info listed above and a random session ID. When you toggle this off,
+            <strong>all other</strong> event collection stops immediately.
           </p>
         </div>
       </div>

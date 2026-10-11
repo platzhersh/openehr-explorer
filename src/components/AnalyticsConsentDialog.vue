@@ -40,13 +40,16 @@ defineEmits<{
             <span>What we collect</span>
           </div>
           <ul class="info-list">
-            <li>App version, OS, and architecture</li>
             <li>
               Which features you use (e.g. <em>aql_executed</em>, <em>composition_viewed</em>)
             </li>
             <li>
               The CDR platform type (<em>ehrbase</em> / <em>better_platform</em> /
               <em>ferro_ehr</em> / <em>generic</em>)
+            </li>
+            <li>
+              Standard system info sent with every event: app version, OS name and version,
+              language, and webview engine version
             </li>
           </ul>
         </div>
@@ -57,7 +60,7 @@ defineEmits<{
             <span>What we <strong>never</strong> collect</span>
           </div>
           <ul class="info-list">
-            <li>Server URLs, credentials, or IP addresses</li>
+            <li>Server URLs or credentials</li>
             <li>Patient data, EHR IDs, or composition content</li>
             <li>Query text, template content, or anything you type</li>
           </ul>
@@ -65,14 +68,17 @@ defineEmits<{
 
         <p class="footnote">
           <strong>Even if you say no</strong>, the app sends a single <em>session_started</em> ping
-          once per launch so we can count total sessions and see how many people opt in. It contains
-          only one field &mdash; your consent choice (yes/no) &mdash; and nothing else: no version,
-          no OS, no feature usage.
+          once per launch so we can count total sessions and see how many people opt in. Its only
+          property is your consent choice (yes/no); it has no feature usage. Like every event, it
+          also carries the standard system info above and a random session ID that is not stored on
+          your device.
         </p>
         <p class="footnote">
           Data is sent to
           <a href="https://aptabase.com" target="_blank" rel="noopener">Aptabase</a>, a
-          privacy-first, GDPR-compliant analytics service. No cookies, no fingerprinting.
+          privacy-first, GDPR-compliant analytics service. Your IP address reaches Aptabase's server
+          with each request; per Aptabase's published policy it is not stored, and no cookies are
+          used.
         </p>
         <p class="footnote hint">
           You can change this at any time under <strong>Settings → Analytics</strong>.

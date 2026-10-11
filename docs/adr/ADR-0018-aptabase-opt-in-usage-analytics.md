@@ -30,7 +30,7 @@ Aptabase is purpose-built for desktop and mobile apps with privacy as a core con
 
 - **Official Tauri plugin** (`tauri-plugin-aptabase`) — first-class integration, not a web analytics shim
 - **Open source** — can be self-hosted if data sovereignty requirements change
-- **No cookies, no fingerprinting** — compliant with GDPR/ePrivacy without a consent banner
+- **No cookies, no fingerprinting** (per Aptabase's published policy) — compliant with GDPR/ePrivacy without a consent banner
 - **Lightweight** — events are batched and sent in background, minimal performance impact
 - **Free tier** — sufficient for early-stage project (up to 20K events/month)
 
@@ -76,16 +76,27 @@ rates collapse after a UI change.
 The carveout is designed to minimise its footprint:
 
 - **Exactly one event per launch.** Not one per action, not one per view.
-- **Exactly one prop.** `consent: "yes" | "no"` — nothing else. No app
-  version, no OS, no architecture, no locale, no feature usage, no
-  identifiers.
+- **Exactly one app-supplied prop.** `consent: "yes" | "no"` — the app adds
+  nothing else: no feature usage, no URLs, no user-entered data. The
+  Aptabase plugin (`tauri-plugin-aptabase` 1.0.0) attaches the same
+  standard `systemProps` to *every* event, including this one: `isDebug`,
+  `osName`, `osVersion`, `locale`, `engineName`, `engineVersion`,
+  `appVersion`, `sdkVersion`, plus a timestamp and a random `sessionId`
+  (rotates after 4h of inactivity, not persisted). Architecture is not
+  sent. The HTTP User-Agent repeats OS, engine and locale, and Aptabase's
+  server necessarily receives the client IP; we cannot verify what the
+  server does with it and rely on Aptabase's published policy (not stored).
+  The stock plugin offers no way to suppress `systemProps` per event;
+  doing so would need a fork or a custom sender and is a project-owner
+  decision.
 - **Deferred until consent is answered.** On a first-run session, the ping
   does not fire until the user has picked yes or no in
   `AnalyticsConsentDialog.vue`. If the user quits without answering,
   nothing is sent.
 - **Explicitly disclosed.** Both the first-run consent dialog and the
   Settings page state that a single `session_started` ping fires even when
-  analytics are off, and describe exactly what it contains.
+  analytics are off, and that it carries the consent choice plus the
+  standard system info.
 - **Implemented via a separate code path.** `useAnalytics` exposes two
   functions: `track()` (consent-gated — used by every feature event) and
   `trackUngated()` (bypasses the gate). `trackUngated` is reserved for
@@ -93,10 +104,10 @@ The carveout is designed to minimise its footprint:
   back on any new call site.
 
 Every other event — `app_launched`, `aql_executed`, `composition_viewed`,
-etc. — remains strictly opt-in. In particular, the version/OS distribution
-signal lives on `app_launched { version, os }`, which is still
-consent-gated; opted-out sessions contribute the count but never the
-metadata.
+etc. — remains strictly opt-in. Note that opted-out sessions still
+contribute the plugin's standard `systemProps` (app version, OS, locale,
+engine) via `session_started`; only app-defined props such as
+`app_launched { version, os }` and feature events are consent-gated.
 
 ### Implementation
 
@@ -173,7 +184,7 @@ gated; see the **Session-counter carveout** section above.
 
 | Event | Gated? | Properties | Purpose |
 |---|---|---|---|
-| `session_started` | **no** | `consent` (`yes`/`no`) | Total session count + opt-in rate denominator |
+| `session_started` | **no** | `consent` (`yes`/`no`), plus plugin `systemProps` as on every event | Total session count + opt-in rate denominator |
 | `app_launched` | yes | `version`, `os` | Platform distribution among opt-in users |
 | `server_connected` | yes | `server_type` | CDR platform usage (ehrbase / better_platform / generic) |
 | `server_profile_created` | yes | `server_type` | New profile writes by CDR platform |
@@ -241,7 +252,8 @@ fatal reports) can replace it once the Tauri plugin exposes it.
 - **Quota protection:** one `panic` per session; frontend events are deduped by
   (event, kind, location) and capped at 10 per session. The consent check runs
   before the limiter, so opted-out errors never consume the budget.
-- App version and OS arrive via Aptabase's built-in session metadata.
+- App version, OS name/version, locale and webview engine arrive on every
+  event via the plugin's built-in `systemProps` (not architecture).
 
 **Hard rules:**
 - Never include free-text fields (query text, template names, server URLs)

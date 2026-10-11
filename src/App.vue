@@ -69,8 +69,10 @@ async function emitLaunchEvents() {
   // Two events fire at the start of every session:
   //
   //   1. `session_started { consent }`  — ALWAYS, regardless of consent
-  //      toggle. This is the denominator used to compute opt-in rate; it
-  //      carries nothing except the consent value itself. See ADR-0018.
+  //      toggle. This is the denominator used to compute opt-in rate. Its
+  //      own property is only the consent value, but the Aptabase plugin
+  //      adds standard system info (app version, OS, locale, webview
+  //      engine) and a session ID to every event. See ADR-0018.
   //   2. `app_launched  { version, os }` — ONLY if the user has opted in.
   //      Gives us the OS/version distribution for the opt-in population.
   //

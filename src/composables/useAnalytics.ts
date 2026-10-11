@@ -45,8 +45,9 @@ export type AnalyticsEvent =
    * `session_started` is the ONE event that is NOT gated on the consent
    * toggle — see `trackUngated` below and ADR-0018 for the rationale. It
    * fires once per launch with a single `consent: "yes" | "no"` prop so we
-   * can compute the opt-in rate and see total session counts. No version,
-   * OS, or any other data rides on it.
+   * can compute the opt-in rate and see total session counts. The app adds
+   * no other props; the Aptabase plugin attaches its standard system info
+   * (app version, OS, locale, webview engine) to every event.
    */
   | "session_started"
   | "app_launched"
@@ -145,8 +146,9 @@ export function useAnalytics() {
    * `consent: "yes" | "no"` prop. The event exists so we can see the
    * denominator ("how many total sessions happened?") and compute an
    * opt-in rate. Opted-out users therefore send exactly ONE anonymous
-   * event per launch — and nothing else — with no version, no OS, no
-   * feature usage, no IDs, no URLs.
+   * event per launch whose only app-supplied prop is `consent` (no feature
+   * usage, no IDs, no URLs). The plugin still attaches standard system info
+   * and a random session ID, as it does to every event.
    *
    * See ADR-0018 "Consent model" for the rationale and the wording of
    * the user-facing disclosure.
