@@ -98,7 +98,7 @@ If the file has been previously submitted (e.g. manually, as in the 0.3.0 incide
 - **Not a security gate**: The step does not fail the release on detections. A high detection count would need to be caught by the maintainer reviewing the release notes. This is intentional — a false-positive should not block a legitimate release.
 - **Public API terms**: The VirusTotal public API must not be used in commercial products or services. openEHR Explorer is Apache 2.0 open-source with no commercial use — this constraint is satisfied. If the project's status changes, the API usage must be re-evaluated.
 - **API key as secret**: The `VT_API_KEY` must be stored as a GitHub Actions secret and rotated if compromised. Low risk — the free public API key has no elevated privileges and rate-limited exposure is the only consequence of compromise.
-- **Does not replace code signing**: VirusTotal reputation is one trust signal. EDR products with strict unsigned-binary policies (like the Cortex rule that triggered the original incident) will still block unsigned binaries regardless of VirusTotal score. Code signing is complementary, not a substitute — adopted separately in [ADR-0029](ADR-0029-signpath-code-signing.md).
+- **Does not replace code signing**: VirusTotal reputation is one trust signal. EDR products with strict unsigned-binary policies (like the Cortex rule that triggered the original incident) will still block unsigned binaries regardless of VirusTotal score. Code signing is complementary, not a substitute — proposed separately in [ADR-0029](ADR-0029-signpath-code-signing.md).
 
 ### Neutral
 

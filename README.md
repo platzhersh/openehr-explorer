@@ -160,9 +160,9 @@ See the full, always-up-to-date **[Tool Comparison](https://openehr-explorer.dev
 
 Free code signing for Windows releases is provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
-- **Scope:** only release installers built from this repository by the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on GitHub-hosted runners are submitted for signing. See [ADR-0029](docs/adr/ADR-0029-signpath-code-signing.md).
+- **Scope:** only Windows installers built from this repository by the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on GitHub-hosted runners are submitted for signing. Release tags use the `release-signing` policy; manually triggered and same-repository labeled PR builds use `test-signing`. See [ADR-0029](docs/adr/ADR-0029-signpath-code-signing.md).
 - **Roles:** committer, reviewer and approver — [@platzhersh](https://github.com/platzhersh) (project owner). Signing requests for release builds are approved manually in SignPath.
-- **Privacy:** the app only talks to the openEHR servers you configure and to GitHub Releases for update checks. See [PRD-0016](docs/prd/PRD-0016-non-intrusive-install-tracking.md) for the install-tracking design.
+- **Privacy:** the app talks to the openEHR servers you configure and to GitHub Releases for update checks. Release builds that include an Aptabase app key also send anonymous analytics to [Aptabase](https://aptabase.com/): a single `session_started` event per launch (carrying only whether you have opted in) is sent regardless of consent, while all usage and error events are sent only if you opt in under Settings. See [ADR-0018](docs/adr/ADR-0018-aptabase-opt-in-usage-analytics.md) and [PRD-0016](docs/prd/PRD-0016-non-intrusive-install-tracking.md).
 
 ## License
 

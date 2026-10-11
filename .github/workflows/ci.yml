@@ -206,6 +206,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      # SignPath's action reads job details and downloads the unsigned
+      # artifact with this token (docs.signpath.io/trusted-build-systems/github).
+      actions: read
     steps:
       - uses: actions/checkout@v6
 
@@ -250,10 +253,14 @@ jobs:
         id: signpath-check
         shell: bash
         run: |
-          echo "configured=$([ -n "$SIGNPATH_API_TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "updater-configured=$([ -n "$SIGNPATH_API_TOKEN" ] && [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          # Both the token and the organization ID are required by the
+          # SignPath action; a half-configured setup must skip signing
+          # rather than fail the Windows job.
+          echo "configured=$([ -n "$SIGNPATH_API_TOKEN" ] && [ -n "$SIGNPATH_ORGANIZATION_ID" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "updater-configured=$([ -n "$SIGNPATH_API_TOKEN" ] && [ -n "$SIGNPATH_ORGANIZATION_ID" ] && [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         env:
           SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       - name: Upload unsigned installer for SignPath
