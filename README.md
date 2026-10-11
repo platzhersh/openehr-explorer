@@ -156,6 +156,14 @@ See the full, always-up-to-date **[Tool Comparison](https://openehr-explorer.dev
   </picture>
 </a>
 
+## Code signing policy
+
+Free code signing for Windows releases is provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- **Scope:** only release installers built from this repository by the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on GitHub-hosted runners are submitted for signing. See [ADR-0029](docs/adr/ADR-0029-signpath-code-signing.md).
+- **Roles:** committer, reviewer and approver — [@platzhersh](https://github.com/platzhersh) (project owner). Signing requests for release builds are approved manually in SignPath.
+- **Privacy:** the app only talks to the openEHR servers you configure and to GitHub Releases for update checks. See [PRD-0016](docs/prd/PRD-0016-non-intrusive-install-tracking.md) for the install-tracking design.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE) for details.
