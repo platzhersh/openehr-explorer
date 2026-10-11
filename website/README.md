@@ -25,12 +25,12 @@ website/
 │   ├── components/      shared Astro components (header, footer, SEO tags, …)
 │   │   └── vue/          interactive Vue islands (gallery, sparkline, docs search, …)
 │   ├── layouts/          Layout.astro — shared <head> boilerplate
-│   ├── pages/            index.astro, docs.astro, compare.astro, brand-kit.astro
+│   ├── pages/            index.astro, docs.astro, compare.astro, brand-kit.astro, privacy.astro
 │   └── styles/           tokens.css (design tokens) + base.css (reset)
 └── astro.config.mjs
 ```
 
-Pages build to `docs.html`, `compare.html`, `brand-kit.html` (not Astro's default `/docs/`-style directory routing) so existing links and the sitemap keep working — see `build.format` in `astro.config.mjs`.
+Pages build to `docs.html`, `compare.html`, `brand-kit.html`, `privacy.html` (not Astro's default `/docs/`-style directory routing) so existing links and the sitemap keep working — see `build.format` in `astro.config.mjs`.
 
 ## Design tokens
 

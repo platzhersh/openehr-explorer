@@ -1,9 +1,10 @@
 ---
-// Single-line footer used by docs.html, compare.html, and brand-kit.html.
+// Single-line footer used by docs.html, compare.html, brand-kit.html, and privacy.html.
+const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
 ---
 
 <footer class="footer">
-  &copy; 2026 <a href="https://www.platzh1rsch.ch/" target="_blank" rel="noopener noreferrer">platzh1rsch</a> &middot; Apache 2.0 License &middot;
+  &copy; 2026 <a href="https://www.platzh1rsch.ch/" target="_blank" rel="noopener noreferrer">platzh1rsch</a> &middot; Apache 2.0 License &middot; <a href={`${BASE}privacy.html`}>Privacy</a> &middot;
   Not affiliated with openEHR International
 </footer>
 

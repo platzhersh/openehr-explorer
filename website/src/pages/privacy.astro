@@ -1,0 +1,167 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SimpleFooter from "../components/SimpleFooter.astro";
+---
+
+<Layout
+  title="Privacy Policy - openEHR Explorer"
+  description="What data openEHR Explorer stores locally, which network connections it makes, and what the optional, opt-in usage analytics and crash reports contain."
+  path="privacy.html"
+>
+  <SiteHeader current="privacy" />
+
+  <div class="container">
+    <div class="page-title">
+      <h1>Privacy Policy</h1>
+      <p>Last updated: 11 October 2026</p>
+    </div>
+
+    <section>
+      <h2>Summary</h2>
+      <p>
+        openEHR Explorer is a desktop application that runs entirely on your machine. There is no openEHR Explorer account, no backend service operated
+        by this project, and no patient or clinical data is ever sent to us. The only data that can leave your machine, other than your own requests
+        to the servers you configure, is the optional analytics described below.
+      </p>
+    </section>
+
+    <section>
+      <h2>Data stored on your machine</h2>
+      <ul>
+        <li>
+          <strong>Server profiles</strong> (name, URL, server type, authentication method) are stored in a local configuration file, for example
+          <code>~/.config/openehr-explorer/profiles.json</code> on Linux and macOS or <code>%APPDATA%\openehr-explorer\profiles.json</code> on Windows.
+        </li>
+        <li>
+          <strong>Credentials</strong> are stored in your operating system's keychain, or in an encrypted local file if no keychain is available.
+        </li>
+        <li>
+          <strong>Request Inspector history</strong> is kept in memory for the current session only. Authorization headers and cookies are redacted.
+        </li>
+        <li><strong>Settings</strong> such as your analytics choice are stored locally.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Network connections</h2>
+      <ul>
+        <li>
+          <strong>Servers you configure.</strong> The app sends requests directly from your machine to the openEHR servers (and the optional terminology
+          server) you set up. The project never sees this traffic or its contents.
+        </li>
+        <li>
+          <strong>Update checks.</strong> The app checks <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for a newer
+          version. GitHub receives the request as it would from any download, including your IP address, under
+          <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer"
+            >GitHub's privacy statement</a
+          >.
+        </li>
+        <li>
+          <strong>Anonymous analytics</strong> to <a href="https://aptabase.com" target="_blank" rel="noopener noreferrer">Aptabase</a>, only in release
+          builds that include an Aptabase app key. See below.
+        </li>
+      </ul>
+    </section>
+
+    <section id="analytics">
+      <h2>Anonymous analytics and crash reports</h2>
+      <p>
+        On first launch the app asks whether you want to share anonymous usage data. Sharing is <strong>off unless you opt in</strong>, and you can change
+        your choice at any time under <em>Settings</em>.
+      </p>
+
+      <h3>Sent even if you decline</h3>
+      <p>
+        A single <code>session_started</code> event is sent once per launch, after you have answered the consent dialog. Its only property is your choice
+        (<code>consent: "yes"</code> or <code>"no"</code>). It exists so the project can tell how many people use the app compared with how many opt in.
+        Aptabase's built-in session metadata, including the app version and operating system, accompanies it. If you quit before answering the dialog,
+        nothing is sent.
+      </p>
+
+      <h3>Sent only if you opt in</h3>
+      <ul>
+        <li>
+          <strong>Feature usage events</strong>, for example that an AQL query was run or a view was opened. Properties are fixed values such as a server
+          type, or the app version and operating system.
+        </li>
+        <li>
+          <strong>Crash and error reports</strong>: an error category and a scrubbed code location (a file name and line number). Error messages are
+          never sent.
+        </li>
+      </ul>
+
+      <h3>Never sent</h3>
+      <p>
+        By design, analytics events contain no free text (such as query text, template names or server URLs), no identifiers (such as EHR IDs,
+        composition UIDs or user names), and no clinical data of any kind. The design is documented in
+        <a href="https://github.com/platzhersh/openehr-explorer/blob/main/docs/adr/ADR-0018-aptabase-opt-in-usage-analytics.md">ADR-0018</a> and the
+        source code is open for inspection. How Aptabase handles data it receives is described in
+        <a href="https://aptabase.com/legal/privacy" target="_blank" rel="noopener noreferrer">its privacy policy</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Code signing</h2>
+      <p>
+        Windows installers are signed with a certificate provided by the <a href="https://signpath.org/" target="_blank" rel="noopener noreferrer"
+          >SignPath Foundation</a
+        >. Signing does not involve any user data.
+      </p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <p>
+        Questions or concerns? Open an issue on <a href="https://github.com/platzhersh/openehr-explorer/issues">GitHub</a>. Changes to this policy are
+        tracked in the <a href="https://github.com/platzhersh/openehr-explorer/commits/main/website/src/pages/privacy.astro">page history</a>.
+      </p>
+    </section>
+  </div>
+
+  <SimpleFooter />
+</Layout>
+
+<style>
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 24px 64px;
+  }
+  .page-title {
+    padding: 56px 0 24px;
+  }
+  .page-title h1 {
+    font-size: 40px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .page-title p {
+    color: var(--text-secondary);
+  }
+  section {
+    margin-top: 32px;
+  }
+  h2 {
+    font-size: 24px;
+    margin-bottom: 12px;
+  }
+  h3 {
+    font-size: 17px;
+    margin: 20px 0 8px;
+  }
+  p,
+  li {
+    color: var(--text-secondary);
+    line-height: 1.65;
+  }
+  ul {
+    padding-left: 22px;
+    display: grid;
+    gap: 8px;
+  }
+  strong {
+    color: var(--text-primary);
+  }
+</style>
