@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
-import { useServerStore, type ServerProfile, type ServerProfileInput } from "../stores/server";
+import {
+  useServerStore,
+  type AuthMethodInput,
+  type AuthMethodPublic,
+  type ClientAuthStyle,
+  type ServerProfile,
+  type ServerProfileInput,
+} from "../stores/server";
+import { validateOAuth2 } from "../lib/oauth";
 import { useSettingsStore } from "../stores/settings";
 import { useAnalytics } from "../composables/useAnalytics";
 import SearchableSelect, { type SearchableSelectOption } from "./SearchableSelect.vue";
@@ -107,6 +115,24 @@ const adminBasicPassword = computed({
   },
 });
 
+// OAuth2 client-credentials fields. Audience/scope are optional: blank → null.
+const oauth = computed(() =>
+  form.value.auth_method.type === "oauth2_client_credentials" ? form.value.auth_method : null,
+);
+const oauthAudience = computed({
+  get: () => oauth.value?.audience ?? "",
+  set: (value: string) => {
+    if (oauth.value) oauth.value.audience = value.trim() === "" ? null : value;
+  },
+});
+const oauthScope = computed({
+  get: () => oauth.value?.scope ?? "",
+  set: (value: string) => {
+    if (oauth.value) oauth.value.scope = value.trim() === "" ? null : value;
+  },
+});
+const oauthValidationError = ref<string | null>(null);
+
 const adminBearerToken = computed({
   get: () =>
     form.value.admin_auth_method?.type === "bearer" ? form.value.admin_auth_method.token : "",
@@ -146,6 +172,7 @@ function initNewForm() {
   testError.value = null;
   urlValidationError.value = null;
   urlValidationWarning.value = null;
+  oauthValidationError.value = null;
 }
 
 function initEditForm(profile: ServerProfile) {
@@ -169,16 +196,12 @@ function initEditForm(profile: ServerProfile) {
   testError.value = null;
   urlValidationError.value = null;
   urlValidationWarning.value = null;
+  oauthValidationError.value = null;
   validateBaseUrl(profile.base_url);
 }
 
 /** Convert a public auth (no secrets) to an input auth (with empty secret fields). */
-function publicAuthToInput(
-  auth:
-    | { type: "none" }
-    | { type: "basic"; username: string; has_password: boolean }
-    | { type: "bearer"; has_token: boolean },
-): ServerProfileInput["auth_method"] {
+function publicAuthToInput(auth: AuthMethodPublic): AuthMethodInput {
   switch (auth.type) {
     case "none":
       return { type: "none" };
@@ -186,6 +209,16 @@ function publicAuthToInput(
       return { type: "basic", username: auth.username, password: "" };
     case "bearer":
       return { type: "bearer", token: "" };
+    case "oauth2_client_credentials":
+      return {
+        type: "oauth2_client_credentials",
+        token_url: auth.token_url,
+        client_id: auth.client_id,
+        client_secret: "",
+        audience: auth.audience ?? null,
+        scope: auth.scope ?? null,
+        client_auth: auth.client_auth,
+      };
   }
 }
 
@@ -235,8 +268,16 @@ function validateBaseUrl(url: string): boolean {
   return true;
 }
 
+/** Validate the OAuth2 fields (no-op for other auth types). */
+function validateOAuthFields(): boolean {
+  oauthValidationError.value = oauth.value
+    ? validateOAuth2(oauth.value, existingProfileHasClientSecret())
+    : null;
+  return oauthValidationError.value === null;
+}
+
 async function save() {
-  if (!validateBaseUrl(form.value.base_url)) {
+  if (!validateBaseUrl(form.value.base_url) || !validateOAuthFields()) {
     return;
   }
   // Snapshot before save — editingExistingId is null when creating a brand
@@ -269,6 +310,7 @@ async function save() {
 async function testConnection() {
   testResult.value = null;
   testError.value = null;
+  if (!validateOAuthFields()) return;
   try {
     // For unsaved profiles (or profiles being edited), use unsaved connection test
     testResult.value = await serverStore.testUnsavedConnection(form.value);
@@ -295,6 +337,12 @@ const AUTH_TYPE_OPTIONS: SearchableSelectOption[] = [
   { value: "none", label: "None" },
   { value: "basic", label: "Basic Auth" },
   { value: "bearer", label: "Bearer Token" },
+  { value: "oauth2_client_credentials", label: "OAuth2 client credentials" },
+];
+
+const CLIENT_AUTH_OPTIONS: SearchableSelectOption[] = [
+  { value: "basic", label: "HTTP Basic header (recommended)" },
+  { value: "body", label: "Form body fields" },
 ];
 
 const ADMIN_AUTH_TYPE_OPTIONS: SearchableSelectOption[] = [
@@ -314,7 +362,18 @@ function setAuthType(type: string) {
     form.value.auth_method = { type: "basic", username: "", password: "" };
   } else if (type === "bearer") {
     form.value.auth_method = { type: "bearer", token: "" };
+  } else if (type === "oauth2_client_credentials") {
+    form.value.auth_method = {
+      type: "oauth2_client_credentials",
+      token_url: "",
+      client_id: "",
+      client_secret: "",
+      audience: null,
+      scope: null,
+      client_auth: "basic",
+    };
   }
+  oauthValidationError.value = null;
 }
 
 function setAdminAuthType(type: string) {
@@ -340,6 +399,16 @@ function existingProfileHasToken(): boolean {
   const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
   if (!existing) return false;
   return existing.auth_method.type === "bearer" && existing.auth_method.has_token;
+}
+
+function existingProfileHasClientSecret(): boolean {
+  if (!editingExistingId.value) return false;
+  const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
+  if (!existing) return false;
+  return (
+    existing.auth_method.type === "oauth2_client_credentials" &&
+    existing.auth_method.has_client_secret
+  );
 }
 
 function existingProfileHasAdminPassword(): boolean {
@@ -493,6 +562,75 @@ useEscapeKey(() => props.open, handleClose);
                 Token is stored securely. Leave empty to keep the existing token.
               </p>
             </div>
+          </template>
+
+          <template v-if="oauth">
+            <div class="form-group">
+              <label for="server-oauth-token-url">Token URL</label>
+              <input
+                id="server-oauth-token-url"
+                class="input"
+                v-model="oauth.token_url"
+                placeholder="https://<tenant>.auth.prod.cadasto.io/oauth/token"
+              />
+            </div>
+            <div class="form-group">
+              <label for="server-oauth-client-id">Client ID</label>
+              <input id="server-oauth-client-id" class="input" v-model="oauth.client_id" />
+            </div>
+            <div class="form-group">
+              <label for="server-oauth-client-secret">Client Secret</label>
+              <input
+                id="server-oauth-client-secret"
+                class="input"
+                type="password"
+                v-model="oauth.client_secret"
+                :placeholder="
+                  existingProfileHasClientSecret()
+                    ? 'Secret saved securely (leave empty to keep)'
+                    : ''
+                "
+              />
+              <p v-if="existingProfileHasClientSecret()" class="form-help secure-hint">
+                <LockIcon />
+                Client secret is stored securely. Leave empty to keep the existing secret.
+              </p>
+            </div>
+            <div class="form-group">
+              <label for="server-oauth-audience">Audience (optional)</label>
+              <input
+                id="server-oauth-audience"
+                class="input"
+                v-model="oauthAudience"
+                :placeholder="apiRootPreview"
+              />
+              <p class="form-help">Some servers (e.g. Cadasto) require the API root here.</p>
+            </div>
+            <div class="form-group">
+              <label for="server-oauth-scope">Scope (optional)</label>
+              <input
+                id="server-oauth-scope"
+                class="input"
+                v-model="oauthScope"
+                placeholder="api.read api.write"
+              />
+            </div>
+            <div class="form-group">
+              <SearchableSelect
+                label="Client authentication (advanced)"
+                :options="CLIENT_AUTH_OPTIONS"
+                :model-value="oauth.client_auth"
+                search-placeholder="Filter..."
+                @update:model-value="(v) => v && (oauth!.client_auth = v as ClientAuthStyle)"
+              />
+            </div>
+            <div v-if="oauthValidationError" class="validation-message error" role="alert">
+              {{ oauthValidationError }}
+            </div>
+            <p class="form-help">
+              The access token is requested automatically, kept in memory only and renewed before it
+              expires.
+            </p>
           </template>
 
           <template v-if="form.server_type === 'ehrbase' || form.server_type === 'ferro_ehr'">

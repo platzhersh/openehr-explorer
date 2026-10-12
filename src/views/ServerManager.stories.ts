@@ -209,3 +209,38 @@ export const CustomApiPathPrefix: Story = {
     await expect(OPENED_URLS).toEqual(["https://cdr.example.com/openehr/v1"]);
   },
 };
+
+export const OAuth2Profile: Story = {
+  render: withStores({
+    profiles: [
+      EHRBASE_PROFILE,
+      {
+        ...CUSTOM_PREFIX_PROFILE,
+        id: "profile-oauth",
+        name: "Cadasto (OAuth2)",
+        auth_method: {
+          type: "oauth2_client_credentials",
+          token_url: "https://acme.auth.prod.cadasto.io/oauth/token",
+          client_id: "explorer",
+          has_client_secret: true,
+          audience: "https://acme.api.prod.cadasto.io/openehr/v1",
+          scope: "api.read api.write",
+          client_auth: "basic",
+        },
+      },
+    ],
+  }),
+  parameters: {
+    docs: {
+      description: {
+        story: "An OAuth2 client-credentials profile shows its token host on the card.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByText("OAuth2 (client credentials) · acme.auth.prod.cadasto.io"),
+    ).toBeVisible();
+  },
+};

@@ -55,6 +55,21 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
   </tr>
 </table>
 
+## Authentication
+
+Each server profile supports **None**, **Basic**, **Bearer token** and **OAuth2 client credentials**. With OAuth2 the app requests an access token from your token endpoint, keeps it in memory only, renews it shortly before it expires and retries once on a `401`. The client secret is stored in the OS keychain (or the encrypted-file fallback), never in `profiles.json`.
+
+Example (Cadasto):
+
+| Field | Value |
+| --- | --- |
+| Token URL | `https://<tenant>.auth.prod.cadasto.io/oauth/token` |
+| Client ID / Secret | from your Cadasto client |
+| Audience | `https://<tenant>.api.prod.cadasto.io/openehr/v1` |
+| Scope | `api.read api.write` |
+
+The token request shows up as its own entry in the Request Inspector with the secret and token redacted.
+
 ## Screenshots
 
 <p align="center">
