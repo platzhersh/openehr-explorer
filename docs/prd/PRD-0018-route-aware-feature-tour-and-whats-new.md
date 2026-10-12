@@ -96,7 +96,7 @@ Each of the five tour-enabled views has a small circular compass icon button in 
 
 `src/lib/whats-new.ts` holds a hand-curated, newest-first list of release entries (version, date, short highlights). On launch, after the app version is fetched and any first-run analytics consent decision is resolved:
 - If `last_seen_version` is `null` (fresh install, or upgrading from a version predating this field), the current version is recorded as the baseline and nothing is shown — there's no "before" to compare to, and a brand-new user doesn't need historical release notes.
-- Otherwise, every entry newer than `last_seen_version` is shown in a modal (oldest of the new ones first), gated on the same `tours_enabled` toggle.
+- Otherwise, every entry newer than `last_seen_version` is shown in a modal (newest first), gated on the same `tours_enabled` toggle.
 - Dismissing the modal ("Got it") records the current app version as `last_seen_version`.
 - A highlight can optionally link to a tour (`tourId` + `routePath`), letting "What's New" hand off directly into a route-aware tour.
 

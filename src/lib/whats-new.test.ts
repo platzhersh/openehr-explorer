@@ -25,10 +25,10 @@ describe("getEntriesSince", () => {
     expect(getEntriesSince(null)).toHaveLength(WHATS_NEW.length);
   });
 
-  it("returns entries in chronological (oldest-first) order", () => {
+  it("returns entries in newest-first order", () => {
     const entries = getEntriesSince("0.0.0");
     for (let i = 1; i < entries.length; i++) {
-      expect(compareVersions(entries[i - 1].version, entries[i].version)).toBeLessThanOrEqual(0);
+      expect(compareVersions(entries[i - 1].version, entries[i].version)).toBeGreaterThanOrEqual(0);
     }
   });
 });
