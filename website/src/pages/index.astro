@@ -8,6 +8,7 @@ import DownloadButton from "../components/vue/DownloadButton.vue";
 import DownloadsSparkline from "../components/vue/DownloadsSparkline.vue";
 import ScreenshotGallery from "../components/vue/ScreenshotGallery.vue";
 import CodeBlock from "../components/vue/CodeBlock.vue";
+import { mentions } from "../data/mentions";
 
 // Root-relative, base-prefixed — see SiteHeader.astro for why a plain
 // relative path like "assets/..." or "docs.html" isn't safe here.
@@ -178,6 +179,28 @@ const screenshots = [
                   {c.logo ? <img src={`${BASE}${c.logo}`} alt={c.name} loading="lazy" /> : <span class="cdr-wordmark">{c.name}</span>}
                 </div>
                 <span class="cdr-name">{c.note ?? c.name}</span>
+              </Tag>
+            );
+          })
+        }
+      </div>
+    </section>
+
+    <section class="mentions" id="as-seen-in">
+      <h2 class="section-heading">As seen in</h2>
+      <div class="mention-grid">
+        {
+          mentions.map((m) => {
+            const Tag = m.url ? "a" : "div";
+            return (
+              <Tag
+                class:list={["mention-card", { "mention-pending": !m.url }]}
+                href={m.url}
+                target={m.url ? "_blank" : undefined}
+                rel={m.url ? "noopener noreferrer" : undefined}
+              >
+                <span class="mention-name">{m.name}</span>
+                <span class="mention-note">{m.note}</span>
               </Tag>
             );
           })
@@ -435,6 +458,50 @@ const screenshots = [
     color: var(--text-secondary);
     font-size: 0.9rem;
     text-align: center;
+  }
+
+  .mentions {
+    padding: 0 24px 80px;
+  }
+  .mention-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .mention-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 16px;
+    text-decoration: none;
+    transition: border-color 0.2s;
+  }
+  a.mention-card:hover {
+    border-color: var(--primary-dim);
+    text-decoration: none;
+  }
+  .mention-name {
+    color: var(--text);
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+  .mention-note {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+  }
+  .mention-pending {
+    border-style: dashed;
+  }
+  .mention-pending .mention-name,
+  .mention-pending .mention-note {
+    color: var(--text-muted);
   }
 
   .quickstart {

@@ -1,6 +1,7 @@
 ---
 // Rich multi-column footer used only by the landing page (index.astro).
 import Logo from "./Logo.astro";
+import { mentions } from "../data/mentions";
 
 // See SiteHeader.astro for why these need the base prefix.
 // import.meta.env.BASE_URL is the literal `base` config value, which
@@ -26,15 +27,17 @@ const BASE = import.meta.env.BASE_URL.replace(/\/*$/, "/");
           <a href={`${BASE}brand-kit.html`}>Brand Kit</a>
           <a href={`${BASE}privacy.html`}>Privacy</a>
           <a href="https://github.com/platzhersh/openehr-explorer" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a
-            href="https://discourse.openehr.org/t/openehr-explorer-a-cross-platform-desktop-cdr-browser-macos-windows-linux/17229"
-            target="_blank"
-            rel="noopener noreferrer">Announcement</a
-          >
+          {
+            mentions
+              .filter((m) => m.url && m.footerLabel)
+              .reverse()
+              .map((m) => (
+                <a href={m.url} target="_blank" rel="noopener noreferrer">
+                  {m.footerLabel}
+                </a>
+              ))
+          }
           <a href="https://discourse.openehr.org/" target="_blank" rel="noopener noreferrer">openEHR Discourse</a>
-          <a href="https://developer.openehr.org/tooling/query-tools/#openehr-explorer" target="_blank" rel="noopener noreferrer"
-            >openEHR Developer Tool Listing</a
-          >
         </nav>
       </div>
       <div class="footer-col">
