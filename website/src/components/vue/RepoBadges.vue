@@ -45,7 +45,7 @@ onMounted(() => {
       <span class="repo-badge-value">{{ format(downloads) }}</span>
     </a>
     <a v-if="stars !== null" class="repo-badge" :href="REPO_URL">
-      <span class="repo-badge-label">stars</span>
+      <span class="repo-badge-label">github stars</span>
       <span class="repo-badge-value">{{ format(stars) }}</span>
     </a>
   </p>
