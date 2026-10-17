@@ -5,6 +5,7 @@ import LandingFooter from "../components/LandingFooter.astro";
 import Logo from "../components/Logo.astro";
 import FeatureCard from "../components/FeatureCard.astro";
 import DownloadButton from "../components/vue/DownloadButton.vue";
+import RepoBadges from "../components/vue/RepoBadges.vue";
 import DownloadsSparkline from "../components/vue/DownloadsSparkline.vue";
 import ScreenshotGallery from "../components/vue/ScreenshotGallery.vue";
 import CodeBlock from "../components/vue/CodeBlock.vue";
@@ -129,14 +130,7 @@ const screenshots = [
         <a href="https://github.com/platzhersh/openehr-explorer" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">View on GitHub</a>
       </div>
       <p class="version-badge">v0.10.0 &middot; macOS &middot; Windows &middot; Linux &middot; <a href={`${BASE}docs.html#installation`}>Installation guide</a></p>
-      <p class="downloads-badge">
-        <a href="https://github.com/platzhersh/openehr-explorer/releases"
-          ><img src="https://img.shields.io/github/downloads/platzhersh/openehr-explorer/total" alt="Total downloads" /></a
-        >
-        <a href="https://github.com/platzhersh/openehr-explorer"
-          ><img src="https://img.shields.io/badge/GitHub-Star%20on%20GitHub-yellow?logo=github" alt="Star on GitHub" /></a
-        >
-      </p>
+      <RepoBadges client:load />
       <DownloadsSparkline client:load />
     </section>
 
@@ -332,13 +326,6 @@ const screenshots = [
     color: var(--text-muted);
     font-size: 0.9rem;
   }
-  .downloads-badge {
-    margin-top: 10px;
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-  }
-
   .preview-strip {
     padding: 0 24px 80px;
   }
