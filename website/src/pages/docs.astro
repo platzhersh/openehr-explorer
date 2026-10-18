@@ -59,7 +59,7 @@ const navGroups = [
     <main class="docs-content">
       <!-- Getting Started -->
       <section id="prerequisites">
-        <h2>Prerequisites</h2>
+        <h2><a class="heading-anchor" href="#prerequisites">Prerequisites</a></h2>
         <p>
           openEHR Explorer is a native desktop application. There are no runtime dependencies — you do not need Java, Docker, Node.js, or
           any other runtime installed to use it.
@@ -78,7 +78,7 @@ const navGroups = [
       </section>
 
       <section id="installation">
-        <h2>Installation</h2>
+        <h2><a class="heading-anchor" href="#installation">Installation</a></h2>
         <Callout title="Early Development">
           openEHR Explorer is currently in early development. Check <a href="https://github.com/platzhersh/openehr-explorer/releases"
             >GitHub Releases</a
@@ -158,7 +158,7 @@ const navGroups = [
       </section>
 
       <section id="first-connection">
-        <h2>First Connection</h2>
+        <h2><a class="heading-anchor" href="#first-connection">First Connection</a></h2>
         <p>After installing and launching the app, follow these steps to connect to your first openEHR CDR:</p>
         <ol>
           <li>Click <strong>Servers</strong> in the sidebar to open the Server Manager.</li>
@@ -181,7 +181,7 @@ const navGroups = [
       </section>
 
       <section id="sandbox">
-        <h2>Setting Up a Sandbox</h2>
+        <h2><a class="heading-anchor" href="#sandbox">Setting Up a Sandbox</a></h2>
         <p>
           No CDR of your own yet? You can try openEHR Explorer against a free sandbox. <strong>EHRBase</strong> and <strong>FerroEHR</strong> both offer a
           hosted public sandbox (nothing to install) and run locally in Docker, which makes them the easiest to set up. The <strong>Better Sandbox</strong> is
@@ -279,7 +279,7 @@ const navGroups = [
 
       <!-- Features -->
       <section id="overview-dashboard">
-        <h2>Overview Dashboard</h2>
+        <h2><a class="heading-anchor" href="#overview-dashboard">Overview Dashboard</a></h2>
         <p>
           The Overview tab is the app's landing view — it's where you land after connecting to a server, before diving into the EHR Browser,
           Templates, or AQL Runner.
@@ -293,7 +293,7 @@ const navGroups = [
       </section>
 
       <section id="server-manager">
-        <h2>Server Manager</h2>
+        <h2><a class="heading-anchor" href="#server-manager">Server Manager</a></h2>
         <p>The Server Manager lets you create, edit, and delete server profiles. Each profile stores a connection configuration for a specific openEHR CDR instance.</p>
         <ul>
           <li>Supports <strong>EHRBase</strong>, <strong>Better Platform</strong>, and generic openEHR REST servers.</li>
@@ -314,7 +314,7 @@ const navGroups = [
       </section>
 
       <section id="ehr-browser">
-        <h2>EHR Browser</h2>
+        <h2><a class="heading-anchor" href="#ehr-browser">EHR Browser</a></h2>
         <p>The EHR Browser displays a paginated list of all Electronic Health Records from the connected CDR.</p>
         <ul>
           <li>Click any EHR to expand it and see its compositions grouped by template.</li>
@@ -358,7 +358,7 @@ const navGroups = [
       </section>
 
       <section id="composition-viewer">
-        <h2>Composition Viewer</h2>
+        <h2><a class="heading-anchor" href="#composition-viewer">Composition Viewer</a></h2>
         <p>The Composition Viewer provides three synchronized views of any composition:</p>
         <ul>
           <li><strong>Pretty view:</strong> A structured tree rendering with human-readable archetype labels. Archetype node IDs like <code>at0006</code> are replaced with their display names (e.g., "Any Event").</li>
@@ -370,7 +370,7 @@ const navGroups = [
       </section>
 
       <section id="template-browser">
-        <h2>Template Browser</h2>
+        <h2><a class="heading-anchor" href="#template-browser">Template Browser</a></h2>
         <p>The Template Browser lists all templates uploaded to the connected CDR.</p>
         <ul>
           <li>Click a template to inspect its <strong>Web Template</strong> tree structure interactively.</li>
@@ -383,7 +383,7 @@ const navGroups = [
       </section>
 
       <section id="aql-runner">
-        <h2>AQL Runner</h2>
+        <h2><a class="heading-anchor" href="#aql-runner">AQL Runner</a></h2>
         <p>The AQL Runner is a query editor for the Archetype Query Language (AQL), the standard query language for openEHR data.</p>
         <ul>
           <li>Write AQL queries with <strong>syntax highlighting</strong> and intelligent autocomplete.</li>
@@ -433,7 +433,7 @@ const navGroups = [
       </section>
 
       <section id="flat-path-panel">
-        <h2>FLAT Path Panel</h2>
+        <h2><a class="heading-anchor" href="#flat-path-panel">FLAT Path Panel</a></h2>
         <p>The FLAT Path Panel is available in both the Composition Viewer and the Template Browser. It displays the full FLAT path for every node in the Web Template.</p>
         <ul>
           <li><strong>One-click copy:</strong> Click any path to copy it to your clipboard.</li>
@@ -445,7 +445,7 @@ const navGroups = [
       </section>
 
       <section id="request-inspector">
-        <h2>Request Inspector</h2>
+        <h2><a class="heading-anchor" href="#request-inspector">Request Inspector</a></h2>
         <p>The Request Inspector is a bottom drawer panel that captures every HTTP request openEHR Explorer makes to the connected CDR. It provides full visibility into the API conversation for debugging and learning.</p>
 
         <h3>Opening the Inspector</h3>
@@ -506,7 +506,7 @@ const navGroups = [
 
       <!-- Configuration -->
       <section id="server-profiles">
-        <h2>Server Profiles</h2>
+        <h2><a class="heading-anchor" href="#server-profiles">Server Profiles</a></h2>
         <p>Server profiles are stored locally on your machine:</p>
         <ul>
           <li><strong>Linux/macOS:</strong> <code>~/.config/openehr-explorer/profiles.json</code></li>
@@ -534,7 +534,7 @@ const navGroups = [
       </section>
 
       <section id="keyboard-shortcuts">
-        <h2>Keyboard Shortcuts</h2>
+        <h2><a class="heading-anchor" href="#keyboard-shortcuts">Keyboard Shortcuts</a></h2>
         <table>
           <thead>
             <tr><th>Shortcut</th><th>Action</th><th>Context</th></tr>
@@ -558,7 +558,7 @@ const navGroups = [
 
       <!-- Reference -->
       <section id="troubleshooting">
-        <h2>Troubleshooting</h2>
+        <h2><a class="heading-anchor" href="#troubleshooting">Troubleshooting</a></h2>
 
         <h3>"Connection refused"</h3>
         <p>Verify that your CDR is running and that the base URL in your server profile is correct. If using EHRBase locally, ensure the Docker container is started:</p>
@@ -585,7 +585,7 @@ const navGroups = [
       </section>
 
       <section id="changelog">
-        <h2>Changelog</h2>
+        <h2><a class="heading-anchor" href="#changelog">Changelog</a></h2>
 
         <h3>v0.10.0 &mdash; Custom API Paths &amp; Inspector Visibility</h3>
         <ul>
@@ -788,6 +788,24 @@ const navGroups = [
   }
   .docs-content h2:first-child {
     margin-top: 0;
+  }
+  .docs-content section {
+    scroll-margin-top: 80px;
+  }
+  .docs-content .heading-anchor {
+    color: inherit;
+    text-decoration: none;
+  }
+  .docs-content .heading-anchor::after {
+    content: "#";
+    margin-left: 0.4em;
+    color: var(--primary);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .docs-content .heading-anchor:hover::after,
+  .docs-content .heading-anchor:focus-visible::after {
+    opacity: 1;
   }
   .docs-content h3 {
     font-size: 1.3rem;
