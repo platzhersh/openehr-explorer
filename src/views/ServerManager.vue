@@ -119,6 +119,17 @@ function credentialBackendLabel(backend: string): string {
   }
 }
 
+const SANDBOX_DOCS_URL = "https://openehr-explorer.dev/docs.html#sandbox";
+
+// Opens the "Setting Up a Sandbox" docs section in the system browser.
+async function openSandboxDocs() {
+  try {
+    await openUrl(SANDBOX_DOCS_URL);
+  } catch (e) {
+    console.error("Could not open sandbox docs:", e);
+  }
+}
+
 // Opens a profile's full API root (base URL + prefix) in the system browser.
 async function openApiRoot(profile: ServerProfile) {
   try {
@@ -257,6 +268,10 @@ async function openApiRoot(profile: ServerProfile) {
         <div v-if="serverStore.profiles.length === 0" class="empty-state">
           <h3>No servers configured</h3>
           <p>Add a server profile to connect to an openEHR CDR.</p>
+          <p>
+            No CDR of your own yet? Try a free hosted sandbox &mdash; see{{ " " }}
+            <a :href="SANDBOX_DOCS_URL" @click.prevent="openSandboxDocs">Setting Up a Sandbox</a>.
+          </p>
         </div>
       </div>
     </div>
@@ -459,5 +474,12 @@ async function openApiRoot(profile: ServerProfile) {
 }
 .empty-state h3 {
   margin-bottom: 8px;
+}
+.empty-state a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.empty-state a:hover {
+  text-decoration: underline;
 }
 </style>
