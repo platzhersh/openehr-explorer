@@ -13,6 +13,7 @@ const navGroups = [
       { href: "#prerequisites", label: "Prerequisites" },
       { href: "#installation", label: "Installation" },
       { href: "#first-connection", label: "First Connection" },
+      { href: "#sandbox", label: "Setting Up a Sandbox" },
     ],
   },
   {
@@ -164,7 +165,7 @@ const navGroups = [
           <li>Click <strong>"+ Add Server"</strong>.</li>
           <li>Enter a display name (e.g., "Local EHRBase").</li>
           <li>Enter the base URL of your CDR (e.g., <code>http://localhost:8080/ehrbase</code>).</li>
-          <li>Select the server type: <strong>EHRBase</strong>, <strong>Better Platform</strong>, or <strong>Generic</strong>.</li>
+          <li>Select the server type: <strong>EHRBase</strong>, <strong>Better Platform</strong>, <strong>FerroEHR</strong>, or <strong>Generic</strong>.</li>
           <li>
             Choose an authentication method:
             <ul>
@@ -177,6 +178,103 @@ const navGroups = [
           <li>Click <strong>"Save"</strong>.</li>
         </ol>
         <p>The server now appears in the sidebar switcher at the top. Select it to start browsing EHRs, templates, and running queries.</p>
+      </section>
+
+      <section id="sandbox">
+        <h2>Setting Up a Sandbox</h2>
+        <p>
+          No CDR of your own yet? You can try openEHR Explorer against a free sandbox. <strong>EHRBase</strong> and <strong>FerroEHR</strong> both offer a
+          hosted public sandbox (nothing to install) and run locally in Docker, which makes them the easiest to set up. The <strong>Better Sandbox</strong> is
+          hosted too, but needs a manually copied Bearer token.
+        </p>
+        <Callout kind="warning" title="Public sandboxes: demo data only">
+          Never upload real patient data to a hosted sandbox. The servers are reset periodically, and on the EHRBase sandbox all users can see all uploaded data.
+        </Callout>
+
+        <h3>EHRBase Sandbox (hosted)</h3>
+        <p>
+          The <a href="https://sandkiste.ehrbase.org">EHRBase Sandbox</a> is a free public test server. Register on the sandbox portal to get a personal account,
+          then use those credentials with Basic auth:
+        </p>
+        <table>
+          <tbody>
+            <tr><td>Server type</td><td>EHRBase</td></tr>
+            <tr><td>Base URL</td><td><code>https://sandbox.ehrbase.org/ehrbase</code></td></tr>
+            <tr><td>Auth</td><td>Basic &mdash; your personal sandbox account</td></tr>
+          </tbody>
+        </table>
+        <p>The server is periodically reset and refilled with test data, so don't rely on anything you upload staying around.</p>
+
+        <h3>FerroEHR Sandbox (hosted)</h3>
+        <p>
+          The <a href="https://sandbox.ferroehr.eu">FerroEHR Sandbox</a> is a public demo instance with a single shared account (no personal registration):
+        </p>
+        <table>
+          <tbody>
+            <tr><td>Server type</td><td>FerroEHR</td></tr>
+            <tr><td>Base URL</td><td><code>https://sandbox.ferroehr.eu/ferroehr</code></td></tr>
+            <tr><td>Auth</td><td>Basic &mdash; <code>ferroehr</code> / <code>ferroehr</code></td></tr>
+          </tbody>
+        </table>
+        <p>Because everyone shares the account, data is demo-only and the instance is wiped nightly.</p>
+
+        <h3>EHRBase (local, Docker)</h3>
+        <p>Requires <a href="https://www.docker.com/get-started">Docker</a>. The repository ships a ready-made <code>docker-compose.yml</code> (EHRBase + PostgreSQL):</p>
+        <CodeBlock
+          client:load
+          segments={[
+            { cmd: "git clone https://github.com/platzhersh/openehr-explorer" },
+            { cmd: "cd openehr-explorer" },
+            { cmd: "docker-compose up -d" },
+          ]}
+        />
+        <p>EHRBase needs about a minute to start. Then add a server profile:</p>
+        <table>
+          <tbody>
+            <tr><td>Server type</td><td>EHRBase</td></tr>
+            <tr><td>Base URL</td><td><code>http://localhost:8080/ehrbase</code></td></tr>
+            <tr><td>Auth</td><td>Basic &mdash; <code>ehrbase-user</code> / <code>ehrbase-password</code></td></tr>
+            <tr><td>Admin auth (template upload)</td><td>Basic &mdash; <code>ehrbase-admin</code> / <code>ehrbase-admin-password</code></td></tr>
+          </tbody>
+        </table>
+        <p>See <a href="https://github.com/platzhersh/openehr-explorer/blob/main/LOCAL_TESTING.md">LOCAL_TESTING.md</a> for troubleshooting and resetting the environment.</p>
+
+        <h3>FerroEHR (local, Docker)</h3>
+        <p>
+          <a href="https://github.com/rubentalstra/FerroEHR">FerroEHR</a> publishes a compose file with each release. Download <code>docker-compose.yml</code> from the
+          <a href="https://github.com/rubentalstra/FerroEHR/releases">latest release</a> (Docker Compose 2.23.1 or later), then:
+        </p>
+        <CodeBlock client:load segments={[{ cmd: "docker compose up -d" }, { cmd: "curl http://localhost:8080/ferroehr/rest/status" }]} />
+        <table>
+          <tbody>
+            <tr><td>Server type</td><td>FerroEHR</td></tr>
+            <tr><td>Base URL</td><td><code>http://localhost:8080/ferroehr</code></td></tr>
+            <tr><td>Auth</td><td>Basic &mdash; <code>ferroehr</code> / <code>ferroehr</code></td></tr>
+          </tbody>
+        </table>
+        <Callout title="Development defaults">The release configuration ships a single development user. Replace these credentials before exposing the server beyond your machine.</Callout>
+
+        <h3>Better Sandbox (hosted)</h3>
+        <p>
+          A <a href="https://sandbox.better.care">Better Care Sandbox</a> account gives you a hosted Better Platform without any local setup. It has one catch:
+          the API only accepts <strong>Bearer tokens</strong>, not the username and password you use to log in.
+        </p>
+        <table>
+          <tbody>
+            <tr><td>Server type</td><td>Better Platform</td></tr>
+            <tr><td>Base URL</td><td><code>https://cloud.better.care/ehr</code></td></tr>
+            <tr><td>Auth</td><td>Bearer &mdash; token copied from your browser session (see below)</td></tr>
+          </tbody>
+        </table>
+        <p>To get a token:</p>
+        <ol>
+          <li>Log in to Better Studio in your browser and open the developer tools (<strong>Network</strong> tab).</li>
+          <li>Find a request to <code>cloud.better.care</code> and copy the <code>Authorization: Bearer …</code> value (right-click &rarr; <em>Copy as cURL</em> is handy).</li>
+          <li>Paste the token (without the <code>Bearer </code> prefix) into the profile's Bearer field and click <strong>Test Connection</strong>.</li>
+        </ol>
+        <Callout kind="warning" title="Tokens expire after 15 minutes">
+          Once the token expires, requests fail with <code>401 Unauthorized</code> and you need to paste a fresh one.
+        </Callout>
       </section>
 
       <!-- Features -->
