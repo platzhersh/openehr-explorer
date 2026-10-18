@@ -244,7 +244,7 @@ const navGroups = [
           <a href="https://github.com/rubentalstra/FerroEHR">FerroEHR</a> publishes a compose file with each release. Download <code>docker-compose.yml</code> from the
           <a href="https://github.com/rubentalstra/FerroEHR/releases">latest release</a> (Docker Compose 2.23.1 or later), then:
         </p>
-        <CodeBlock client:load segments={[{ cmd: "docker compose up" }, { cmd: "curl http://localhost:8080/ferroehr/rest/status" }]} />
+        <CodeBlock client:load segments={[{ cmd: "docker compose up -d" }, { cmd: "curl http://localhost:8080/ferroehr/rest/status" }]} />
         <table>
           <tbody>
             <tr><td>Server type</td><td>FerroEHR</td></tr>
