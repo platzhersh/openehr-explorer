@@ -136,9 +136,18 @@ export const Empty: Story = {
   parameters: {
     docs: {
       description: {
-        story: "No server profiles configured yet.",
+        story:
+          "No server profiles configured yet. The empty state links to the sandbox section of the docs so new users can try the app without their own CDR.",
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = await canvas.findByRole("link", { name: "Setting Up a Sandbox" });
+    await expect(link).toHaveAttribute("href", "https://openehr-explorer.dev/docs.html#sandbox");
+    OPENED_URLS.length = 0;
+    await userEvent.click(link);
+    await expect(OPENED_URLS).toEqual(["https://openehr-explorer.dev/docs.html#sandbox"]);
   },
 };
 
