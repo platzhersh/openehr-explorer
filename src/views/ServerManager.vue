@@ -10,6 +10,7 @@ import PlusIcon from "../components/PlusIcon.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 import LockIcon from "../components/LockIcon.vue";
+import KeyIcon from "../components/KeyIcon.vue";
 
 const serverStore = useServerStore();
 const analytics = useAnalytics();
@@ -108,6 +109,19 @@ function defaultTooltip(profile: ServerProfile): string {
     : "Preselect this server on app start";
 }
 
+/** Tooltip for the auth badge: how requests to this server authenticate. */
+function authTooltip(profile: ServerProfile): string {
+  const auth = profile.auth_method;
+  switch (auth.type) {
+    case "basic":
+      return `HTTP Basic authentication as "${auth.username}"`;
+    case "bearer":
+      return "Bearer token authentication (Authorization header)";
+    default:
+      return "No authentication — requests are sent without credentials";
+  }
+}
+
 function credentialBackendLabel(backend: string): string {
   switch (backend) {
     case "os_keychain":
@@ -156,7 +170,10 @@ async function openApiRoot(profile: ServerProfile) {
             <div class="profile-url">{{ profile.base_url }}</div>
             <div class="profile-meta">
               <span class="badge">{{ profile.server_type }}</span>
-              <span class="badge">{{ profile.auth_method.type }}</span>
+              <span class="badge auth-badge" :data-tooltip="authTooltip(profile)">
+                <KeyIcon />
+                {{ profile.auth_method.type }}
+              </span>
               <a
                 v-if="customApiPrefixLabel(profile.api_path_prefix)"
                 class="badge prefix-badge"
@@ -359,6 +376,9 @@ async function openApiRoot(profile: ServerProfile) {
 .prefix-badge[data-tooltip]:hover::after,
 .prefix-badge[data-tooltip]:focus-visible::after {
   transform: translateY(0);
+}
+.auth-badge {
+  gap: 5px;
 }
 .version-badge {
   background: var(--color-primary-dim);
