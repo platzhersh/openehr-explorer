@@ -162,7 +162,7 @@ not implement a CDR, and does not provide multi-user features.
 | Contain XSS from hostile server data | Input validation, escaped rendering, strict CSP, SRI | §8.1, ADR-0014, ADR-0016 |
 | Keep the UI maintainable | One Pinia store per domain; views compose reusable, Storybook-documented components | §5.3, ADR-0004 |
 | Consistent errors | Three-layer error handling (Rust → store → view) | §8.4, ADR-0005 |
-| Keep types honest across the IPC boundary | End-to-end type safety (Rust `serde` structs mirrored by TS interfaces) | ADR-0006 |
+| Keep types honest across the IPC boundary | Typed IPC with manually mirrored contracts (Rust `serde` structs and TS interfaces are separate declarations; no generation step) | ADR-0006 |
 | Large result sets stay responsive | Virtualized list rendering | ADR-0023 |
 | Trustworthy distribution | Tag-driven CI/CD, Tauri updater, code signing, VirusTotal scan | §7, ADR-0017/0019/0029 |
 
@@ -378,7 +378,7 @@ Details: [`RELEASING.md`](../../RELEASING.md).
 
 - **Credentials:** keychain-first storage, encrypted-file fallback, zeroization, never returned to the frontend, `Authorization`/`Cookie` redacted in the Inspector ([ADR-0015](../adr/ADR-0015-secure-credential-storage.md), [ADR-0011](../adr/ADR-0011-centralized-request-instrumentation.md)).
 - **Hostile server data:** treat CDR responses as untrusted; escape on render; validate user input ([ADR-0014](../adr/ADR-0014-xss-hardening-and-input-validation.md)).
-- **CSP + SRI:** CSP in `tauri.conf.json` limits script/style sources; CDN assets pinned with SRI ([ADR-0016](../adr/ADR-0016-csp-and-subresource-integrity.md)). `connect-src` permits arbitrary `http(s)` because users add arbitrary CDR URLs — mitigated because CDR traffic is made from Rust, not the webview.
+- **CSP + SRI:** CSP in `tauri.conf.json` limits script/style sources; CDN assets pinned with SRI ([ADR-0016](../adr/ADR-0016-csp-and-subresource-integrity.md)). `connect-src` permits arbitrary `http(s)` because users add arbitrary CDR URLs. CDR traffic is made from Rust, but the broad directive leaves a residual risk that compromised webview code could send requests to arbitrary destinations (see R3).
 - **Supply chain:** pinned dependencies + committed lockfiles, signed updater artifacts, code-signed Windows installer.
 - **Privacy:** analytics and crash reporting are opt-in, contain no PII ([ADR-0018](../adr/ADR-0018-aptabase-opt-in-usage-analytics.md)).
 
@@ -449,11 +449,11 @@ All decisions live in [`docs/adr/`](../adr/). Grouped by concern:
 | Concern | ADRs |
 |---|---|
 | Governance | 0001 PRD/ADR docs, 0007 pinned versions |
-| Frontend structure | 0002 medblocks-ui forms, 0003 dialog pattern for CRUD, 0004 store per domain, 0008 CDN medblocks-ui, 0012 CodeMirror AQL editor, 0021 JSON viewer, 0022 XML viewer, 0023 virtualized lists, 0025 codeblock copy |
+| Frontend structure | 0002 medblocks-ui forms, 0003 dialog pattern for CRUD, 0004 store per domain, 0008 CDN medblocks-ui, 0012 CodeMirror AQL editor, 0021 JSON viewer (`ADR-0021-harmonized-json-viewer-component`), 0022 XML viewer, 0023 virtualized lists, 0025 codeblock copy |
 | Backend / integration | 0005 error handling, 0006 end-to-end types, 0009 Location-header parsing, 0010 AQL-based listing, 0011 request instrumentation, 0013 OPT term-binding normalisation, 0020 contribution audit trail, 0027 EHR attribute AQL limits |
 | Security & privacy | 0014 XSS hardening, 0015 credential storage, 0016 CSP + SRI, 0018 opt-in analytics |
 | Delivery | 0017 Tauri updater, 0019 VirusTotal, 0029 SignPath signing |
-| Quality tooling | 0021 Storybook, 0028 contrast gate |
+| Quality tooling | 0021 Storybook (`ADR-0021-storybook-for-component-development`), 0028 contrast gate |
 | Website | 0024 Astro + Vue site, 0026 shared Storybook/website |
 
 ---
