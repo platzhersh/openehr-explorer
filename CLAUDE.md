@@ -180,6 +180,8 @@ This project uses **PRDs** (`docs/prd/`) and **ADRs** (`docs/adr/`) for governan
 - **PRD-XXXX-short-title.md**: Product requirements (what/why of features)
 - **ADR-XXXX-short-title.md**: Architecture decisions (technical choices, rationale, consequences)
 
+The overall architecture is documented in **[docs/architecture/README.md](docs/architecture/README.md)** (arc42); keep it in sync when building blocks, interfaces, or cross-cutting concepts change.
+
 When making significant architectural changes, create an ADR. When planning new features, reference or create a PRD.
 
 ## Commit & PR Conventions
