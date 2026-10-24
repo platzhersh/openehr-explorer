@@ -29,7 +29,13 @@ function handleClose() {
 </script>
 
 <template>
-  <div v-if="open" class="dialog-overlay" @click.self="handleClose">
+  <div
+    v-if="open"
+    class="dialog-overlay"
+    role="presentation"
+    @click.self="handleClose"
+    @keydown.esc="handleClose"
+  >
     <div class="dialog">
       <div class="dialog-header">
         <h2>Upload Template</h2>

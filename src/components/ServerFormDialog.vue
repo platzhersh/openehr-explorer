@@ -742,11 +742,11 @@ useEscapeKey(() => props.open, handleClose);
   border: 1px solid #fbbf24;
 }
 
-.input-error {
-  border-color: var(--color-error) !important;
+.form-group .input.input-error {
+  border-color: var(--color-error);
 }
-.input-warning {
-  border-color: #fbbf24 !important;
+.form-group .input.input-warning {
+  border-color: #fbbf24;
 }
 
 .dialog-actions {
