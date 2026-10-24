@@ -79,12 +79,12 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
     @close="handleClose"
   >
     <button type="button" class="lightbox-close" ref="closeBtn" aria-label="Close" @click="close">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" />
       </svg>
     </button>
     <button type="button" class="lightbox-nav lightbox-prev" aria-label="Previous screenshot" @click="show(currentIndex - 1, screenshots)">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="15 18 9 12 15 6" />
       </svg>
     </button>
@@ -94,7 +94,7 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
       <div class="lightbox-counter">{{ currentIndex + 1 }} / {{ screenshots.length }}</div>
     </figure>
     <button type="button" class="lightbox-nav lightbox-next" aria-label="Next screenshot" @click="show(currentIndex + 1, screenshots)">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="9 18 15 12 9 6" />
       </svg>
     </button>
