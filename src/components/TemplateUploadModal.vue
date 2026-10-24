@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from "vue";
+import { onBeforeUnmount, watch } from "vue";
 import { useTemplateUpload } from "../composables/useTemplateUpload";
 import TemplateUploadZone from "./TemplateUploadZone.vue";
 
@@ -19,12 +19,25 @@ const { dragOver, uploading, uploadStatus, uploadError, resetState, handleDrop, 
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) resetState();
+    if (isOpen) {
+      resetState();
+      window.addEventListener("keydown", handleKeydown);
+    } else {
+      window.removeEventListener("keydown", handleKeydown);
+    }
   },
+  { immediate: true },
 );
+
+onBeforeUnmount(() => window.removeEventListener("keydown", handleKeydown));
 
 function handleClose() {
   emit("close");
+}
+
+// Listen on window so Escape works even when focus is still on the opener.
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") handleClose();
 }
 </script>
 
@@ -34,7 +47,6 @@ function handleClose() {
     class="dialog-overlay"
     role="presentation"
     @click.self="handleClose"
-    @keydown.esc="handleClose"
   >
     <div class="dialog">
       <div class="dialog-header">
