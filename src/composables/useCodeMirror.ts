@@ -1,6 +1,6 @@
 import { ref, onMounted, onBeforeUnmount, watch, type Ref } from "vue";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, Prec, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { completionKeymap } from "@codemirror/autocomplete";
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from "@codemirror/language";
@@ -146,9 +146,18 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
     // Add custom keybindings
     const customKeys = [];
 
-    // Ctrl/Cmd+Enter for execute
+    // Ctrl+Enter and Cmd+Enter both execute. "Mod" alone maps to Cmd on macOS,
+    // so Ctrl+Enter must be bound explicitly there.
     if (options.onExecute) {
       const executeHandler = options.onExecute;
+      customKeys.push({
+        key: "Ctrl-Enter",
+        mac: "Ctrl-Enter",
+        run: () => {
+          executeHandler();
+          return true;
+        },
+      });
       customKeys.push({
         key: "Mod-Enter",
         run: () => {
@@ -171,7 +180,8 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
     }
 
     if (customKeys.length > 0) {
-      extensions.push(keymap.of(customKeys));
+      // Highest precedence: defaultKeymap binds Mod-Enter to insertBlankLine.
+      extensions.push(Prec.highest(keymap.of(customKeys)));
     }
 
     const state = EditorState.create({
