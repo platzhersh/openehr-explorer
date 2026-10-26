@@ -4,7 +4,7 @@ use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request};
+use super::server::{create_client, get_profile_by_id, make_request, ServerType};
 use crate::inspector::send_instrumented;
 
 #[tauri::command]
@@ -29,13 +29,35 @@ pub async fn get_template_example(
         urlencoding::encode(&template_id)
     );
 
-    let resp = send_instrumented(
+    let mut resp = send_instrumented(
         &app,
         &client,
         make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
             .header("Accept", "application/json"),
     )
     .await?;
+
+    // Better CDR doesn't implement the standard Definition API `/example`
+    // endpoint; it exposes it on its own API instead (`<host>/rest/v1/template/<id>/example`).
+    if resp.status == 404 && matches!(profile.server_type, ServerType::BetterPlatform) {
+        let better_url = format!(
+            "{}/rest/v1/template/{}/example",
+            profile.base_url.trim_end_matches('/'),
+            urlencoding::encode(&template_id)
+        );
+        resp = send_instrumented(
+            &app,
+            &client,
+            make_request(
+                &client,
+                reqwest::Method::GET,
+                &better_url,
+                &profile.auth_method,
+            )
+            .header("Accept", "application/json"),
+        )
+        .await?;
+    }
 
     if !resp.is_success {
         return Err(format!("Server returned HTTP {}", resp.status));
