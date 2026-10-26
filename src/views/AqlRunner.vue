@@ -6,6 +6,7 @@ import { useQueryStore, type SavedQuery, type StoredQuerySummary } from "../stor
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
 import { useVirtualList } from "../composables/useVirtualList";
+import { isMacPlatform } from "../lib/navShortcuts";
 import AqlEditor from "../components/AqlEditor.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import JsonViewer from "../components/JsonViewer.vue";
@@ -40,6 +41,9 @@ const isResizing = ref(false);
 // Template path index for Layer 3 completions
 const templatePaths = ref<Map<string, AqlPathEntry[]>>(new Map());
 const allTemplatePaths = ref<AqlPathEntry[]>([]);
+
+// Matches the editor's "Mod-Enter" binding: Cmd on macOS, Ctrl elsewhere.
+const runShortcut = isMacPlatform() ? "Cmd+Enter" : "Ctrl+Enter";
 
 // Reference to AqlEditor component
 const editorRef = ref<InstanceType<typeof AqlEditor> | null>(null);
@@ -443,7 +447,7 @@ const editorStyle = computed(() => ({
                 data-tour="aql-run"
                 @click="runQuery"
               >
-                Run (Ctrl+Enter)
+                Run ({{ runShortcut }})
               </button>
             </div>
           </div>
@@ -537,7 +541,7 @@ const editorStyle = computed(() => ({
 
           <div v-else class="empty-state">
             <h3>Run a query</h3>
-            <p>Write an AQL query above and press Ctrl+Enter to execute.</p>
+            <p>Write an AQL query above and press {{ runShortcut }} to execute.</p>
           </div>
         </div>
       </div>
