@@ -150,21 +150,12 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
     // so Ctrl+Enter must be bound explicitly there.
     if (options.onExecute) {
       const executeHandler = options.onExecute;
-      customKeys.push({
-        key: "Ctrl-Enter",
-        mac: "Ctrl-Enter",
-        run: () => {
-          executeHandler();
-          return true;
-        },
-      });
-      customKeys.push({
-        key: "Mod-Enter",
-        run: () => {
-          executeHandler();
-          return true;
-        },
-      });
+      const run = () => {
+        executeHandler();
+        return true;
+      };
+      customKeys.push({ key: "Ctrl-Enter", mac: "Ctrl-Enter", run });
+      customKeys.push({ key: "Mod-Enter", run });
     }
 
     // Shift+Alt+F for format (VS Code style)
