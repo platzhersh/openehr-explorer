@@ -146,16 +146,17 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
     // Add custom keybindings
     const customKeys = [];
 
-    // Ctrl+Enter and Cmd+Enter both execute. "Mod" alone maps to Cmd on macOS,
-    // so Ctrl+Enter must be bound explicitly there.
+    // Cmd+Enter on macOS, Ctrl+Enter elsewhere ("Mod"). Custom keys get highest
+    // precedence below because defaultKeymap binds Mod-Enter to insertBlankLine.
     if (options.onExecute) {
       const executeHandler = options.onExecute;
-      const run = () => {
-        executeHandler();
-        return true;
-      };
-      customKeys.push({ key: "Ctrl-Enter", mac: "Ctrl-Enter", run });
-      customKeys.push({ key: "Mod-Enter", run });
+      customKeys.push({
+        key: "Mod-Enter",
+        run: () => {
+          executeHandler();
+          return true;
+        },
+      });
     }
 
     // Shift+Alt+F for format (VS Code style)
@@ -171,7 +172,6 @@ export function useCodeMirror(container: Ref<HTMLElement | null>, options: UseCo
     }
 
     if (customKeys.length > 0) {
-      // Highest precedence: defaultKeymap binds Mod-Enter to insertBlankLine.
       extensions.push(Prec.highest(keymap.of(customKeys)));
     }
 
