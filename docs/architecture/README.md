@@ -101,7 +101,7 @@ The top quality goals, in priority order (details and scenarios in [section 10](
 ### 2.3 Conventions
 
 - Lint/format: `oxlint` / `oxfmt` (frontend), `cargo fmt` / `cargo clippy -D warnings` (Rust).
-- Type check with `tsc --runExternalCode` (TypeScript 7.1 + `@vue/content-mapper`); unit tests with Vitest (frontend) and `cargo test` (backend).
+- Type check with `tsc --runExternalCode` (TypeScript 7.1 + `@vue/content-mapper`, [ADR-0031](../adr/ADR-0031-typescript-7-content-mapper-type-checking.md)); unit tests with Vitest (frontend) and `cargo test` (backend).
 - Components documented in Storybook ([ADR-0021](../adr/ADR-0021-storybook-for-component-development.md)); WCAG AA colour contrast enforced ([ADR-0028](../adr/ADR-0028-color-contrast-gate.md)).
 - No text-glyph carets; use `CaretIcon` / `CollapsibleSection` (enforced by test).
 
