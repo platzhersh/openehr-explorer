@@ -101,7 +101,7 @@ The top quality goals, in priority order (details and scenarios in [section 10](
 ### 2.3 Conventions
 
 - Lint/format: `oxlint` / `oxfmt` (frontend), `cargo fmt` / `cargo clippy -D warnings` (Rust).
-- Type check with `vue-tsc`; unit tests with Vitest (frontend) and `cargo test` (backend).
+- Type check with `tsc --runExternalCode` (TypeScript 7.1 + `@vue/content-mapper`); unit tests with Vitest (frontend) and `cargo test` (backend).
 - Components documented in Storybook ([ADR-0021](../adr/ADR-0021-storybook-for-component-development.md)); WCAG AA colour contrast enforced ([ADR-0028](../adr/ADR-0028-color-contrast-gate.md)).
 - No text-glyph carets; use `CaretIcon` / `CollapsibleSection` (enforced by test).
 
@@ -347,7 +347,7 @@ a local EHRBase for development ([`LOCAL_TESTING.md`](../../LOCAL_TESTING.md)).
 
 ### 7.2 Build and release pipeline
 
-`ci.yml` runs frontend checks (lint, format, `vue-tsc`, Vitest, build, Storybook + contrast gate)
+`ci.yml` runs frontend checks (lint, format, `tsc`, Vitest, build, Storybook + contrast gate)
 and Rust checks (fmt, clippy `-D warnings`, tests) on every push/PR, plus a macOS build.
 Pushing a `v*` tag triggers:
 
@@ -434,7 +434,7 @@ keyboard navigation (`navShortcuts.ts`, PRD-0015), `aria-expanded` on disclosure
 | Frontend unit | Vitest (`*.test.ts` next to sources, e.g. `webtemplate`, `virtualList`, `contrast`) |
 | Component / visual | Storybook stories + axe-core contrast run in CI |
 | Backend unit | `cargo test` (credentials, URL building, parsing) |
-| Static | `vue-tsc`, oxlint, clippy |
+| Static | `tsc` (TS 7.1), oxlint, clippy |
 | Manual / integration | Local EHRBase via `docker-compose` |
 
 ### 8.10 Documentation

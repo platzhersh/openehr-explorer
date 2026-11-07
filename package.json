@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "vite",
     "dev:analytics": "bash scripts/dev-with-analytics.sh",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "tsc --runExternalCode && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "oxlint src/",
@@ -52,13 +52,16 @@
     "@storybook/vue3-vite": "10.6.6",
     "@tauri-apps/cli": "2.12.4",
     "@vitejs/plugin-vue": "6.0.10",
+    "@vue/content-mapper": "4.0.0-alpha.3",
     "oxfmt": "0.77.0",
     "oxlint": "1.92.0",
     "playwright": "1.65.0",
     "storybook": "10.6.6",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript": "7.1.0-beta",
     "vite": "8.3.6",
-    "vitest": "5.1.0",
-    "vue-tsc": "3.3.14"
+    "vitest": "5.1.0"
+  },
+  "overrides": {
+    "typescript": "7.1.0-beta"
   }
 }
