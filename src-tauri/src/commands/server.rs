@@ -293,12 +293,8 @@ fn store_auth_secrets(
         AuthMethod::Bearer { token } => {
             // Only update if a non-empty token was provided (empty = keep existing)
             if !token.is_empty() {
-                mgr.store_secret(
-                    profile_id,
-                    &format!("{prefix}token"),
-                    token.clone(),
-                    config_dir,
-                )?;
+                let token = normalize_bearer_token(token)?;
+                mgr.store_secret(profile_id, &format!("{prefix}token"), token, config_dir)?;
             }
             mgr.delete_secret(profile_id, &format!("{prefix}password"), config_dir)?;
         }
@@ -544,6 +540,25 @@ fn build_client(_profile: &ServerProfile) -> reqwest::Client {
         .unwrap_or_default()
 }
 
+/// Clean up a pasted bearer token and reject values that can never be a valid
+/// HTTP header value. Browser devtools truncate long headers with `…`, and
+/// users often copy the `Bearer ` prefix too; either breaks the request
+/// (servers answer with 400/500 "header value not allowed").
+fn normalize_bearer_token(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    let token = match trimmed.get(..7) {
+        Some(prefix) if prefix.eq_ignore_ascii_case("bearer ") => trimmed[7..].trim(),
+        _ => trimmed,
+    };
+    if token.contains('\u{2026}') || token.contains("...") {
+        return Err("The bearer token contains an ellipsis (… or ...): your browser's devtools truncated it. Copy the full value (e.g. right-click the header > Copy Value, or use the Network tab's \"Copy as cURL\").".to_string());
+    }
+    if token.chars().any(|c| !c.is_ascii_graphic()) {
+        return Err("The bearer token contains whitespace or non-ASCII characters and is not a valid token. Paste only the token itself.".to_string());
+    }
+    Ok(token.to_string())
+}
+
 fn build_request(
     client: &reqwest::Client,
     method: reqwest::Method,
@@ -707,6 +722,9 @@ pub async fn test_unsaved_connection(
     full.auth_method = keep_stored_secret(full.auth_method, |key| {
         mgr.load_secret(&profile_id, key, &config_dir)
     })?;
+    if let AuthMethod::Bearer { token } = &mut full.auth_method {
+        *token = normalize_bearer_token(token)?;
+    }
     let client = build_client(&full);
     let url = connection_test_url(&full);
 
@@ -876,6 +894,21 @@ fn parse_ferroehr_status_json(body: &str) -> Result<ServerVersionInfo, String> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn normalize_bearer_token_cleans_and_rejects() {
+        use super::normalize_bearer_token;
+        assert_eq!(
+            normalize_bearer_token("  Bearer abc.def.ghi \n").unwrap(),
+            "abc.def.ghi"
+        );
+        assert_eq!(normalize_bearer_token("abc.def").unwrap(), "abc.def");
+        assert!(normalize_bearer_token("abc\u{2026}def").is_err());
+        assert!(normalize_bearer_token("abc...def").is_err());
+        assert!(normalize_bearer_token("abc def").is_err());
+        assert!(normalize_bearer_token("abc\u{00e9}").is_err());
+    }
+
     use super::{
         connection_test_url, join_api_root, keep_stored_secret, normalize_api_path_prefix,
         to_public_profile, AuthMethod, ServerProfile, ServerProfileInput, ServerType,
