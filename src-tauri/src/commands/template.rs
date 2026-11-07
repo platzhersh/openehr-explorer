@@ -4,7 +4,9 @@ use quick_xml::reader::Reader;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request, ServerType};
+use super::server::{
+    create_client, get_profile_by_id, make_request, ServerType, DEFAULT_API_PATH_PREFIX,
+};
 use crate::inspector::send_instrumented;
 
 #[tauri::command]
@@ -43,7 +45,7 @@ pub async fn get_template_example(
         // `base_url` may itself already point at `/rest/openehr/v1` (empty
         // prefix), so strip that suffix from the API root to get the server root.
         let server_root = base
-            .strip_suffix("/rest/openehr/v1")
+            .strip_suffix(DEFAULT_API_PATH_PREFIX)
             .unwrap_or_else(|| profile.base_url.trim_end_matches('/'));
         let better_url = format!(
             "{}/rest/v1/template/{}/example",
