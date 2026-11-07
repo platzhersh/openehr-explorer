@@ -177,7 +177,9 @@ onMounted(async () => {
   color: var(--color-text-secondary);
   text-decoration: none;
   font-size: 13px;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 .nav-item:hover {
   background: var(--color-surface);
@@ -240,7 +242,9 @@ onMounted(async () => {
   border: none;
   cursor: pointer;
   border-radius: var(--radius);
-  transition: all 0.15s;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
 }
 .version-display:hover,
 .version-display:focus-visible {

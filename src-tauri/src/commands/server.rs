@@ -892,6 +892,34 @@ fn parse_ferroehr_status_json(body: &str) -> Result<ServerVersionInfo, String> {
     Ok(info)
 }
 
+// ---------------------------------------------------------------------------
+// Re-export helpers for other command modules
+// ---------------------------------------------------------------------------
+
+pub fn get_profile_by_id(id: &str) -> Result<ServerProfile, String> {
+    let config_dir = get_config_dir();
+    let mgr = cred_manager();
+    let stored = load_stored_profiles();
+    let sp = stored
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| format!("Server profile '{}' not found", id))?;
+    load_resolved_profile(mgr, &sp, &config_dir)
+}
+
+pub fn make_request(
+    client: &reqwest::Client,
+    method: reqwest::Method,
+    url: &str,
+    auth: &AuthMethod,
+) -> reqwest::RequestBuilder {
+    build_request(client, method, url, auth)
+}
+
+pub fn create_client(profile: &ServerProfile) -> reqwest::Client {
+    build_client(profile)
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1173,32 +1201,4 @@ mod tests {
     fn parse_ferroehr_status_json_rejects_invalid_json() {
         assert!(parse_ferroehr_status_json("not json").is_err());
     }
-}
-
-// ---------------------------------------------------------------------------
-// Re-export helpers for other command modules
-// ---------------------------------------------------------------------------
-
-pub fn get_profile_by_id(id: &str) -> Result<ServerProfile, String> {
-    let config_dir = get_config_dir();
-    let mgr = cred_manager();
-    let stored = load_stored_profiles();
-    let sp = stored
-        .into_iter()
-        .find(|p| p.id == id)
-        .ok_or_else(|| format!("Server profile '{}' not found", id))?;
-    load_resolved_profile(mgr, &sp, &config_dir)
-}
-
-pub fn make_request(
-    client: &reqwest::Client,
-    method: reqwest::Method,
-    url: &str,
-    auth: &AuthMethod,
-) -> reqwest::RequestBuilder {
-    build_request(client, method, url, auth)
-}
-
-pub fn create_client(profile: &ServerProfile) -> reqwest::Client {
-    build_client(profile)
 }

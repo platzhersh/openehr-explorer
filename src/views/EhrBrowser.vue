@@ -221,7 +221,7 @@ function selectStatusHistoryTab() {
     !statusVersionsLoaded.value &&
     !statusVersionsLoading.value
   ) {
-    fetchStatusVersions();
+    void fetchStatusVersions();
   }
 }
 
@@ -579,7 +579,7 @@ function selectContributionsTab() {
     !contributionRowsLoaded.value &&
     !contributionRowsLoading.value
   ) {
-    loadContributions();
+    void loadContributions();
   }
 }
 
@@ -763,7 +763,7 @@ watch(
     clearContributions();
     clearCompositionFilters();
     if (activeTab.value === "status" && ehrId.value && id) {
-      fetchStatusVersions();
+      void fetchStatusVersions();
     }
   },
   { immediate: true },
@@ -795,7 +795,7 @@ watch(ehrId, (id) => {
   clearContributions();
   clearCompositionFilters();
   if (activeTab.value === "status" && id && serverStore.activeServerId) {
-    fetchStatusVersions();
+    void fetchStatusVersions();
   }
 });
 
@@ -811,7 +811,7 @@ watch(
       !contributionRowsLoaded.value &&
       !contributionRowsLoading.value
     ) {
-      loadContributions();
+      void loadContributions();
     }
   },
 );

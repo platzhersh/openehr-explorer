@@ -95,7 +95,7 @@ async function loadTemplateDetail(serverId: string, templateId: string) {
     termBindings.value = bindings;
     resolvedBindingTerms.value = {};
     for (const binding of bindings) {
-      lookupCode(serverId, binding.terminology, binding.code).then((display) => {
+      void lookupCode(serverId, binding.terminology, binding.code).then((display) => {
         if (display && requestId === bindingsRequestId) {
           resolvedBindingTerms.value = {
             ...resolvedBindingTerms.value,
@@ -121,7 +121,7 @@ watch(
     // leaves that server's web template/OPT/bindings displayed (and, via
     // the download button, exportable) under the new server.
     if (selectedTemplateId.value) {
-      loadTemplateDetail(id, selectedTemplateId.value);
+      void loadTemplateDetail(id, selectedTemplateId.value);
     }
   },
   { immediate: true },
@@ -129,7 +129,7 @@ watch(
 
 watch(selectedTemplateId, (id) => {
   if (id && serverStore.activeServerId) {
-    loadTemplateDetail(serverStore.activeServerId, id);
+    void loadTemplateDetail(serverStore.activeServerId, id);
   } else {
     clearTemplateDetail();
   }

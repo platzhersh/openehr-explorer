@@ -213,7 +213,7 @@ onMounted(async () => {
 
   // Push the web template — and, in edit mode, the composition's existing
   // FLAT data — into the mb-auto-form element once it has mounted.
-  hydrateMbForm();
+  void hydrateMbForm();
 });
 
 async function loadCompositionForEdit(existingComposition: Record<string, unknown> | null) {
@@ -305,7 +305,7 @@ async function hydrateMbForm(attempt = 0) {
       console.warn("mb-auto-form did not mount in time; could not initialize the form");
       return;
     }
-    setTimeout(() => hydrateMbForm(attempt + 1), 100);
+    setTimeout(() => void hydrateMbForm(attempt + 1), 100);
     return;
   }
 
@@ -371,11 +371,11 @@ function shouldSkipMedblocksField(key: string): boolean {
   if (key.startsWith("ctx/")) return true;
   // Context-related fields medblocks exports alongside ctx/* (e.g.
   // "minimal/language|code" or "minimal/minimal:0/language|code")
-  if (key.match(/\/(language|territory|composer|encoding)\|/)) return true;
+  if (/\/(language|territory|composer|encoding)\|/.exec(key)) return true;
   // Name fields are metadata, not actual content — FLAT format omits them
   if (key.endsWith("/name")) return true;
   // Structural metadata at the event_series level
-  if (key.match(/event_series\/(duration|period)$/)) return true;
+  if (/event_series\/(duration|period)$/.exec(key)) return true;
   return false;
 }
 

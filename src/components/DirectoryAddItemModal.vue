@@ -295,7 +295,9 @@ useEscapeKey(() => props.open, handleClose);
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
 }
 .composition-row:hover {
   border-color: var(--color-primary-dim);
