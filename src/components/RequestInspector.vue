@@ -140,6 +140,14 @@ function isXmlResponse(entry: RequestLogEntry | null): boolean {
   return contentType.includes("application/xml") || contentType.includes("text/xml");
 }
 
+// Check if response is HTML (e.g. a proxy/servlet error page)
+function isHtmlResponse(entry: RequestLogEntry | null): boolean {
+  if (!entry) return false;
+  const contentType = (entry.response_headers["content-type"] || "").toLowerCase();
+  if (contentType.includes("text/html") || contentType.includes("application/xhtml")) return true;
+  return /^\s*<(!doctype\s+html|html[\s>])/i.test(entry.response_body || "");
+}
+
 const responseJson = computed(() =>
   selected.value ? tryParseJson(selected.value.response_body) : undefined,
 );
@@ -147,7 +155,9 @@ const requestJson = computed(() =>
   selected.value ? tryParseJson(selected.value.request_body) : undefined,
 );
 
-const isResponseXml = computed(() => isXmlResponse(selected.value));
+const isResponseHtml = computed(() => isHtmlResponse(selected.value));
+// XML and HTML share the markup viewer / "xml" tab.
+const isResponseXml = computed(() => isXmlResponse(selected.value) || isResponseHtml.value);
 
 const curlCommand = computed(() => (selected.value ? generateCurl(selected.value) : ""));
 
@@ -464,7 +474,7 @@ function doClear() {
                     :class="['tab-btn-sm', { active: bodyViewTab === 'xml' }]"
                     @click="bodyViewTab = 'xml'"
                   >
-                    XML
+                    {{ isResponseHtml ? "HTML" : "XML" }}
                   </button>
                   <button
                     :class="['tab-btn-sm', { active: bodyViewTab === 'raw' }]"
@@ -505,7 +515,7 @@ function doClear() {
 
                 <!-- XML View -->
                 <div v-else-if="bodyViewTab === 'xml'" class="xml-container">
-                  <XmlViewer :xml="selected.response_body || ''" />
+                  <XmlViewer :xml="selected.response_body || ''" :html="isResponseHtml" />
                 </div>
 
                 <!-- Raw View -->

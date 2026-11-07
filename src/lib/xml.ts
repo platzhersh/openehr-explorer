@@ -35,15 +35,42 @@ export interface XmlLine {
 // output). This is the fix for the namespaced-tag regression described in
 // OEH-35 — one of the two duplicated `highlightXml()` copies omitted `:`.
 const NAME = String.raw`[\w:.-]+`;
-const ATTR = String.raw`${NAME}\s*=\s*(?:"[^"]*"|'[^']*')`;
+// Attribute values may also be unquoted and attributes may be bare booleans
+// (`<input disabled>`), which only occur in HTML but are harmless to accept.
+const ATTR = String.raw`${NAME}(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>/=\x60]+))?`;
 const TAG = String.raw`<\/?${NAME}(?:\s+${ATTR})*\s*\/?>`;
-const SPECIAL_OR_TAG_RE = new RegExp(String.raw`(<\?[\s\S]*?\?>)|(<!--[\s\S]*?-->)|(${TAG})`, "g");
+const SPECIAL_OR_TAG_RE = new RegExp(
+  String.raw`(<\?[\s\S]*?\?>|<![A-Za-z][^>]*>)|(<!--[\s\S]*?-->)|(${TAG})`,
+  "g",
+);
 const TAG_PARTS_RE = new RegExp(String.raw`^(<\/?)(${NAME})([\s\S]*?)(\/?>)$`);
-const ATTR_RE = new RegExp(String.raw`(${NAME})(\s*=\s*)("[^"]*"|'[^']*')`, "g");
+const ATTR_RE = new RegExp(
+  String.raw`(${NAME})(?:(\s*=\s*)("[^"]*"|'[^']*'|[^\s"'<>/=\x60]+))?`,
+  "g",
+);
+
+// HTML elements that never have a closing tag, so they must not indent what follows.
+const HTML_VOID_ELEMENTS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
 
 interface TagGroup {
   openBracket: string; // "<" | "</"
   closeBracket: string; // ">" | "/>"
+  tagName: string;
 }
 
 interface TokenizedLine {
@@ -112,7 +139,7 @@ function tokenizeTag(tag: string, out: XmlToken[]): TagGroup {
   const parts = TAG_PARTS_RE.exec(tag);
   if (!parts) {
     out.push({ type: "text", text: tag });
-    return { openBracket: "", closeBracket: "" };
+    return { openBracket: "", closeBracket: "", tagName: "" };
   }
 
   const [, openBracket, tagName, attrsRaw, closeBracket] = parts;
@@ -126,11 +153,10 @@ function tokenizeTag(tag: string, out: XmlToken[]): TagGroup {
       out.push({ type: "punct", text: attrsRaw.slice(cursor, match.index) });
     }
     const [whole, name, eq, value] = match;
-    out.push(
-      { type: "attr-name", text: name },
-      { type: "punct", text: eq },
-      { type: "attr-value", text: value },
-    );
+    out.push({ type: "attr-name", text: name });
+    if (eq !== undefined && value !== undefined) {
+      out.push({ type: "punct", text: eq }, { type: "attr-value", text: value });
+    }
     cursor = match.index + whole.length;
   }
   if (cursor < attrsRaw.length) {
@@ -138,11 +164,15 @@ function tokenizeTag(tag: string, out: XmlToken[]): TagGroup {
   }
 
   out.push({ type: "bracket", text: closeBracket });
-  return { openBracket, closeBracket };
+  return { openBracket, closeBracket, tagName };
 }
 
-/** Pretty-prints and tokenizes raw XML into renderable, depth-tagged lines. */
-export function parseXmlLines(xml: string): XmlLine[] {
+/**
+ * Pretty-prints and tokenizes raw XML into renderable, depth-tagged lines.
+ * With `{ html: true }` the same tokenizer is used for HTML: void elements
+ * (`<meta>`, `<br>`, ...) don't indent following lines.
+ */
+export function parseXmlLines(xml: string, options: { html?: boolean } = {}): XmlLine[] {
   const tokenizedLines = splitIntoTokenizedLines(xml);
   const lines: XmlLine[] = [];
   let depth = 0;
@@ -155,7 +185,9 @@ export function parseXmlLines(xml: string): XmlLine[] {
     // line, or a bare declaration/comment line all leave depth unchanged.
     const single = tagGroups.length === 1 ? tagGroups[0] : null;
     const isPureClose = single?.openBracket === "</";
-    const isPureOpen = single?.openBracket === "<" && single?.closeBracket === ">";
+    const isVoid =
+      options.html === true && HTML_VOID_ELEMENTS.has(single?.tagName.toLowerCase() ?? "");
+    const isPureOpen = single?.openBracket === "<" && single?.closeBracket === ">" && !isVoid;
 
     if (isPureClose) depth = Math.max(0, depth - 1);
     lines.push({ depth, tokens });
