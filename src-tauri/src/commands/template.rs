@@ -42,11 +42,16 @@ pub async fn get_template_example(
     // Better CDR doesn't implement the standard Definition API `/example`
     // endpoint; it exposes it on its own API instead (`<host>/rest/v1/template/<id>/example`).
     if resp.status == 404 && matches!(profile.server_type, ServerType::BetterPlatform) {
-        // `base_url` may itself already point at `/rest/openehr/v1` (empty
-        // prefix), so strip that suffix from the API root to get the server root.
-        let server_root = base
-            .strip_suffix(DEFAULT_API_PATH_PREFIX)
-            .unwrap_or_else(|| profile.base_url.trim_end_matches('/'));
+        // Vendor endpoints hang off `base_url`. Only an empty prefix means
+        // `base_url` may itself already point at the API root, so strip that
+        // suffix then; a custom prefix keeps `base_url` as the root.
+        let base_url = profile.base_url.trim_end_matches('/');
+        let server_root = match profile.api_path_prefix.as_deref() {
+            Some(prefix) if !prefix.trim().trim_matches('/').is_empty() => base_url,
+            _ => base
+                .strip_suffix(DEFAULT_API_PATH_PREFIX)
+                .unwrap_or(base_url),
+        };
         let better_url = format!(
             "{}/rest/v1/template/{}/example",
             server_root,
