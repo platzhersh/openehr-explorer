@@ -299,15 +299,15 @@ fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let tag = e.name().as_ref().to_string();
                 current_tag = tag.clone();
 
                 if tag == "term_bindings" {
                     in_term_bindings = true;
                     // Extract terminology attribute
                     for attr in e.attributes().flatten() {
-                        if String::from_utf8_lossy(attr.key.as_ref()) == "terminology" {
-                            current_terminology = String::from_utf8_lossy(&attr.value).to_string();
+                        if attr.key.as_ref() == "terminology" {
+                            current_terminology = attr.value.to_string();
                         }
                     }
                 } else if in_term_bindings && tag == "items" {
@@ -316,19 +316,19 @@ fn parse_term_bindings(opt_xml: &str) -> Vec<TermBinding> {
                     current_node_id.clear();
                     // Extract code attribute if present
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                        let key = attr.key.as_ref().to_string();
                         if key == "code" {
-                            current_node_id = String::from_utf8_lossy(&attr.value).to_string();
+                            current_node_id = attr.value.to_string();
                         }
                     }
                 }
             }
             Ok(Event::Text(e)) if in_items && current_tag == "code_string" => {
-                let text = e.decode().unwrap_or_default();
+                let text = e.xml10_content();
                 current_code = unescape(&text).unwrap_or_default().into_owned();
             }
             Ok(Event::End(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let tag = e.name().as_ref().to_string();
                 if tag == "term_bindings" {
                     in_term_bindings = false;
                     current_terminology.clear();
