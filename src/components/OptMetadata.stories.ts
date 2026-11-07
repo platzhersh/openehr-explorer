@@ -58,7 +58,7 @@ const NO_DESCRIPTION_OPT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </template>`;
 
 export const Full: Story = {
-  args: { optXml: FULL_OPT_XML },
+  args: { optXml: FULL_OPT_XML, templateId: "vital_signs.v1" },
 };
 
 export const MinimalMetadata: Story = {
