@@ -64,7 +64,7 @@ cargo clippy -- -D warnings  # Clippy with warnings as errors (CI mode)
 ### Build
 ```bash
 npm run tauri build      # Build production app (creates DMG on macOS)
-npm run build            # Build frontend only (runs vue-tsc + vite build)
+npm run build            # Build frontend only (runs tsc + vite build)
 ```
 
 ### Storybook
@@ -82,7 +82,7 @@ Theme tokens live in `src/styles/tokens.css`; `src/lib/contrast.test.ts` enforce
 
 ### Type Checking
 ```bash
-npx vue-tsc --noEmit     # Type check Vue/TypeScript without emitting files
+npx tsc --runExternalCode  # Type check Vue/TypeScript (TS 7.1 + @vue/content-mapper; no vue-tsc)
 ```
 
 ### Rust Development
