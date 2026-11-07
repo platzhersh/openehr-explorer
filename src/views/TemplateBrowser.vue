@@ -589,7 +589,11 @@ onUnmounted(() => {
 
         <!-- Tree view -->
         <div v-if="activeTab === 'tree'" class="tree-view">
-          <OptMetadata v-if="templateStore.selectedOpt" :optXml="templateStore.selectedOpt" />
+          <OptMetadata
+            v-if="templateStore.selectedOpt"
+            :optXml="templateStore.selectedOpt"
+            :templateId="selectedTemplateId"
+          />
 
           <div class="info-banner">
             <svg

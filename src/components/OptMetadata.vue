@@ -21,6 +21,8 @@ interface OptMetadata {
 
 const props = defineProps<{
   optXml: string;
+  /** Template ID, shown as the first metadata row with a copy button. */
+  templateId?: string;
 }>();
 
 const metadataExpanded = ref(true);
@@ -225,6 +227,12 @@ const descriptionPreview = computed(() => {
         <template v-if="metadataExpanded">
           <!-- Primary Metadata -->
           <div class="metadata-section">
+            <div v-if="templateId" class="metadata-row">
+              <span class="metadata-label">Template ID:</span>
+              <span class="metadata-value template-id-value">{{ templateId }}</span>
+              <CopyButton :text="templateId" title="Copy template ID" />
+            </div>
+
             <div v-if="metadata.lifecycleStatePresent" class="metadata-row">
               <span class="metadata-label">Lifecycle:</span>
               <LifecycleBadge :value="metadata.lifecycleState" />
@@ -395,6 +403,12 @@ const descriptionPreview = computed(() => {
 
 .metadata-value {
   color: var(--color-text);
+}
+
+.template-id-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .author-link {
