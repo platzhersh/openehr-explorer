@@ -76,7 +76,10 @@ function buildPaths(pts: Coord[]) {
 const dateFormat = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 function formatDate(iso: string): string {
   const date = new Date(`${iso}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? iso : dateFormat.format(date);
+  // JS rolls impossible dates over (2026-02-30 becomes 2 March), so also
+  // require the parsed date to round-trip to the same calendar day.
+  const valid = !Number.isNaN(date.getTime()) && date.toISOString().startsWith(iso);
+  return valid ? dateFormat.format(date) : iso;
 }
 
 // The history file comes from a cross-origin fetch, not a schema this
