@@ -53,7 +53,7 @@ pub async fn get_template_example(
                 .unwrap_or(base_url),
         };
         let better_url = format!(
-            "{}/rest/v1/template/{}/example",
+            "{}/rest/v1/template/{}/example?format=FLAT&exampleFilter=INPUT",
             server_root,
             urlencoding::encode(&template_id)
         );

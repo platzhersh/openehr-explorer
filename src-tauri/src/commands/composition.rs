@@ -15,15 +15,25 @@ use crate::inspector::send_instrumented;
 /// variant: sending the spec-current media type gets rejected before it
 /// even reaches EHRBase's own validation logic (a generic framework-level
 /// 415), while the `.schema` variant is parsed and validated as expected.
-/// Better Platform and unspecified/generic servers keep the same `.schema`
-/// value this app has always sent them (unconfirmed either way, but
-/// unbroken until reported).
+/// Better Platform (verified against cloud.better.care) also rejects `.schema`
+/// with a 415 and lists `application/openehr.wt.flat+json` as accepted.
+/// Unspecified/generic servers keep the `.schema` value this app has always
+/// sent them (unconfirmed either way, but unbroken until reported).
 fn flat_composition_content_type(server_type: &ServerType) -> &'static str {
     match server_type {
-        ServerType::FerroEhr => "application/openehr.wt.flat+json",
-        ServerType::Ehrbase | ServerType::BetterPlatform | ServerType::Generic => {
-            "application/openehr.wt.flat.schema+json"
-        }
+        ServerType::FerroEhr | ServerType::BetterPlatform => "application/openehr.wt.flat+json",
+        ServerType::Ehrbase | ServerType::Generic => "application/openehr.wt.flat.schema+json",
+    }
+}
+
+/// Name of the header that carries the target template of a FLAT commit.
+/// Better's gateway only recognises the spelling `openEHR-TEMPLATE_ID`
+/// (underscore); with the spec's `openehr-template-id` it answers 400
+/// "Template id is missing". Other servers take the spec spelling.
+fn template_id_header(server_type: &ServerType) -> &'static str {
+    match server_type {
+        ServerType::BetterPlatform => "openEHR-TEMPLATE_ID",
+        _ => "openehr-template-id",
     }
 }
 
@@ -293,7 +303,7 @@ pub async fn create_composition(
             // this header; FerroEHR enforces that and rejects the request
             // with a 422 otherwise. EHRBase accepts it fine alongside the
             // `templateId` query parameter it additionally expects.
-            .header("openehr-template-id", &template_id)
+            .header(template_id_header(&profile.server_type), &template_id)
             .json(&composition_data),
     )
     .await?;
@@ -378,7 +388,7 @@ pub async fn update_composition(
             )
             .header("Accept", "application/json")
             // See create_composition — same Simplified-Format requirement.
-            .header("openehr-template-id", &template_id)
+            .header(template_id_header(&profile.server_type), &template_id)
             // Per the openEHR REST API spec, updating a COMPOSITION is an
             // optimistic-concurrency operation: the server requires If-Match
             // to name the preceding version being updated from (quoted, like
