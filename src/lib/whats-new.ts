@@ -27,6 +27,44 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.10.1",
+    date: "2026-11-07",
+    highlights: [
+      {
+        title: "Run queries with Cmd/Ctrl+Enter",
+        description:
+          "The AQL run shortcut now works reliably: Cmd+Enter on macOS, Ctrl+Enter on Windows and Linux.",
+        tourId: "aql",
+        routePath: "/aql",
+      },
+      {
+        title: "Better Platform example compositions",
+        description:
+          "Templates on Better Platform servers now fall back to Better's own example endpoint when the standard one isn't available.",
+        tourId: "templates",
+        routePath: "/templates",
+      },
+      {
+        title: "HTML responses highlighted in the Inspector",
+        description:
+          "The Request Inspector now syntax-highlights HTML responses, making error pages easier to read.",
+        tourId: "inspector",
+      },
+      {
+        title: "Clearer server list",
+        description:
+          "An empty server list now links to the sandbox setup guide, and the auth badge shows a key icon with a tooltip.",
+        tourId: "servers",
+        routePath: "/servers",
+      },
+      {
+        title: "Signed Windows installer",
+        description:
+          "The Windows installer is now Authenticode-signed, so SmartScreen warnings should be much less common.",
+      },
+    ],
+  },
+  {
     version: "0.10.0",
     date: "2026-10-09",
     highlights: [
