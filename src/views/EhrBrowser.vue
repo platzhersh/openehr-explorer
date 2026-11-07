@@ -221,7 +221,7 @@ function selectStatusHistoryTab() {
     !statusVersionsLoaded.value &&
     !statusVersionsLoading.value
   ) {
-    fetchStatusVersions();
+    void fetchStatusVersions();
   }
 }
 
@@ -579,7 +579,7 @@ function selectContributionsTab() {
     !contributionRowsLoaded.value &&
     !contributionRowsLoading.value
   ) {
-    loadContributions();
+    void loadContributions();
   }
 }
 
@@ -763,7 +763,7 @@ watch(
     clearContributions();
     clearCompositionFilters();
     if (activeTab.value === "status" && ehrId.value && id) {
-      fetchStatusVersions();
+      void fetchStatusVersions();
     }
   },
   { immediate: true },
@@ -795,7 +795,7 @@ watch(ehrId, (id) => {
   clearContributions();
   clearCompositionFilters();
   if (activeTab.value === "status" && id && serverStore.activeServerId) {
-    fetchStatusVersions();
+    void fetchStatusVersions();
   }
 });
 
@@ -811,7 +811,7 @@ watch(
       !contributionRowsLoaded.value &&
       !contributionRowsLoading.value
     ) {
-      loadContributions();
+      void loadContributions();
     }
   },
 );
@@ -2708,7 +2708,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 .filter-btn:hover {
   background: var(--color-border);
@@ -2941,7 +2943,9 @@ const ehrStatCards = computed<EhrStatCard[]>(() => [
   font: inherit;
   color: inherit;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
 }
 .stat-card:hover {
   border-color: var(--color-primary-dim);

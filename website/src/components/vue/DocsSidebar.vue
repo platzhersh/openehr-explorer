@@ -268,7 +268,10 @@ onBeforeUnmount(() => {
   text-decoration: none;
   font-size: 14px;
   border-left: 3px solid transparent;
-  transition: all 0.2s;
+  transition:
+    color 0.2s,
+    background-color 0.2s,
+    border-left-color 0.2s;
 }
 .sidebar-link:hover {
   color: var(--text);

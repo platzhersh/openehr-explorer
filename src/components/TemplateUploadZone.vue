@@ -45,7 +45,9 @@ const emit = defineEmits<{
   text-align: center;
   color: var(--color-text-muted);
   font-size: 13px;
-  transition: all 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
   display: flex;
   flex-direction: column;
   gap: 12px;

@@ -68,10 +68,6 @@ function buildPaths(pts: Coord[]) {
   return { line, area };
 }
 
-// The history file comes from a cross-origin fetch, not a schema this
-// component controls — a malformed entry (missing/non-numeric `total`)
-// would otherwise flow into Math.min/max as NaN and silently draw
-// nothing while still marking the sparkline "visible".
 // Snapshot dates are ISO (YYYY-MM-DD). Show them in the visitor's own
 // locale with a spelled-out month ("28 Aug 2026" / "Aug 28, 2026"), which
 // can't be misread as DD/MM vs MM/DD. Parsed and formatted in UTC so the
@@ -83,6 +79,10 @@ function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : dateFormat.format(date);
 }
 
+// The history file comes from a cross-origin fetch, not a schema this
+// component controls — a malformed entry (missing/non-numeric `total`)
+// would otherwise flow into Math.min/max as NaN and silently draw
+// nothing while still marking the sparkline "visible".
 function isWellFormedPoint(value: unknown): value is Point {
   const point = value as Partial<Point> | null;
   return typeof point?.date === "string" && Number.isFinite(point?.total);
@@ -100,7 +100,7 @@ function render(rawPoints: unknown[]) {
   areaPath.value = paths.area;
 
   const first = parsed[0];
-  const last = parsed[parsed.length - 1];
+  const last = parsed.at(-1) ?? first;
   description.value = `Total downloads grew from ${first.total} on ${formatDate(first.date)} to ${last.total} on ${formatDate(last.date)}.`;
   caption.value = `downloads since ${formatDate(first.date)}`;
   visible.value = true;

@@ -65,7 +65,11 @@ function valueTokens(value: unknown): Token[] {
   if (typeof value === "string") return [{ type: "string", text: JSON.stringify(value) }];
   // Functions/symbols/undefined shouldn't appear in JSON-sourced data, but
   // render something rather than crash if they do.
-  return [{ type: "null", text: String(value) }];
+  const text =
+    typeof value === "object"
+      ? JSON.stringify(value)
+      : String(value as bigint | symbol | undefined);
+  return [{ type: "null", text }];
 }
 
 // Recursively flattens `value` into a list of renderable "lines", each
@@ -209,7 +213,7 @@ const matchesByLine = computed(() => {
         from = found + term.length;
       }
       if (spans.length > 0) {
-        if (!lineMap) lineMap = new Map();
+        lineMap ??= new Map();
         lineMap.set(tokenIndex, spans);
       }
     });
