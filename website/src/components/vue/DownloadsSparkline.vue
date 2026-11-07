@@ -72,6 +72,17 @@ function buildPaths(pts: Coord[]) {
 // component controls — a malformed entry (missing/non-numeric `total`)
 // would otherwise flow into Math.min/max as NaN and silently draw
 // nothing while still marking the sparkline "visible".
+// Snapshot dates are ISO (YYYY-MM-DD). Show them in the visitor's own
+// locale with a spelled-out month ("28 Aug 2026" / "Aug 28, 2026"), which
+// can't be misread as DD/MM vs MM/DD. Parsed and formatted in UTC so the
+// day never shifts with the visitor's timezone; falls back to the raw
+// string if it isn't a valid date.
+const dateFormat = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+function formatDate(iso: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? iso : dateFormat.format(date);
+}
+
 function isWellFormedPoint(value: unknown): value is Point {
   const point = value as Partial<Point> | null;
   return typeof point?.date === "string" && Number.isFinite(point?.total);
@@ -90,8 +101,8 @@ function render(rawPoints: unknown[]) {
 
   const first = parsed[0];
   const last = parsed[parsed.length - 1];
-  description.value = `Total downloads grew from ${first.total} on ${first.date} to ${last.total} on ${last.date}.`;
-  caption.value = `since ${first.date}`;
+  description.value = `Total downloads grew from ${first.total} on ${formatDate(first.date)} to ${last.total} on ${formatDate(last.date)}.`;
+  caption.value = `downloads since ${formatDate(first.date)}`;
   visible.value = true;
 }
 
@@ -164,7 +175,7 @@ onMounted(() => {
       >
         <strong>{{ hovered.point.total.toLocaleString() }}</strong>
         <span aria-hidden="true">·</span>
-        <span>{{ hovered.point.date }}</span>
+        <span>{{ formatDate(hovered.point.date) }}</span>
       </output>
     </div>
     <span class="downloads-sparkline-caption">{{ caption }}</span>
