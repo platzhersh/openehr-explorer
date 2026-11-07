@@ -345,14 +345,14 @@ function existingProfileHasToken(): boolean {
 function existingProfileHasAdminPassword(): boolean {
   if (!editingExistingId.value) return false;
   const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
-  if (!existing || !existing.admin_auth_method) return false;
+  if (!existing?.admin_auth_method) return false;
   return existing.admin_auth_method.type === "basic" && existing.admin_auth_method.has_password;
 }
 
 function existingProfileHasAdminToken(): boolean {
   if (!editingExistingId.value) return false;
   const existing = serverStore.profiles.find((p) => p.id === editingExistingId.value);
-  if (!existing || !existing.admin_auth_method) return false;
+  if (!existing?.admin_auth_method) return false;
   return existing.admin_auth_method.type === "bearer" && existing.admin_auth_method.has_token;
 }
 

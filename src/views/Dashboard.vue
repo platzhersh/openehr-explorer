@@ -242,7 +242,9 @@ watch(
   border-radius: var(--radius);
   text-decoration: none;
   color: inherit;
-  transition: all 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
 }
 .stat-card:hover {
   border-color: var(--color-primary-dim);
@@ -287,7 +289,9 @@ watch(
   max-width: 560px;
   text-decoration: none;
   color: inherit;
-  transition: all 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
 }
 .server-info-card:hover {
   border-color: var(--color-primary-dim);

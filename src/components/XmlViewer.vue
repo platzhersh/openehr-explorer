@@ -81,7 +81,7 @@ const matchesByLine = computed(() => {
         from = found + term.length;
       }
       if (spans.length > 0) {
-        if (!lineMap) lineMap = new Map();
+        lineMap ??= new Map();
         lineMap.set(tokenIndex, spans);
       }
     });

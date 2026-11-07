@@ -68,7 +68,10 @@ defineEmits<{ click: [MouseEvent] }>();
   flex-shrink: 0;
   padding: 0;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    color 0.15s,
+    background-color 0.15s,
+    border-color 0.15s;
   color: var(--color-text-muted);
 }
 .search-icon-btn svg {
