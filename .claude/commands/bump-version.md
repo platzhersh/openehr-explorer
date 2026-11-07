@@ -14,7 +14,7 @@ Update the version string in all of the following files (these are the exact fil
 3. `src-tauri/Cargo.toml` — `[package]` → `version`
 4. `src-tauri/Cargo.lock` — the `[[package]]` entry for `name = "openehr-explorer"`
 5. `src-tauri/tauri.conf.json` — top-level `"version"`
-6. `website/src/pages/index.astro` — the `version-badge` paragraph (e.g. `<a href={`${BASE}docs.html#v0-4-0`}>v0.4.0</a> &middot; macOS …` — update both the link anchor and the text) **and** the JSON-LD `"softwareVersion"` field in the page's structured data (two separate spots in the same file)
+6. `website/src/pages/index.astro` — the `version-badge` paragraph (e.g. `v0.4.0 &middot; macOS …`) **and** the JSON-LD `"softwareVersion"` field in the page's structured data (two separate spots in the same file)
 7. `website/src/pages/docs.astro` — the Debian/AppImage install snippets (`openEHR.Explorer_<version>_amd64.deb`/`.AppImage`)
 8. `src-tauri/linux/dev.openehr_explorer.Explorer.metainfo.xml` — the screenshot URL is pinned to the release tag (`.../openehr-explorer/v<version>/website/public/assets/screenshots/01-ehr-browser.webp`); replace `v<old-version>` with `v$1`. The tag is created at the end of the bump, so the URL resolves only once the release is tagged; it ships inside the AppImage and is what AppImageHub shows as the listing screenshot.
 
@@ -39,7 +39,7 @@ Add a new changelog entry for `$1` in `website/src/pages/docs.astro`:
 
 1. Find the previous tag: `git describe --tags --abbrev=0` (before the tag for `$1` is created).
 2. Review what changed since that tag: `git log <previous-tag>..HEAD --oneline`. Read the underlying commits/PRs as needed to understand user-facing impact — don't just paraphrase commit subjects.
-3. Add a new `<h3 id="v<major>-<minor>-<patch>">v$1 — <short theme>` block (the id is the version with dots replaced by dashes, e.g. `v0-10-1`; the landing page version badge links to it) as the **first** entry under `<section id="changelog">` in `website/src/pages/docs.astro` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
+3. Add a new `<h3 id="v<major>-<minor>-<patch>">v$1 — <short theme>` block (the id is the version with dots replaced by dashes, e.g. `v0-10-1`, so each entry is linkable) as the **first** entry under `<section id="changelog">` in `website/src/pages/docs.astro` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
 4. Commit separately with this message:
 
   ```
