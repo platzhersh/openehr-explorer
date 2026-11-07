@@ -317,7 +317,6 @@ pub fn harden_file_permissions(_path: &std::path::Path) {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {

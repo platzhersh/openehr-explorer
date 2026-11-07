@@ -834,10 +834,10 @@ fn parse_version_xml(xml_body: &str) -> Result<ServerVersionInfo, String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                current_tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                current_tag = e.name().as_ref().to_string();
             }
             Ok(Event::Text(e)) => {
-                let text = e.decode().unwrap_or_default();
+                let text = e.xml10_content();
                 let text = unescape(&text).unwrap_or_default().into_owned();
                 match current_tag.as_str() {
                     "ehrbase_version" => {
