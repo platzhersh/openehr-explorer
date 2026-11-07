@@ -44,7 +44,7 @@ function legacyCopy(text: string): Promise<void> {
   textarea.select();
   let succeeded = false;
   try {
-    succeeded = document.execCommand("copy");
+    succeeded = document.execCommand("copy"); // NOSONAR: deprecated, but intentional fallback when the async Clipboard API is unavailable
   } finally {
     textarea.remove();
   }

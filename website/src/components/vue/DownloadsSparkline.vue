@@ -89,7 +89,7 @@ function render(rawPoints: unknown[]) {
   areaPath.value = paths.area;
 
   const first = parsed[0];
-  const last = parsed[parsed.length - 1];
+  const last = parsed.at(-1) ?? first;
   description.value = `Total downloads grew from ${first.total} on ${first.date} to ${last.total} on ${last.date}.`;
   caption.value = `since ${first.date}`;
   visible.value = true;
