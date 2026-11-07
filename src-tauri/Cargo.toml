@@ -35,6 +35,6 @@ quick-xml = "0.42.0"
 chrono = { version = "0.4.45", features = ["serde"] }
 keyring = { version = "3.6.3", features = ["sync-secret-service", "vendored"] }
 zeroize = { version = "1.9.1", features = ["derive"] }
-aes-gcm = "0.10.3"
+aes-gcm = "0.11.1"
 rand = "0.10.3"
 

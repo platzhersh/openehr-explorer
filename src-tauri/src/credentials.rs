@@ -1,6 +1,5 @@
-use aes_gcm::aead::rand_core::RngCore;
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::aead::{Aead, Generate, KeyInit, Nonce};
+use aes_gcm::{Aes256Gcm, Key};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -221,8 +220,7 @@ impl CredentialManager {
             }
         }
         // Generate a new 256-bit key
-        let mut key = vec![0u8; 32];
-        OsRng.fill_bytes(&mut key);
+        let key = Key::<Aes256Gcm>::generate().to_vec();
         fs::create_dir_all(config_dir).ok();
         fs::write(&key_path, &key).ok();
         // Set restrictive permissions
@@ -237,14 +235,12 @@ impl CredentialManager {
     fn encrypt(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, String> {
         let cipher =
             Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init error: {e}"))?;
-        let mut nonce_bytes = [0u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::<Aes256Gcm>::generate();
         let ciphertext = cipher
-            .encrypt(nonce, plaintext)
+            .encrypt(&nonce, plaintext)
             .map_err(|e| format!("Encryption error: {e}"))?;
         // Prepend nonce to ciphertext
-        let mut result = nonce_bytes.to_vec();
+        let mut result = nonce.to_vec();
         result.extend(ciphertext);
         Ok(result)
     }
@@ -255,9 +251,10 @@ impl CredentialManager {
         }
         let cipher =
             Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init error: {e}"))?;
-        let nonce = Nonce::from_slice(&data[..NONCE_SIZE]);
+        let nonce = Nonce::<Aes256Gcm>::try_from(&data[..NONCE_SIZE])
+            .map_err(|_| "Invalid nonce length".to_string())?;
         cipher
-            .decrypt(nonce, &data[NONCE_SIZE..])
+            .decrypt(&nonce, &data[NONCE_SIZE..])
             .map_err(|e| format!("Decryption error: {e}"))
     }
 
