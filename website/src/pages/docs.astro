@@ -587,7 +587,7 @@ const navGroups = [
       <section id="changelog">
         <h2><a class="heading-anchor" href="#changelog">Changelog</a></h2>
 
-        <h3>v0.10.1 &mdash; Better Templates, AQL Shortcut &amp; Inspector Polish</h3>
+        <h3 id="v0-10-1">v0.10.1 &mdash; Better Templates, AQL Shortcut &amp; Inspector Polish</h3>
         <ul>
           <li><strong>Better Platform Templates:</strong> Example compositions now fall back to Better&rsquo;s own example endpoint when the standard one isn&rsquo;t available</li>
           <li><strong>AQL Shortcut:</strong> The run-query shortcut now works as advertised &mdash; Cmd+Enter on macOS, Ctrl+Enter elsewhere</li>
@@ -596,7 +596,7 @@ const navGroups = [
           <li><strong>Docs:</strong> New sandbox setup guide, shareable permalinks on docs section headings, and an architecture overview</li>
         </ul>
 
-        <h3>v0.10.0 &mdash; Custom API Paths &amp; Inspector Visibility</h3>
+        <h3 id="v0-10-0">v0.10.0 &mdash; Custom API Paths &amp; Inspector Visibility</h3>
         <ul>
           <li><strong>Configurable API Path:</strong> Each server profile can now set its own openEHR REST API path prefix, so servers that don&rsquo;t expose <code>/rest/openehr/v1</code> work out of the box</li>
           <li><strong>Request Inspector:</strong> In-flight and failed requests now show up in the inspector, not just completed ones</li>
@@ -607,50 +607,50 @@ const navGroups = [
           <li><strong>Dialogs:</strong> Escape now closes dialogs even when focus stays on the button that opened them</li>
         </ul>
 
-        <h3>v0.9.7 &mdash; Crash Reporting &amp; Editor Polish</h3>
+        <h3 id="v0-9-7">v0.9.7 &mdash; Crash Reporting &amp; Editor Polish</h3>
         <ul>
           <li><strong>Opt-in Crash Reports:</strong> If you&rsquo;ve enabled anonymous usage analytics, crashes and unexpected errors are now reported too, helping us fix problems faster. Reports contain only a scrubbed code location and, for frontend errors, a bounded error type &mdash; never messages or data. Crash reports are only sent if you opt in; the single anonymous session-count ping sent per launch is unchanged</li>
           <li><strong>AQL Editor:</strong> Selected text in the query editor is now clearly visible</li>
           <li><strong>Linux Listing:</strong> The AppImage now ships with AppStream metadata and a screenshot for app store listings</li>
         </ul>
 
-        <h3>v0.9.6 &mdash; Navigation Shortcut Hints</h3>
+        <h3 id="v0-9-6">v0.9.6 &mdash; Navigation Shortcut Hints</h3>
         <ul>
           <li><strong>Shortcut Hints:</strong> Hold Cmd (macOS) or Ctrl (Windows/Linux) for a moment and the sidebar overlays each tab&rsquo;s keyboard shortcut</li>
           <li><strong>Synced Tab Shortcuts:</strong> Ctrl/Cmd+number shortcuts now always match the order of the tabs in the sidebar</li>
           <li><strong>Linux AppImage:</strong> The AppImage is now built on Ubuntu 22.04 for broader compatibility with older Linux distributions</li>
         </ul>
 
-        <h3>v0.9.5 &mdash; Linux AppImage Build Fix</h3>
+        <h3 id="v0-9-5">v0.9.5 &mdash; Linux AppImage Build Fix</h3>
         <ul>
           <li><strong>Linux AppImage:</strong> Release builds now repack the AppImage reliably, so the Wayland fix from v0.9.4 ships in the published AppImage</li>
         </ul>
 
-        <h3>v0.9.4 &mdash; Linux AppImage &amp; Template Panel Fixes</h3>
+        <h3 id="v0-9-4">v0.9.4 &mdash; Linux AppImage &amp; Template Panel Fixes</h3>
         <ul>
           <li><strong>Linux AppImage:</strong> The AppImage now launches reliably on Wayland systems by no longer bundling a conflicting libwayland, and its launcher is correctly executable</li>
           <li><strong>Template Panel Scrolling:</strong> The Template Browser panel no longer scrolls sideways after the full-path display change in v0.9.3</li>
         </ul>
 
-        <h3>v0.9.3 &mdash; Template Browser Path Fix</h3>
+        <h3 id="v0-9-3">v0.9.3 &mdash; Template Browser Path Fix</h3>
         <ul>
           <li><strong>Full Template Paths:</strong> Long paths in the Template Browser are no longer truncated early on wide screens, so the full path stays readable</li>
         </ul>
 
-        <h3>v0.9.2 &mdash; Accessibility &amp; AQL Editor Fixes</h3>
+        <h3 id="v0-9-2">v0.9.2 &mdash; Accessibility &amp; AQL Editor Fixes</h3>
         <ul>
           <li><strong>Accessible Contrast:</strong> Text colors throughout the app were raised to meet WCAG AA contrast, with an automated contrast check now gating every change</li>
           <li><strong>AQL Editor Persistence:</strong> The AQL editor now keeps your query when you navigate to another view and back</li>
           <li><strong>Linux AppImage:</strong> Fixed the AppImage icon symlink so the app displays correctly in Linux launchers and file managers</li>
         </ul>
 
-        <h3>v0.9.1 &mdash; Template Sorting &amp; Dashboard Polish</h3>
+        <h3 id="v0-9-1">v0.9.1 &mdash; Template Sorting &amp; Dashboard Polish</h3>
         <ul>
           <li><strong>Template List Sorting:</strong> The Template Browser can now sort templates by creation date, template ID, or concept, ascending or descending (newest first by default)</li>
           <li><strong>Dashboard Icons:</strong> The EHR, composition, and template count cards on the landing dashboard now carry icons for quicker scanning</li>
         </ul>
 
-        <h3>v0.9.0 &mdash; Terminology Browser, EHR History &amp; Directory Versioning</h3>
+        <h3 id="v0-9-0">v0.9.0 &mdash; Terminology Browser, EHR History &amp; Directory Versioning</h3>
         <ul>
           <li><strong>Terminology Browser:</strong> A new standalone Terminology Browser view lets you look up codes by system, with per-tab explanations, worked examples, and a guided product tour</li>
           <li><strong>EHR Status History &amp; Compositions Tabs:</strong> The EHR detail view now shows full EHR_STATUS version history and a dedicated Compositions tab, with contributions reconstructed for context</li>
@@ -662,7 +662,7 @@ const navGroups = [
           <li><strong>EHR Search Fix:</strong> Searching by EHR ID prefix now works as a proper post-filter instead of a broken AQL <code>LIKE</code></li>
         </ul>
 
-        <h3>v0.8.0 — DIRECTORY CRUD, Live Dashboard &amp; Template Tools</h3>
+        <h3 id="v0-8-0">v0.8.0 — DIRECTORY CRUD, Live Dashboard &amp; Template Tools</h3>
         <ul>
           <li><strong>DIRECTORY CRUD:</strong> Create, update, and delete DIRECTORY folder entries directly from the EHR browser, building on the read-only DIRECTORY viewer introduced in v0.7.0</li>
           <li><strong>Live Dashboard:</strong> A new landing dashboard shows live EHR, composition, and template counts pulled straight from the connected server</li>
@@ -675,7 +675,7 @@ const navGroups = [
           <li><strong>DIRECTORY Fix:</strong> Fixed <code>archetype_node_id</code> only being set on the root FOLDER instead of every FOLDER in the hierarchy</li>
         </ul>
 
-        <h3>v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
+        <h3 id="v0-7-0">v0.7.0 — Contribution Audit Trail, DIRECTORY &amp; Stored Queries</h3>
         <ul>
           <li><strong>Contribution Audit Trail:</strong> A new Contribution viewer shows every version, deletion, and audit-trail entry behind a composition, with links from the EHR and composition views for tracing who changed what and when</li>
           <li><strong>DIRECTORY Support:</strong> Browse and inspect the EHR's DIRECTORY (folder hierarchy) directly in the EHR browser, with a dedicated tree view</li>
@@ -686,32 +686,32 @@ const navGroups = [
           <li><strong>Sidebar Connection Status Fix:</strong> The server connection indicator now updates on every request instead of only after an explicit connection test</li>
         </ul>
 
-        <h3>v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
+        <h3 id="v0-6-0">v0.6.0 — FerroEHR Support &amp; Default Server Profile</h3>
         <ul>
           <li><strong>FerroEHR Support:</strong> Added <code>FerroEHR</code> as a recognized server type, including automatic version detection against its unauthenticated status endpoint</li>
           <li><strong>Default Server Profile:</strong> Server profiles can now be marked as the default, so it's preselected automatically on app start instead of requiring a manual switch every time</li>
           <li><strong>AQL Autocomplete Fix:</strong> Pressing Enter or Escape to accept or dismiss an AQL autocomplete suggestion now works correctly instead of inserting a newline or falling through to the editor</li>
         </ul>
 
-        <h3>v0.5.2 — AQL Editor Highlighting Fix</h3>
+        <h3 id="v0-5-2">v0.5.2 — AQL Editor Highlighting Fix</h3>
         <ul>
           <li><strong>AQL Syntax Highlighting:</strong> Fixed a regression from the previous release where standard SQL keywords (<code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, and others) stopped being highlighted in the AQL editor while openEHR-specific keywords were added</li>
         </ul>
 
-        <h3>v0.5.1 — Linux APT Repo &amp; AQL Editor Highlighting</h3>
+        <h3 id="v0-5-1">v0.5.1 — Linux APT Repo &amp; AQL Editor Highlighting</h3>
         <ul>
           <li><strong>APT Repository:</strong> Debian/Ubuntu users can now install and update via a signed <code>apt</code> repository, published automatically on every release alongside the existing <code>.deb</code> download</li>
           <li><strong>AQL Syntax Highlighting:</strong> The AQL editor now highlights openEHR-specific keywords (<code>CONTAINS</code>, <code>EHR</code>, <code>COMPOSITION</code>, <code>MATCHES</code>, <code>EXISTS</code>, and more) the same way it already highlighted standard SQL keywords</li>
           <li><strong>Landing Page Refresh:</strong> Real product screenshots and a demo clip replace the old hero mockup, with a fullscreen lightbox for browsing the screenshot gallery and OS-aware download button text</li>
         </ul>
 
-        <h3>v0.5.0 — Manual Update Checks</h3>
+        <h3 id="v0-5-0">v0.5.0 — Manual Update Checks</h3>
         <ul>
           <li><strong>Check for Updates:</strong> Added a &ldquo;Check for Updates&hellip;&rdquo; item to the native app menu (macOS app menu, Windows/Linux Help menu) that triggers the same check as the Settings page button</li>
           <li><strong>Update Download Fix:</strong> Fixed a crash that could occur while downloading and installing an update</li>
         </ul>
 
-        <h3>v0.4.3 — Windows Install &amp; Server Form Refresh</h3>
+        <h3 id="v0-4-3">v0.4.3 — Windows Install &amp; Server Form Refresh</h3>
         <ul>
           <li><strong>Windows Install via Scoop:</strong> <code>scoop install openehr-explorer</code> now works against the published Scoop bucket, auto-published on every release (winget support still planned)</li>
           <li><strong>Server Form Modal:</strong> Add/Edit Server now opens in a modal dialog instead of an inline panel, for a cleaner server management workflow</li>
@@ -719,26 +719,26 @@ const navGroups = [
           <li><strong>Troubleshooting:</strong> Documented the macOS Gatekeeper &ldquo;damaged&rdquo; workaround for unnotarized builds</li>
         </ul>
 
-        <h3>v0.4.2 — Signed Auto-Updates &amp; Homebrew</h3>
+        <h3 id="v0-4-2">v0.4.2 — Signed Auto-Updates &amp; Homebrew</h3>
         <ul>
           <li><strong>Working Auto-Update:</strong> The updater now signs releases with a real Tauri signing key, so in-place updates actually verify and install (previous versions shipped the updater unsigned)</li>
           <li><strong>Homebrew Cask:</strong> <code>brew install --cask platzhersh/openehr-explorer/openehr-explorer</code> is now published and auto-updated on every release</li>
           <li><strong>SEO basics:</strong> Sitemap, Open Graph/Twitter metadata, and Google Search Console verification for the product website</li>
         </ul>
 
-        <h3>v0.4.1 — Windows Icon Fix</h3>
+        <h3 id="v0-4-1">v0.4.1 — Windows Icon Fix</h3>
         <ul>
           <li><strong>App icon:</strong> Replaced the single-size Windows <code>.ico</code> with a multi-resolution icon so the app looks correct in the Start menu, taskbar, and title bar at all sizes</li>
         </ul>
 
-        <h3>v0.4.0 — Template Lifecycle &amp; OPT Readability</h3>
+        <h3 id="v0-4-0">v0.4.0 — Template Lifecycle &amp; OPT Readability</h3>
         <ul>
           <li><strong>Template Lifecycle Indicator:</strong> Templates now show a lifecycle badge (Published, Draft, etc.) with a contextual help popover explaining each state</li>
           <li><strong>Pretty-Printed OPT XML:</strong> The raw Operational Template XML view is now indented for readability</li>
           <li><strong>VirusTotal Scanning:</strong> Windows installers are automatically submitted to VirusTotal on tagged releases</li>
         </ul>
 
-        <h3>v0.3.0 — Auto-Update, Analytics &amp; Security Hardening</h3>
+        <h3 id="v0-3-0">v0.3.0 — Auto-Update, Analytics &amp; Security Hardening</h3>
         <ul>
           <li><strong>Auto-Update:</strong> Built-in updater checks GitHub Releases on startup and installs signed updates in-place (toggleable in Settings)</li>
           <li><strong>Secure Credential Storage:</strong> Server profile credentials are stored in the OS keychain, with an encrypted-file fallback when no keychain is available</li>
@@ -748,14 +748,14 @@ const navGroups = [
           <li><strong>Documentation Shortcut:</strong> New Documentation link in the sidebar with a keyboard shortcut for quick access</li>
         </ul>
 
-        <h3>v0.2.0 — EHR Browser Search &amp; Enhanced Features</h3>
+        <h3 id="v0-2-0">v0.2.0 — EHR Browser Search &amp; Enhanced Features</h3>
         <ul>
           <li><strong>EHR Browser Search:</strong> Server-side AQL-backed search with attribute filters (subject, namespace, system, modifiable, hasCompositions)</li>
           <li><strong>Server Version Detection:</strong> Auto-detect and display CDR version for EHRBase and Better Platform</li>
           <li><strong>Global Keyboard Shortcuts:</strong> Navigate with Cmd+1-6, open settings with Cmd+,, toggle inspector with Cmd+Shift+I</li>
         </ul>
 
-        <h3>v0.1.0 — Initial Release</h3>
+        <h3 id="v0-1-0">v0.1.0 — Initial Release</h3>
         <ul>
           <li><strong>EHR Browser:</strong> Paginated listing, create, delete EHRs</li>
           <li><strong>Composition Viewer:</strong> Pretty / JSON / FLAT views, path panel, version navigation</li>
@@ -798,7 +798,8 @@ const navGroups = [
   .docs-content h2:first-child {
     margin-top: 0;
   }
-  .docs-content section {
+  .docs-content section,
+  .docs-content h3[id] {
     scroll-margin-top: 80px;
   }
   .docs-content .heading-anchor {
@@ -898,7 +899,8 @@ const navGroups = [
     .docs-content {
       padding: 24px 16px;
     }
-    .docs-content section {
+    .docs-content section,
+    .docs-content h3[id] {
       scroll-margin-top: 175px;
     }
   }

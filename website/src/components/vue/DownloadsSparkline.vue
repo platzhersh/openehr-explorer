@@ -68,6 +68,20 @@ function buildPaths(pts: Coord[]) {
   return { line, area };
 }
 
+// Snapshot dates are ISO (YYYY-MM-DD). Show them in the visitor's own
+// locale with a spelled-out month ("28 Aug 2026" / "Aug 28, 2026"), which
+// can't be misread as DD/MM vs MM/DD. Parsed and formatted in UTC so the
+// day never shifts with the visitor's timezone; falls back to the raw
+// string if it isn't a valid date.
+const dateFormat = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+function formatDate(iso: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  // JS rolls impossible dates over (2026-02-30 becomes 2 March), so also
+  // require the parsed date to round-trip to the same calendar day.
+  const valid = !Number.isNaN(date.getTime()) && date.toISOString().startsWith(iso);
+  return valid ? dateFormat.format(date) : iso;
+}
+
 // The history file comes from a cross-origin fetch, not a schema this
 // component controls — a malformed entry (missing/non-numeric `total`)
 // would otherwise flow into Math.min/max as NaN and silently draw
@@ -90,8 +104,8 @@ function render(rawPoints: unknown[]) {
 
   const first = parsed[0];
   const last = parsed.at(-1) ?? first;
-  description.value = `Total downloads grew from ${first.total} on ${first.date} to ${last.total} on ${last.date}.`;
-  caption.value = `since ${first.date}`;
+  description.value = `Total downloads grew from ${first.total} on ${formatDate(first.date)} to ${last.total} on ${formatDate(last.date)}.`;
+  caption.value = `downloads since ${formatDate(first.date)}`;
   visible.value = true;
 }
 
@@ -164,7 +178,7 @@ onMounted(() => {
       >
         <strong>{{ hovered.point.total.toLocaleString() }}</strong>
         <span aria-hidden="true">·</span>
-        <span>{{ hovered.point.date }}</span>
+        <span>{{ formatDate(hovered.point.date) }}</span>
       </output>
     </div>
     <span class="downloads-sparkline-caption">{{ caption }}</span>
