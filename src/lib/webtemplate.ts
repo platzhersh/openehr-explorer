@@ -45,7 +45,7 @@ export function normalizeWebTemplate(
 ): Record<string, unknown> {
   if (!webTemplate) return webTemplate;
 
-  const normalized = { ...webTemplate };
+  const normalized = camelCaseKeys(webTemplate) as Record<string, unknown>;
   const tree = normalized.tree as Record<string, unknown> | undefined;
 
   if (tree) {
@@ -55,12 +55,56 @@ export function normalizeWebTemplate(
   return normalized;
 }
 
-function normalizeNode(node: Record<string, unknown>): Record<string, unknown> {
-  const normalized = { ...node };
+function humanizeId(id: unknown): string {
+  const text = typeof id === "string" ? id.replace(/_/g, " ").trim() : "";
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
+// Keys whose *values* are user-defined dictionaries (language codes,
+// terminology ids, annotation names): the key itself is camelCased but the
+// entries inside are left alone.
+const OPAQUE_DICTIONARIES = new Set([
+  "localizedNames",
+  "localizedDescriptions",
+  "termBindings",
+  "annotations",
+]);
+
+function camelCaseKey(key: string): string {
+  // Only plain snake_case identifiers; leave `|`-suffixes, ids, "en_US" etc. alone.
+  if (!/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(key)) return key;
+  return key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+}
+
+// Better's Web Template uses snake_case keys (`rm_type`, `in_context`,
+// `node_id`, `min_op`, ...) where EHRBase uses camelCase, which is what
+// medblocks-ui reads. Without this, medblocks sees no `rmType` and renders no
+// fields for the node.
+function camelCaseKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(camelCaseKeys);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const key = camelCaseKey(k);
+      out[key] = OPAQUE_DICTIONARIES.has(key) ? v : camelCaseKeys(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function normalizeNode(rawNode: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...rawNode };
 
   // Ensure 'inputs' property exists (medblocks-ui expects this on all nodes)
   if (!normalized.inputs) {
     normalized.inputs = [];
+  }
+
+  // Better's Web Templates omit `name` on structural nodes such as `context`
+  // and `category`; medblocks-ui renders that as the literal text "undefined".
+  if (!normalized.name) {
+    normalized.name = (normalized.localizedName as string | undefined) || humanizeId(normalized.id);
   }
 
   // Recursively normalize children
