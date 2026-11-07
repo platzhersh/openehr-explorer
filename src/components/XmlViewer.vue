@@ -27,12 +27,15 @@ const props = withDefaults(
     currentMatchIndex?: number;
     showLineNumbers?: boolean;
     showCopyButton?: boolean;
+    /** Treat the input as HTML (void elements, doctype) rather than strict XML. */
+    html?: boolean;
   }>(),
   {
     searchTerm: "",
     currentMatchIndex: 0,
     showLineNumbers: true,
     showCopyButton: true,
+    html: false,
   },
 );
 
@@ -40,7 +43,9 @@ const emit = defineEmits<{
   (e: "total-matches", count: number): void;
 }>();
 
-const lines = computed<XmlLine[]>(() => (props.xml ? parseXmlLines(props.xml) : []));
+const lines = computed<XmlLine[]>(() =>
+  props.xml ? parseXmlLines(props.xml, { html: props.html }) : [],
+);
 
 // Must match `.xv-line`'s fixed height in <style> below — row virtualization
 // assumes every line takes exactly this many px.

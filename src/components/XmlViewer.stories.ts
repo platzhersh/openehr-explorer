@@ -82,3 +82,31 @@ export const Empty: Story = {
     xml: "",
   },
 };
+
+// An HTML error page as returned by a servlet container / proxy: doctype,
+// void elements (`<meta>`) and unquoted/bare attributes.
+const SAMPLE_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=ISO-8859-1"/>
+<title>Error 500 The request was rejected because the header value is invalid</title>
+</head>
+<body>
+<h2>HTTP ERROR 500</h2>
+<table>
+<tr><th>URI:</th><td>/ehr/rest/openehr/v1</td></tr>
+<tr><th>STATUS:</th><td>500</td></tr>
+</table>
+<input type=checkbox checked>
+<hr>
+<a href="https://eclipse.dev/jetty/">Powered by Jetty</a>
+</body>
+</html>
+`;
+
+export const Html: Story = {
+  args: {
+    xml: SAMPLE_HTML,
+    html: true,
+  },
+};

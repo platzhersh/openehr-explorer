@@ -61,3 +61,24 @@ describe("parseXmlLines", () => {
     expect(xmlLinesToText(lines)).toBe("<a>\n  <b>text</b>\n</a>");
   });
 });
+
+describe("parseXmlLines (html mode)", () => {
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Oops</title></head><body><br><input disabled value=x></body></html>';
+
+  it("does not indent after void elements", () => {
+    const lines = parseXmlLines(html, { html: true });
+    expect(lines.map((l) => l.depth)).toEqual([0, 0, 1, 2, 2, 1, 1, 2, 2, 1, 0]);
+  });
+
+  it("tokenizes doctype, bare and unquoted attributes", () => {
+    const lines = parseXmlLines(html, { html: true });
+    expect(lines[0].tokens[0]).toEqual({ type: "decl", text: "<!DOCTYPE html>" });
+    const input = lines[8].tokens;
+    expect(input.filter((t) => t.type === "attr-name").map((t) => t.text)).toEqual([
+      "disabled",
+      "value",
+    ]);
+    expect(input.find((t) => t.type === "attr-value")?.text).toBe("x");
+  });
+});
