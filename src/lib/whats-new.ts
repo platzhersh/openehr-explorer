@@ -57,11 +57,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
         tourId: "servers",
         routePath: "/servers",
       },
-      {
-        title: "Signed Windows installer",
-        description:
-          "The Windows installer is now Authenticode-signed, so SmartScreen warnings should be much less common.",
-      },
     ],
   },
   {
