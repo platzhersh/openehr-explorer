@@ -38,7 +38,9 @@ rm -rf squashfs-root
 chmod -R u=rwX,go=rX squashfs-root
 
 echo "Removing bundled Wayland libraries:"
-find squashfs-root -name 'libwayland-*' -print -delete
+# Matches include non-empty doc directories (usr/share/doc/libwayland-*), which
+# `find -delete` refuses to remove; use rm -rf and -prune so we don't descend into them.
+find squashfs-root -name 'libwayland-*' -print -prune -exec rm -rf {} +
 
 curl --proto "=https" --tlsv1.2 -fsSL -o appimagetool \
   "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${ARCH_NAME}.AppImage"
