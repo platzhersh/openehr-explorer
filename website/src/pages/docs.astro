@@ -144,12 +144,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.10.1_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.10.2_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.10.1_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.10.1_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.10.2_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.10.2_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -586,6 +586,12 @@ const navGroups = [
 
       <section id="changelog">
         <h2><a class="heading-anchor" href="#changelog">Changelog</a></h2>
+
+        <h3 id="v0-10-2">v0.10.2 &mdash; Template ID Copy</h3>
+        <ul>
+          <li><strong>Template Metadata:</strong> The Template Browser now shows the template ID in Template Metadata, with a one-click copy button</li>
+          <li><strong>Docs:</strong> The changelog now has shareable version anchors, and download dates are shown in your locale</li>
+        </ul>
 
         <h3 id="v0-10-1">v0.10.1 &mdash; Better Templates, AQL Shortcut &amp; Inspector Polish</h3>
         <ul>
