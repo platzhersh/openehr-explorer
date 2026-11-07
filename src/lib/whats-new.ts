@@ -27,6 +27,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.10.2",
+    date: "2026-11-07",
+    highlights: [
+      {
+        title: "Copy a template's ID",
+        description:
+          "Template Metadata in the Template Browser now shows the template ID, with a copy button so you can paste it straight into a query or API call.",
+      },
+    ],
+  },
+  {
     version: "0.10.1",
     date: "2026-11-07",
     highlights: [
