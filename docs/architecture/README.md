@@ -395,6 +395,7 @@ All CDR traffic is observable via the event pipeline in §5.4. Any new CDR call
 - Build openEHR URLs from `profile.api_root()`; never hardcode `/rest/openehr/v1`.
 - Vendor-specific non-openEHR endpoints (e.g. EHRBase `/rest/admin`, `/rest/status`) hang off `base_url`.
 - Where the spec lacks an endpoint (EHR listing), use AQL ([ADR-0010](../adr/ADR-0010-aql-based-listing-for-ehr-and-composition.md)); know its limits ([ADR-0027](../adr/ADR-0027-ehr-level-attribute-aql-limitations.md)).
+- Vendor deviations (media types, header spellings, own endpoints, payload shape) live in small `server_type`-keyed functions or boundary normalisation, never in per-vendor views; spec endpoint first, vendor endpoint as fallback ([ADR-0030](../adr/ADR-0030-vendor-specific-api-handling.md)).
 - Version detection informs feature availability (PRD-0014).
 
 ### 8.4 Error handling
@@ -450,7 +451,7 @@ All decisions live in [`docs/adr/`](../adr/). Grouped by concern:
 |---|---|
 | Governance | 0001 PRD/ADR docs, 0007 pinned versions |
 | Frontend structure | 0002 medblocks-ui forms, 0003 dialog pattern for CRUD, 0004 store per domain, 0008 CDN medblocks-ui, 0012 CodeMirror AQL editor, 0021 JSON viewer (`ADR-0021-harmonized-json-viewer-component`), 0022 XML viewer, 0023 virtualized lists, 0025 codeblock copy |
-| Backend / integration | 0005 error handling, 0006 end-to-end types, 0009 Location-header parsing, 0010 AQL-based listing, 0011 request instrumentation, 0013 OPT term-binding normalisation, 0020 contribution audit trail, 0027 EHR attribute AQL limits |
+| Backend / integration | 0005 error handling, 0006 end-to-end types, 0009 Location-header parsing, 0010 AQL-based listing, 0011 request instrumentation, 0013 OPT term-binding normalisation, 0020 contribution audit trail, 0027 EHR attribute AQL limits, 0030 vendor-specific API handling |
 | Security & privacy | 0014 XSS hardening, 0015 credential storage, 0016 CSP + SRI, 0018 opt-in analytics |
 | Delivery | 0017 Tauri updater, 0019 VirusTotal, 0029 SignPath signing |
 | Quality tooling | 0021 Storybook (`ADR-0021-storybook-for-component-development`), 0028 contrast gate |
