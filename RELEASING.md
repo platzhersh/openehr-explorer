@@ -48,7 +48,14 @@ format (version + one-line theme, then a bullet list of user-facing
 highlights), based on reviewing what actually changed since the previous
 tag — not a raw commit-message dump.
 
-These stay two commits on purpose: the version bump is mechanical and
+**Comparison table check.** Reviews `website/src/pages/compare.astro` against
+the current releases of the other tools it lists, and against what this
+release changes in our own column. Updates any cells/footnotes that changed and
+bumps the "Last updated … reflects openEHR Explorer v…" line at the bottom of
+the page (even when no cells changed, so it records that the review happened).
+Lands as its own commit, since it's a judgment call, not a mechanical edit.
+
+The version bump and changelog stay separate commits on purpose: the version bump is mechanical and
 verifiable (`git diff --stat` against a known file count), while the
 changelog is a hand-written summary that needs judgment about what's
 user-facing and worth mentioning.
