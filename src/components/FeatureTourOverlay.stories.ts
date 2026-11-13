@@ -45,7 +45,8 @@ export const AppIntro: Story = {
       return { startTour: () => tour.start(APP_INTRO_TOUR_ID) };
     },
     template: `
-      <div style="display:flex;flex-direction:column;min-height:100vh;color:var(--color-text)">
+      <div class="story-chrome" style="display:flex;flex-direction:column;min-height:100vh;color:var(--color-text)">
+        <component :is="'style'">.story-chrome a { color: var(--color-primary); }</component>
         <header style="display:flex;gap:16px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--color-border)">
           <select data-tour="server-select" aria-label="Server"><option>Local EHRBase</option></select>
           <nav data-tour="nav-tabs" style="display:flex;gap:12px">

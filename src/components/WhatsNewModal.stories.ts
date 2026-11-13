@@ -40,7 +40,8 @@ export const Default: Story = {
       return { whatsNew };
     },
     template: `
-      <div style="padding:24px;color:var(--color-text)">
+      <div class="story-chrome" style="padding:24px;color:var(--color-text)">
+        <component :is="'style'">.story-chrome a { color: var(--color-primary); }</component>
         <button id="open-whats-new" type="button" class="btn btn-primary" @click="whatsNew.showLatest()">View What's New</button>
         <p><a href="#background-link">A background link that must not receive focus while the dialog is open</a></p>
         <input aria-label="Background input" placeholder="Background input" />
