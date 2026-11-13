@@ -14,9 +14,15 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useModalDialog } from "../composables/useModalDialog";
 
 const tourStore = useTourStore();
 const analytics = useAnalytics();
+
+// The tooltip is a native modal <dialog> (showModal): the browser makes the
+// rest of the page inert, traps Tab/Shift+Tab, and restores focus afterwards.
+const dialogRef = ref<HTMLDialogElement | null>(null);
+useModalDialog(dialogRef);
 
 const targetRect = ref<DOMRect | null>(null);
 const highlightStyle = ref<Record<string, string>>({});
@@ -139,12 +145,26 @@ function requestNext() {
   void tourStore.next();
 }
 
+// Escape is handled by the dialog's native `cancel` event, not here, so there
+// is exactly one Escape path. We prevent the default close and let the store
+// unmount the dialog, so skip tracking runs once.
+function handleCancel() {
+  requestSkip();
+}
+
+// Safety net: if the dialog is ever closed natively without going through
+// `cancel` (so without the tour ending), treat it as a skip rather than
+// leaving the tour active with no visible dialog.
+function handleClose() {
+  if (tourStore.activeTour) requestSkip();
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (!tourStore.activeTour) return;
-  if (e.key === "Escape") {
-    e.preventDefault();
-    requestSkip();
-  } else if (e.key === "ArrowRight" || e.key === "Enter") {
+  if (e.key === "ArrowRight" || e.key === "Enter") {
+    // Focus now lives on the dialog's buttons, where Enter already fires a
+    // click — don't also advance the tour a second time.
+    if (e.key === "Enter" && e.target instanceof Element && e.target.closest("button, a")) return;
     e.preventDefault();
     requestNext();
   } else if (e.key === "ArrowLeft") {
@@ -186,11 +206,12 @@ onUnmounted(() => {
     <div class="tour-backdrop"></div>
     <div class="tour-highlight" :style="highlightStyle"></div>
     <dialog
-      open
+      ref="dialogRef"
       class="tour-tooltip"
       :style="tooltipStyle"
-      aria-modal="true"
       aria-label="Feature tour"
+      @cancel.prevent="handleCancel"
+      @close="handleClose"
     >
       <div class="tour-tooltip-header">
         <span class="tour-step-count">
@@ -213,7 +234,7 @@ onUnmounted(() => {
           >
             Back
           </button>
-          <button class="btn btn-sm btn-primary" type="button" @click="requestNext">
+          <button class="btn btn-sm btn-primary" type="button" autofocus @click="requestNext">
             {{ tourStore.isLastStep ? "Done" : "Next" }}
           </button>
         </div>
@@ -253,6 +274,9 @@ onUnmounted(() => {
      color-scheme-based background/border) so it renders identically to
      the plain positioned div it replaces. */
   margin: 0;
+  /* `dialog:modal` UA styles pin inset-block to 0; reset so the inline
+     top/bottom/left from computeStyles() fully control placement. */
+  inset: auto;
   max-width: none;
   max-height: none;
   color: inherit;
@@ -262,6 +286,12 @@ onUnmounted(() => {
   border-radius: var(--radius);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   padding: 14px 16px 16px 16px;
+}
+
+/* The dim + spotlight come from .tour-backdrop/.tour-highlight; the native
+   backdrop only needs to exist to block interaction, not to draw anything. */
+.tour-tooltip::backdrop {
+  background: transparent;
 }
 
 .tour-tooltip-header {

@@ -5,10 +5,12 @@
  *
  * Styling mirrors `AnalyticsConsentDialog.vue` for visual consistency.
  */
+import { ref } from "vue";
 import { isNavigationFailure, NavigationFailureType, useRouter } from "vue-router";
 import { useWhatsNewStore } from "../stores/whatsNew";
 import { useTourStore } from "../stores/tour";
 import { useAnalytics } from "../composables/useAnalytics";
+import { useModalDialog } from "../composables/useModalDialog";
 
 const props = defineProps<{
   currentVersion: string;
@@ -19,7 +21,19 @@ const tourStore = useTourStore();
 const router = useRouter();
 const analytics = useAnalytics();
 
+// Native modal <dialog> (showModal): inert background, Tab trapping, and
+// focus restoration come from the browser + useModalDialog.
+const dialogRef = ref<HTMLDialogElement | null>(null);
+useModalDialog(dialogRef);
+
+// Single dismissal path: every way of closing (Escape → native cancel →
+// close, the "Got it" button, taking a tour) ends in the dialog's `close`
+// event, which is the only place the store is told.
 function close() {
+  dialogRef.value?.close();
+}
+
+function handleClosed() {
   void whatsNewStore.dismiss(props.currentVersion);
 }
 
@@ -43,57 +57,49 @@ async function takeTour(tourId: string, routePath?: string) {
 </script>
 
 <template>
-  <div class="dialog-overlay">
-    <dialog open class="dialog" aria-modal="true" aria-labelledby="whats-new-title">
-      <div class="dialog-header">
-        <h2 id="whats-new-title">What's New</h2>
-      </div>
+  <dialog ref="dialogRef" class="dialog" aria-labelledby="whats-new-title" @close="handleClosed">
+    <div class="dialog-header">
+      <h2 id="whats-new-title">What's New</h2>
+    </div>
 
-      <div class="dialog-body">
-        <div v-for="entry in whatsNewStore.entries" :key="entry.version" class="version-block">
-          <div class="version-heading">
-            <span class="version-badge">v{{ entry.version }}</span>
-            <span class="version-date">{{ entry.date }}</span>
-          </div>
-          <div v-for="highlight in entry.highlights" :key="highlight.title" class="highlight">
-            <div class="highlight-title">{{ highlight.title }}</div>
-            <p class="highlight-desc">{{ highlight.description }}</p>
-            <button
-              v-if="highlight.tourId"
-              type="button"
-              class="btn btn-sm take-tour-btn"
-              @click="takeTour(highlight.tourId, highlight.routePath)"
-            >
-              Take the tour →
-            </button>
-          </div>
+    <div class="dialog-body">
+      <div v-for="entry in whatsNewStore.entries" :key="entry.version" class="version-block">
+        <div class="version-heading">
+          <span class="version-badge">v{{ entry.version }}</span>
+          <span class="version-date">{{ entry.date }}</span>
+        </div>
+        <div v-for="highlight in entry.highlights" :key="highlight.title" class="highlight">
+          <div class="highlight-title">{{ highlight.title }}</div>
+          <p class="highlight-desc">{{ highlight.description }}</p>
+          <button
+            v-if="highlight.tourId"
+            type="button"
+            class="btn btn-sm take-tour-btn"
+            @click="takeTour(highlight.tourId, highlight.routePath)"
+          >
+            Take the tour →
+          </button>
         </div>
       </div>
+    </div>
 
-      <div class="dialog-footer">
-        <button type="button" class="btn btn-primary" @click="close">Got it</button>
-      </div>
-    </dialog>
-  </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn btn-primary" autofocus @click="close">Got it</button>
+    </div>
+  </dialog>
 </template>
 
 <style scoped>
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
+/* showModal() puts the dialog in the top layer, above FeatureTourOverlay and
+   everything else, and centres it (UA margin: auto) — no wrapper or z-index. */
+.dialog::backdrop {
   background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000; /* above FeatureTourOverlay */
 }
 
 .dialog {
-  /* Reset the <dialog> element's UA defaults — position: absolute would
-     otherwise pull it out of .dialog-overlay's flex-centering, and margin:
-     auto/color/border defaults would fight the ones below. */
-  position: static;
-  margin: 0;
+  /* The global reset zeroes margins, which would pin the top-layer dialog to
+     the corner — auto margins are what centre a modal <dialog>. */
+  margin: auto;
   color: inherit;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
