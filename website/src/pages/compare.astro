@@ -122,7 +122,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
 
       <div class="tool-card">
         <div class="tool-name">ehr-ctrl</div>
-        <div class="tool-type">Desktop app (Windows)<br />Free, newly discovered</div>
+        <div class="tool-type">Desktop app (free)<br />macOS &middot; Win &middot; Linux</div>
       </div>
     </div>
 
@@ -134,7 +134,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span><br /><span class="note">Docker Compose</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span><br /><span class="note">SaaS / hosted</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Native Windows app</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Native desktop app</span></div>
     </div>
 
     <div class="feature-row">
@@ -161,7 +161,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Env vars / manual</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not evidenced on site</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Multiple saved connections (1.4.3), no version detect evidenced</span></div>
     </div>
 
     <div class="feature-row">
@@ -170,7 +170,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br /><span class="note">Native</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not listed (EHRbase, FerroEHR, Custom)</span></div>
     </div>
 
     <div class="feature-row">
@@ -179,7 +179,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">EHRBase-focused</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Per-connection CDR type: EHRbase, FerroEHR, Custom (1.4.3)</span></div>
     </div>
 
     <div class="cat-title">EHR &amp; Composition Browsing</div>
@@ -256,6 +256,15 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not evidenced on site</span></div>
     </div>
 
+    <div class="feature-row">
+      <div class="feat-label">Create &amp; edit compositions</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Template-rendered form</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span><br /><span class="note">Upload JSON / XML / FLAT file</span></div>
+      <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Hand-built request body</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br /><span class="note">Form builder + renderer</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Guided REST forms, no rendered form evidenced</span></div>
+    </div>
+
     <div class="cat-title">Template Tooling</div>
 
     <div class="feature-row">
@@ -306,10 +315,19 @@ import SimpleFooter from "../components/SimpleFooter.astro";
     <div class="feature-row">
       <div class="feat-label">OPT XML pretty-printed view</div>
       <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Indented, syntax-highlighted</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br /><span class="note">Formatted OPT output</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br /><span class="note">Native response formatting</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
       <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Composition XML view, not OPT-specific</span></div>
+    </div>
+
+    <div class="feature-row">
+      <div class="feat-label">Terminology browser</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Standalone view, per-system lookup</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
+      <div class="cell" data-tool="Better Studio"><span class="yes">&#10003;</span><br /><span class="note">Terminology editor (Studio 3.16)</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="no">&#10007;</span><br /><span class="note">Not evidenced on site</span></div>
     </div>
 
     <div class="cat-title">AQL Query Interface</div>
@@ -367,7 +385,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <div class="cell" data-tool="openEHRTool"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Postman"><span class="yes">&#10003;</span><br /><span class="note">Native feature</span></div>
       <div class="cell" data-tool="Better Studio"><span class="no">&#10007;</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Request history/replay</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Request history/replay, cURL popup (1.4.3)</span></div>
     </div>
 
     <div class="feature-row">
@@ -429,34 +447,34 @@ import SimpleFooter from "../components/SimpleFooter.astro";
     <div class="feature-row">
       <div class="feat-label">EHR_STATUS view &amp; update</div>
       <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Flags editable, full version history</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br /><span class="note">Update + versioned retrieval via forms</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
       <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Explicit handling</span></div>
     </div>
 
     <div class="feature-row">
-      <div class="feat-label">DIRECTORY (folder hierarchy) operations</div>
-      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Browse, create/rename/delete, version history</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="feat-label">DIRECTORY (folder hierarchy) operations &sup3;</div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Full CRUD, version history, at-time view</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br /><span class="note">CRUD via JSON file upload</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br /><span class="note">Not seen in hands-on test</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Guided forms (per site)</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">CONTRIBUTION tracking / audit trail &sup3;</div>
-      <div class="cell ours" data-tool="Explorer"><span class="partial">&#9681;</span><br /><span class="note">View by UID + linked from version history &mdash; no list endpoint in the openEHR API</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Per-EHR Contributions tab, reconstructed from version histories</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="partial">&#9681;</span><br /><span class="note">Insert / retrieve by UID</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span><br /><span class="note">Not seen in hands-on test</span></div>
+      <div class="cell" data-tool="ehr-ctrl"><span class="partial">&#9681;</span><br /><span class="note">Guided REST forms (per site), no audit-trail list evidenced</span></div>
     </div>
 
     <div class="feature-row">
       <div class="feat-label">STORED_QUERY execution</div>
       <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">List, view &amp; execute with params</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br /><span class="note">List, versions, run</span></div>
       <div class="cell" data-tool="Postman"><span class="partial">&#9681;</span><br /><span class="note">Manual REST call</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
       <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span><br /><span class="note">Confirmed in-app, per-version granularity</span></div>
@@ -465,43 +483,34 @@ import SimpleFooter from "../components/SimpleFooter.astro";
     <div class="feature-row">
       <div class="feat-label">Landing dashboard (live EHR/composition/template counts)</div>
       <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Overview tab &mdash; live counts + server info, refreshable</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
+      <div class="cell" data-tool="openEHRTool"><span class="yes">&#10003;</span><br /><span class="note">Counts + charts</span></div>
       <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
       <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
       <div class="cell" data-tool="ehr-ctrl"><span class="yes">&#10003;</span></div>
-    </div>
-
-    <div class="feature-row">
-      <div class="feat-label">Terminology browser (code lookup)</div>
-      <div class="cell ours" data-tool="Explorer"><span class="yes">&#10003;</span><br /><span class="note">Standalone browser across terminology systems</span></div>
-      <div class="cell" data-tool="openEHRTool"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="Postman"><span class="no">&#10007;</span></div>
-      <div class="cell" data-tool="Better Studio"><span class="unknown">?</span></div>
-      <div class="cell" data-tool="ehr-ctrl"><span class="unknown">?</span></div>
     </div>
 
     <div class="score-section">
       <div class="score-row">
         <div class="score-label">Feature score</div>
         <div class="score-cell ours" data-tool="Explorer">
-          <span class="score-num primary">34</span>
-          <span class="score-denom">of 38</span>
+          <span class="score-num primary">35.5</span>
+          <span class="score-denom">of 39</span>
         </div>
         <div class="score-cell" data-tool="openEHRTool">
-          <span class="score-num">12.5</span>
-          <span class="score-denom">of 38</span>
+          <span class="score-num">18.5</span>
+          <span class="score-denom">of 39</span>
         </div>
         <div class="score-cell" data-tool="Postman">
-          <span class="score-num">15.5</span>
-          <span class="score-denom">of 38</span>
+          <span class="score-num">16</span>
+          <span class="score-denom">of 39</span>
         </div>
         <div class="score-cell" data-tool="Better Studio">
-          <span class="score-num">15</span>
-          <span class="score-denom">of 38</span>
+          <span class="score-num">17</span>
+          <span class="score-denom">of 39</span>
         </div>
         <div class="score-cell" data-tool="ehr-ctrl">
-          <span class="score-num">23</span>
-          <span class="score-denom">of 38</span>
+          <span class="score-num">26</span>
+          <span class="score-denom">of 39</span>
         </div>
       </div>
     </div>
@@ -518,12 +527,12 @@ import SimpleFooter from "../components/SimpleFooter.astro";
           <p>Every Web Template path, one click to copy. Eliminates the most common source of EHRBase integration errors.</p>
         </div>
         <div class="summary-item">
-          <strong>Zero-dependency install</strong>
-          <p>No Docker, no Python, no Node runtime. A native binary that opens in &lt; 2 seconds.</p>
+          <strong>Browsable audit trail</strong>
+          <p>A per-EHR Contributions tab, reconstructed from version histories &mdash; the openEHR REST API has no endpoint to list them.</p>
         </div>
         <div class="summary-item">
-          <strong>Multi-server profile switcher</strong>
-          <p>Local dev, staging, colleague's EHRBase &mdash; switch without restarting or editing config.</p>
+          <strong>Server profiles with version detection</strong>
+          <p>EHRBase, Better Platform, FerroEHR &mdash; each profile detects the CDR and its version, so you switch without editing config.</p>
         </div>
       </div>
     </div>
@@ -532,10 +541,9 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <p>&sup1; Resolves raw node IDs (at0006) to human-readable template labels ("Systolic"). No other tool does this.</p>
       <p>&sup2; One-click copy of every FLAT path from the Web Template tree &mdash; eliminates the #1 developer pain point when building compositions.</p>
       <p>
-        &sup3; DIRECTORY is fully supported: browse the folder tree, create, rename and delete folders, step through version history, and edit
-        entries as raw JSON. CONTRIBUTION support is partial: a contribution can be viewed by UID &mdash; entered directly, or reached from a
-        composition's or EHR_STATUS's version history &mdash; but the openEHR REST API has no endpoint to list all contributions for an EHR, so
-        there's no browsable list.
+        &sup3; DIRECTORY has full create/update/delete, version history and an at-time view. The openEHR REST API has no endpoint to list
+        all contributions for an EHR, so openEHR Explorer rebuilds the list from the composition, EHR_STATUS and DIRECTORY version histories;
+        other tools can only fetch a CONTRIBUTION by UID.
       </p>
       <p>
         &sup4; Per ehr-ctrl's v1.4.0 release notes (Aug 27, 2026, openEHR Discourse): the Template Viewer gained three scoped tree views
@@ -548,10 +556,11 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <p>
         Legend: &#10003; = 1 &middot; &#9681; = 0.5 &middot; &#10007; = 0 &middot; ? = not yet evaluated, scored as 0 pending verification &middot;
         openEHRTool v2: <a href="https://github.com/crs4/openEHRTool-v2">github.com/crs4/openEHRTool-v2</a> &middot; Better Studio: proprietary,
-        Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free Windows desktop client (ClaroTech,
-        v1.4.0) &mdash; most rows scored from its public marketing site (home + features pages) only, not hands-on testing; see &sup4; for the
+        Better Platform only &middot; ehr-ctrl: <a href="https://www.ehr-ctrl.info/">ehr-ctrl.info</a>, free desktop client for macOS, Windows and Linux (ClaroTech,
+        v1.4.3, Sep 2026) &mdash; most rows scored from its public marketing site (home + features pages) only, not hands-on testing; see &sup4; for the
         v1.4.0 rows scored from its release notes. Rows noted "Not evidenced on site" (keyboard shortcuts, one-click ID copy, self-hostable,
-        multi-server profiles) remain unconfirmed absences rather than verified ones.
+        version detection) remain unconfirmed absences rather than verified ones. openEHRTool v2 cells were checked against its source
+        (master, May 2026).
       </p>
       <p>Last updated November 2026 &middot; reflects openEHR Explorer v0.10.2.</p>
     </div>
