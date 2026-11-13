@@ -27,6 +27,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.10.3",
+    date: "2026-11-13",
+    highlights: [
+      {
+        title: "More accessible tours and What's New",
+        description:
+          "Feature tours and this What's New panel are now proper modal dialogs: keyboard focus stays inside, Escape closes them, and screen readers announce them correctly.",
+      },
+    ],
+  },
+  {
     version: "0.10.2",
     date: "2026-11-07",
     highlights: [
