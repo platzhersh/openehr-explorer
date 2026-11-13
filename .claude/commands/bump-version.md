@@ -69,3 +69,18 @@ Regenerate the landing page screenshots and hero video/gif so they reflect the a
 
 1. Run the `/generate-demo-assets` command (`both`) — it covers prerequisites (ffmpeg, gifsicle, Playwright's Chromium, a running `npm run dev`), regenerates `website/public/assets/screenshots/*.webp`, `demo.mp4`, `demo.gif`, and `demo.vtt`, and commits the result itself.
 2. Skip this step only if the user explicitly says not to regenerate assets for this bump.
+
+## Step 5: Comparison table check
+
+Keep the tool comparison on the website (`website/src/pages/compare.astro`) honest — competitors ship on their own schedules, and we may have just shipped something that changes our own column:
+
+1. Reuse the changelog from Step 2 to spot which of our rows are affected (features newly shipped in `$1` that a competitor column currently beats us on, or vice versa).
+2. Check the other tools' current releases (the page's footnotes name each tool and the version/date it was last verified against) for features added or dropped since. Prefer primary sources (release notes, repo, docs) over marketing pages, and follow the existing footnote convention for anything not verified hands-on.
+3. Update any changed cells and footnotes, and bump the `Last updated <Month Year> · reflects openEHR Explorer v<version>.` line at the bottom of the page to today's month and `$1`. Update that line even if no cells changed, since it records that the review happened.
+4. Commit separately with this message:
+
+  ```
+  docs(website): refresh comparison table for v$1
+  ```
+
+- Do NOT push or open a PR unless the user explicitly asks.
