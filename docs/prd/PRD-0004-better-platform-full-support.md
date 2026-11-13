@@ -2,10 +2,14 @@
 
 **Version:** 1.0
 **Date:** 2026-04-03
-**Status:** Draft
+**Status:** Partially superseded by [ADR-0030](../adr/ADR-0030-vendor-specific-api-handling.md)
 **Owner:** openEHR Explorer (standalone — openEHR ecosystem)
 **Repo slug:** `openehr-explorer`
 **Depends on:** PRD-0001 (Desktop CDR Browser), PRD-0002 (Composition & EHR CRUD)
+
+---
+
+> **Status note (2026-11-13):** The frontend `CdrAdapter` layer (Feature 2) is superseded by ADR-0030, which handles vendor differences by branching on `server_type` in the Rust commands. Shipped so far: the Better template-example fallback, FLAT media type and `openEHR-TEMPLATE_ID` header handling, snake_case Web Template support (all ADR-0030; manually verified against Better Platform, #284), and version detection (PRD-0014). Not implemented: server-type auto-detection (Feature 1), Better session auth (Feature 3), Better error parsing (Feature 4). The remaining sections are kept as originally written.
 
 ---
 
