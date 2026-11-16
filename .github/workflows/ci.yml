@@ -643,7 +643,7 @@ jobs:
             desc "Browse, query, and inspect any openEHR CDR"
             homepage "https://openehr-explorer.dev/"
 
-            depends_on macos: :catalina
+            depends_on macos: ">= :catalina"
 
             app "openEHR Explorer.app"
 
