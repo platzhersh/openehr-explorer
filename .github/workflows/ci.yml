@@ -584,6 +584,55 @@ jobs:
         with:
           files: latest.json
 
+      # VirusTotal link in the release notes (ADR-0019). crazy-max/ghaction-virustotal's
+      # `update_release_body` did not leave a link in the v0.10.3 release notes even
+      # though the scan succeeded, and several jobs write to the release concurrently.
+      # Doing it here, after every build job has finished, avoids that race. The link
+      # is the permanent per-hash report page, which is what the README tells users to
+      # look for. Idempotent, and never fails the release.
+      - name: Add VirusTotal link to release notes
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_JSON=$(gh api "/repos/${REPO}/releases/tags/${TAG_NAME}")
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+          BODY=$(echo "$RELEASE_JSON" | jq -r '.body // ""')
+
+          SECTION=""
+          for SUFFIX in "-setup.exe" ".msi"; do
+            ASSET=$(echo "$RELEASE_JSON" | jq -c --arg s "$SUFFIX" \
+              '[.assets[] | select(.name | endswith($s))][0] // empty')
+            [ -z "$ASSET" ] && continue
+            NAME=$(echo "$ASSET" | jq -r '.name')
+            SHA=$(echo "$ASSET" | jq -r '.digest // empty')
+            SHA="${SHA#sha256:}"
+            if [ -z "$SHA" ]; then
+              URL=$(echo "$ASSET" | jq -r '.browser_download_url')
+              SHA=$(curl -fsSL "$URL" | sha256sum | cut -d' ' -f1)
+            fi
+            LINK="https://www.virustotal.com/gui/file/${SHA}"
+            if echo "$BODY" | grep -q "$SHA"; then
+              echo "$NAME: link already present, skipping"
+              continue
+            fi
+            SECTION="${SECTION}- [${NAME}](${LINK}) (SHA-256 \`${SHA}\`)"$'\n'
+          done
+
+          if [ -z "$SECTION" ]; then
+            echo "Nothing to add"
+            exit 0
+          fi
+
+          NEW_BODY="${BODY}"$'\n\n'"### VirusTotal scan"$'\n\n'"${SECTION}"
+          gh api -X PATCH "/repos/${REPO}/releases/${RELEASE_ID}" -f body="$NEW_BODY" > /dev/null
+          echo "Release notes updated:"
+          echo "$SECTION"
+
   publish-homebrew-cask:
     name: Publish Homebrew Cask
     needs: [build-macos]
