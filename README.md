@@ -114,7 +114,7 @@ To check that your download is the genuine release:
    Get-FileHash ".\openEHR Explorer_<version>_x64-setup.exe" -Algorithm SHA256
    ```
 2. Open the VirusTotal link in the release notes (added automatically for each tagged release) or search for the hash on virustotal.com. A handful of generic detections against a large number of clean engines is expected.
-3. Check the installer's digital signature (right-click → Properties → Digital Signatures). Releases are signed via SignPath when signing is configured; see the [code signing policy](#code-signing-policy).
+3. Note that Windows installers are currently **not Authenticode-signed**, which is the main reason for these warnings. We are working on code signing (see the [code signing policy](#code-signing-policy)). The `.sig` files on the Releases page are updater signatures used by the in-app updater, not Windows code signatures.
 4. If you prefer, [build from source](#build); the repository is open.
 
 If SmartScreen shows "Windows protected your PC", click **More info → Run anyway**. If your antivirus quarantines the file, please report it as a false positive to the vendor and [open an issue](https://github.com/platzhersh/openehr-explorer/issues) with the vendor name and verdict.
@@ -173,6 +173,8 @@ See the full, always-up-to-date **[Tool Comparison](https://openehr-explorer.dev
 </a>
 
 ## Code signing policy
+
+> **Status:** Windows installers are currently unsigned. We have applied to the SignPath Foundation's open-source program, and the signing pipeline is prepared but not yet active. The policy below describes how signing will work once approved.
 
 Free code signing for Windows releases is provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
