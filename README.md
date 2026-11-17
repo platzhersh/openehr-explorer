@@ -103,6 +103,22 @@ chmod +x openehr-explorer_<version>_amd64.AppImage && ./openehr-explorer_<versio
 
 See the [installation docs](https://openehr-explorer.dev/docs.html#installation) for troubleshooting (unsigned builds, Gatekeeper/SmartScreen warnings).
 
+### Windows security warnings
+
+Windows SmartScreen or your antivirus may warn about, or block, the installer. A few engines on [VirusTotal](https://www.virustotal.com) occasionally flag it with generic or machine-learning verdicts such as `Generic ML PUA`, `Malicious` or `Trojan-Downloader.…Galirus`. These are **false positives** that Tauri/NSIS installers commonly trigger: the installer is a self-extracting package with a new SHA-256 and no reputation for each release, so heuristic engines may flag it. Sandbox runs of the installer show only normal installer behaviour (extracting files, creating shortcuts and uninstall registry entries) and no malicious network activity.
+
+To check that your download is the genuine release:
+
+1. Compare the file's SHA-256 with the digest GitHub shows next to the asset on the [Releases](https://github.com/platzhersh/openehr-explorer/releases/latest) page:
+   ```powershell
+   Get-FileHash ".\openEHR Explorer_<version>_x64-setup.exe" -Algorithm SHA256
+   ```
+2. Open the VirusTotal link in the release notes (added automatically for each tagged release) or search for the hash on virustotal.com. A handful of generic detections against a large number of clean engines is expected.
+3. Check the installer's digital signature (right-click → Properties → Digital Signatures). Releases are signed via SignPath when signing is configured; see the [code signing policy](#code-signing-policy).
+4. If you prefer, [build from source](#build); the repository is open.
+
+If SmartScreen shows "Windows protected your PC", click **More info → Run anyway**. If your antivirus quarantines the file, please report it as a false positive to the vendor and [open an issue](https://github.com/platzhersh/openehr-explorer/issues) with the vendor name and verdict.
+
 ## Prerequisites
 
 Only needed if you're building from source:
