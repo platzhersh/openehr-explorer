@@ -8,7 +8,11 @@
 //!         --run                 (execute the AQL query immediately)
 //!         --bench-scroll        (auto-scroll the AQL table, print frame stats, exit)
 
-use gpui::*;
+use gpui::{
+    div, point, px, rgb, size, uniform_list, App, Application, Bounds, AppContext, Context, Div, FontWeight, InteractiveElement,
+    IntoElement, ParentElement, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
+    TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
+};
 use std::ops::Range;
 use std::time::{Duration, Instant};
 

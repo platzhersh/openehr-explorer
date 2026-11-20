@@ -13,12 +13,12 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const median = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 function browserPid() {
-  const lines = execSync("ps -eo pid=,args=").toString().split("\n");
+  const lines = execSync("/bin/ps -eo pid=,args=").toString().split("\n");
   const l = lines.find((x) => /chrome-linux64\/chrome/.test(x) && !/--type=/.test(x) && !/ps -eo/.test(x));
   return Number(l.trim().split(/\s+/)[0]);
 }
 function descendants(root) {
-  const rows = execSync("ps -eo pid=,ppid=").toString().trim().split("\n").map((l) => l.trim().split(/\s+/).map(Number));
+  const rows = execSync("/bin/ps -eo pid=,ppid=").toString().trim().split("\n").map((l) => l.trim().split(/\s+/).map(Number));
   const kids = new Map();
   for (const [p, pp] of rows) (kids.get(pp) ?? kids.set(pp, []).get(pp)).push(p);
   const out = [root], q = [root];
@@ -81,7 +81,10 @@ const result = { startup: [], scenarios: {} };
 for (let i = 0; i < 5; i++) {
   const s = await open();
   const pids = descendants(browserPid());
-  if (i === 4) result.idle_pss_mb = +(pssKb(pids) / 1024).toFixed(1), result.idle_procs = pids.length;
+  if (i === 4) {
+    result.idle_pss_mb = +(pssKb(pids) / 1024).toFixed(1);
+    result.idle_procs = pids.length;
+  }
   result.startup.push({ browser_launch_ms: +s.tLaunch.toFixed(0), page_load_to_ui_ms: +s.tNav.toFixed(0) });
   await s.browser.close();
 }
@@ -143,7 +146,7 @@ async function scrollBench() {
     iv.sort((a, b) => a - b);
     const q = (p) => iv[Math.floor((iv.length - 1) * p)];
     const total = iv.reduce((a, b) => a + b, 0);
-    return { scrollable_px: max, frames: iv.length, avg_fps: +(iv.length / (total / 1000)).toFixed(1), frame_ms_p50: +q(0.5).toFixed(2), frame_ms_p95: +q(0.95).toFixed(2), frame_ms_max: +iv[iv.length - 1].toFixed(2) };
+    return { scrollable_px: max, frames: iv.length, avg_fps: +(iv.length / (total / 1000)).toFixed(1), frame_ms_p50: +q(0.5).toFixed(2), frame_ms_p95: +q(0.95).toFixed(2), frame_ms_max: +iv.at(-1).toFixed(2) };
   });
 }
 
