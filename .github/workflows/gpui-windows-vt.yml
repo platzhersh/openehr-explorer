@@ -10,13 +10,13 @@ name: GPUI Windows + VirusTotal (experiment)
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  actions: read
+permissions: {}
 
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -33,6 +33,8 @@ jobs:
   packaging-test:
     needs: build
     runs-on: windows-latest
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
