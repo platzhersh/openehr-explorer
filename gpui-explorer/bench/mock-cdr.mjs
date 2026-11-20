@@ -118,9 +118,16 @@ const STATUS_XML = '<?xml version="1.0" encoding="UTF-8"?><status><ehrbase_versi
 // MOCK_HTML=1: the templates endpoint answers with an HTML error page, like a proxy/servlet container would.
 const ERROR_HTML = '<!DOCTYPE html>\n<html lang="en">\n<head><title>Error 502</title><style>body{color:#333}</style></head>\n<body class="err" data-code="502">\n<!-- upstream down -->\n<h1>Bad Gateway</h1><p>The upstream server is <b>unavailable</b> &mdash; try again.</p>\n</body>\n</html>';
 
-function route(req, path, body) {
+// Opt-in non-JSON responses (see above); undefined when no switch applies.
+function altFormats(path) {
   if (process.env.MOCK_XML && path === "/rest/status") return [200, { __raw: STATUS_XML, type: "application/xml" }];
   if (process.env.MOCK_HTML && path === `${R}/definition/template/adl1.4`) return [502, { __raw: ERROR_HTML, type: "text/html" }];
+  return undefined;
+}
+
+function route(req, path, body) {
+  const alt = altFormats(path);
+  if (alt) return alt;
   if (path === "/rest/status") return [200, { ehrbase_version: "2.7.0", openehr_sdk_version: "2.19.0" }];
   if (path === `${R}/definition/template/adl1.4`) return [200, TEMPLATES];
   if (path.startsWith(`${R}/definition/template/adl1.4/`)) return [200, WEB_TEMPLATE(decodeURIComponent(path.split("/").pop()))];

@@ -272,21 +272,20 @@ pub fn markup_line(line: &str, st: &mut MarkupState) -> Runs {
     out
 }
 
-/// Re-indent markup that arrives minified (few lines): one element per line, text-only elements kept inline.
-pub fn format_markup(body: &str) -> Vec<String> {
-    if body.lines().count() > 3 {
-        return body.lines().map(str::to_string).collect();
-    }
-    // Split into tags and text.
+/// Split markup into (is_tag, text) parts; text parts are trimmed and blank ones dropped.
+fn split_markup(body: &str) -> Vec<(bool, String)> {
     let mut parts: Vec<(bool, String)> = Vec::new();
     let mut cur = String::new();
     let mut in_tag = false;
+    let mut flush_text = |cur: &mut String, parts: &mut Vec<(bool, String)>| {
+        if !cur.trim().is_empty() {
+            parts.push((false, cur.trim().to_string()));
+        }
+        cur.clear();
+    };
     for c in body.trim().chars() {
         if c == '<' && !in_tag {
-            if !cur.trim().is_empty() {
-                parts.push((false, cur.trim().to_string()));
-            }
-            cur.clear();
+            flush_text(&mut cur, &mut parts);
             in_tag = true;
         }
         cur.push(c);
@@ -296,36 +295,48 @@ pub fn format_markup(body: &str) -> Vec<String> {
             in_tag = false;
         }
     }
-    if !cur.trim().is_empty() {
-        parts.push((in_tag, cur.trim().to_string()));
+    flush_text(&mut cur, &mut parts);
+    parts
+}
+
+/// `<a>text</a>` and `<a></a>` stay on one line: returns the joined line and how many parts it consumed.
+fn inline_element(parts: &[(bool, String)], i: usize) -> Option<(String, usize)> {
+    let open = &parts[i].1;
+    match (parts.get(i + 1), parts.get(i + 2)) {
+        (Some((false, t)), Some((true, c))) if c.starts_with("</") => Some((format!("{open}{t}{c}"), 3)),
+        (Some((true, c)), _) if c.starts_with("</") => Some((format!("{open}{c}"), 2)),
+        _ => None,
     }
-    let is_open = |t: &str| !t.starts_with("</") && !t.starts_with("<?") && !t.starts_with("<!") && !t.ends_with("/>");
+}
+
+fn is_open_tag(t: &str) -> bool {
+    !t.starts_with("</") && !t.starts_with("<?") && !t.starts_with("<!") && !t.ends_with("/>")
+}
+
+/// Re-indent markup that arrives minified (few lines): one element per line, text-only elements kept inline.
+pub fn format_markup(body: &str) -> Vec<String> {
+    if body.lines().count() > 3 {
+        return body.lines().map(str::to_string).collect();
+    }
+    let parts = split_markup(body);
     let mut lines: Vec<String> = Vec::new();
     let mut depth = 0usize;
     let mut i = 0;
     while i < parts.len() {
-        let (tag, text) = &parts[i];
+        let (is_tag, text) = &parts[i];
+        if *is_tag && text.starts_with("</") {
+            depth = depth.saturating_sub(1);
+        }
         let pad = "  ".repeat(depth);
-        if *tag && is_open(text) {
-            // <a>text</a> or <a></a> stays on one line.
-            let inline_close = match (parts.get(i + 1), parts.get(i + 2)) {
-                (Some((false, t)), Some((true, c))) if c.starts_with("</") => Some(format!("{text}{t}{c}")),
-                (Some((true, c)), _) if c.starts_with("</") => Some(format!("{text}{c}")),
-                _ => None,
-            };
-            if let Some(l) = inline_close {
-                lines.push(format!("{pad}{l}"));
-                i += if matches!(parts.get(i + 1), Some((false, _))) { 3 } else { 2 };
+        if *is_tag && is_open_tag(text) {
+            if let Some((line, used)) = inline_element(&parts, i) {
+                lines.push(format!("{pad}{line}"));
+                i += used;
                 continue;
             }
-            lines.push(format!("{pad}{text}"));
             depth += 1;
-        } else if *tag && text.starts_with("</") {
-            depth = depth.saturating_sub(1);
-            lines.push(format!("{}{text}", "  ".repeat(depth)));
-        } else {
-            lines.push(format!("{pad}{text}"));
         }
+        lines.push(format!("{pad}{text}"));
         i += 1;
     }
     lines
