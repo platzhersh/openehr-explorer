@@ -1685,54 +1685,45 @@ impl Explorer {
         StyledText::new(line.to_string()).with_highlights(runs)
     }
 
-    fn editor_view(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let Some(ae) = self.aql_editor.as_mut() else { return div() };
-        let char_w = ae.measure_char_w(window);
-        ae.refresh_tokens();
-        let focused = ae.focus.is_focused(window);
+    /// One editor row: current-line tint, selection rectangle, caret and the highlighted text.
+    fn editor_row(ae: &AqlEd, i: usize, line: &str, row_start: usize, focused: bool, char_w: f32) -> Div {
         let ed = &ae.ed;
         let (sel_a, sel_b) = ed.selection();
         let (cur_line, cur_col) = ed.line_col(ed.cursor);
-        let text = ed.text();
-        let mut starts = vec![0usize];
-        for (i, c) in ed.chars.iter().enumerate() {
-            if *c == '\n' {
-                starts.push(i + 1);
-            }
+        let row_end = row_start + line.chars().count();
+        let is_cur = i == cur_line && focused;
+        let mut row = div().relative().h(px(AqlEd::LINE_H)).whitespace_nowrap();
+        if is_cur && sel_a == sel_b {
+            row = row.bg(rgb(0x16203d));
         }
-        let nlines = starts.len();
-        let mut gutter = div().w(px(AqlEd::GUTTER)).flex_none().flex().flex_col().pt(px(AqlEd::PAD)).pr_2().text_size(px(12.)).font_family(MONO).items_end();
-        let mut body = div().relative().flex_1().min_w_0().pt(px(AqlEd::PAD)).pl(px(AqlEd::PAD));
-        for (i, line) in text.split('\n').enumerate() {
-            let is_cur = i == cur_line;
-            gutter = gutter.child(div().h(px(AqlEd::LINE_H)).flex().items_center().text_color(rgb(if is_cur && focused { TEXT } else { MUTED })).child((i + 1).to_string()));
-            let (rs, re) = (starts[i], starts[i] + line.chars().count());
-            let mut row = div().relative().h(px(AqlEd::LINE_H)).whitespace_nowrap();
-            if is_cur && focused && sel_a == sel_b {
-                row = row.bg(rgb(0x16203d));
-            }
-            if sel_a < sel_b && sel_a <= re && sel_b > rs {
-                let from = sel_a.max(rs) - rs;
-                let to = sel_b.min(re) - rs;
-                let extra = if sel_b > re { 0.6 } else { 0.0 };
-                row = row.child(div().absolute().top_0().left(px(from as f32 * char_w)).w(px((to - from) as f32 * char_w + extra * char_w)).h(px(AqlEd::LINE_H)).bg(rgb(0x2b4a7d)));
-            }
-            if is_cur && focused {
-                row = row.child(div().absolute().top(px(1.)).left(px(cur_col as f32 * char_w - 0.75)).w(px(1.5)).h(px(AqlEd::LINE_H - 2.)).bg(rgb(PRIMARY)));
-            }
-            if !line.is_empty() {
-                row = row.child(Self::editor_line(line, &ae.toks[i]));
-            }
-            body = body.child(row);
+        if sel_a < sel_b && sel_a <= row_end && sel_b > row_start {
+            let from = sel_a.max(row_start) - row_start;
+            let to = sel_b.min(row_end) - row_start;
+            // A selection running past the line end also covers the newline: draw half a cell more.
+            let extra = if sel_b > row_end { 0.6 } else { 0.0 };
+            row = row.child(div().absolute().top_0().left(px(from as f32 * char_w)).w(px((to - from) as f32 * char_w + extra * char_w)).h(px(AqlEd::LINE_H)).bg(rgb(0x2b4a7d)));
         }
-        // Autocomplete popup anchored under the caret.
+        if is_cur {
+            row = row.child(div().absolute().top(px(1.)).left(px(cur_col as f32 * char_w - 0.75)).w(px(1.5)).h(px(AqlEd::LINE_H - 2.)).bg(rgb(PRIMARY)));
+        }
+        if !line.is_empty() {
+            row = row.child(Self::editor_line(line, &ae.toks[i]));
+        }
+        row
+    }
+
+    /// Autocomplete popup anchored under the caret (None when there is nothing to suggest).
+    fn editor_popup(ae: &AqlEd, focused: bool, char_w: f32) -> Option<Div> {
         let sugg = if focused { ae.suggestions() } else { vec![] };
-        let popup = (!sugg.is_empty()).then(|| {
-            let (_, prefix) = ae.prefix();
-            let scroll_y = f32::from(ae.scroll.offset().y);
-            let x = AqlEd::GUTTER + AqlEd::PAD + (cur_col - prefix.chars().count()) as f32 * char_w;
-            let y = AqlEd::PAD + (cur_line + 1) as f32 * AqlEd::LINE_H + scroll_y;
-            let sel = ae.sugg_sel.min(sugg.len() - 1);
+        if sugg.is_empty() {
+            return None;
+        }
+        let (cur_line, cur_col) = ae.ed.line_col(ae.ed.cursor);
+        let (_, prefix) = ae.prefix();
+        let x = AqlEd::GUTTER + AqlEd::PAD + (cur_col - prefix.chars().count()) as f32 * char_w;
+        let y = AqlEd::PAD + (cur_line + 1) as f32 * AqlEd::LINE_H + f32::from(ae.scroll.offset().y);
+        let sel = ae.sugg_sel.min(sugg.len() - 1);
+        Some(
             div()
                 .absolute()
                 .left(px(x))
@@ -1748,8 +1739,28 @@ impl Explorer {
                 .py_1()
                 .font_family(MONO)
                 .text_size(px(12.))
-                .children(sugg.iter().enumerate().map(|(i, s)| div().px_2().h(px(22.)).flex().items_center().text_color(rgb(if i == sel { BG } else { TEXT })).bg(rgb(if i == sel { PRIMARY } else { SURFACE })).child(*s)))
-        });
+                .children(sugg.iter().enumerate().map(|(i, s)| div().px_2().h(px(22.)).flex().items_center().text_color(rgb(if i == sel { BG } else { TEXT })).bg(rgb(if i == sel { PRIMARY } else { SURFACE })).child(*s))),
+        )
+    }
+
+    fn editor_view(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let Some(ae) = self.aql_editor.as_mut() else { return div() };
+        let char_w = ae.measure_char_w(window);
+        ae.refresh_tokens();
+        let focused = ae.focus.is_focused(window);
+        let (cur_line, _) = ae.ed.line_col(ae.ed.cursor);
+        let text = ae.ed.text();
+        let mut starts = vec![0usize];
+        starts.extend(ae.ed.chars.iter().enumerate().filter(|(_, c)| **c == '\n').map(|(i, _)| i + 1));
+        let nlines = starts.len();
+        let mut gutter = div().w(px(AqlEd::GUTTER)).flex_none().flex().flex_col().pt(px(AqlEd::PAD)).pr_2().text_size(px(12.)).font_family(MONO).items_end();
+        let mut body = div().relative().flex_1().min_w_0().pt(px(AqlEd::PAD)).pl(px(AqlEd::PAD));
+        for (i, line) in text.split('\n').enumerate() {
+            let lit = i == cur_line && focused;
+            gutter = gutter.child(div().h(px(AqlEd::LINE_H)).flex().items_center().text_color(rgb(if lit { TEXT } else { MUTED })).child((i + 1).to_string()));
+            body = body.child(Self::editor_row(ae, i, line, starts[i], focused, char_w));
+        }
+        let popup = Self::editor_popup(ae, focused, char_w);
         let height = (nlines as f32 * AqlEd::LINE_H + AqlEd::PAD * 2.0).clamp(96.0, AqlEd::MAX_H);
         let scroll = ae.scroll.clone();
         let handle = ae.focus.clone();

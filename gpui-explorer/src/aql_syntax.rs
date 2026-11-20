@@ -44,118 +44,106 @@ fn is_member(list: &[&str], s: &str) -> bool {
     list.iter().any(|k| k.eq_ignore_ascii_case(s))
 }
 
+fn scan_while(c: &[char], mut i: usize, f: impl Fn(char) -> bool) -> usize {
+    while i < c.len() && f(c[i]) {
+        i += 1;
+    }
+    i
+}
+
+/// Quoted string starting at `i`; an unterminated one still colours to end of line, so typing a quote is visible at once.
+fn scan_string(c: &[char], i: usize) -> usize {
+    let q = c[i];
+    let end = scan_while(c, i + 1, |x| x != q);
+    (end + 1).min(c.len())
+}
+
+/// Bracketed predicate starting at `[`, up to the matching `]` (strings inside may contain brackets).
+fn scan_bracket(c: &[char], mut i: usize) -> usize {
+    let mut depth = 0;
+    let mut quote: Option<char> = None;
+    while i < c.len() {
+        let x = c[i];
+        i += 1;
+        if let Some(q) = quote {
+            if x == q {
+                quote = None;
+            }
+            continue;
+        }
+        match x {
+            '\'' | '"' => quote = Some(x),
+            '[' => depth += 1,
+            ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    i
+}
+
+/// Path starting at `/`: runs to whitespace or a delimiter, predicates included.
+fn scan_path(c: &[char], mut i: usize) -> usize {
+    while i < c.len() && !c[i].is_whitespace() && !matches!(c[i], ',' | ')' | '(' | '=' | '<' | '>' | '!') {
+        i = if c[i] == '[' { scan_bracket(c, i) } else { i + 1 };
+    }
+    i
+}
+
+fn classify_word(word: &str, next_is_paren: bool, prev_kw: &mut Option<String>) -> Tok {
+    let after_container = matches!(prev_kw.as_deref(), Some("FROM" | "CONTAINS"));
+    if after_container && is_member(TYPES, word) {
+        Tok::Type
+    } else if next_is_paren && is_member(FUNCTIONS, word) {
+        Tok::Function
+    } else if is_member(KEYWORDS, word) {
+        *prev_kw = Some(word.to_ascii_uppercase());
+        Tok::Keyword
+    } else {
+        Tok::Alias
+    }
+}
+
+/// Scan one token starting at `i`: (end, kind).
+fn next_token(c: &[char], i: usize, prev_kw: &mut Option<String>) -> (usize, Tok) {
+    let ch = c[i];
+    let next = c.get(i + 1).copied();
+    match ch {
+        '-' if next == Some('-') => (c.len(), Tok::Comment),
+        '\'' | '"' => (scan_string(c, i), Tok::String),
+        '[' => (scan_bracket(c, i), Tok::Archetype),
+        '$' if next.is_some_and(is_ident_start) => (scan_while(c, i + 1, is_ident), Tok::Param),
+        '/' => (scan_path(c, i), Tok::Path),
+        '=' | '<' | '>' | '!' | '+' | '*' | '%' => (scan_while(c, i + 1, |x| matches!(x, '=' | '>')), Tok::Operator),
+        '(' | ')' | ',' | ';' | '{' | '}' => (i + 1, Tok::Punct),
+        _ if ch.is_ascii_digit() || (ch == '.' && next.is_some_and(|x| x.is_ascii_digit())) => (scan_while(c, i, |x| x.is_ascii_digit() || x == '.'), Tok::Number),
+        _ if is_ident_start(ch) => {
+            let end = scan_while(c, i, is_ident);
+            let word: String = c[i..end].iter().collect();
+            let paren = c[end..].iter().find(|x| **x != ' ') == Some(&'(');
+            (end, classify_word(&word, paren, prev_kw))
+        }
+        _ => (i + 1, Tok::Plain),
+    }
+}
+
 /// Tokenize one line. `prev_kw` is the last keyword seen before this line (for type detection).
 /// Returns tokens covering every char (gaps are `Plain`) in order.
 pub fn tokenize_line(line: &str, prev_kw: &mut Option<String>) -> Vec<(Range<usize>, Tok)> {
     let c: Vec<char> = line.chars().collect();
-    let n = c.len();
     let mut out: Vec<(Range<usize>, Tok)> = Vec::new();
     let mut i = 0;
-    while i < n {
-        let start = i;
-        let ch = c[i];
-        let kind;
-        if ch == '-' && c.get(i + 1) == Some(&'-') {
-            i = n;
-            kind = Tok::Comment;
-        } else if ch == '\'' || ch == '"' {
-            i += 1;
-            while i < n && c[i] != ch {
-                i += 1;
-            }
-            // Unterminated strings still colour to end of line, so typing a quote is visible immediately.
-            i = (i + 1).min(n);
-            kind = Tok::String;
-        } else if ch == '[' {
-            // Archetype / node predicate: up to the matching bracket (strings inside may contain `]`).
-            let mut depth = 0;
-            let mut q: Option<char> = None;
-            while i < n {
-                match (q, c[i]) {
-                    (Some(qc), x) if x == qc => q = None,
-                    (Some(_), _) => {}
-                    (None, '\'') | (None, '"') => q = Some(c[i]),
-                    (None, '[') => depth += 1,
-                    (None, ']') => {
-                        depth -= 1;
-                        if depth == 0 {
-                            i += 1;
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-                i += 1;
-            }
-            kind = Tok::Archetype;
-        } else if ch == '$' && c.get(i + 1).is_some_and(|x| is_ident_start(*x)) {
-            i += 1;
-            while i < n && is_ident(c[i]) {
-                i += 1;
-            }
-            kind = Tok::Param;
-        } else if ch.is_ascii_digit() || (ch == '.' && c.get(i + 1).is_some_and(|x| x.is_ascii_digit())) {
-            while i < n && (c[i].is_ascii_digit() || c[i] == '.') {
-                i += 1;
-            }
-            kind = Tok::Number;
-        } else if is_ident_start(ch) {
-            while i < n && is_ident(c[i]) {
-                i += 1;
-            }
-            let word: String = c[start..i].iter().collect();
-            let next_non_space = c[i..].iter().find(|x| **x != ' ');
-            let after_container = matches!(prev_kw.as_deref(), Some("FROM" | "CONTAINS"));
-            if after_container && is_member(TYPES, &word) {
-                kind = Tok::Type;
-            } else if is_member(FUNCTIONS, &word) && next_non_space == Some(&'(') {
-                kind = Tok::Function;
-            } else if is_member(KEYWORDS, &word) {
-                *prev_kw = Some(word.to_ascii_uppercase());
-                kind = Tok::Keyword;
-            } else {
-                kind = Tok::Alias;
-            }
-        } else if ch == '/' {
-            // Path segment: /a/b[at0001]/c — stop at whitespace, comma or closing paren; brackets handled above.
-            while i < n && !c[i].is_whitespace() && !matches!(c[i], ',' | ')' | '(' | '=' | '<' | '>' | '!') {
-                if c[i] == '[' {
-                    // Consume the predicate as part of the path.
-                    let mut depth = 0;
-                    while i < n {
-                        if c[i] == '[' {
-                            depth += 1;
-                        } else if c[i] == ']' {
-                            depth -= 1;
-                            if depth == 0 {
-                                i += 1;
-                                break;
-                            }
-                        }
-                        i += 1;
-                    }
-                    continue;
-                }
-                i += 1;
-            }
-            kind = Tok::Path;
-        } else if matches!(ch, '=' | '<' | '>' | '!' | '+' | '*' | '%') {
-            i += 1;
-            while i < n && matches!(c[i], '=' | '>') {
-                i += 1;
-            }
-            kind = Tok::Operator;
-        } else if matches!(ch, '(' | ')' | ',' | ';' | '{' | '}') {
-            i += 1;
-            kind = Tok::Punct;
-        } else {
-            i += 1;
-            kind = Tok::Plain;
-        }
+    while i < c.len() {
+        let (end, kind) = next_token(&c, i, prev_kw);
         match out.last_mut() {
-            Some((r, k)) if *k == kind && kind == Tok::Plain && r.end == start => r.end = i,
-            _ => out.push((start..i, kind)),
+            Some((r, Tok::Plain)) if kind == Tok::Plain => r.end = end,
+            _ => out.push((i..end, kind)),
         }
+        i = end;
     }
     out
 }

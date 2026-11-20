@@ -215,7 +215,7 @@ impl Editor {
                 self.checkpoint(Kind::Other);
                 let (a, b) = self.selection();
                 let mut wrapped = vec![c];
-                wrapped.extend_from_slice(&self.chars[a..b].to_vec());
+                wrapped.extend_from_slice(&self.chars[a..b]);
                 wrapped.push(close);
                 self.replace(a, b, &wrapped);
                 self.anchor = a + 1;
@@ -302,7 +302,7 @@ impl Editor {
         let start = self.line_start(c);
         if !by_word && c - start > 0 && self.chars[start..c].iter().all(|x| *x == ' ') {
             let col = c - start;
-            let drop = if col % INDENT.len() == 0 { INDENT.len() } else { col % INDENT.len() };
+            let drop = if col.is_multiple_of(INDENT.len()) { INDENT.len() } else { col % INDENT.len() };
             self.replace(c - drop, c, &[]);
             return;
         }
