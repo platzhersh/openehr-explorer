@@ -181,7 +181,7 @@ impl Explorer {
 
     fn inspector_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let ui = &mut self.inspector;
-        if !ui.filter_field.focus.is_focused(window) {
+        if !ui.filter_field.focus.is_focused(window) || crate::is_inspector_shortcut(&ev.keystroke) {
             return;
         }
         let paste = if (ev.keystroke.modifiers.control || ev.keystroke.modifiers.platform) && ev.keystroke.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
@@ -303,9 +303,12 @@ impl Explorer {
                         range
                             .filter_map(|i| {
                                 let idx = *this.inspector.visible.get(i)?;
-                                let e = this.inspector.log.entries.get(idx)?.clone();
-                                let selected = this.inspector.log.selected == Some(e.id);
+                                // Borrow the entry: only the few small strings a row shows are copied (never the bodies).
+                                let e = this.inspector.log.entries.get(idx)?;
                                 let id = e.id;
+                                let selected = this.inspector.log.selected == Some(id);
+                                let (method, path, status, color) = (e.method.clone(), inspector::extract_path(&e.url), inspector::status_label(e), status_color(e));
+                                let duration = if e.state == State::Pending { "…".to_string() } else { format!("{} ms", e.duration_ms) };
                                 Some(
                                     div()
                                         .id(ElementId::from(("insp-row", id as usize)))
@@ -324,10 +327,10 @@ impl Explorer {
                                             this.inspector.log.selected = Some(id);
                                             cx.notify();
                                         }))
-                                        .child(div().w(px(52.)).flex_none().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(method_color(&e.method))).child(e.method.clone()))
-                                        .child(div().flex_1().min_w_0().whitespace_nowrap().overflow_hidden().text_ellipsis().font_family(MONO).text_size(px(11.)).text_color(rgb(TEXT)).child(inspector::extract_path(&e.url)))
-                                        .child(div().flex_none().text_size(px(11.)).text_color(rgb(status_color(&e))).child(inspector::status_label(&e)))
-                                        .child(div().w(px(52.)).flex_none().text_size(px(11.)).text_color(rgb(MUTED)).child(if e.state == State::Pending { "…".to_string() } else { format!("{} ms", e.duration_ms) })),
+                                        .child(div().w(px(52.)).flex_none().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(method_color(&method))).child(method))
+                                        .child(div().flex_1().min_w_0().whitespace_nowrap().overflow_hidden().text_ellipsis().font_family(MONO).text_size(px(11.)).text_color(rgb(TEXT)).child(path))
+                                        .child(div().flex_none().text_size(px(11.)).text_color(rgb(color)).child(status))
+                                        .child(div().w(px(52.)).flex_none().text_size(px(11.)).text_color(rgb(MUTED)).child(duration)),
                                 )
                             })
                             .collect()
@@ -354,7 +357,8 @@ impl Explorer {
         div().flex().flex_col().children(rows)
     }
 
-    fn meta_pane(&self, e: &LogEntry, cx: &mut Context<Self>) -> Stateful<Div> {
+    /// `curl` and `response_size` are computed by the caller from the full entry; `e` has no bodies.
+    fn meta_pane(&self, e: &LogEntry, curl: String, response_size: Option<usize>, cx: &mut Context<Self>) -> Stateful<Div> {
         let tab = self.inspector.tab;
         let mut col = div().id("insp-meta").w(px(META_W)).flex_none().h_full().overflow_y_scroll().px_3().pb_3().flex().flex_col().border_r_1().border_color(rgb(BORDER));
         col = col.child(section("Summary"));
@@ -362,7 +366,6 @@ impl Explorer {
             Tab::Request => {
                 col = col.child(kv("Method", e.method.clone(), method_color(&e.method), false)).child(kv("URL", e.url.clone(), TEXT, true)).child(kv("Duration", if e.state == State::Pending { "…".to_string() } else { format!("{} ms", e.duration_ms) }, TEXT, false)).child(kv("Time", inspector::iso8601(e.timestamp_ms), TEXT, true));
                 col = col.child(section("Request headers")).child(Self::headers_block(&e.request_headers));
-                let curl = inspector::generate_curl(e);
                 let shown: SharedString = curl.replace(" \\\n  ", " ").into();
                 col = col.child(section("cURL")).child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(TEXT2)).child(shown)).child(div().pt_2().flex().child(btn("insp-copy-curl", "Copy cURL", false, cx.listener(move |_this, _, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(curl.clone()));
@@ -373,7 +376,7 @@ impl Explorer {
                 if let Some(err) = &e.error {
                     col = col.child(kv("Error", err.clone(), RED, true));
                 }
-                col = col.child(kv("Content-Type", inspector::header_value(&e.response_headers, "content-type").unwrap_or("—").to_string(), TEXT, true)).child(kv("Size", e.response_body.as_ref().map(|b| inspector::format_size(b.len())).unwrap_or_else(|| "—".into()), TEXT, false));
+                col = col.child(kv("Content-Type", inspector::header_value(&e.response_headers, "content-type").unwrap_or("—").to_string(), TEXT, true)).child(kv("Size", response_size.map(inspector::format_size).unwrap_or_else(|| "—".into()), TEXT, false));
                 col = col.child(section("Response headers")).child(Self::headers_block(&e.response_headers));
             }
         }
@@ -435,9 +438,12 @@ impl Explorer {
     }
 
     fn detail_pane(&mut self, cx: &mut Context<Self>) -> Div {
-        let Some(e) = self.inspector.log.selected_entry().cloned() else {
+        let Some(full) = self.inspector.log.selected_entry() else {
             return div().flex_1().h_full().flex().items_center().justify_center().text_size(px(12.)).text_color(rgb(MUTED)).child("Select a request");
         };
+        // Everything the metadata pane needs, taken from the borrowed entry; only the bodies stay behind.
+        let (curl, response_size) = (inspector::generate_curl(full), full.response_body.as_ref().map(String::len));
+        let e = full.without_bodies();
         let tab = self.inspector.tab;
         let tabs = div()
             .h(px(34.))
@@ -457,7 +463,7 @@ impl Explorer {
                 cx.notify();
             })))
             .child(div().flex_1().min_w_0().whitespace_nowrap().overflow_hidden().text_ellipsis().font_family(MONO).text_size(px(11.)).text_color(rgb(MUTED)).child(format!("{} {}", e.method, inspector::extract_path(&e.url))));
-        let panes = div().flex_1().min_h_0().flex().child(self.meta_pane(&e, cx)).child(self.body_pane(cx));
+        let panes = div().flex_1().min_h_0().flex().child(self.meta_pane(&e, curl, response_size, cx)).child(self.body_pane(cx));
         div().flex_1().min_w_0().h_full().flex().flex_col().child(tabs).child(panes)
     }
 

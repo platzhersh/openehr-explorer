@@ -13,12 +13,14 @@ versions/directory/contributions, writes (create/edit/delete), the Terminology v
 ```bash
 cd gpui-explorer
 cargo build --release
-./target/release/openehr-explorer-gpui --view aql --run --rows 10000
-#   --view dashboard|ehrs|templates|aql   --ehrs N   --rows N   --select   --run   --bench-scroll
+# --demo forces the generated demo data; without it the app connects to your stored default server profile
+./target/release/openehr-explorer-gpui --demo --view aql --run --rows 10000
+#   --view dashboard|ehrs|templates|aql|servers|settings   --demo   --ehrs N   --rows N   --select   --run   --bench-scroll
 ```
 
 `xattr 0.2.3` (transitive, via gpui's http client) fails against current `libc` (`ENOATTR` removed on
-Linux), so `vendor/xattr` is a one-line patched copy (`ENOATTR` → `ENODATA`).
+Linux), so `vendor/xattr` is a small patched copy: the "no such attribute" constant is `ENODATA` on Linux/Android and
+`ENOATTR` on macOS and the BSDs.
 
 ## Network mode
 
@@ -108,11 +110,13 @@ the sandbox shows its own 1,422 EHRs / 11,504 compositions / 506 templates).
 
 The official `tauri-plugin-aptabase` is Tauri-only; this uses the community
 [`aptabase-rs`](https://crates.io/crates/aptabase-rs) SDK (unofficial, needs a Tokio runtime). Same policy as the app:
-**off by default**, active only with `--analytics` **and** an App Key (`APTABASE_APP_KEY`, compile-time like the Tauri
+**off by default**, active only when you opt in (the Settings toggle, which is shared with the Tauri app — so an opt-in made there also
+enables it here — or the `--analytics` flag) **and** an App Key (`APTABASE_APP_KEY`, compile-time like the Tauri
 app, with a runtime env fallback for testing; self-hosted `A-SH-` keys also need `--analytics-host`). Events are
 coarse (`app_started`, `connection_result`, `view_opened`, `aql_run`, `app_exited`); never query text, EHR/composition
-ids, server URLs or credentials. Verified against the mock: nothing is sent without the flag, without a key or with an
-invalid key.
+ids, server URLs or credentials. Verified against the mock: nothing is sent without opting in, without a key or with an
+invalid key or host (these are rejected up front and reported in Settings). Opting out stops the flusher and discards any
+queued events; it never blocks.
 
 ## Reproducing the screenshots / numbers (headless Linux)
 
@@ -122,7 +126,9 @@ events). Here: Xvfb + openbox + Mesa lavapipe (software Vulkan), see `bench/xenv
 ```bash
 ./shot.sh screenshots/gpui-04-aql.png --view aql --run         # GPUI screenshot
 bench/gpui-bench.sh                                            # GPUI numbers
-(cd .. && npm ci && npx vite build && npx vite preview --port 4173 &)
+(cd .. && npm ci && npx vite build)                            # finish the build first...
+(cd .. && npx vite preview --port 4173 &)                      # ...then serve it
+until curl -sf localhost:4173 >/dev/null; do sleep 1; done     # wait until it answers
 node bench/vue-bench.mjs .. screenshots                        # real Vue app numbers + screenshots
 ```
 
@@ -173,7 +179,7 @@ Fields this PoC does not use (updates, tours) are preserved and written back unc
 
 A bottom drawer like the Tauri app's (ADR-0011): toggle with **Ctrl/Cmd+Shift+I** or by clicking the header (collapsed → half → full), or use the Collapse/Half/Full buttons.
 Every HTTP request the client sends is logged through one choke point (`net::Profile::send_logged`), with a *pending* entry that is updated in place when the response (or failure) arrives, exactly like the Tauri backend:
-method, URL, request/response headers (`Authorization`, `Cookie`, `Set-Cookie` redacted), request/response body (the log copy is capped at 2 MB, the caller still gets the full body), status, duration, error.
+method, URL, request/response headers (`Authorization`, `Cookie`, `Set-Cookie` redacted), response body (the log copy of the *response* body is capped at 2 MB, the caller still gets the full body; request bodies are not capped), status, duration, error.
 The list holds the newest 500 requests and can be filtered by path text, method and status class (2xx/3xx/4xx/5xx/failed); *Clear* asks for confirmation.
 The detail view has Request/Response tabs with a summary, headers, a Pretty/Raw body viewer (virtualized, so 2 MB bodies scroll smoothly), *Copy* for the body and *Copy cURL*.
 The model and helpers (`src/inspector.rs`) are pure and unit-tested; the panel is `src/inspector_ui.rs`.

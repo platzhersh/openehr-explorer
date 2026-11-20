@@ -193,7 +193,7 @@ impl Editor {
 
     /// Insert text (paste or typed), replacing the selection.
     pub fn insert_str(&mut self, s: &str) {
-        let clean: Vec<char> = s.replace("\r\n", "\n").replace('\r', "\n").chars().filter(|c| !c.is_control() || *c == '\n').collect();
+        let clean: Vec<char> = s.replace("\r\n", "\n").replace('\r', "\n").chars().filter(|c| !c.is_control() || matches!(*c, '\n' | '\t')).collect();
         if clean.is_empty() && !self.has_selection() {
             return;
         }
@@ -208,7 +208,8 @@ impl Editor {
 
     /// Type one character, with bracket/quote pairing.
     pub fn type_char(&mut self, c: char) {
-        let kind = if is_word(c) { Kind::Typing } else { Kind::Other };
+        // Typing over a selection replaces text, so it must be its own undo step (undo restores the selection).
+        let kind = if is_word(c) && !self.has_selection() { Kind::Typing } else { Kind::Other };
         if self.has_selection() {
             if let Some(close) = closer(c) {
                 // Wrap the selection.
@@ -698,6 +699,28 @@ mod tests {
         press(&mut e, "enter", false, false);
         assert_eq!(e.text(), "(\n  \n)");
         assert_eq!(e.line_col(e.cursor), (1, 2));
+    }
+
+    #[test]
+    fn typing_over_a_selection_is_a_separate_undo_step() {
+        let mut e = ed("hello world");
+        e.select_all();
+        typ(&mut e, "x");
+        typ(&mut e, "y");
+        assert_eq!(e.text(), "xy");
+        e.undo();
+        assert_eq!(e.text(), "x", "the continuation is undone first");
+        e.undo();
+        assert_eq!(e.text(), "hello world", "undo restores the replaced selection");
+        e.redo();
+        assert_eq!(e.text(), "x");
+    }
+
+    #[test]
+    fn paste_keeps_tabs() {
+        let mut e = ed("");
+        e.insert_str("SELECT\tx\r\nFROM\u{7}e");
+        assert_eq!(e.text(), "SELECT\tx\nFROMe");
     }
 
     #[test]
