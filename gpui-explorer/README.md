@@ -2,8 +2,9 @@
 
 A ~700-line [GPUI](https://crates.io/crates/gpui) (Zed's GPU UI framework) port of four screens of
 openEHR Explorer: **Dashboard, EHR Browser, Templates (Web Template tree), AQL Runner**.
-It is a toy: data is in-process and mirrors `scripts/demo-assets/mock.js`; there is no networking,
-text editing, server profiles, Request Inspector, composition viewer, etc.
+It is a toy. By default data is in-process and mirrors `scripts/demo-assets/mock.js`. With `--server` it talks to a
+real openEHR CDR (see below). Still missing: text editing (the AQL query comes from `--query`), a server-profile UI,
+keychain storage, Request Inspector, composition viewer, filters/search, writes (create/edit/delete).
 
 ```bash
 cd gpui-explorer
@@ -14,6 +15,34 @@ cargo build --release
 
 `xattr 0.2.3` (transitive, via gpui's http client) fails against current `libc` (`ENOATTR` removed on
 Linux), so `vendor/xattr` is a one-line patched copy (`ENOATTR` → `ENODATA`).
+
+## Network mode
+
+```bash
+export OEH_USER=ehrbase-user OEH_PASSWORD=ehrbase-password      # or OEH_TOKEN for bearer auth; never on argv
+./target/release/openehr-explorer-gpui --server http://localhost:8080/ehrbase --view ehrs
+#   --api-prefix /rest/openehr/v1   (default; "" means base URL is the openEHR root)
+#   --query "SELECT ... FROM EHR e CONTAINS COMPOSITION c LIMIT 50" --view aql --run
+```
+
+`src/net.rs` makes the same calls as the Rust backend: `/rest/status` (EHRBase) with a template-list fallback for
+connection tests, EHR paging via AQL (`LIMIT n+1`/`OFFSET`, retrying without `ORDER BY` when the CDR rejects it, as
+EHRBase does), `/definition/template/adl1.4` (+ Web Template with `application/openehr.wt+json`), and
+`/query/aql`. A shared Tokio runtime does the I/O; results are applied on GPUI's thread. Rows are stored flat
+(`Vec<SharedString>` + column count), so arbitrary AQL result shapes cost no extra per-row allocation.
+
+No real CDR was available when this was written, so it was tested against `bench/mock-cdr.mjs`, an EHRBase-like
+mock (Basic auth, rejects `ORDER BY` on EHR attributes). It has **not** been run against a real EHRBase or Better.
+
+## Analytics (Aptabase)
+
+The official `tauri-plugin-aptabase` is Tauri-only; this uses the community
+[`aptabase-rs`](https://crates.io/crates/aptabase-rs) SDK (unofficial, needs a Tokio runtime). Same policy as the app:
+**off by default**, active only with `--analytics` **and** an App Key (`APTABASE_APP_KEY`, compile-time like the Tauri
+app, with a runtime env fallback for testing; self-hosted `A-SH-` keys also need `--analytics-host`). Events are
+coarse (`app_started`, `connection_result`, `view_opened`, `aql_run`, `app_exited`); never query text, EHR/composition
+ids, server URLs or credentials. Verified against the mock: nothing is sent without the flag, without a key or with an
+invalid key.
 
 ## Reproducing the screenshots / numbers (headless Linux)
 
@@ -34,9 +63,9 @@ Tauri-IPC mock (`scripts/demo-assets/mock.js`) — *not* the native Tauri/WebKit
 
 | | Vue (Chromium) | GPUI |
 |---|---|---|
-| Startup → first UI (median of 5) | 111 ms browser launch + 373 ms page load ≈ **485 ms** | **~70 ms** (spawn → first `render()`) |
-| Idle memory (PSS) | **348 MB** (8 processes) | **104 MB** (1 process) |
-| Frontend artifact | 1.1 MB `dist/` (+ a ~290 MB browser runtime) | 25 MB self-contained binary |
+| Startup → first UI (median of 5) | 111 ms browser launch + 373 ms page load ≈ **485 ms** | **~77 ms** (spawn → first `render()`) |
+| Idle memory (PSS) | **348 MB** (8 processes) | **107 MB** (1 process) |
+| Frontend artifact | 1.1 MB `dist/` (+ a ~290 MB browser runtime) | 36 MB self-contained binary (25 MB before `reqwest`/`tokio`/TLS were added) |
 
 AQL Runner, click *Run* → rows on screen, then scroll the whole table in 300 frames:
 

@@ -1,18 +1,18 @@
-# binary_bytes=25384488
+# binary_bytes=35948304
 # startup (5 cold launches, process spawn -> first render)
-startup run=1 spawn_to_first_render_ms=73 idle_pss_kb_after_2.5s=103690
+startup run=1 spawn_to_first_render_ms=74 idle_pss_kb_after_2.5s=107298
 0
-startup run=2 spawn_to_first_render_ms=69 idle_pss_kb_after_2.5s=103473
+startup run=2 spawn_to_first_render_ms=82 idle_pss_kb_after_2.5s=107276
 0
-startup run=3 spawn_to_first_render_ms=73 idle_pss_kb_after_2.5s=103391
+startup run=3 spawn_to_first_render_ms=77 idle_pss_kb_after_2.5s=107401
 0
-startup run=4 spawn_to_first_render_ms=89 idle_pss_kb_after_2.5s=103613
+startup run=4 spawn_to_first_render_ms=70 idle_pss_kb_after_2.5s=107216
 0
-startup run=5 spawn_to_first_render_ms=67 idle_pss_kb_after_2.5s=103563
+startup run=5 spawn_to_first_render_ms=84 idle_pss_kb_after_2.5s=107151
 0
 # aql scenarios
-rows=3 run_to_render_ms=1.3 {"frames":300,"avg_fps":38.6,"frame_ms_p50":31.95,"frame_ms_p95":32.02,"frame_ms_max":32.90,"build_ms_p50":0.028,"build_ms_p95":0.042,"pss_kb":104541}
-rows=1000 run_to_render_ms=1.8 {"frames":300,"avg_fps":31.3,"frame_ms_p50":32.00,"frame_ms_p95":32.02,"frame_ms_max":48.00,"build_ms_p50":0.027,"build_ms_p95":0.040,"pss_kb":108759}
-rows=10000 run_to_render_ms=6.5 {"frames":300,"avg_fps":31.4,"frame_ms_p50":32.00,"frame_ms_p95":32.05,"frame_ms_max":47.97,"build_ms_p50":0.025,"build_ms_p95":0.056,"pss_kb":110485}
-rows=50000 run_to_render_ms=26.3 {"frames":300,"avg_fps":31.3,"frame_ms_p50":32.00,"frame_ms_p95":32.03,"frame_ms_max":64.01,"build_ms_p50":0.025,"build_ms_p95":0.040,"pss_kb":121501}
-rows=1000000 run_to_render_ms=512.8 {"frames":300,"avg_fps":31.4,"frame_ms_p50":32.00,"frame_ms_p95":32.05,"frame_ms_max":47.99,"build_ms_p50":0.030,"build_ms_p95":0.046,"pss_kb":380637}
+rows=3 run_to_render_ms=2.8 {"frames":300,"avg_fps":32.0,"frame_ms_p50":32.00,"frame_ms_p95":32.06,"frame_ms_max":47.99,"build_ms_p50":0.049,"build_ms_p95":0.073,"pss_kb":109004}
+rows=1000 run_to_render_ms=2.4 {"frames":300,"avg_fps":31.3,"frame_ms_p50":32.00,"frame_ms_p95":32.05,"frame_ms_max":48.04,"build_ms_p50":0.044,"build_ms_p95":0.074,"pss_kb":112719}
+rows=10000 run_to_render_ms=6.9 {"frames":300,"avg_fps":30.6,"frame_ms_p50":32.00,"frame_ms_p95":47.08,"frame_ms_max":48.03,"build_ms_p50":0.046,"build_ms_p95":0.075,"pss_kb":115685}
+rows=50000 run_to_render_ms=29.3 {"frames":300,"avg_fps":30.7,"frame_ms_p50":32.00,"frame_ms_p95":33.04,"frame_ms_max":48.04,"build_ms_p50":0.049,"build_ms_p95":0.077,"pss_kb":126290}
+rows=1000000 run_to_render_ms=535.8 {"frames":300,"avg_fps":30.4,"frame_ms_p50":32.00,"frame_ms_p95":47.91,"frame_ms_max":48.09,"build_ms_p50":0.047,"build_ms_p95":0.074,"pss_kb":385109}

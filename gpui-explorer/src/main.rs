@@ -3,16 +3,27 @@
 //! Data is in-process and mirrors `scripts/demo-assets/mock.js` so that screenshots
 //! and benchmarks can be compared 1:1 with the Vue frontend.
 //!
+//! Without `--server` the data is in-process demo data. With `--server URL` it talks to a real openEHR CDR
+//! (credentials via env: OEH_USER/OEH_PASSWORD or OEH_TOKEN; never on the command line).
+//!
 //! Flags:  --view dashboard|ehrs|templates|aql   --ehrs N   --rows N
+//!         --server URL  [--api-prefix /rest/openehr/v1]  [--query "AQL..."]
+//!         --analytics   [--analytics-host URL]   (opt-in Aptabase events; needs APTABASE_APP_KEY)
 //!         --select              (open first EHR / first template detail)
 //!         --run                 (execute the AQL query immediately)
 //!         --bench-scroll        (auto-scroll the AQL table, print frame stats, exit)
 
+use gpui::prelude::FluentBuilder;
 use gpui::{
     div, point, px, rgb, size, uniform_list, App, Application, Bounds, AppContext, Context, Div, FontWeight, InteractiveElement,
     IntoElement, ParentElement, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
 };
+mod analytics;
+mod net;
+
+use analytics::Analytics;
+use serde_json::json;
 use std::ops::Range;
 use std::time::{Duration, Instant};
 
@@ -45,34 +56,54 @@ struct Ehr {
     compositions: u32,
 }
 
+#[derive(Clone)]
 struct Composition {
-    name: &'static str,
-    template: &'static str,
-    composer: &'static str,
-    committed: &'static str,
+    name: SharedString,
+    template: SharedString,
+    composer: SharedString,
+    committed: SharedString,
 }
 
+#[derive(Clone)]
 struct Template {
-    id: &'static str,
-    concept: &'static str,
-    archetype: &'static str,
+    id: SharedString,
+    concept: SharedString,
+    archetype: SharedString,
 }
 
-const TEMPLATES: [Template; 4] = [
-    Template { id: "vital_signs.v1", concept: "Vital Signs", archetype: "openEHR-EHR-COMPOSITION.encounter.v1" },
-    Template { id: "IDCR - Problem List.v1", concept: "Problem List", archetype: "openEHR-EHR-COMPOSITION.problem_list.v1" },
-    Template { id: "IDCR - Medication List.v1", concept: "Medication List", archetype: "openEHR-EHR-COMPOSITION.medication_list.v1" },
-    Template { id: "IDCR - Discharge Summary.v1", concept: "Discharge Summary", archetype: "openEHR-EHR-COMPOSITION.discharge_summary.v1" },
+#[derive(Clone)]
+struct TreeRow {
+    depth: u8,
+    label: SharedString,
+    rm: SharedString,
+    path: SharedString,
+}
+
+#[derive(Clone)]
+enum Conn {
+    Demo,
+    Connecting,
+    Connected(SharedString),
+    Failed(SharedString),
+}
+
+const PAGE: usize = 100;
+
+const DEMO_TEMPLATES: [(&str, &str, &str); 4] = [
+    ("vital_signs.v1", "Vital Signs", "openEHR-EHR-COMPOSITION.encounter.v1"),
+    ("IDCR - Problem List.v1", "Problem List", "openEHR-EHR-COMPOSITION.problem_list.v1"),
+    ("IDCR - Medication List.v1", "Medication List", "openEHR-EHR-COMPOSITION.medication_list.v1"),
+    ("IDCR - Discharge Summary.v1", "Discharge Summary", "openEHR-EHR-COMPOSITION.discharge_summary.v1"),
 ];
 
-const COMPOSITIONS: [Composition; 3] = [
-    Composition { name: "Vital Signs", template: "vital_signs.v1", composer: "Dr. A. Kessler", committed: "2026-08-20T09:15:00Z" },
-    Composition { name: "Problem List", template: "IDCR - Problem List.v1", composer: "Dr. A. Kessler", committed: "2026-08-18T13:42:10Z" },
-    Composition { name: "Medication List", template: "IDCR - Medication List.v1", composer: "Dr. R. Okafor", committed: "2026-08-12T10:03:44Z" },
+const DEMO_COMPOSITIONS: [(&str, &str, &str, &str); 3] = [
+    ("Vital Signs", "vital_signs.v1", "Dr. A. Kessler", "2026-08-20T09:15:00Z"),
+    ("Problem List", "IDCR - Problem List.v1", "Dr. A. Kessler", "2026-08-18T13:42:10Z"),
+    ("Medication List", "IDCR - Medication List.v1", "Dr. R. Okafor", "2026-08-12T10:03:44Z"),
 ];
 
 // (depth, label, rm_type, aql_path)
-const WEB_TEMPLATE: [(u8, &str, &str, &str); 11] = [
+const DEMO_TREE: [(u8, &str, &str, &str); 11] = [
     (0, "Vital Signs", "COMPOSITION", "/"),
     (1, "Context", "EVENT_CONTEXT", "/context"),
     (2, "Start time", "DV_DATE_TIME", "/context/start_time"),
@@ -85,6 +116,22 @@ const WEB_TEMPLATE: [(u8, &str, &str, &str); 11] = [
     (2, "SpO2", "DV_QUANTITY", ".../items[at0008]/value"),
     (2, "Body temperature", "DV_QUANTITY", ".../items[at0009]/value"),
 ];
+
+fn demo_templates() -> Vec<Template> {
+    DEMO_TEMPLATES.iter().map(|(id, c, a)| Template { id: (*id).into(), concept: (*c).into(), archetype: (*a).into() }).collect()
+}
+
+fn demo_comps(n: usize) -> Vec<Composition> {
+    DEMO_COMPOSITIONS
+        .iter()
+        .take(n)
+        .map(|(n, t, c, d)| Composition { name: (*n).into(), template: (*t).into(), composer: (*c).into(), committed: (*d).into() })
+        .collect()
+}
+
+fn demo_tree() -> Vec<TreeRow> {
+    DEMO_TREE.iter().map(|(d, l, r, p)| TreeRow { depth: *d, label: (*l).into(), rm: (*r).into(), path: (*p).into() }).collect()
+}
 
 const NAV: [(View, &str); 4] = [
     (View::Dashboard, "Dashboard"),
@@ -110,10 +157,36 @@ fn fake_uuid(seed: &mut u64) -> String {
     format!("{a:08x}-{b:04x}-4{:03x}-9{:03x}-{e:012x}", c & 0xfff, d & 0xfff)
 }
 
+/// Row-major flat cell storage (no per-row allocation, so memory stays flat for very large results).
 struct AqlTable {
-    columns: Vec<&'static str>,
-    rows: Vec<[SharedString; 4]>,
+    columns: Vec<SharedString>,
+    cells: Vec<SharedString>,
+    widths: Vec<f32>,
     exec_ms: f64,
+}
+
+impl AqlTable {
+    fn new(columns: Vec<SharedString>, cells: Vec<SharedString>, exec_ms: f64) -> Self {
+        let ncols = columns.len().max(1);
+        // Column width from the header and the first 50 rows (~7.4px per mono glyph at 12px).
+        let widths = (0..ncols)
+            .map(|c| {
+                let head = columns.get(c).map(|h| h.chars().count()).unwrap_or(0);
+                let body = cells.iter().skip(c).step_by(ncols).take(50).map(|v| v.chars().count()).max().unwrap_or(0);
+                (head.max(body) as f32 * 7.4 + 28.0).clamp(90.0, 460.0)
+            })
+            .collect();
+        Self { columns, cells, widths, exec_ms }
+    }
+    fn ncols(&self) -> usize {
+        self.columns.len().max(1)
+    }
+    fn row_count(&self) -> usize {
+        self.cells.len() / self.ncols()
+    }
+    fn row(&self, i: usize) -> &[SharedString] {
+        &self.cells[i * self.ncols()..(i + 1) * self.ncols()]
+    }
 }
 
 struct Bench {
@@ -130,6 +203,20 @@ struct Explorer {
     ehrs: Vec<Ehr>,
     selected_ehr: Option<usize>,
     selected_template: usize,
+    templates: Vec<Template>,
+    tree: Vec<TreeRow>,
+    comps: Vec<Composition>,
+    comps_loading: bool,
+    server: Option<net::Profile>,
+    conn: Conn,
+    error: Option<SharedString>,
+    ehrs_has_more: bool,
+    ehrs_loading: bool,
+    aql_loading: bool,
+    auto_run: bool,
+    auto_select: bool,
+    query: SharedString,
+    analytics: Analytics,
     table: Option<AqlTable>,
     row_target: usize,
     ehr_scroll: UniformListScrollHandle,
@@ -154,50 +241,215 @@ fn rss_kb() -> u64 {
         .unwrap_or(0)
 }
 
+struct Opts {
+    boot: Instant,
+    view: View,
+    ehr_count: usize,
+    rows: usize,
+    select: bool,
+    run: bool,
+    bench_scroll: bool,
+    server: Option<net::Profile>,
+    query: Option<String>,
+    analytics: Analytics,
+}
+
 impl Explorer {
-    fn new(boot: Instant, view: View, ehr_count: usize, rows: usize, select: bool, run: bool, bench_scroll: bool) -> Self {
-        let mut seed = 42u64;
-        let mut ehrs = vec![
-            Ehr { id: "9c2c5c5e-1c1b-4b0a-9d1e-9a4b2f3c8a11".into(), created: "2026-06-02T08:14:21Z".into(), subject: "P-10234".into(), compositions: 3 },
-            Ehr { id: "4a9e2d7b-6f31-4c9e-8a5a-1d2e3f4a5b6c".into(), created: "2026-08-19T10:05:17Z".into(), subject: "—".into(), compositions: 0 },
-            Ehr { id: "b28f6a9c-2e4d-4a1b-9c3f-7e8d9c0b1a2f".into(), created: "2026-08-11T16:38:44Z".into(), subject: "—".into(), compositions: 0 },
-        ];
-        while ehrs.len() < ehr_count {
-            let n = lcg(&mut seed);
-            ehrs.push(Ehr {
-                id: fake_uuid(&mut seed).into(),
-                created: format!("2026-{:02}-{:02}T{:02}:{:02}:00Z", 1 + n % 11, 1 + (n >> 4) % 28, (n >> 9) % 24, (n >> 14) % 60).into(),
-                subject: format!("P-{}", 10000 + n % 90000).into(),
-                compositions: (n % 7) as u32,
-            });
+    fn new(o: Opts) -> Self {
+        let server = o.server;
+        let mut ehrs = Vec::new();
+        let mut comps = Vec::new();
+        if server.is_none() {
+            let mut seed = 42u64;
+            ehrs = vec![
+                Ehr { id: "9c2c5c5e-1c1b-4b0a-9d1e-9a4b2f3c8a11".into(), created: "2026-06-02T08:14:21Z".into(), subject: "P-10234".into(), compositions: 3 },
+                Ehr { id: "4a9e2d7b-6f31-4c9e-8a5a-1d2e3f4a5b6c".into(), created: "2026-08-19T10:05:17Z".into(), subject: "—".into(), compositions: 0 },
+                Ehr { id: "b28f6a9c-2e4d-4a1b-9c3f-7e8d9c0b1a2f".into(), created: "2026-08-11T16:38:44Z".into(), subject: "—".into(), compositions: 0 },
+            ];
+            while ehrs.len() < o.ehr_count {
+                let n = lcg(&mut seed);
+                ehrs.push(Ehr {
+                    id: fake_uuid(&mut seed).into(),
+                    created: format!("2026-{:02}-{:02}T{:02}:{:02}:00Z", 1 + n % 11, 1 + (n >> 4) % 28, (n >> 9) % 24, (n >> 14) % 60).into(),
+                    subject: format!("P-{}", 10000 + n % 90000).into(),
+                    compositions: (n % 7) as u32,
+                });
+            }
+            if o.select {
+                comps = demo_comps(3);
+            }
         }
-        let mut this = Self {
-            view,
+        let demo = server.is_none();
+        Self {
+            view: o.view,
             ehrs,
-            selected_ehr: select.then_some(0),
+            selected_ehr: (demo && o.select).then_some(0),
             selected_template: 0,
+            templates: if demo { demo_templates() } else { Vec::new() },
+            tree: if demo { demo_tree() } else { Vec::new() },
+            comps,
+            comps_loading: false,
+            conn: if demo { Conn::Demo } else { Conn::Connecting },
+            server,
+            error: None,
+            ehrs_has_more: false,
+            ehrs_loading: false,
+            aql_loading: false,
+            auto_run: o.run,
+            auto_select: o.select,
+            query: o.query.unwrap_or_else(|| QUERY.to_string()).into(),
+            analytics: o.analytics,
             table: None,
-            row_target: rows,
+            row_target: o.rows,
             ehr_scroll: UniformListScrollHandle::new(),
             aql_scroll: UniformListScrollHandle::new(),
             tree_scroll: UniformListScrollHandle::new(),
-            boot,
+            boot: o.boot,
             first_render_reported: false,
             run_clicked_at: None,
             bench: None,
-            bench_scroll,
-        };
-        if run {
-            this.run_query();
+            bench_scroll: o.bench_scroll,
         }
-        this
+    }
+
+    fn start(&mut self, cx: &mut Context<Self>) {
+        let mode = if self.server.is_some() { "server" } else { "demo" };
+        self.analytics.track("app_started", Some(json!({ "mode": mode })));
+        if self.server.is_some() {
+            self.connect(cx);
+        }
+        if self.auto_run {
+            self.run_query(cx);
+        }
+    }
+
+    /// Spawn `fut` on the Tokio runtime and apply its result to `self` on the GPUI thread.
+    fn spawn_net<T, Fut>(&self, cx: &mut Context<Self>, fut: Fut, apply: impl FnOnce(&mut Self, Result<T, String>, &mut Context<Self>) + 'static)
+    where
+        T: Send + 'static,
+        Fut: std::future::Future<Output = Result<T, String>> + Send + 'static,
+    {
+        let task = net::runtime().spawn(fut);
+        cx.spawn(async move |this, cx| {
+            let res = match task.await {
+                Ok(r) => r,
+                Err(e) => Err(format!("Network task failed: {e}")),
+            };
+            this.update(cx, |this, cx| {
+                apply(this, res, cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn connect(&mut self, cx: &mut Context<Self>) {
+        let Some(server) = self.server.clone() else { return };
+        self.conn = Conn::Connecting;
+        self.error = None;
+        self.ehrs_loading = true;
+        let fut = async move {
+            let desc = server.test_connection().await?;
+            let templates = server.list_templates().await?;
+            let page = server.list_ehrs(0, PAGE).await?;
+            Ok::<_, String>((desc, templates, page))
+        };
+        self.spawn_net(cx, fut, |this, res, cx| {
+            this.ehrs_loading = false;
+            match res {
+                Ok((desc, templates, page)) => {
+                    this.analytics.track("connection_result", Some(json!({ "ok": true })));
+                    this.conn = Conn::Connected(desc.into());
+                    this.templates = templates.into_iter().map(|t| Template { id: t.id.into(), concept: t.concept.into(), archetype: t.archetype.into() }).collect();
+                    this.ehrs = page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }).collect();
+                    this.ehrs_has_more = page.has_more;
+                    if !this.templates.is_empty() {
+                        this.select_template(0, cx);
+                    }
+                    if this.auto_select && !this.ehrs.is_empty() {
+                        this.select_ehr(0, cx);
+                    }
+                }
+                Err(e) => {
+                    this.analytics.track("connection_result", Some(json!({ "ok": false })));
+                    this.conn = Conn::Failed(e.clone().into());
+                    this.error = Some(e.into());
+                }
+            }
+        });
+    }
+
+    fn load_more_ehrs(&mut self, cx: &mut Context<Self>) {
+        let Some(server) = self.server.clone() else { return };
+        if self.ehrs_loading {
+            return;
+        }
+        self.ehrs_loading = true;
+        let offset = self.ehrs.len();
+        self.spawn_net(cx, async move { server.list_ehrs(offset, PAGE).await }, |this, res, _cx| {
+            this.ehrs_loading = false;
+            match res {
+                Ok(page) => {
+                    this.ehrs.extend(page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }));
+                    this.ehrs_has_more = page.has_more;
+                }
+                Err(e) => this.error = Some(e.into()),
+            }
+        });
+    }
+
+    fn select_ehr(&mut self, i: usize, cx: &mut Context<Self>) {
+        self.selected_ehr = Some(i);
+        let Some(server) = self.server.clone() else {
+            self.comps = demo_comps(self.ehrs[i].compositions.min(3) as usize);
+            return;
+        };
+        let id = self.ehrs[i].id.to_string();
+        self.comps.clear();
+        self.comps_loading = true;
+        self.spawn_net(cx, async move { server.ehr_compositions(&id).await }, move |this, res, _cx| {
+            // Ignore a stale answer if the user already picked another EHR.
+            if this.selected_ehr != Some(i) {
+                return;
+            }
+            this.comps_loading = false;
+            match res {
+                Ok(rows) => {
+                    this.comps = rows.into_iter().map(|c| Composition { name: c.name.into(), template: c.template.into(), composer: c.composer.into(), committed: c.committed.into() }).collect();
+                    if let Some(e) = this.ehrs.get_mut(i) {
+                        e.compositions = this.comps.len() as u32;
+                    }
+                }
+                Err(e) => this.error = Some(e.into()),
+            }
+        });
+    }
+
+    fn select_template(&mut self, i: usize, cx: &mut Context<Self>) {
+        self.selected_template = i;
+        let Some(server) = self.server.clone() else { return };
+        let Some(t) = self.templates.get(i) else { return };
+        let id = t.id.to_string();
+        self.spawn_net(cx, async move { server.web_template(&id).await }, move |this, res, _cx| {
+            if this.selected_template != i {
+                return;
+            }
+            match res {
+                Ok(rows) => this.tree = rows.into_iter().map(|r| TreeRow { depth: r.depth, label: r.label.into(), rm: r.rm_type.into(), path: r.path.into() }).collect(),
+                Err(e) => {
+                    this.tree.clear();
+                    this.error = Some(e.into());
+                }
+            }
+        });
     }
 
     /// Called by the bench driver task: advance the scroll position from the number of frames
     /// rendered so far and ask for another frame.
     fn bench_tick(&mut self, cx: &mut Context<Self>) {
         let Some(b) = self.bench.as_ref() else { return };
-        let n = self.table.as_ref().map(|t| t.rows.len()).unwrap_or(0);
+        let n = self.table.as_ref().map(|t| t.row_count()).unwrap_or(0);
         if n > 0 {
             let ix = (b.frame * (n / b.total_frames).max(1)).min(n - 1);
             self.aql_scroll.scroll_to_item(ix, ScrollStrategy::Top);
@@ -205,11 +457,47 @@ impl Explorer {
         cx.notify();
     }
 
-    fn run_query(&mut self) {
+    fn run_query(&mut self, cx: &mut Context<Self>) {
+        let Some(server) = self.server.clone() else {
+            self.run_query_demo();
+            self.analytics.track("aql_run", Some(json!({ "mode": "demo" })));
+            return;
+        };
+        if self.aql_loading {
+            return;
+        }
+        let q = self.query.to_string();
+        self.error = None;
+        self.aql_loading = true;
+        let t = Instant::now();
+        self.spawn_net(cx, async move { server.aql(&q).await }, move |this, res, _cx| {
+            this.aql_loading = false;
+            match res {
+                Ok(o) => {
+                    this.analytics.track("aql_run", Some(json!({ "mode": "server", "rows": o.rows.len() })));
+                    let ncols = o.columns.len();
+                    let cells: Vec<SharedString> = o
+                        .rows
+                        .into_iter()
+                        .flat_map(|mut r| {
+                            r.resize(ncols, String::new());
+                            r.into_iter().map(SharedString::from)
+                        })
+                        .collect();
+                    let columns = o.columns.into_iter().map(SharedString::from).collect();
+                    this.table = Some(AqlTable::new(columns, cells, t.elapsed().as_secs_f64() * 1000.0));
+                    this.run_clicked_at = Some(t);
+                }
+                Err(e) => this.error = Some(e.into()),
+            }
+        });
+    }
+
+    fn run_query_demo(&mut self) {
         let t = Instant::now();
         let mut seed = 7u64;
         let n = self.row_target;
-        let mut rows = Vec::with_capacity(n);
+        let mut cells: Vec<SharedString> = Vec::with_capacity(n * 4);
         for i in 0..n {
             let id: SharedString = if i < 3 {
                 ["9c2c5c5e-1c1b-4b0a-9d1e-9a4b2f3c8a11", "4a9e2d7b-6f31-4c9e-8a5a-1d2e3f4a5b6c", "b28f6a9c-2e4d-4a1b-9c3f-7e8d9c0b1a2f"][i].into()
@@ -217,18 +505,13 @@ impl Explorer {
                 fake_uuid(&mut seed).into()
             };
             let r = lcg(&mut seed);
-            rows.push([
-                id,
-                format!("{}", 100 + r % 60).into(),
-                format!("{}", 60 + (r >> 8) % 40).into(),
-                format!("2026-{:02}-{:02}T{:02}:{:02}:00Z", 1 + r % 11, 1 + (r >> 4) % 28, (r >> 9) % 24, (r >> 14) % 60).into(),
-            ]);
+            cells.push(id);
+            cells.push(format!("{}", 100 + r % 60).into());
+            cells.push(format!("{}", 60 + (r >> 8) % 40).into());
+            cells.push(format!("2026-{:02}-{:02}T{:02}:{:02}:00Z", 1 + r % 11, 1 + (r >> 4) % 28, (r >> 9) % 24, (r >> 14) % 60).into());
         }
-        self.table = Some(AqlTable {
-            columns: vec!["ehr_id", "systolic", "diastolic", "time_committed"],
-            rows,
-            exec_ms: t.elapsed().as_secs_f64() * 1000.0,
-        });
+        let columns = ["ehr_id", "systolic", "diastolic", "time_committed"].map(SharedString::from).to_vec();
+        self.table = Some(AqlTable::new(columns, cells, t.elapsed().as_secs_f64() * 1000.0));
         self.run_clicked_at = Some(t);
     }
 
@@ -255,6 +538,7 @@ impl Explorer {
                     .hover(|s| s.bg(rgb(SURFACE_HOVER)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.view = view;
+                        this.analytics.track("view_opened", Some(json!({ "view": label })));
                         cx.notify();
                     }))
                     .child(label),
@@ -277,7 +561,21 @@ impl Explorer {
                     .child(div().px_4().py_4().text_size(px(17.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child("openEHR Explorer"))
                     .child(nav),
             )
-            .child(div().p_4().text_size(px(12.)).text_color(rgb(MUTED)).child("v0.10.3 · gpui"))
+            .child({
+                let (dot, text) = match &self.conn {
+                    Conn::Demo => (MUTED, SharedString::from("Demo data (no server)")),
+                    Conn::Connecting => (0xffd93d, SharedString::from("Connecting…")),
+                    Conn::Connected(d) => (SUCCESS, d.clone()),
+                    Conn::Failed(_) => (0xff7b7b, SharedString::from("Connection failed")),
+                };
+                div()
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(div().flex().items_center().gap_2().child(div().size(px(8.)).rounded_full().bg(rgb(dot))).child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(text)))
+                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(if self.analytics.enabled() { "v0.10.3 · gpui · analytics on" } else { "v0.10.3 · gpui" }))
+            })
     }
 
     fn dashboard(&self) -> Div {
@@ -295,20 +593,28 @@ impl Explorer {
                 .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(label))
                 .child(div().text_size(px(30.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child(value))
         };
-        let comps: u32 = self.ehrs.iter().map(|e| e.compositions).sum();
+        let demo = self.server.is_none();
+        let comps = if demo { self.ehrs.iter().map(|e| e.compositions).sum::<u32>().to_string() } else { "—".to_string() };
+        let ehr_count = format!("{}{}", self.ehrs.len(), if self.ehrs_has_more { "+" } else { "" });
+        let (status_dot, status_text): (u32, SharedString) = match &self.conn {
+            Conn::Demo => (SUCCESS, "Connected — EHRBase 2.7.0, openEHR SDK 2.19.0 (demo data)".into()),
+            Conn::Connecting => (0xffd93d, "Connecting…".into()),
+            Conn::Connected(d) => (SUCCESS, format!("Connected — {d}").into()),
+            Conn::Failed(e) => (0xff7b7b, format!("Connection failed — {e}").into()),
+        };
         div()
             .flex()
             .flex_col()
             .p_6()
             .gap_4()
-            .child(Self::page_title("Dashboard", "Local EHRBase · hospital.example.org".into()))
+            .child(Self::page_title("Dashboard", if demo { "Local EHRBase · hospital.example.org".to_string() } else { self.server.as_ref().map(|s| s.base_url.clone()).unwrap_or_default() }))
             .child(
                 div()
                     .flex()
                     .gap_4()
-                    .child(card("EHRs", self.ehrs.len().to_string()))
-                    .child(card("Compositions", comps.to_string()))
-                    .child(card("Templates", TEMPLATES.len().to_string())),
+                    .child(card("EHRs", ehr_count))
+                    .child(card("Compositions", comps))
+                    .child(card("Templates", self.templates.len().to_string())),
             )
             .child(
                 div()
@@ -320,8 +626,8 @@ impl Explorer {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(SUCCESS)))
-                    .child(div().text_size(px(13.)).text_color(rgb(TEXT)).child("Connected — EHRBase 2.7.0, openEHR SDK 2.19.0")),
+                    .child(div().size(px(8.)).rounded_full().bg(rgb(status_dot)))
+                    .child(div().text_size(px(13.)).text_color(rgb(TEXT)).child(status_text)),
             )
     }
 
@@ -350,7 +656,7 @@ impl Explorer {
                             .bg(rgb(if sel { BG3 } else { SURFACE }))
                             .hover(|s| s.bg(rgb(SURFACE_HOVER)))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.selected_ehr = Some(i);
+                                this.select_ehr(i, cx);
                                 cx.notify();
                             }))
                             .child(div().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).child(e.id.clone()))
@@ -371,8 +677,28 @@ impl Explorer {
             .flex_col()
             .border_r_1()
             .border_color(rgb(BORDER))
-            .child(div().p_4().child(Self::page_title("EHR Browser", format!("{count} EHRs"))))
-            .child(list);
+            .child(div().p_4().child(Self::page_title("EHR Browser", format!("{count}{} EHRs", if self.ehrs_has_more { "+" } else { "" }))))
+            .child(list)
+            .children(self.server.is_some().then(|| {
+                let label = if self.ehrs_loading { "Loading…" } else if self.ehrs_has_more { "Load more" } else { "End of list" };
+                div().p_3().border_t_1().border_color(rgb(BORDER)).child(
+                    div()
+                        .id("load-more")
+                        .h(px(32.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(6.))
+                        .text_size(px(13.))
+                        .text_color(rgb(if self.ehrs_has_more { PRIMARY } else { MUTED }))
+                        .bg(rgb(SURFACE))
+                        .when(self.ehrs_has_more && !self.ehrs_loading, |d| d.cursor_pointer().hover(|s| s.bg(rgb(SURFACE_HOVER))).on_click(cx.listener(|this, _, _, cx| {
+                            this.load_more_ehrs(cx);
+                            cx.notify();
+                        })))
+                        .child(label),
+                )
+            }));
 
         let detail = match self.selected_ehr {
             None => div().flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Select an EHR"),
@@ -387,7 +713,7 @@ impl Explorer {
                         .child(div().text_size(px(13.)).font_family(MONO).text_color(rgb(TEXT)).child(v))
                 };
                 let mut comps = div().flex().flex_col().gap_2();
-                for c in COMPOSITIONS.iter().take(e.compositions.min(3) as usize) {
+                for c in self.comps.iter() {
                     comps = comps.child(
                         div()
                             .p_3()
@@ -402,8 +728,8 @@ impl Explorer {
                                     .flex()
                                     .flex_col()
                                     .gap_1()
-                                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(c.name))
-                                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(c.template)),
+                                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(c.name.clone()))
+                                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(c.template.clone())),
                             )
                             .child(
                                 div()
@@ -411,8 +737,8 @@ impl Explorer {
                                     .flex_col()
                                     .items_end()
                                     .gap_1()
-                                    .child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(c.composer))
-                                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(c.committed)),
+                                    .child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(c.composer.clone()))
+                                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(c.committed.clone())),
                             ),
                     );
                 }
@@ -428,13 +754,11 @@ impl Explorer {
                             .flex()
                             .flex_col()
                             .child(kv("EHR ID", e.id.clone()))
-                            .child(kv("System ID", "hospital.example.org".into()))
+                            .child(kv("System ID", if self.server.is_some() { e.subject.clone() } else { "hospital.example.org".into() }))
                             .child(kv("Created", e.created.clone()))
-                            .child(kv("Subject", e.subject.clone()))
-                            .child(kv("Modifiable", "true".into()))
-                            .child(kv("Queryable", "true".into())),
+                            .child(kv("Subject", if self.server.is_some() { "—".into() } else { e.subject.clone() })),
                     )
-                    .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(format!("Compositions ({})", e.compositions)))
+                    .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(if self.comps_loading { "Compositions (loading…)".to_string() } else { format!("Compositions ({})", self.comps.len()) }))
                     .child(comps)
             }
         };
@@ -443,7 +767,7 @@ impl Explorer {
 
     fn template_browser(&mut self, cx: &mut Context<Self>) -> Div {
         let mut list = div().flex().flex_col().gap_2().px_4();
-        for (i, t) in TEMPLATES.iter().enumerate() {
+        for (i, t) in self.templates.iter().enumerate() {
             let sel = self.selected_template == i;
             list = list.child(
                 div()
@@ -456,25 +780,25 @@ impl Explorer {
                     .bg(rgb(if sel { BG3 } else { SURFACE }))
                     .hover(|s| s.bg(rgb(SURFACE_HOVER)))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.selected_template = i;
+                        this.select_template(i, cx);
                         cx.notify();
                     }))
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(t.concept))
-                    .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).child(t.id))
-                    .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(t.archetype)),
+                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(t.concept.clone()))
+                    .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).child(t.id.clone()))
+                    .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(t.archetype.clone())),
             );
         }
-        let t = &TEMPLATES[self.selected_template];
+        let concept: SharedString = self.templates.get(self.selected_template).map(|t| t.concept.clone()).unwrap_or_else(|| "No template".into());
         let tree = uniform_list(
             "tpl-tree",
-            WEB_TEMPLATE.len(),
-            cx.processor(|_this, range: Range<usize>, _w, _cx| {
+            self.tree.len(),
+            cx.processor(|this, range: Range<usize>, _w, _cx| {
                 range
                     .map(|i| {
-                        let (depth, label, rm, path) = WEB_TEMPLATE[i];
+                        let TreeRow { depth, label, rm, path } = this.tree[i].clone();
                         div()
                             .w_full()
                             .h(px(32.))
@@ -506,7 +830,7 @@ impl Explorer {
                     .flex_col()
                     .border_r_1()
                     .border_color(rgb(BORDER))
-                    .child(div().p_4().child(Self::page_title("Templates", format!("{} templates", TEMPLATES.len()))))
+                    .child(div().p_4().child(Self::page_title("Templates", format!("{} templates", self.templates.len()))))
                     .child(list),
             )
             .child(
@@ -516,7 +840,7 @@ impl Explorer {
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(format!("{} — Web Template", t.concept)))
+                    .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(format!("{concept} — Web Template")))
                     .child(div().flex().flex_col().flex_1().rounded(px(6.)).border_1().border_color(rgb(BORDER)).bg(rgb(SURFACE)).child(tree)),
             )
     }
@@ -532,7 +856,7 @@ impl Explorer {
             .text_size(px(13.))
             .text_color(rgb(TEXT))
             .whitespace_nowrap()
-            .children(QUERY.lines().map(|l| {
+            .children(self.query.lines().map(|l| {
                 let mut line = div().h(px(20.));
                 if l.trim_start().starts_with("SELECT") || l.trim_start().starts_with("FROM") || l.trim_start().starts_with("CONTAINS") {
                     line = line.text_color(rgb(PRIMARY));
@@ -552,22 +876,21 @@ impl Explorer {
             .font_weight(FontWeight::SEMIBOLD)
             .text_size(px(13.))
             .on_click(cx.listener(|this, _, _, cx| {
-                this.run_query();
+                this.run_query(cx);
                 cx.notify();
             }))
-            .child("Run (Ctrl+Enter)");
+            .child(if self.aql_loading { "Running…" } else { "Run (Ctrl+Enter)" });
         let status = match &self.table {
-            Some(t) => format!("{} rows · built in {:.1} ms", t.rows.len(), t.exec_ms),
+            Some(t) => format!("{} rows · {} in {:.1} ms", t.row_count(), if self.server.is_some() { "fetched" } else { "built" }, t.exec_ms),
             None => "No results yet".to_string(),
         };
-        let col_w = [px(330.), px(110.), px(110.), px(220.)];
         let results = match &self.table {
             None => div().flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Run a query to see results"),
             Some(t) => {
                 let header = div().flex().h(px(34.)).items_center().bg(rgb(BG3)).border_b_1().border_color(rgb(BORDER)).children(
-                    t.columns.iter().enumerate().map(|(i, c)| div().w(col_w[i]).px_3().text_size(px(12.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(*c)),
+                    t.columns.iter().enumerate().map(|(i, c)| div().w(px(t.widths[i])).flex_none().px_3().text_size(px(12.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(c.clone())),
                 );
-                let n = t.rows.len();
+                let n = t.row_count();
                 let body = uniform_list(
                     "aql-rows",
                     n,
@@ -575,7 +898,7 @@ impl Explorer {
                         let t = this.table.as_ref().unwrap();
                         range
                             .map(|i| {
-                                let r = &t.rows[i];
+                                let r = t.row(i);
                                 div()
                                     .w_full()
                                     .h(px(30.))
@@ -587,7 +910,7 @@ impl Explorer {
                                     .font_family(MONO)
                                     .text_size(px(12.))
                                     .text_color(rgb(TEXT))
-                                    .children(r.iter().enumerate().map(|(c, v)| div().w(col_w[c]).px_3().child(v.clone())))
+                                    .children(r.iter().enumerate().map(|(c, v)| div().w(px(t.widths[c])).flex_none().px_3().child(v.clone())))
                             })
                             .collect()
                     }),
@@ -639,7 +962,30 @@ impl Render for Explorer {
             .bg(rgb(BG))
             .text_color(rgb(TEXT))
             .child(self.sidebar(cx))
-            .child(div().flex_1().h_full().min_w_0().child(content));
+            .child({
+                let banner = self.error.clone().map(|e| {
+                    div()
+                        .id("error-banner")
+                        .absolute()
+                        .bottom_4()
+                        .left_4()
+                        .right_4()
+                        .p_3()
+                        .rounded(px(6.))
+                        .bg(rgb(0x3a1f2b))
+                        .border_1()
+                        .border_color(rgb(0xff7b7b))
+                        .text_size(px(13.))
+                        .text_color(rgb(0xff7b7b))
+                        .cursor_pointer()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.error = None;
+                            cx.notify();
+                        }))
+                        .child(format!("{e}  (click to dismiss)"))
+                });
+                div().flex_1().h_full().min_w_0().relative().child(content).children(banner)
+            });
 
         if let Some(b) = self.bench.as_mut() {
             let now = Instant::now();
@@ -676,8 +1022,22 @@ fn flag(name: &str) -> bool {
     std::env::args().any(|x| x == name)
 }
 
+/// Build the server profile from flags/env. Secrets come from the environment only, never argv.
+fn server_from_env() -> Option<net::Profile> {
+    let url = arg("--server")?;
+    let auth = if let Ok(t) = std::env::var("OEH_TOKEN") {
+        net::Auth::Bearer(t)
+    } else if let (Ok(user), Ok(password)) = (std::env::var("OEH_USER"), std::env::var("OEH_PASSWORD")) {
+        net::Auth::Basic { user, password }
+    } else {
+        net::Auth::None
+    };
+    Some(net::Profile::new(&url, arg("--api-prefix"), auth))
+}
+
 fn main() {
     let boot = Instant::now();
+    env_logger::init();
     let view = match arg("--view").as_deref() {
         Some("ehrs") => View::Ehrs,
         Some("templates") => View::Templates,
@@ -687,17 +1047,37 @@ fn main() {
     let ehrs: usize = arg("--ehrs").and_then(|s| s.parse().ok()).unwrap_or(3);
     let rows: usize = arg("--rows").and_then(|s| s.parse().ok()).unwrap_or(3);
     let (select, run, bench_scroll) = (flag("--select"), flag("--run"), flag("--bench-scroll"));
+    let server = server_from_env();
+    let query = arg("--query");
+    // Opt-in only; never during benchmarks.
+    let analytics = Analytics::init(flag("--analytics") && !bench_scroll, arg("--analytics-host"));
+    let max_seconds: Option<u64> = arg("--max-seconds").and_then(|s| s.parse().ok()).or(bench_scroll.then_some(120));
     Application::new().run(move |cx: &mut App| {
         let bounds = Bounds { origin: point(px(0.), px(0.)), size: size(px(1440.), px(960.)) };
-        let handle = cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(TitlebarOptions { title: Some("openEHR Explorer".into()), ..Default::default() }),
-                ..Default::default()
-            },
-            |_, cx| cx.new(|_| Explorer::new(boot, view, ehrs, rows, select, run, bench_scroll)),
-        )
-        .unwrap();
+        let opts = Opts { boot, view, ehr_count: ehrs, rows, select, run, bench_scroll, server, query, analytics: analytics.clone() };
+        let handle = cx
+            .open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(TitlebarOptions { title: Some("openEHR Explorer".into()), ..Default::default() }),
+                    ..Default::default()
+                },
+                |_, cx| {
+                    cx.new(|cx| {
+                        let mut this = Explorer::new(opts);
+                        this.start(cx);
+                        this
+                    })
+                },
+            )
+            .unwrap();
+        let flush = analytics.clone();
+        cx.on_app_quit(move |_| {
+            flush.track("app_exited", None);
+            flush.flush_blocking();
+            async {}
+        })
+        .detach();
         if bench_scroll {
             cx.spawn(async move |cx| loop {
                 cx.background_executor().timer(Duration::from_millis(2)).await;
@@ -708,11 +1088,13 @@ fn main() {
             .detach();
         }
         cx.activate(true);
-        // Safety net so scripted runs can never hang.
-        cx.spawn(async move |cx| {
-            cx.background_executor().timer(Duration::from_secs(120)).await;
-            cx.update(|cx| cx.quit()).ok();
-        })
-        .detach();
+        if let Some(secs) = max_seconds {
+            // Safety net so scripted runs can never hang.
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(Duration::from_secs(secs)).await;
+                cx.update(|cx| cx.quit()).ok();
+            })
+            .detach();
+        }
     });
 }
