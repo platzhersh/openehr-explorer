@@ -1,88 +1,138 @@
-# Experiment (see gpui-explorer/README.md, OEH-130): build the GPUI toy for Windows and compare its
-# VirusTotal result against the latest released Tauri installer. Not part of the release pipeline.
+# Experiment (see gpui-explorer/README.md, OEH-130): separate "packaging" from "UI stack" when explaining
+# VirusTotal detections. Scans four files and reports signing status for each:
+#   1. GPUI toy, bare exe                  (artifact from an earlier run of this workflow)
+#   2. GPUI toy wrapped in a minimal NSIS installer
+#   3. The real Tauri app exe, extracted from the latest release installer
+#   4. The latest release's Tauri NSIS installer
+# Not part of the release pipeline.
 name: GPUI Windows + VirusTotal (experiment)
 
 on:
   workflow_dispatch:
+    inputs:
+      gpui_run_id:
+        description: Earlier run whose openehr-explorer-gpui-windows artifact to reuse
+        default: "44701128848"
+        required: true
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  build-and-scan:
+  packaging-test:
     runs-on: windows-latest
     defaults:
       run:
         shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VT_API_KEY: ${{ secrets.VT_API_KEY }}
+      GPUI_RUN_ID: ${{ inputs.gpui_run_id }}
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Build GPUI clone (release)
-        working-directory: gpui-explorer
-        run: cargo build --release --locked
-
-      - name: Hash and upload artifact
-        id: hash
-        run: |
-          EXE=gpui-explorer/target/release/openehr-explorer-gpui.exe
-          ls -la "$EXE"
-          echo "sha=$(sha256sum "$EXE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-          echo "size=$(stat -c %s "$EXE")" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: openehr-explorer-gpui-windows
-          path: gpui-explorer/target/release/openehr-explorer-gpui.exe
-
-      - name: Submit GPUI exe to VirusTotal
-        env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+      - name: Fetch GPUI exe and latest release installer
         run: |
           set -euo pipefail
-          # Public submission (the file is a toy build with no secrets). Upload limit is 32 MB.
-          curl -fsS -H "x-apikey: $VT_API_KEY" -F "file=@gpui-explorer/target/release/openehr-explorer-gpui.exe" \
-            https://www.virustotal.com/api/v3/files | jq -r '"analysis id: " + .data.id'
+          mkdir -p work/gpui work/tauri
+          gh run download "$GPUI_RUN_ID" -R "$GITHUB_REPOSITORY" -n openehr-explorer-gpui-windows -D work/gpui
+          gh release download -R "$GITHUB_REPOSITORY" --pattern '*-setup.exe' -D work/tauri
+          gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName > work/tag.txt
+          ls -la work/gpui work/tauri
 
-      - name: Compare VirusTotal reports
-        env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GPUI_SHA: ${{ steps.hash.outputs.sha }}
-          GPUI_SIZE: ${{ steps.hash.outputs.size }}
+      - name: Build minimal NSIS installer around the GPUI exe
         run: |
           set -euo pipefail
-          report() { # arg: sha256 ; prints "malicious suspicious undetected harmless total flagged-engines"
+          cd work
+          cp gpui/openehr-explorer-gpui.exe .
+          cat > gpui.nsi <<'EOF'
+          Unicode true
+          Name "openEHR Explorer GPUI"
+          OutFile "gpui-setup.exe"
+          InstallDir "$PROGRAMFILES64\openEHR Explorer GPUI"
+          RequestExecutionLevel admin
+          Page directory
+          Page instfiles
+          UninstPage uninstConfirm
+          UninstPage instfiles
+          Section
+            SetOutPath $INSTDIR
+            File "openehr-explorer-gpui.exe"
+            WriteUninstaller "$INSTDIR\uninstall.exe"
+            CreateShortcut "$SMPROGRAMS\openEHR Explorer GPUI.lnk" "$INSTDIR\openehr-explorer-gpui.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenEHRExplorerGPUI" "DisplayName" "openEHR Explorer GPUI"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenEHRExplorerGPUI" "UninstallString" "$INSTDIR\uninstall.exe"
+          SectionEnd
+          Section Uninstall
+            Delete "$INSTDIR\openehr-explorer-gpui.exe"
+            Delete "$INSTDIR\uninstall.exe"
+            Delete "$SMPROGRAMS\openEHR Explorer GPUI.lnk"
+            RMDir "$INSTDIR"
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenEHRExplorerGPUI"
+          SectionEnd
+          EOF
+          sed -i 's/^          //' gpui.nsi
+          MAKENSIS="/c/Program Files (x86)/NSIS/makensis.exe"
+          [ -x "$MAKENSIS" ] || { choco install nsis -y --no-progress >/dev/null; }
+          "$MAKENSIS" -V2 gpui.nsi
+          ls -la gpui-setup.exe
+
+      - name: Extract the real Tauri app exe from the released installer
+        run: |
+          set -euo pipefail
+          cd work
+          INSTALLER=$(ls tauri/*-setup.exe | head -1)
+          7z x "$INSTALLER" -otauri/extracted -y > /dev/null
+          find tauri/extracted -type f -name '*.exe' -printf '%s %p\n' | sort -rn | head -5
+          APP=$(find tauri/extracted -type f -name '*.exe' ! -iname 'uninstall*' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+          [ -n "$APP" ] || { echo "no exe found in installer"; exit 1; }
+          cp "$APP" tauri-app.exe
+          ls -la tauri-app.exe
+
+      - name: Scan with VirusTotal and compare
+        run: |
+          set -euo pipefail
+          cd work
+          vt_get() { # arg: sha256 -> JSON on stdout, non-zero if unknown
             local sha="$1"
-            curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/${sha}" \
-              | jq -r '.data.attributes as $a | ($a.last_analysis_stats // {}) as $s
-                | "\($s.malicious // 0) \($s.suspicious // 0) \($s.undetected // 0) \($s.harmless // 0) \(($s|add) // 0) \([$a.last_analysis_results // {} | to_entries[] | select(.value.category=="malicious" or .value.category=="suspicious") | .key] | join(","))"'
+            curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/${sha}"
           }
-          # Wait for the GPUI analysis to finish (up to ~6 min).
-          G=""
-          for i in $(seq 1 24); do
-            G=$(report "$GPUI_SHA" 2>/dev/null || true)
-            [ -n "$G" ] && [ "$(echo "$G" | awk '{print $5}')" -ge 50 ] && break
-            sleep 15
-          done
-
-          REL=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest")
-          TAG=$(echo "$REL" | jq -r .tag_name)
-          ASSET=$(echo "$REL" | jq -c '[.assets[] | select(.name | endswith("-setup.exe"))][0] // empty')
-          T=""; TSHA=""; TNAME=""; TSIZE=""
-          if [ -n "$ASSET" ]; then
-            TNAME=$(echo "$ASSET" | jq -r .name); TSIZE=$(echo "$ASSET" | jq -r .size)
-            TSHA=$(echo "$ASSET" | jq -r '.digest // empty'); TSHA=${TSHA#sha256:}
-            [ -z "$TSHA" ] && TSHA=$(curl -fsSL "$(echo "$ASSET" | jq -r .browser_download_url)" | sha256sum | cut -d' ' -f1)
-            T=$(report "$TSHA" 2>/dev/null || true)
-          fi
-
+          summary() { # arg: JSON -> "malicious suspicious undetected harmless engines flagged"
+            jq -r '.data.attributes as $a | ($a.last_analysis_stats // {}) as $s
+              | "\($s.malicious // 0) \($s.suspicious // 0) \($s.undetected // 0) \($s.harmless // 0) \(($s|add) // 0) \([$a.last_analysis_results // {} | to_entries[] | select(.value.category=="malicious" or .value.category=="suspicious") | .key] | join(","))"'
+          }
+          sigstatus() { # arg: file -> Authenticode status
+            local f
+            f=$(cygpath -w "$1")
+            powershell -NoProfile -Command "(Get-AuthenticodeSignature -LiteralPath '$f').Status" | tr -d '\r'
+          }
+          row() { # args: label file
+            local label="$1" file="$2" sha size sig json out="" i
+            sha=$(sha256sum "$file" | cut -d' ' -f1)
+            size=$(stat -c %s "$file")
+            sig=$(sigstatus "$file")
+            if ! json=$(vt_get "$sha" 2>/dev/null); then
+              curl -fsS -H "x-apikey: $VT_API_KEY" -F "file=@${file}" https://www.virustotal.com/api/v3/files > /dev/null
+            fi
+            for i in $(seq 1 40); do
+              json=$(vt_get "$sha" 2>/dev/null || true)
+              if [ -n "$json" ]; then
+                out=$(echo "$json" | summary)
+                [ "$(echo "$out" | awk '{print $5}')" -ge 50 ] && break
+              fi
+              sleep 15
+            done
+            local m="n/a" s="" u="" h="" t="" f=""
+            [ -n "$out" ] && read -r m s u h t f <<< "$out"
+            echo "| $label | $size | $sig | $m | $s | $u | $t | ${f:-none} | [report](https://www.virustotal.com/gui/file/$sha) |"
+          }
+          TAG=$(cat tag.txt)
           {
-            echo "## VirusTotal comparison"
+            echo "## Packaging test (VirusTotal)"
             echo
-            echo "| Binary | Size | malicious | suspicious | undetected | harmless | engines | Flagged by | Report |"
-            echo "|---|---:|---:|---:|---:|---:|---:|---|---|"
-            if [ -n "$G" ]; then read -r gm gs gu gh gt gf <<< "$G"; echo "| GPUI clone (exe) | $GPUI_SIZE | $gm | $gs | $gu | $gh | $gt | ${gf:-none} | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"
-            else echo "| GPUI clone (exe) | $GPUI_SIZE | n/a (analysis not ready) | | | | | | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"; fi
-            if [ -n "$T" ]; then read -r tm ts tu th tt tf <<< "$T"; echo "| Tauri installer $TAG ($TNAME) | $TSIZE | $tm | $ts | $tu | $th | $tt | ${tf:-none} | [report](https://www.virustotal.com/gui/file/$TSHA) |"
-            else echo "| Tauri installer ${TAG:-?} | | no VirusTotal report found | | | | | | |"; fi
+            echo "| File | Size | Authenticode | malicious | suspicious | undetected | engines | Flagged by | Report |"
+            echo "|---|---:|---|---:|---:|---:|---:|---|---|"
+            row "GPUI toy, bare exe" gpui/openehr-explorer-gpui.exe
+            row "GPUI toy in minimal NSIS installer" gpui-setup.exe
+            row "Tauri app exe, extracted from $TAG installer" tauri-app.exe
+            row "Tauri NSIS installer $TAG" "$(ls tauri/*-setup.exe | head -1)"
           } | tee -a "$GITHUB_STEP_SUMMARY"
