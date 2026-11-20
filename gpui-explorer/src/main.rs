@@ -18,7 +18,7 @@ use gpui::{
     div, point, px, rgb, size, uniform_list, App, AppContext, Application, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, Keystroke, MouseButton, Stateful,
     IntoElement, ParentElement, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
-    ClipboardItem, FontStyle, HighlightStyle, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollHandle, StyledText,
+    ClipboardItem, FontStyle, HighlightStyle, TextRun, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollHandle, StyledText,
 };
 mod analytics;
 // The very same file the Tauri app compiles, so the keychain/encrypted-store formats cannot drift.
@@ -51,6 +51,13 @@ const TEXT2: u32 = 0xb4bedb;
 const MUTED: u32 = 0x9aa6c6;
 const PRIMARY: u32 = 0x64ffda;
 const SUCCESS: u32 = 0x6bff8e;
+// A monospace face that exists on each OS: the editor's caret and selection are placed by glyph advance,
+// so a silent fall-back to a proportional font would put the caret in the wrong place.
+#[cfg(target_os = "macos")]
+const MONO: &str = "Menlo";
+#[cfg(target_os = "windows")]
+const MONO: &str = "Consolas";
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const MONO: &str = "DejaVu Sans Mono";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -490,7 +497,6 @@ struct AqlEd {
     dismissed_at: Option<usize>,
     toks: Vec<Vec<(Range<usize>, aql_syntax::Tok)>>,
     toks_version: Option<u64>,
-    char_w: f32,
 }
 
 impl AqlEd {
@@ -501,17 +507,35 @@ impl AqlEd {
     const MAX_H: f32 = 260.0;
 
     fn new(cx: &mut App, text: &str) -> Self {
-        Self { ed: editor::Editor::new(text), focus: cx.focus_handle().tab_stop(true), scroll: ScrollHandle::new(), dragging: false, sugg_sel: 0, dismissed_at: None, toks: vec![], toks_version: None, char_w: Self::FONT * 0.602 }
+        Self { ed: editor::Editor::new(text), focus: cx.focus_handle().tab_stop(true), scroll: ScrollHandle::new(), dragging: false, sugg_sel: 0, dismissed_at: None, toks: vec![], toks_version: None }
     }
 
-    /// Advance width of one monospace glyph, measured once from the font.
-    fn measure_char_w(&mut self, window: &Window) -> f32 {
-        let ts = window.text_system();
-        let id = ts.resolve_font(&gpui::font(MONO));
-        if let Ok(sz) = ts.advance(id, px(Self::FONT), 'm') {
-            self.char_w = f32::from(sz.width);
+    fn shape(window: &Window, text: &str) -> gpui::ShapedLine {
+        let run = TextRun { len: text.len(), font: gpui::font(MONO), color: gpui::black(), background_color: None, underline: None, strikethrough: None };
+        window.text_system().shape_line(SharedString::from(text.to_string()), px(Self::FONT), &[run], None)
+    }
+
+    /// Pixel x of char column `col` in `line`, from the real shaped glyphs (correct for any font, not just monospace).
+    fn x_of(window: &Window, line: &str, col: usize) -> f32 {
+        let prefix: String = line.chars().take(col).collect();
+        if prefix.is_empty() {
+            return 0.0;
         }
-        self.char_w
+        f32::from(Self::shape(window, &prefix).width)
+    }
+
+    /// Char column in `line` closest to pixel `x`.
+    fn col_at(window: &Window, line: &str, x: f32) -> usize {
+        if line.is_empty() || x <= 0.0 {
+            return 0;
+        }
+        let byte = Self::shape(window, line).closest_index_for_x(px(x));
+        line[..byte.min(line.len())].chars().count()
+    }
+
+    fn line_text(&self, line: usize) -> String {
+        let s = self.ed.pos_at(line, 0);
+        self.ed.chars[s..self.ed.line_end(s)].iter().collect()
     }
 
     fn refresh_tokens(&mut self) {
@@ -537,14 +561,14 @@ impl AqlEd {
     }
 
     /// Window point -> char index in the buffer.
-    fn pos_from_point(&self, p: gpui::Point<gpui::Pixels>, _window: &Window) -> usize {
+    fn pos_from_point(&self, p: gpui::Point<gpui::Pixels>, window: &Window) -> usize {
         let b = self.scroll.bounds();
         let off = self.scroll.offset();
         let x = f32::from(p.x - b.origin.x) - Self::GUTTER - Self::PAD;
         let y = f32::from(p.y - b.origin.y) - f32::from(off.y) - Self::PAD;
-        let line = (y / Self::LINE_H).floor().max(0.0) as usize;
-        let col = (x / self.char_w).round().max(0.0) as usize;
-        self.ed.pos_at(line.min(self.ed.line_count() - 1), col)
+        let line = ((y / Self::LINE_H).floor().max(0.0) as usize).min(self.ed.line_count() - 1);
+        let col = Self::col_at(window, &self.line_text(line), x);
+        self.ed.pos_at(line, col)
     }
 
     /// Scroll so the caret line is visible.
@@ -1686,7 +1710,7 @@ impl Explorer {
     }
 
     /// One editor row: current-line tint, selection rectangle, caret and the highlighted text.
-    fn editor_row(ae: &AqlEd, i: usize, line: &str, row_start: usize, focused: bool, char_w: f32) -> Div {
+    fn editor_row(ae: &AqlEd, window: &Window, i: usize, line: &str, row_start: usize, focused: bool) -> Div {
         let ed = &ae.ed;
         let (sel_a, sel_b) = ed.selection();
         let (cur_line, cur_col) = ed.line_col(ed.cursor);
@@ -1697,14 +1721,14 @@ impl Explorer {
             row = row.bg(rgb(0x16203d));
         }
         if sel_a < sel_b && sel_a <= row_end && sel_b > row_start {
-            let from = sel_a.max(row_start) - row_start;
-            let to = sel_b.min(row_end) - row_start;
-            // A selection running past the line end also covers the newline: draw half a cell more.
-            let extra = if sel_b > row_end { 0.6 } else { 0.0 };
-            row = row.child(div().absolute().top_0().left(px(from as f32 * char_w)).w(px((to - from) as f32 * char_w + extra * char_w)).h(px(AqlEd::LINE_H)).bg(rgb(0x2b4a7d)));
+            let x0 = AqlEd::x_of(window, line, sel_a.max(row_start) - row_start);
+            let x1 = AqlEd::x_of(window, line, sel_b.min(row_end) - row_start);
+            // A selection running past the line end also covers the newline: draw a little more.
+            let extra = if sel_b > row_end { AqlEd::FONT * 0.4 } else { 0.0 };
+            row = row.child(div().absolute().top_0().left(px(x0)).w(px(x1 - x0 + extra)).h(px(AqlEd::LINE_H)).bg(rgb(0x2b4a7d)));
         }
         if is_cur {
-            row = row.child(div().absolute().top(px(1.)).left(px(cur_col as f32 * char_w - 0.75)).w(px(1.5)).h(px(AqlEd::LINE_H - 2.)).bg(rgb(PRIMARY)));
+            row = row.child(div().absolute().top(px(1.)).left(px(AqlEd::x_of(window, line, cur_col) - 0.75)).w(px(1.5)).h(px(AqlEd::LINE_H - 2.)).bg(rgb(PRIMARY)));
         }
         if !line.is_empty() {
             row = row.child(Self::editor_line(line, &ae.toks[i]));
@@ -1713,14 +1737,14 @@ impl Explorer {
     }
 
     /// Autocomplete popup anchored under the caret (None when there is nothing to suggest).
-    fn editor_popup(ae: &AqlEd, focused: bool, char_w: f32) -> Option<Div> {
+    fn editor_popup(ae: &AqlEd, window: &Window, focused: bool) -> Option<Div> {
         let sugg = if focused { ae.suggestions() } else { vec![] };
         if sugg.is_empty() {
             return None;
         }
         let (cur_line, cur_col) = ae.ed.line_col(ae.ed.cursor);
         let (_, prefix) = ae.prefix();
-        let x = AqlEd::GUTTER + AqlEd::PAD + (cur_col - prefix.chars().count()) as f32 * char_w;
+        let x = AqlEd::GUTTER + AqlEd::PAD + AqlEd::x_of(window, &ae.line_text(cur_line), cur_col - prefix.chars().count());
         let y = AqlEd::PAD + (cur_line + 1) as f32 * AqlEd::LINE_H + f32::from(ae.scroll.offset().y);
         let sel = ae.sugg_sel.min(sugg.len() - 1);
         Some(
@@ -1745,7 +1769,6 @@ impl Explorer {
 
     fn editor_view(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
         let Some(ae) = self.aql_editor.as_mut() else { return div() };
-        let char_w = ae.measure_char_w(window);
         ae.refresh_tokens();
         let focused = ae.focus.is_focused(window);
         let (cur_line, _) = ae.ed.line_col(ae.ed.cursor);
@@ -1758,9 +1781,9 @@ impl Explorer {
         for (i, line) in text.split('\n').enumerate() {
             let lit = i == cur_line && focused;
             gutter = gutter.child(div().h(px(AqlEd::LINE_H)).flex().items_center().text_color(rgb(if lit { TEXT } else { MUTED })).child((i + 1).to_string()));
-            body = body.child(Self::editor_row(ae, i, line, starts[i], focused, char_w));
+            body = body.child(Self::editor_row(ae, window, i, line, starts[i], focused));
         }
-        let popup = Self::editor_popup(ae, focused, char_w);
+        let popup = Self::editor_popup(ae, window, focused);
         let height = (nlines as f32 * AqlEd::LINE_H + AqlEd::PAD * 2.0).clamp(96.0, AqlEd::MAX_H);
         let scroll = ae.scroll.clone();
         let handle = ae.focus.clone();
@@ -2313,14 +2336,18 @@ impl Explorer {
     }
 
     fn page_title(title: &'static str, subtitle: String) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .pb_4()
-            .min_w_0()
-            .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title))
-            .child(div().w_full().text_size(px(13.)).text_color(rgb(MUTED)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(subtitle))
+        // The inner flex_1/min_w_0 box gives the ellipsised subtitle a definite width (without it GPUI collapses it to "…").
+        div().flex().min_w_0().child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .pb_4()
+                .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title))
+                .child(div().text_size(px(13.)).text_color(rgb(MUTED)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(subtitle)),
+        )
     }
 
     fn nav_item(&self, label: &'static str, view: View, cx: &mut Context<Self>) -> Stateful<Div> {
