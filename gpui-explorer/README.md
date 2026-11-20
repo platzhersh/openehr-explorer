@@ -1,10 +1,14 @@
 # openEHR Explorer — GPUI clone (just for fun)
 
+> **⚠️ Experimental.** This is a proof-of-concept experiment (OEH-130), not a supported part of openEHR Explorer. It is not
+> built, tested, packaged or released with the app, is not covered by the app's CI release pipeline, and is deliberately
+> **not mentioned in the release notes or changelog**. Expect missing features and rough edges.
+
 A ~700-line [GPUI](https://crates.io/crates/gpui) (Zed's GPU UI framework) port of four screens of
 openEHR Explorer: **Dashboard, EHR Browser, Templates (Web Template tree), AQL Runner**.
 It is a toy. By default data is in-process and mirrors `scripts/demo-assets/mock.js`. With `--server` it talks to a
-real openEHR CDR (see below). Still missing: Request Inspector, filters/search/sort in EHR Browser, horizontal scrolling for wide content, composition
-versions/directory/contributions, writes (create/edit/delete).
+real openEHR CDR (see below). Still missing: horizontal scrolling for wide content, composition
+versions/directory/contributions, writes (create/edit/delete), the Terminology view.
 
 ```bash
 cd gpui-explorer

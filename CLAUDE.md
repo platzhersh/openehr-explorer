@@ -188,6 +188,10 @@ When making significant architectural changes, create an ADR. When planning new 
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages and PR titles: `<type>(<optional scope>): <description>`, e.g. `feat(website): publish working Windows install command`, `fix: gh api --jq doesn't accept extra jq flags`, `docs(readme): add header banner and badges`, `ci: add Windows package manager auto-publish workflows`, `chore: bump version to 0.4.2`. Common types in this repo: `feat`, `fix`, `docs`, `chore`, `ci`, `refactor`.
 
+### Experimental `gpui-explorer/`
+
+`gpui-explorer/` is an experimental GPUI proof-of-concept (OEH-130), marked as such in its README. It is not part of the app or its releases: **never mention `gpui-explorer` or its commits in release notes, the website changelog (`website/src/pages/docs.astro`), What's New (`src/lib/whats-new.ts`) or any other user-facing release text.** When reviewing history for those, exclude it (`git log <tag>..HEAD -- . ':!gpui-explorer'`).
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/ci.yml`) runs frontend and Rust checks plus a macOS build on every push/PR to `main`. Windows and Linux builds, GitHub Release publishing, the in-app updater manifest, and Homebrew/Scoop/WinGet package updates are all tag-triggered (`v*`).

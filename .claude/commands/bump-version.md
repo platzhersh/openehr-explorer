@@ -38,7 +38,7 @@ Rules:
 Add a new changelog entry for `$1` in `website/src/pages/docs.astro`:
 
 1. Find the previous tag: `git describe --tags --abbrev=0` (before the tag for `$1` is created).
-2. Review what changed since that tag: `git log <previous-tag>..HEAD --oneline`. Read the underlying commits/PRs as needed to understand user-facing impact — don't just paraphrase commit subjects.
+2. Review what changed since that tag: `git log <previous-tag>..HEAD --oneline -- . ':!gpui-explorer'` (the `gpui-explorer/` experiment is excluded on purpose: never mention it or its commits in the changelog, What's New or any other release notes). Read the underlying commits/PRs as needed to understand user-facing impact — don't just paraphrase commit subjects.
 3. Add a new `<h3 id="v<major>-<minor>-<patch>">v$1 — <short theme>` block (the id is the version with dots replaced by dashes, e.g. `v0-10-1`, so each entry is linkable) as the **first** entry under `<section id="changelog">` in `website/src/pages/docs.astro` (above the current top entry), matching the existing format: a short thematic title, then a `<ul>` of `<strong>Label:</strong> description` bullets covering user-facing highlights only (skip internal chores, CI tweaks, dependency bumps, etc. unless user-visible).
 4. Commit separately with this message:
 
