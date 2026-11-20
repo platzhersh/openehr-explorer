@@ -78,8 +78,25 @@ enum View {
 struct Ehr {
     id: SharedString,
     created: SharedString,
-    subject: SharedString,
+    /// External subject id, when the EHR has one.
+    subject: Option<SharedString>,
+    system: SharedString,
     compositions: u32,
+}
+
+impl Ehr {
+    fn from_row(r: net::EhrRow) -> Self {
+        Self { id: r.id.into(), created: r.created.into(), subject: None, system: r.system_id.into(), compositions: 0 }
+    }
+
+    fn from_hit(h: net::SearchHit) -> Self {
+        Self { id: h.id.into(), created: h.created.into(), subject: h.subject_id.map(Into::into), system: h.system_id.unwrap_or_default().into(), compositions: 0 }
+    }
+
+    /// What the list row shows under the id: the subject when there is one, else the system id.
+    fn meta(&self) -> SharedString {
+        self.subject.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| if self.system.is_empty() { "—".into() } else { self.system.clone() })
+    }
 }
 
 #[derive(Clone)]
@@ -296,6 +313,16 @@ struct Explorer {
     aql_loading: bool,
     auto_run: bool,
     auto_select: bool,
+    /// Bumped when the active server changes: every in-flight server request of the old server is dropped.
+    server_epoch: u64,
+    /// Per-feature request tokens: only the latest request of each kind may update the UI.
+    load_req: u64,
+    list_req: u64,
+    ehr_req: u64,
+    tmpl_req: u64,
+    comp_req: u64,
+    aql_req: u64,
+    test_seq: u64,
     query: SharedString,
     analytics: Analytics,
     settings: settings::GlobalSettings,
@@ -460,6 +487,8 @@ struct ProfileForm {
     admin: Option<profiles::StoredAuthMethod>,
     result: Option<Result<String, String>>,
     testing: bool,
+    /// Identifies the connection test whose answer may still be shown (0 = none; reset by any edit).
+    test_token: u64,
 }
 
 #[derive(Default)]
@@ -643,16 +672,17 @@ impl Explorer {
         if server.is_none() {
             let mut seed = 42u64;
             ehrs = vec![
-                Ehr { id: "9c2c5c5e-1c1b-4b0a-9d1e-9a4b2f3c8a11".into(), created: "2026-06-02T08:14:21Z".into(), subject: "P-10234".into(), compositions: 3 },
-                Ehr { id: "4a9e2d7b-6f31-4c9e-8a5a-1d2e3f4a5b6c".into(), created: "2026-08-19T10:05:17Z".into(), subject: "—".into(), compositions: 0 },
-                Ehr { id: "b28f6a9c-2e4d-4a1b-9c3f-7e8d9c0b1a2f".into(), created: "2026-08-11T16:38:44Z".into(), subject: "—".into(), compositions: 0 },
+                Ehr { id: "9c2c5c5e-1c1b-4b0a-9d1e-9a4b2f3c8a11".into(), created: "2026-06-02T08:14:21Z".into(), subject: Some("P-10234".into()), system: "hospital.example.org".into(), compositions: 3 },
+                Ehr { id: "4a9e2d7b-6f31-4c9e-8a5a-1d2e3f4a5b6c".into(), created: "2026-08-19T10:05:17Z".into(), subject: None, system: "hospital.example.org".into(), compositions: 0 },
+                Ehr { id: "b28f6a9c-2e4d-4a1b-9c3f-7e8d9c0b1a2f".into(), created: "2026-08-11T16:38:44Z".into(), subject: None, system: "hospital.example.org".into(), compositions: 0 },
             ];
             while ehrs.len() < o.ehr_count {
                 let n = lcg(&mut seed);
                 ehrs.push(Ehr {
                     id: fake_uuid(&mut seed).into(),
                     created: format!("2026-{:02}-{:02}T{:02}:{:02}:00Z", 1 + n % 11, 1 + (n >> 4) % 28, (n >> 9) % 24, (n >> 14) % 60).into(),
-                    subject: format!("P-{}", 10000 + n % 90000).into(),
+                    subject: Some(format!("P-{}", 10000 + n % 90000).into()),
+                    system: "hospital.example.org".into(),
                     compositions: (n % 7) as u32,
                 });
             }
@@ -696,13 +726,21 @@ impl Explorer {
             server,
             server_name: o.server_name.map(SharedString::from),
             active_profile: o.active_profile,
-            profiles_ui: ProfilesUi { profiles: profiles::load_stored(), ..Default::default() },
+            profiles_ui: ProfilesUi { profiles: profiles::load_stored().unwrap_or_default(), ..Default::default() },
             error: o.startup_error.map(SharedString::from),
             ehrs_has_more: false,
             ehrs_loading: false,
             aql_loading: false,
             auto_run: o.run,
             auto_select: o.select,
+            server_epoch: 0,
+            load_req: 0,
+            list_req: 0,
+            ehr_req: 0,
+            tmpl_req: 0,
+            comp_req: 0,
+            aql_req: 0,
+            test_seq: 0,
             query: o.query.unwrap_or_else(|| QUERY.to_string()).into(),
             analytics: o.analytics,
             settings: o.settings,
@@ -739,8 +777,23 @@ impl Explorer {
         }
     }
 
-    /// Spawn `fut` on the Tokio runtime and apply its result to `self` on the GPUI thread.
+    /// Spawn `fut` on the Tokio runtime and apply its result to `self` on the GPUI thread, but only if the
+    /// active server is still the one the request was made for (answers for a previous server are dropped).
     fn spawn_net<T, Fut>(&self, cx: &mut Context<Self>, fut: Fut, apply: impl FnOnce(&mut Self, Result<T, String>, &mut Context<Self>) + 'static)
+    where
+        T: Send + 'static,
+        Fut: std::future::Future<Output = Result<T, String>> + Send + 'static,
+    {
+        let epoch = self.server_epoch;
+        self.spawn_net_any(cx, fut, move |this, res, cx| {
+            if this.server_epoch == epoch {
+                apply(this, res, cx);
+            }
+        });
+    }
+
+    /// Like `spawn_net`, without the server check (connection tests of profiles that are not active).
+    fn spawn_net_any<T, Fut>(&self, cx: &mut Context<Self>, fut: Fut, apply: impl FnOnce(&mut Self, Result<T, String>, &mut Context<Self>) + 'static)
     where
         T: Send + 'static,
         Fut: std::future::Future<Output = Result<T, String>> + Send + 'static,
@@ -765,54 +818,80 @@ impl Explorer {
         self.conn = Conn::Connecting;
         self.error = None;
         self.ehrs_loading = true;
+        self.load_req += 1;
+        self.list_req += 1;
+        let (load, list) = (self.load_req, self.list_req);
         let (sort_field, sort_dir) = (self.sort_field, self.sort_dir);
+        // Only a failing connection test is fatal; templates, the EHR page and the counts each fail on their own.
         let fut = async move {
             let desc = server.test_connection().await?;
-            let templates = server.list_templates().await?;
-            let page = server.list_ehrs(0, PAGE, sort_field, sort_dir).await?;
+            let templates = server.list_templates().await;
+            let page = server.list_ehrs(0, PAGE, sort_field, sort_dir).await;
             let counts = server.dashboard_counts().await;
             Ok::<_, String>((desc, templates, page, counts))
         };
-        self.spawn_net(cx, fut, |this, res, cx| {
-            this.ehrs_loading = false;
+        self.spawn_net(cx, fut, move |this, res, cx| {
+            if this.load_req != load {
+                return; // superseded by a newer Refresh
+            }
             match res {
-                Ok((desc, templates, page, counts)) => {
-                    // A COUNT failure must not break the rest of the load, but it is shown on the dashboard.
-                    match counts {
-                        Ok(c) => {
-                            this.counts = Some(c);
-                            this.counts_error = None;
-                        }
-                        Err(e) => {
-                            this.counts = None;
-                            this.counts_error = Some(e.into());
-                        }
-                    }
-                    this.server_version = Some(desc.clone().into());
-                    this.analytics.track("connection_result", Some(json!({ "ok": true })));
-                    let label = match &this.server_name {
-                        Some(n) => format!("{n} · {desc}"),
-                        None => desc,
-                    };
-                    this.conn = Conn::Connected(label.into());
-                    this.templates = templates.into_iter().map(|t| Template { id: t.id.into(), concept: t.concept.into(), archetype: t.archetype.into() }).collect();
-                    this.ehrs = page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }).collect();
-                    this.ehrs_has_more = page.has_more;
-                    this.sort_applied = page.sort_applied;
-                    if !this.templates.is_empty() {
-                        this.select_template(0, cx);
-                    }
-                    if this.auto_select && !this.ehrs.is_empty() {
-                        this.select_ehr(0, cx);
-                    }
-                }
+                Ok((desc, templates, page, counts)) => this.apply_loaded(desc, templates, page, counts, list, cx),
                 Err(e) => {
+                    this.ehrs_loading = false;
                     this.analytics.track("connection_result", Some(json!({ "ok": false })));
                     this.conn = Conn::Failed(e.clone().into());
                     this.error = Some(e.into());
                 }
             }
         });
+    }
+
+    fn apply_loaded(&mut self, desc: String, templates: Result<Vec<net::TemplateRow>, String>, page: Result<net::EhrPage, String>, counts: Result<net::Counts, String>, list: u64, cx: &mut Context<Self>) {
+        let mut problems: Vec<String> = Vec::new();
+        // A COUNT failure must not break the rest of the load, but it is shown on the dashboard.
+        match counts {
+            Ok(c) => {
+                self.counts = Some(c);
+                self.counts_error = None;
+            }
+            Err(e) => {
+                self.counts = None;
+                self.counts_error = Some(e.into());
+            }
+        }
+        self.server_version = Some(desc.clone().into());
+        self.analytics.track("connection_result", Some(json!({ "ok": true })));
+        let label = match &self.server_name {
+            Some(n) => format!("{n} · {desc}"),
+            None => desc,
+        };
+        self.conn = Conn::Connected(label.into());
+        match templates {
+            Ok(t) => self.templates = t.into_iter().map(|t| Template { id: t.id.into(), concept: t.concept.into(), archetype: t.archetype.into() }).collect(),
+            Err(e) => problems.push(format!("Templates unavailable: {e}")),
+        }
+        // A newer list request (sort change) owns the EHR list now.
+        if self.list_req == list {
+            self.ehrs_loading = false;
+            match page {
+                Ok(p) => {
+                    self.reset_selection();
+                    self.ehrs = p.rows.into_iter().map(Ehr::from_row).collect();
+                    self.ehrs_has_more = p.has_more;
+                    self.sort_applied = p.sort_applied;
+                }
+                Err(e) => problems.push(format!("EHR list unavailable: {e}")),
+            }
+        }
+        if !problems.is_empty() {
+            self.error = Some(problems.join(" — ").into());
+        }
+        if !self.templates.is_empty() {
+            self.select_template(0, cx);
+        }
+        if self.auto_select && self.search.is_none() && !self.ehrs.is_empty() {
+            self.select_ehr(0, cx);
+        }
     }
 
     fn load_more_ehrs(&mut self, cx: &mut Context<Self>) {
@@ -822,12 +901,17 @@ impl Explorer {
         }
         self.ehrs_loading = true;
         let offset = self.ehrs.len();
+        let list = self.list_req;
+        // Page with the sort the committed rows were fetched with.
         let (sort_field, sort_dir) = (self.sort_field, self.sort_dir);
-        self.spawn_net(cx, async move { server.list_ehrs(offset, PAGE, sort_field, sort_dir).await }, |this, res, _cx| {
+        self.spawn_net(cx, async move { server.list_ehrs(offset, PAGE, sort_field, sort_dir).await }, move |this, res, _cx| {
+            if this.list_req != list {
+                return; // the list was reloaded or re-sorted meanwhile
+            }
             this.ehrs_loading = false;
             match res {
                 Ok(page) => {
-                    this.ehrs.extend(page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }));
+                    this.ehrs.extend(page.rows.into_iter().map(Ehr::from_row));
                     this.ehrs_has_more = page.has_more;
                 }
                 Err(e) => this.error = Some(e.into()),
@@ -836,18 +920,18 @@ impl Explorer {
     }
 
     fn select_ehr(&mut self, i: usize, cx: &mut Context<Self>) {
+        let Some(id) = self.shown().get(i).map(|e| e.id.to_string()) else { return };
+        self.reset_selection();
         self.selected_ehr = Some(i);
-        self.reset_composition();
         let Some(server) = self.server.clone() else {
             self.comps = demo_comps(self.shown()[i].compositions.min(3) as usize);
             return;
         };
-        let id = self.shown()[i].id.to_string();
-        self.comps.clear();
         self.comps_loading = true;
+        let req = self.ehr_req;
         self.spawn_net(cx, async move { server.ehr_compositions(&id).await }, move |this, res, _cx| {
-            // Ignore a stale answer if the user already picked another EHR.
-            if this.selected_ehr != Some(i) {
+            // Ignore a stale answer if the user already picked another EHR (or the list changed).
+            if this.ehr_req != req {
                 return;
             }
             this.comps_loading = false;
@@ -869,8 +953,12 @@ impl Explorer {
         let Some(server) = self.server.clone() else { return };
         let Some(t) = self.templates.get(i) else { return };
         let id = t.id.to_string();
+        // Show nothing (not the previous template's tree) until this template's answer arrives.
+        self.tree.clear();
+        self.tmpl_req += 1;
+        let req = self.tmpl_req;
         self.spawn_net(cx, async move { server.web_template(&id).await }, move |this, res, _cx| {
-            if this.selected_template != i {
+            if this.tmpl_req != req {
                 return;
             }
             match res {
@@ -889,7 +977,8 @@ impl Explorer {
         let Some(b) = self.bench.as_ref() else { return };
         let n = self.table.as_ref().map(AqlTable::row_count).unwrap_or(0);
         if n > 0 {
-            let ix = (b.frame * (n / b.total_frames).max(1)).min(n - 1);
+            // Spread the frames over the whole range so the last frame shows the last rows.
+            let ix = (b.frame * (n - 1) / b.total_frames.saturating_sub(1).max(1)).min(n - 1);
             self.aql_scroll.scroll_to_item(ix, ScrollStrategy::Top);
         }
         cx.notify();
@@ -907,8 +996,13 @@ impl Explorer {
         let q = self.query.to_string();
         self.error = None;
         self.aql_loading = true;
+        self.aql_req += 1;
+        let req = self.aql_req;
         let t = Instant::now();
         self.spawn_net(cx, async move { server.aql(&q).await }, move |this, res, _cx| {
+            if this.aql_req != req {
+                return; // the server changed while this query was running
+            }
             this.aql_loading = false;
             match res {
                 Ok(o) => {
@@ -955,10 +1049,6 @@ impl Explorer {
 
     // ---- server profiles ------------------------------------------------------------------------
 
-    fn reload_profiles(&mut self) {
-        self.profiles_ui.profiles = profiles::load_stored();
-    }
-
     fn open_form(&mut self, editing: Option<profiles::StoredProfile>, cx: &mut Context<Self>) {
         use profiles::StoredAuthMethod as S;
         let (id, name, url, prefix, term, user, kind, st, has_secret, admin) = match &editing {
@@ -966,7 +1056,8 @@ impl Explorer {
                 p.id.clone(),
                 p.name.clone(),
                 p.base_url.clone(),
-                p.api_path_prefix.clone().unwrap_or_default(),
+                // An explicit root ("") is shown as "/" so it stays distinguishable from the blank default.
+                p.api_path_prefix.clone().map(|s| if s.is_empty() { "/".to_string() } else { s }).unwrap_or_default(),
                 p.terminology_url.clone().unwrap_or_default(),
                 if let S::Basic { username } = &p.auth_method { username.clone() } else { String::new() },
                 match p.auth_method {
@@ -990,8 +1081,7 @@ impl Explorer {
             Field::new(cx, "", true, if has_secret { keep } else { "password" }),
             Field::new(cx, "", true, if has_secret { keep } else { "token" }),
         ];
-        // Editing keeps an empty api_path_prefix field = default only if it was stored as None; "" is a real value.
-        self.profiles_ui.form = Some(ProfileForm { editing: editing.map(|p| p.id), id, fields, server_type: st, auth: kind, has_secret, admin, result: None, testing: false });
+        self.profiles_ui.form = Some(ProfileForm { editing: editing.map(|p| p.id), id, fields, server_type: st, auth: kind, has_secret, admin, result: None, testing: false, test_token: 0 });
         self.profiles_ui.confirm_delete = None;
     }
 
@@ -1033,7 +1123,7 @@ impl Explorer {
             auth_method: auth,
             admin_auth_method: admin,
             terminology_url: Some(t(F_TERM)).filter(|s| !s.is_empty()),
-            // Blank = use the default (None); the Tauri form distinguishes it the same way.
+            // Blank = use the default (None); "/" = explicit root (Some("") after normalization).
             api_path_prefix: if prefix.is_empty() { None } else { Some(prefix) },
         })
     }
@@ -1108,20 +1198,24 @@ impl Explorer {
                 }
             }
         }
+        self.test_seq += 1;
+        let token = self.test_seq;
         if let Some(f) = self.profiles_ui.form.as_mut() {
             f.testing = true;
             f.result = None;
+            f.test_token = token;
         }
         let stype = sp.server_type.as_str();
         let net_profile = net::Profile::from_server(&sp);
         let id = input.id;
-        self.spawn_net(cx, async move { net_profile.test_http().await }, move |this, res, _cx| {
+        self.spawn_net_any(cx, async move { net_profile.test_http().await }, move |this, res, _cx| {
             if res.is_ok() {
                 // Coarse event only (CDR platform type), same as the Tauri app.
                 this.analytics.track("server_connected", Some(json!({ "server_type": stype })));
             }
             if let Some(f) = this.profiles_ui.form.as_mut() {
-                if f.id == id {
+                // Only the test started from this very form state: an edit, close or newer test invalidates it.
+                if f.id == id && f.test_token == token {
                     f.testing = false;
                     f.result = Some(res);
                 }
@@ -1142,7 +1236,7 @@ impl Explorer {
         let np = net::Profile::from_server(&sp);
         let id = id.to_string();
         self.profiles_ui.testing.insert(id.clone());
-        self.spawn_net(cx, async move { np.test_http().await }, move |this, res, _cx| {
+        self.spawn_net_any(cx, async move { np.test_http().await }, move |this, res, _cx| {
             if res.is_ok() {
                 this.analytics.track("server_connected", Some(json!({ "server_type": stype })));
             }
@@ -1157,6 +1251,13 @@ impl Explorer {
         match profiles::resolve(&stored) {
             Ok(p) => {
                 self.server = Some(net::Profile::from_server(&p));
+                // Drop everything still in flight for the previous server.
+                self.server_epoch += 1;
+                self.aql_req += 1;
+                self.tmpl_req += 1;
+                self.list_req += 1;
+                self.aql_loading = false;
+                self.ehrs_loading = false;
                 self.server_name = Some(p.name.into());
                 self.active_profile = Some(stored.id);
                 self.ehrs.clear();
@@ -1202,6 +1303,9 @@ impl Explorer {
 
     fn form_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let ks = &ev.keystroke;
+        if is_inspector_shortcut(ks) {
+            return;
+        }
         let m = &ks.modifiers;
         match ks.key.as_str() {
             "tab" => {
@@ -1229,6 +1333,9 @@ impl Explorer {
         let Some(form) = self.profiles_ui.form.as_mut() else { return };
         let Some(f) = form.fields.iter_mut().find(|f| f.focus.is_focused(window)) else { return };
         f.handle_key(ks, paste);
+        form.test_token = 0;
+        form.testing = false;
+        form.result = None;
         cx.notify();
         cx.stop_propagation();
     }
@@ -1512,6 +1619,7 @@ impl Explorer {
     }
 
     fn reset_composition(&mut self) {
+        self.comp_req += 1;
         self.comp_sel = None;
         self.comp_json.clear();
         self.comp_flat.clear();
@@ -1545,6 +1653,8 @@ impl Explorer {
     fn open_composition(&mut self, i: usize, cx: &mut Context<Self>) {
         let Some(c) = self.comps.get(i).cloned() else { return };
         self.view = View::Composition;
+        self.comp_req += 1;
+        let req = self.comp_req;
         self.comp_sel = Some(i);
         self.comp_json_err = None;
         self.comp_flat_err = None;
@@ -1565,7 +1675,7 @@ impl Explorer {
         // reports its own error without blocking or failing the other.
         let (s2, e2, u2) = (server.clone(), ehr.clone(), uid.clone());
         self.spawn_net(cx, async move { server.composition(&ehr, &uid).await }, move |this, res, _cx| {
-            if this.comp_sel != Some(i) {
+            if this.comp_req != req {
                 return;
             }
             this.comp_json_loading = false;
@@ -1575,7 +1685,7 @@ impl Explorer {
             }
         });
         self.spawn_net(cx, async move { s2.composition_flat(&e2, &u2).await }, move |this, res, _cx| {
-            if this.comp_sel != Some(i) {
+            if this.comp_req != req {
                 return;
             }
             this.comp_flat_loading = false;
@@ -1960,6 +2070,8 @@ impl Explorer {
     }
 
     fn reset_selection(&mut self) {
+        self.ehr_req += 1;
+        self.comps_loading = false;
         self.selected_ehr = None;
         self.comps.clear();
         self.reset_composition();
@@ -2036,7 +2148,7 @@ impl Explorer {
                         s.results = r
                             .hits
                             .into_iter()
-                            .map(|h| Ehr { id: h.id.into(), created: h.created.into(), subject: h.subject_id.or(h.system_id).unwrap_or_else(|| "—".to_string()).into(), compositions: 0 })
+                            .map(Ehr::from_hit)
                             .collect();
                     }
                 }
@@ -2053,13 +2165,14 @@ impl Explorer {
         self.ehrs
             .iter()
             .filter(|e| c.ehr_id_prefix.as_deref().map(|p| e.id.starts_with(p)).unwrap_or(true))
-            .filter(|e| c.subject_id.as_deref().map(|p| e.subject.contains(p)).unwrap_or(true))
+            .filter(|e| c.subject_id.as_deref().map(|p| e.subject.as_deref().is_some_and(|s| s.contains(p))).unwrap_or(true))
             .take(search::SEARCH_DISPLAY_LIMIT)
             .cloned()
             .collect()
     }
 
     fn set_sort(&mut self, field: SortField, dir: SortDir, cx: &mut Context<Self>) {
+        let previous = (self.sort_field, self.sort_dir);
         self.sort_field = field;
         self.sort_dir = dir;
         self.analytics.track("ehr_list_sorted", Some(json!({ "field": field.label() })));
@@ -2075,27 +2188,36 @@ impl Explorer {
             self.reset_selection();
             return;
         };
-        self.reset_selection();
         self.ehrs_loading = true;
+        self.list_req += 1;
+        let list = self.list_req;
         self.spawn_net(cx, async move { server.list_ehrs(0, PAGE, field, dir).await }, move |this, res, _cx| {
-            this.ehrs_loading = false;
-            // Ignore an answer for a sort the user has already changed again.
-            if this.sort_field != field || this.sort_dir != dir {
+            // Only the latest list request (this sort, not a later sort or a reload) may touch the list.
+            if this.list_req != list {
                 return;
             }
+            this.ehrs_loading = false;
             match res {
                 Ok(page) => {
-                    this.ehrs = page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }).collect();
+                    this.reset_selection();
+                    this.ehrs = page.rows.into_iter().map(Ehr::from_row).collect();
                     this.ehrs_has_more = page.has_more;
                     this.sort_applied = page.sort_applied;
                 }
-                Err(e) => this.error = Some(e.into()),
+                Err(e) => {
+                    // Keep the rows on screen together with the sort that produced them.
+                    (this.sort_field, this.sort_dir) = previous;
+                    this.error = Some(e.into());
+                }
             }
         });
     }
 
     fn search_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let ks = &ev.keystroke;
+        if is_inspector_shortcut(ks) {
+            return;
+        }
         let paste = if (ks.modifiers.control || ks.modifiers.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
         let Some(f) = self.search_field.as_mut() else { return };
         if !f.focus.is_focused(window) {
@@ -2189,7 +2311,9 @@ impl Explorer {
 
     fn save_settings(&mut self) {
         let Some(ui) = self.settings_ui.as_mut() else { return };
-        let mut next = self.settings.clone();
+        // Merge only what this screen edits into the latest persisted settings, so values written meanwhile
+        // (e.g. by the Tauri app: tours, last-seen version) are not overwritten by this window's stale copy.
+        let mut next = settings::load();
         let url = ui.terminology.text.trim().to_string();
         next.terminology_server_url = if url.is_empty() { None } else { Some(url) };
         next.check_updates_on_startup = ui.check_updates;
@@ -2197,10 +2321,13 @@ impl Explorer {
         next.analytics_enabled = ui.analytics;
         ui.message = Some(match settings::save(&next) {
             Ok(()) => {
-                // Opting out takes effect immediately and flushes what is pending; opting in starts collection.
-                self.analytics.set_enabled(next.analytics_enabled);
+                // Opting out takes effect immediately (queued events are discarded); opting in starts collection.
+                let started = self.analytics.set_enabled(next.analytics_enabled);
                 self.settings = next;
-                Ok("Settings saved".to_string())
+                match started {
+                    Ok(()) => Ok("Settings saved".to_string()),
+                    Err(e) => Err(format!("Settings saved, but analytics could not start: {e}")),
+                }
             }
             Err(e) => Err(format!("Could not save settings: {e}")),
         });
@@ -2208,6 +2335,9 @@ impl Explorer {
 
     fn settings_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let ks = &ev.keystroke;
+        if is_inspector_shortcut(ks) {
+            return;
+        }
         let paste = if (ks.modifiers.control || ks.modifiers.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
         if ks.key == "enter" {
             self.save_settings();
@@ -2559,7 +2689,7 @@ impl Explorer {
                                 cx.notify();
                             }))
                             .child(div().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).child(e.id.clone()))
-                            .child(div().text_size(px(11.)).text_color(rgb(MUTED)).child(format!("{} · {}", e.subject, e.created)))
+                            .child(div().text_size(px(11.)).text_color(rgb(MUTED)).child(format!("{} · {}", e.meta(), e.created)))
                     })
                     .collect()
             }),
@@ -2668,9 +2798,9 @@ impl Explorer {
                             .flex()
                             .flex_col()
                             .child(kv("EHR ID", e.id.clone()))
-                            .child(kv("System ID", if self.server.is_some() { e.subject.clone() } else { "hospital.example.org".into() }))
+                            .child(kv("System ID", if e.system.is_empty() { "—".into() } else { e.system.clone() }))
                             .child(kv("Created", e.created.clone()))
-                            .child(kv("Subject", if self.server.is_some() { "—".into() } else { e.subject.clone() })),
+                            .child(kv("Subject", e.subject.clone().unwrap_or_else(|| "—".into()))),
                     )
                     .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(if self.comps_loading { "Compositions (loading…)".to_string() } else { format!("Compositions ({}{})", self.comps.len(), if self.comps.len() >= COMPS_LIMIT { "+" } else { "" }) }))
                     .child(comps)
@@ -2883,8 +3013,7 @@ impl Render for Explorer {
             .id("root")
             .track_focus(&self.root_focus)
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
-                let ks = &ev.keystroke;
-                if (ks.modifiers.control || ks.modifiers.platform) && ks.modifiers.shift && ks.key == "i" {
+                if is_inspector_shortcut(&ev.keystroke) {
                     this.inspector_cycle();
                     cx.notify();
                 }
@@ -2948,6 +3077,11 @@ impl Render for Explorer {
     }
 }
 
+/// Ctrl/Cmd+Shift+I toggles the Request Inspector from anywhere, including focused inputs.
+fn is_inspector_shortcut(ks: &Keystroke) -> bool {
+    (ks.modifiers.control || ks.modifiers.platform) && ks.modifiers.shift && ks.key == "i"
+}
+
 fn arg(name: &str) -> Option<String> {
     let a: Vec<String> = std::env::args().collect();
     a.iter().position(|x| x == name).and_then(|i| a.get(i + 1).cloned())
@@ -2986,7 +3120,10 @@ fn main() {
     // Explicit --server wins; otherwise use the stored default/first profile (like the Tauri app); --demo opts out.
     let (mut server, mut server_name, mut active_profile, mut startup_error) = (server_from_env(), None, None, None);
     if server.is_none() && !flag("--demo") {
-        let stored = profiles::load_stored();
+        let stored = profiles::load_stored().unwrap_or_else(|e| {
+            startup_error = Some(e);
+            Vec::new()
+        });
         if let Some(sp) = profiles::initial_active(&stored) {
             match profiles::resolve(sp) {
                 Ok(p) => {

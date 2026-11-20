@@ -1,3 +1,11 @@
+// What the OS reports for "no such attribute": ENODATA on Linux/Android, ENOATTR on macOS and the BSDs
+// (libc has no ENODATA for FreeBSD, and on macOS ENODATA is a different error).
+#[cfg(any(target_os = "linux", target_os = "android"))]
+const MISSING_ATTR: ::libc::c_int = ::libc::ENODATA;
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[allow(dead_code)]
+const MISSING_ATTR: ::libc::c_int = ::libc::ENOATTR;
+
 macro_rules! platforms {
     ($($($platform:expr);* => $module:ident),*) => {
         $(
@@ -9,7 +17,7 @@ macro_rules! platforms {
             pub use self::$module::*;
 
             #[cfg(any($(target_os = $platform),*))]
-            pub const ENOATTR: ::libc::c_int = ::libc::ENODATA;
+            pub const ENOATTR: ::libc::c_int = MISSING_ATTR;
         )*
 
         #[cfg(all(feature = "unsupported", not(any($($(target_os = $platform),*),*))))]

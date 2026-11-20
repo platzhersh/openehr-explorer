@@ -6,16 +6,16 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 const [repo, outDir, url = "http://localhost:4173"] = process.argv.slice(2);
-const require = createRequire(path.join(repo, "package.json"));
+const require = createRequire(path.resolve(repo, "package.json"));
 const { chromium } = require("playwright");
 const MOCK = path.join(repo, "scripts/demo-assets/mock.js");
 fs.mkdirSync(outDir, { recursive: true });
 
 const median = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
-function browserPid() {
+// Main (non-renderer) Chromium processes currently running, so the one `open()` launches is the new one.
+function chromeMainPids() {
   const lines = execSync("/bin/ps -eo pid=,args=").toString().split("\n");
-  const l = lines.find((x) => /chrome-linux64\/chrome/.test(x) && !/--type=/.test(x) && !/ps -eo/.test(x));
-  return Number(l.trim().split(/\s+/)[0]);
+  return lines.filter((x) => /chrome-linux64\/chrome|\/opt\/pw-browsers\/chromium/.test(x) && !/--type=/.test(x) && !/ps -eo/.test(x)).map((l) => Number(l.trim().split(/\s+/)[0]));
 }
 function descendants(root) {
   const rows = execSync("/bin/ps -eo pid=,ppid=").toString().trim().split("\n").map((l) => l.trim().split(/\s+/).map(Number));
@@ -52,9 +52,12 @@ const rowsOverride = () => {
 };
 
 async function open() {
+  const before = new Set(chromeMainPids());
   const t0 = performance.now();
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--no-sandbox"] });
   const tLaunch = performance.now() - t0;
+  const pid = chromeMainPids().find((p) => !before.has(p));
+  if (!pid) throw new Error("could not find the browser process this run launched");
   const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 });
   await page.addInitScript({ path: MOCK });
   await page.addInitScript(() => { window.__DEMO_APP_VERSION__ = "0.10.3"; });
@@ -63,7 +66,7 @@ async function open() {
   await page.waitForSelector(".sidebar-nav");
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const tNav = performance.now() - t1;
-  return { browser, page, tLaunch, tNav };
+  return { browser, page, pid, tLaunch, tNav };
 }
 
 async function addServer(page) {
@@ -83,7 +86,7 @@ const inSequence = (items, fn) => items.reduce((prev, item, i) => prev.then(() =
 // ---------- startup (5 cold launches) ----------
 await inSequence([0, 1, 2, 3, 4], async (i) => {
   const s = await open();
-  const pids = descendants(browserPid());
+  const pids = descendants(s.pid);
   if (i === 4) {
     result.idle_pss_mb = +(pssKb(pids) / 1024).toFixed(1);
     result.idle_procs = pids.length;
@@ -93,7 +96,7 @@ await inSequence([0, 1, 2, 3, 4], async (i) => {
 });
 
 // ---------- screenshots + scenarios ----------
-const { browser, page } = await open();
+const { browser, page, pid: browserPid } = await open();
 await page.evaluate(rowsOverride);
 await page.evaluate(() => { window.__BENCH_ROWS__ = 0; });
 await page.screenshot({ path: path.join(outDir, "vue-01-dashboard.png") });
@@ -157,7 +160,7 @@ await inSequence([3, 1000, 10000, 50000], async (n) => {
   const ms = await runAql(n);
   await page.waitForTimeout(400);
   if (n === 3) { await page.mouse.move(1439, 959); await page.screenshot({ path: path.join(outDir, "vue-04-aql.png") }); }
-  const pids = descendants(browserPid());
+  const pids = descendants(browserPid);
   const sc = { rows: n, run_to_render_ms: +ms.toFixed(1), pss_mb: +(pssKb(pids) / 1024).toFixed(1) };
   if (n >= 1000) {
     sc.dom_nodes = await page.evaluate(() => document.getElementsByTagName("*").length);
