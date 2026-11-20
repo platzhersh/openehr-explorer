@@ -68,7 +68,7 @@ jobs:
             sleep 15
           done
 
-          REL=$(gh api "/repos/${GITHUB_REPOSITORY}/releases/latest")
+          REL=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest")
           TAG=$(echo "$REL" | jq -r .tag_name)
           ASSET=$(echo "$REL" | jq -c '[.assets[] | select(.name | endswith("-setup.exe"))][0] // empty')
           T=""; TSHA=""; TNAME=""; TSIZE=""
