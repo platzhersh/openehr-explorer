@@ -4,9 +4,6 @@ name: GPUI Windows + VirusTotal (experiment)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ccr-7593b2ae-b0zhzc]
-    paths: [.github/workflows/gpui-windows-vt.yml]
 
 permissions:
   contents: read
