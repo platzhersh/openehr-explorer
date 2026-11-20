@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@astrojs/vue": "7.0.2",
-    "astro": "7.4.3",
+    "astro": "7.4.12",
     "vue": "3.5.43"
   },
   "devDependencies": {
