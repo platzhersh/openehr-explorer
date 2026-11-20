@@ -1,0 +1,89 @@
+# Experiment (see gpui-explorer/README.md, OEH-130): build the GPUI toy for Windows and compare its
+# VirusTotal result against the latest released Tauri installer. Not part of the release pipeline.
+name: GPUI Windows + VirusTotal (experiment)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ccr-7593b2ae-b0zhzc]
+    paths: [.github/workflows/gpui-windows-vt.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-scan:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build GPUI clone (release)
+        working-directory: gpui-explorer
+        run: cargo build --release
+
+      - name: Hash and upload artifact
+        id: hash
+        run: |
+          EXE=gpui-explorer/target/release/openehr-explorer-gpui.exe
+          ls -la "$EXE"
+          echo "sha=$(sha256sum "$EXE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c %s "$EXE")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openehr-explorer-gpui-windows
+          path: gpui-explorer/target/release/openehr-explorer-gpui.exe
+
+      - name: VirusTotal scan (GPUI exe)
+        uses: crazy-max/ghaction-virustotal@v5
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          request_rate: 4
+          files: |
+            gpui-explorer/target/release/openehr-explorer-gpui.exe
+
+      - name: Compare VirusTotal reports
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPUI_SHA: ${{ steps.hash.outputs.sha }}
+          GPUI_SIZE: ${{ steps.hash.outputs.size }}
+        run: |
+          set -euo pipefail
+          report() { # $1 = sha256 ; prints "malicious suspicious undetected harmless total flagged-engines"
+            curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/$1" \
+              | jq -r '.data.attributes as $a | ($a.last_analysis_stats // {}) as $s
+                | "\($s.malicious // 0) \($s.suspicious // 0) \($s.undetected // 0) \($s.harmless // 0) \(($s|add) // 0) \([$a.last_analysis_results // {} | to_entries[] | select(.value.category=="malicious" or .value.category=="suspicious") | .key] | join(","))"'
+          }
+          # Wait for the GPUI analysis to finish (up to ~6 min).
+          G=""
+          for i in $(seq 1 24); do
+            G=$(report "$GPUI_SHA" 2>/dev/null || true)
+            [ -n "$G" ] && [ "$(echo "$G" | awk '{print $5}')" -ge 50 ] && break
+            sleep 15
+          done
+
+          REL=$(gh api "/repos/${GITHUB_REPOSITORY}/releases/latest")
+          TAG=$(echo "$REL" | jq -r .tag_name)
+          ASSET=$(echo "$REL" | jq -c '[.assets[] | select(.name | endswith("-setup.exe"))][0] // empty')
+          T=""; TSHA=""; TNAME=""; TSIZE=""
+          if [ -n "$ASSET" ]; then
+            TNAME=$(echo "$ASSET" | jq -r .name); TSIZE=$(echo "$ASSET" | jq -r .size)
+            TSHA=$(echo "$ASSET" | jq -r '.digest // empty'); TSHA=${TSHA#sha256:}
+            [ -z "$TSHA" ] && TSHA=$(curl -fsSL "$(echo "$ASSET" | jq -r .browser_download_url)" | sha256sum | cut -d' ' -f1)
+            T=$(report "$TSHA" 2>/dev/null || true)
+          fi
+
+          {
+            echo "## VirusTotal comparison"
+            echo
+            echo "| Binary | Size | malicious | suspicious | undetected | harmless | engines | Flagged by | Report |"
+            echo "|---|---:|---:|---:|---:|---:|---:|---|---|"
+            if [ -n "$G" ]; then set -- $G; echo "| GPUI clone (exe) | $GPUI_SIZE | $1 | $2 | $3 | $4 | $5 | ${6:-none} | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"
+            else echo "| GPUI clone (exe) | $GPUI_SIZE | n/a (analysis not ready) | | | | | | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"; fi
+            if [ -n "$T" ]; then set -- $T; echo "| Tauri installer $TAG ($TNAME) | $TSIZE | $1 | $2 | $3 | $4 | $5 | ${6:-none} | [report](https://www.virustotal.com/gui/file/$TSHA) |"
+            else echo "| Tauri installer ${TAG:-?} | | no VirusTotal report found | | | | | | |"; fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
