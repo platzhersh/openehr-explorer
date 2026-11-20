@@ -988,92 +988,210 @@ impl Explorer {
         )
     }
 
-    fn servers_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let backend = if self.profiles_ui.profiles.is_empty() { "—" } else { profiles::credential_backend() };
-        let mut cards = div().flex().flex_col().gap_2().px_4().pb_4();
-        let list: Vec<profiles::StoredProfile> = self.profiles_ui.profiles.clone();
-        for p in list.iter() {
-            let id = p.id.clone();
-            let active = self.active_profile.as_deref() == Some(p.id.as_str());
-            let confirming = self.profiles_ui.confirm_delete.as_deref() == Some(p.id.as_str());
-            let auth = match &p.auth_method {
-                profiles::StoredAuthMethod::None => "no auth".to_string(),
-                profiles::StoredAuthMethod::Basic { username } => format!("basic · {username}"),
-                profiles::StoredAuthMethod::Bearer => "bearer".to_string(),
+    /// A pill toggle (server type / auth kind).
+    fn chip<F>(id: &'static str, label: String, on: bool, apply: F, cx: &mut Context<Self>) -> Stateful<Div>
+    where
+        F: Fn(&mut ProfileForm) + 'static,
+    {
+        div()
+            .id(id)
+            .px_3()
+            .h(px(28.))
+            .flex()
+            .items_center()
+            .rounded(px(14.))
+            .cursor_pointer()
+            .text_size(px(12.))
+            .border_1()
+            .border_color(rgb(if on { PRIMARY } else { BORDER }))
+            .text_color(rgb(if on { PRIMARY } else { TEXT2 }))
+            .bg(rgb(if on { BG3 } else { SURFACE }))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(f) = this.profiles_ui.form.as_mut() {
+                    apply(f);
+                }
+                cx.notify();
+            }))
+            .child(label)
+    }
+
+    fn labelled(label: &'static str, body: Div) -> Div {
+        div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(label)).child(body)
+    }
+
+    fn type_chips(form: &ProfileForm, cx: &mut Context<Self>) -> Div {
+        const IDS: [&str; 4] = ["st0", "st1", "st2", "st3"];
+        let mut row = div().flex().gap_2();
+        for (i, t) in profiles::ServerType::ALL.iter().copied().enumerate() {
+            row = row.child(Self::chip(IDS[i], t.as_str().to_string(), form.server_type == t, move |f| f.server_type = t, cx));
+        }
+        row
+    }
+
+    fn auth_chips(form: &ProfileForm, cx: &mut Context<Self>) -> Div {
+        let mut row = div().flex().gap_2();
+        for (id, label, kind) in [("au0", "None", AuthKind::None), ("au1", "Basic", AuthKind::Basic), ("au2", "Bearer", AuthKind::Bearer)] {
+            row = row.child(Self::chip(id, label.to_string(), form.auth == kind, move |f| f.auth = kind, cx));
+        }
+        row
+    }
+
+    fn form_buttons(form: &ProfileForm, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .gap_2()
+            .child(btn("form-test", if form.testing { "Testing…" } else { "Test Connection" }, false, cx.listener(|this, _, _, cx| {
+                this.test_form(cx);
+                cx.notify();
+            })))
+            .child(btn("form-save", "Save", true, cx.listener(|this, _, _, cx| {
+                this.save_form(cx);
+                cx.notify();
+            })))
+            .child(btn("form-cancel", "Cancel", false, cx.listener(|this, _, _, cx| {
+                this.profiles_ui.form = None;
+                cx.notify();
+            })))
+    }
+
+    fn profile_form_panel(&self, form: &ProfileForm, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        let basic = form.auth == AuthKind::Basic;
+        let bearer = form.auth == AuthKind::Bearer;
+        let secret_label = |plain: &'static str, stored: &'static str| if form.has_secret { stored } else { plain };
+        let result = form.result.as_ref().map(|r| {
+            let (color, msg) = match r {
+                Ok(m) => (SUCCESS, m.clone()),
+                Err(e) => (0xff7b7b, e.clone()),
             };
-            let result_line = if self.profiles_ui.testing.contains(&p.id) {
-                Some((MUTED, "Testing…".to_string()))
-            } else {
-                self.profiles_ui.test.get(&p.id).map(|r| match r {
-                    Ok(m) => (SUCCESS, m.clone()),
-                    Err(e) => (0xff7b7b, e.clone()),
-                })
-            };
-            let (i1, i2, i3, i4, i5) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
-            let ps = p.clone();
-            cards = cards.child(
+            div().text_size(px(13.)).text_color(rgb(color)).child(msg)
+        });
+        div()
+            .id("profile-form")
+            .flex_1()
+            .p_6()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .overflow_y_scroll()
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.form_key(ev, window, cx)))
+            .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(if form.editing.is_some() { "Edit Server" } else { "Add Server" }))
+            .child(self.field_view(form, F_NAME, "Name", window))
+            .child(self.field_view(form, F_URL, "Base URL", window))
+            .child(Self::labelled("Server type", Self::type_chips(form, cx)))
+            .child(Self::labelled("Authentication", Self::auth_chips(form, cx)))
+            .children(basic.then(|| self.field_view(form, F_USER, "Username", window)))
+            .children(basic.then(|| self.field_view(form, F_PASS, secret_label("Password", "Password (stored)"), window)))
+            .children(bearer.then(|| self.field_view(form, F_TOKEN, secret_label("Bearer token", "Bearer token (stored)"), window)))
+            .child(self.field_view(form, F_PREFIX, "API path prefix", window))
+            .child(self.field_view(form, F_TERM, "Terminology URL", window))
+            .children(form.admin.as_ref().map(|_| div().text_size(px(12.)).text_color(rgb(MUTED)).child("Admin credentials are kept as stored (edit them in the Tauri app).")))
+            .children(result)
+            .child(Self::form_buttons(form, cx))
+    }
+
+    fn card_header(p: &profiles::StoredProfile, active: bool) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(p.name.clone()))
+            .child(
                 div()
-                    .p_3()
-                    .rounded(px(6.))
-                    .bg(rgb(SURFACE))
-                    .border_1()
-                    .border_color(rgb(if active { PRIMARY } else { BORDER }))
                     .flex()
-                    .flex_col()
                     .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(p.name.clone()))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_2()
-                                    .children(p.is_default.then(|| div().text_size(px(11.)).text_color(rgb(0xffd93d)).child("★ default")))
-                                    .children(active.then(|| div().text_size(px(11.)).text_color(rgb(PRIMARY)).child("● active")))
-                                    .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(p.server_type.as_str())),
-                            ),
-                    )
-                    .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(TEXT2)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(p.base_url.clone()))
-                    .child(div().text_size(px(11.)).text_color(rgb(MUTED)).child(auth))
-                    .children(result_line.map(|(c, m)| div().text_size(px(12.)).text_color(rgb(c)).child(m)))
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(btn(SharedString::from(format!("test-{}", i1)), "Test", false, cx.listener(move |this, _, _, cx| {
-                                this.test_profile(&i1, cx);
-                                cx.notify();
-                            })))
-                            .child(btn(SharedString::from(format!("use-{}", i2)), if active { "Reload" } else { "Use" }, active, cx.listener(move |this, _, _, cx| {
-                                this.use_profile(&i2, cx);
-                                cx.notify();
-                            })))
-                            .child(btn(SharedString::from(format!("def-{}", i3)), if p.is_default { "Unset default" } else { "Set default" }, false, cx.listener(move |this, _, _, cx| {
-                                this.toggle_default(&i3);
-                                cx.notify();
-                            })))
-                            .child(btn(SharedString::from(format!("edit-{}", i4)), "Edit", false, cx.listener(move |this, _, _, cx| {
-                                this.open_form(Some(ps.clone()), cx);
-                                cx.notify();
-                            })))
-                            .child(btn(SharedString::from(format!("del-{}", i5)), if confirming { "Confirm delete" } else { "Delete" }, false, cx.listener(move |this, _, _, cx| {
-                                if this.profiles_ui.confirm_delete.as_deref() == Some(i5.as_str()) {
-                                    this.delete_profile(&i5);
-                                } else {
-                                    this.profiles_ui.confirm_delete = Some(i5.clone());
-                                }
-                                cx.notify();
-                            }))),
-                    ),
-            );
+                    .children(p.is_default.then(|| div().text_size(px(11.)).text_color(rgb(0xffd93d)).child("★ default")))
+                    .children(active.then(|| div().text_size(px(11.)).text_color(rgb(PRIMARY)).child("● active")))
+                    .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(p.server_type.as_str())),
+            )
+    }
+
+    fn card_actions(&self, p: &profiles::StoredProfile, active: bool, cx: &mut Context<Self>) -> Div {
+        let confirming = self.profiles_ui.confirm_delete.as_deref() == Some(p.id.as_str());
+        let (i1, i2, i3, i4, i5) = (p.id.clone(), p.id.clone(), p.id.clone(), p.id.clone(), p.id.clone());
+        let ps = p.clone();
+        div()
+            .flex()
+            .gap_2()
+            .child(btn(SharedString::from(format!("test-{i1}")), "Test", false, cx.listener(move |this, _, _, cx| {
+                this.test_profile(&i1, cx);
+                cx.notify();
+            })))
+            .child(btn(SharedString::from(format!("use-{i2}")), if active { "Reload" } else { "Use" }, active, cx.listener(move |this, _, _, cx| {
+                this.use_profile(&i2, cx);
+                cx.notify();
+            })))
+            .child(btn(SharedString::from(format!("def-{i3}")), if p.is_default { "Unset default" } else { "Set default" }, false, cx.listener(move |this, _, _, cx| {
+                this.toggle_default(&i3);
+                cx.notify();
+            })))
+            .child(btn(SharedString::from(format!("edit-{i4}")), "Edit", false, cx.listener(move |this, _, _, cx| {
+                this.open_form(Some(ps.clone()), cx);
+                cx.notify();
+            })))
+            .child(btn(SharedString::from(format!("del-{i5}")), if confirming { "Confirm delete" } else { "Delete" }, false, cx.listener(move |this, _, _, cx| {
+                if this.profiles_ui.confirm_delete.as_deref() == Some(i5.as_str()) {
+                    this.delete_profile(&i5);
+                } else {
+                    this.profiles_ui.confirm_delete = Some(i5.clone());
+                }
+                cx.notify();
+            })))
+    }
+
+    /// The last connection-test line for a card: (colour, text).
+    fn test_line(&self, id: &str) -> Option<(u32, String)> {
+        if self.profiles_ui.testing.contains(id) {
+            return Some((MUTED, "Testing…".to_string()));
+        }
+        self.profiles_ui.test.get(id).map(|r| match r {
+            Ok(m) => (SUCCESS, m.clone()),
+            Err(e) => (0xff7b7b, e.clone()),
+        })
+    }
+
+    fn profile_card(&self, p: &profiles::StoredProfile, cx: &mut Context<Self>) -> Div {
+        let active = self.active_profile.as_deref() == Some(p.id.as_str());
+        let auth = match &p.auth_method {
+            profiles::StoredAuthMethod::None => "no auth".to_string(),
+            profiles::StoredAuthMethod::Basic { username } => format!("basic · {username}"),
+            profiles::StoredAuthMethod::Bearer => "bearer".to_string(),
+        };
+        div()
+            .p_3()
+            .rounded(px(6.))
+            .bg(rgb(SURFACE))
+            .border_1()
+            .border_color(rgb(if active { PRIMARY } else { BORDER }))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::card_header(p, active))
+            .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(TEXT2)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(p.base_url.clone()))
+            .child(div().text_size(px(11.)).text_color(rgb(MUTED)).child(auth))
+            .children(self.test_line(&p.id).map(|(c, m)| div().text_size(px(12.)).text_color(rgb(c)).child(m)))
+            .child(self.card_actions(p, active, cx))
+    }
+
+    fn servers_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let list: Vec<profiles::StoredProfile> = self.profiles_ui.profiles.clone();
+        let backend = if list.is_empty() { "—" } else { profiles::credential_backend() };
+        let mut cards = div().flex().flex_col().gap_2().px_4().pb_4();
+        for p in list.iter() {
+            cards = cards.child(self.profile_card(p, cx));
         }
         if list.is_empty() {
             cards = cards.child(div().p_4().text_size(px(13.)).text_color(rgb(MUTED)).child("No server profiles yet. Profiles are shared with the Tauri app (same profiles.json and credential store)."));
         }
-
+        let header = div()
+            .p_4()
+            .flex()
+            .items_start()
+            .justify_between()
+            .child(Self::page_title("Servers", format!("{} profiles · credentials: {backend}", list.len())))
+            .child(btn("add-server", "Add Server", true, cx.listener(|this, _, _, cx| {
+                this.open_form(None, cx);
+                cx.notify();
+            })));
         let left = div()
             .w(px(520.))
             .flex_none()
@@ -1082,104 +1200,11 @@ impl Explorer {
             .flex_col()
             .border_r_1()
             .border_color(rgb(BORDER))
-            .child(
-                div()
-                    .p_4()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .child(Self::page_title("Servers", format!("{} profiles · credentials: {backend}", list.len())))
-                    .child(btn("add-server", "Add Server", true, cx.listener(|this, _, _, cx| {
-                        this.open_form(None, cx);
-                        cx.notify();
-                    }))),
-            )
+            .child(header)
             .child(div().id("profile-list").flex_1().overflow_y_scroll().child(cards));
-
         let right = match &self.profiles_ui.form {
             None => div().id("profile-form-empty").flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Select Edit on a profile or Add Server"),
-            Some(form) => {
-                let chip = |id: &'static str, label: String, on: bool, f: Box<dyn Fn(&mut Self, &mut Context<Self>)>, cx: &mut Context<Self>| {
-                    div()
-                        .id(id)
-                        .px_3()
-                        .h(px(28.))
-                        .flex()
-                        .items_center()
-                        .rounded(px(14.))
-                        .cursor_pointer()
-                        .text_size(px(12.))
-                        .border_1()
-                        .border_color(rgb(if on { PRIMARY } else { BORDER }))
-                        .text_color(rgb(if on { PRIMARY } else { TEXT2 }))
-                        .bg(rgb(if on { BG3 } else { SURFACE }))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            f(this, cx);
-                            cx.notify();
-                        }))
-                        .child(label)
-                };
-                let mut types = div().flex().gap_2();
-                for (i, t) in profiles::ServerType::ALL.iter().enumerate() {
-                    let t = *t;
-                    let id: &'static str = ["st0", "st1", "st2", "st3"][i];
-                    types = types.child(chip(id, t.as_str().to_string(), form.server_type == t, Box::new(move |this, _| {
-                        if let Some(f) = this.profiles_ui.form.as_mut() {
-                            f.server_type = t;
-                        }
-                    }), cx));
-                }
-                let mut auths = div().flex().gap_2();
-                for (id, label, kind) in [("au0", "None", AuthKind::None), ("au1", "Basic", AuthKind::Basic), ("au2", "Bearer", AuthKind::Bearer)] {
-                    auths = auths.child(chip(id, label.to_string(), form.auth == kind, Box::new(move |this, _| {
-                        if let Some(f) = this.profiles_ui.form.as_mut() {
-                            f.auth = kind;
-                        }
-                    }), cx));
-                }
-                let result = form.result.as_ref().map(|r| match r {
-                    Ok(m) => div().text_size(px(13.)).text_color(rgb(SUCCESS)).child(m.clone()),
-                    Err(e) => div().text_size(px(13.)).text_color(rgb(0xff7b7b)).child(e.clone()),
-                });
-                div()
-                    .id("profile-form")
-                    .flex_1()
-                    .p_6()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .overflow_y_scroll()
-                    .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.form_key(ev, window, cx)))
-                    .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(if form.editing.is_some() { "Edit Server" } else { "Add Server" }))
-                    .child(self.field_view(form, F_NAME, "Name", window))
-                    .child(self.field_view(form, F_URL, "Base URL", window))
-                    .child(div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child("Server type")).child(types))
-                    .child(div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child("Authentication")).child(auths))
-                    .children((form.auth == AuthKind::Basic).then(|| self.field_view(form, F_USER, "Username", window)))
-                    .children((form.auth == AuthKind::Basic).then(|| self.field_view(form, F_PASS, if form.has_secret { "Password (stored)" } else { "Password" }, window)))
-                    .children((form.auth == AuthKind::Bearer).then(|| self.field_view(form, F_TOKEN, if form.has_secret { "Bearer token (stored)" } else { "Bearer token" }, window)))
-                    .child(self.field_view(form, F_PREFIX, "API path prefix", window))
-                    .child(self.field_view(form, F_TERM, "Terminology URL", window))
-                    .children(form.admin.as_ref().map(|_| div().text_size(px(12.)).text_color(rgb(MUTED)).child("Admin credentials are kept as stored (edit them in the Tauri app).")))
-                    .children(result)
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(btn("form-test", if form.testing { "Testing…" } else { "Test Connection" }, false, cx.listener(|this, _, _, cx| {
-                                this.test_form(cx);
-                                cx.notify();
-                            })))
-                            .child(btn("form-save", "Save", true, cx.listener(|this, _, _, cx| {
-                                this.save_form(cx);
-                                cx.notify();
-                            })))
-                            .child(btn("form-cancel", "Cancel", false, cx.listener(|this, _, _, cx| {
-                                this.profiles_ui.form = None;
-                                cx.notify();
-                            }))),
-                    )
-            }
+            Some(form) => self.profile_form_panel(form, window, cx),
         };
         div().flex().size_full().child(left).child(right)
     }
