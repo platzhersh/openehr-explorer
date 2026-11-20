@@ -241,7 +241,8 @@ impl Profile {
     async fn send_json(&self, rb: reqwest::RequestBuilder) -> Result<Value, String> {
         let Logged { status, body } = self.send_logged(rb).await?;
         if !(200..300).contains(&status) {
-            let snippet: String = body.chars().take(300).collect();
+            // One line, so HTML/XML error pages don't blow up the error banner.
+            let snippet: String = body.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(300).collect();
             return Err(format!("Server returned HTTP {}: {}", status, snippet));
         }
         serde_json::from_str(&body).map_err(|e| format!("Failed to parse response: {e}"))

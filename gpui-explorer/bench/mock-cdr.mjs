@@ -113,7 +113,14 @@ function compositionJson(uid) {
     content: [{ _type: "OBSERVATION", name: { value: "Vital Signs" }, data: { events: [{ data: { items: [{ name: { value: "Systolic" }, value: { magnitude: 128, units: "mm[Hg]" } }] } }] } }] };
 }
 
+// MOCK_XML=1: /rest/status answers in XML like a real EHRBase does without `Accept: application/json`.
+const STATUS_XML = '<?xml version="1.0" encoding="UTF-8"?><status><ehrbase_version>2.7.0</ehrbase_version><!-- demo --><components><component name="db" ok="true"/><component name="cache" note="fish &amp; chips">warm</component></components></status>';
+// MOCK_HTML=1: the templates endpoint answers with an HTML error page, like a proxy/servlet container would.
+const ERROR_HTML = '<!DOCTYPE html>\n<html lang="en">\n<head><title>Error 502</title><style>body{color:#333}</style></head>\n<body class="err" data-code="502">\n<!-- upstream down -->\n<h1>Bad Gateway</h1><p>The upstream server is <b>unavailable</b> &mdash; try again.</p>\n</body>\n</html>';
+
 function route(req, path, body) {
+  if (process.env.MOCK_XML && path === "/rest/status") return [200, { __raw: STATUS_XML, type: "application/xml" }];
+  if (process.env.MOCK_HTML && path === `${R}/definition/template/adl1.4`) return [502, { __raw: ERROR_HTML, type: "text/html" }];
   if (path === "/rest/status") return [200, { ehrbase_version: "2.7.0", openehr_sdk_version: "2.19.0" }];
   if (path === `${R}/definition/template/adl1.4`) return [200, TEMPLATES];
   if (path.startsWith(`${R}/definition/template/adl1.4/`)) return [200, WEB_TEMPLATE(decodeURIComponent(path.split("/").pop()))];
@@ -133,7 +140,11 @@ http.createServer((req, res) => {
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", () => {
-    const send = (code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+    const send = (code, obj) => {
+      if (obj && obj.__raw !== undefined) { res.writeHead(code, { "content-type": obj.type }); return res.end(obj.__raw); }
+      res.writeHead(code, { "content-type": "application/json" });
+      res.end(JSON.stringify(obj));
+    };
     const path = req.url.split("?")[0];
     if (path === "/api/v0/events") { // Aptabase ingest: record headers + body, no auth
       log({ aptabase: true, app_key: req.headers["app-key"], body: JSON.parse(body || "[]") });

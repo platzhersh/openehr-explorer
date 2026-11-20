@@ -1,10 +1,12 @@
 //! Request Inspector panel (a bottom drawer, like the Tauri app's): log list with filters on the left,
 //! request/response detail on the right. Model and helpers are in `inspector.rs`.
 
+use crate::highlight::{self, Kind, Lang, Runs};
 use crate::inspector::{self, Filter, Log, LogEntry, State};
 use crate::{btn, Explorer, Field, BG, BG2, BG3, BORDER, MONO, MUTED, PRIMARY, SUCCESS, SURFACE, TEXT, TEXT2};
 use gpui::{
-    div, px, rgb, uniform_list, App, ClipboardItem, Context, Div, ElementId, FontWeight, InteractiveElement, KeyDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, UniformListScrollHandle, Window,
+    div, px, rgb, uniform_list, App, ClipboardItem, Context, Div, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveElement, KeyDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, StyledText,
+    UniformListScrollHandle, Window,
 };
 use std::ops::Range;
 
@@ -30,7 +32,30 @@ enum Tab {
 
 struct BodyCache {
     key: (u64, Tab, bool, bool),
+    lang: Lang,
     lines: Vec<SharedString>,
+    runs: Vec<Runs>,
+}
+
+fn kind_style(k: Kind) -> HighlightStyle {
+    let (color, italic) = match k {
+        Kind::Key => (0x8fd3ff, false),
+        Kind::String | Kind::AttrValue => (0xc3e88d, false),
+        Kind::Number | Kind::Entity => (0xf78c6c, false),
+        Kind::Keyword => (0xc792ea, false),
+        Kind::Punct => (TEXT2, false),
+        Kind::Tag => (0xff9cac, false),
+        Kind::Attr => (AMBER, false),
+        Kind::Comment | Kind::Doctype => (MUTED, true),
+        Kind::Plain => (TEXT, false),
+    };
+    HighlightStyle { color: Some(rgb(color).into()), font_style: italic.then_some(FontStyle::Italic), ..Default::default() }
+}
+
+/// One line of text coloured by its highlight runs (byte ranges into `text`).
+pub fn highlighted(text: &str, runs: &[(std::ops::Range<usize>, Kind)]) -> StyledText {
+    let valid = runs.iter().filter(|(r, _)| r.end <= text.len() && text.is_char_boundary(r.start) && text.is_char_boundary(r.end)).map(|(r, k)| (r.clone(), kind_style(*k)));
+    StyledText::new(text.to_string()).with_highlights(valid.collect::<Vec<_>>())
 }
 
 pub struct InspectorUi {
@@ -65,20 +90,26 @@ impl InspectorUi {
         }
     }
 
-    /// Selected entry's body for the current tab as display lines (cached until selection/tab/mode changes).
-    fn body_lines(&mut self) -> (&[SharedString], Option<(usize, bool)>) {
-        let Some(e) = self.log.selected_entry() else { return (&[], None) };
-        let raw = match self.tab {
-            Tab::Request => e.request_body.as_deref(),
-            Tab::Response => e.response_body.as_deref(),
+    /// Selected entry's body for the current tab: display lines + highlight runs (cached until selection/tab/mode changes).
+    fn body(&mut self) -> (Option<&BodyCache>, Option<(usize, bool)>) {
+        let Some(e) = self.log.selected_entry() else { return (None, None) };
+        let (raw, headers) = match self.tab {
+            Tab::Request => (e.request_body.as_deref(), &e.request_headers),
+            Tab::Response => (e.response_body.as_deref(), &e.response_headers),
         };
         let info = raw.map(|b| (b.len(), self.tab == Tab::Response && e.body_truncated));
         let key = (e.id, self.tab, self.pretty, e.state == State::Complete);
         if self.body.as_ref().map(|c| c.key) != Some(key) {
-            let lines = raw.map(|b| inspector::body_lines(b, self.pretty).into_iter().map(SharedString::from).collect()).unwrap_or_default();
-            self.body = Some(BodyCache { key, lines });
+            let body = raw.unwrap_or("");
+            let lang = highlight::detect(inspector::header_value(headers, "content-type"), body);
+            let lines: Vec<String> = match lang {
+                Lang::Xml | Lang::Html if self.pretty => highlight::format_markup(body),
+                _ => inspector::body_lines(body, self.pretty && lang == Lang::Json),
+            };
+            let runs = highlight::highlight_lines(lang, &lines);
+            self.body = Some(BodyCache { key, lang, lines: lines.into_iter().map(SharedString::from).collect(), runs });
         }
-        (self.body.as_ref().map(|c| c.lines.as_slice()).unwrap_or(&[]), info)
+        (self.body.as_ref(), info)
     }
 }
 
@@ -351,16 +382,16 @@ impl Explorer {
 
     fn body_pane(&mut self, cx: &mut Context<Self>) -> Div {
         let pretty = self.inspector.pretty;
-        let (n, info) = {
-            let (lines, info) = self.inspector.body_lines();
-            (lines.len(), info)
+        let (n, info, lang) = {
+            let (cache, info) = self.inspector.body();
+            (cache.map(|c| c.lines.len()).unwrap_or(0), info, cache.map(|c| c.lang))
         };
         let title = match self.inspector.tab {
             Tab::Request => "Request body",
             Tab::Response => "Response body",
         };
         let meta = match info {
-            Some((bytes, truncated)) => format!("{}{}", inspector::format_size(bytes), if truncated { " · truncated to 2 MB in the log" } else { "" }),
+            Some((bytes, truncated)) => format!("{} · {}{}", lang.map(Lang::label).unwrap_or("Text"), inspector::format_size(bytes), if truncated { " · truncated to 2 MB in the log" } else { "" }),
             None => "no body".to_string(),
         };
         let toolbar = div()
@@ -381,7 +412,7 @@ impl Explorer {
                 cx.notify();
             })))
             .child(btn("insp-copy-body", "Copy", false, cx.listener(|this, _, _, cx| {
-                let text = this.inspector.body_lines().0.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+                let text = this.inspector.body().0.map(|c| c.lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n")).unwrap_or_default();
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
             })));
         let body = if n == 0 {
@@ -392,8 +423,8 @@ impl Explorer {
                     "insp-body",
                     n,
                     cx.processor(|this, range: Range<usize>, _w, _cx| {
-                        let lines = this.inspector.body_lines().0;
-                        range.filter_map(|i| lines.get(i).cloned()).map(|l| div().h(px(18.)).px_3().whitespace_nowrap().overflow_hidden().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).child(l)).collect()
+                        let Some(cache) = this.inspector.body().0 else { return vec![] };
+                        range.filter_map(|i| Some((cache.lines.get(i)?, cache.runs.get(i)?))).map(|(l, r)| div().h(px(18.)).px_3().whitespace_nowrap().overflow_hidden().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).child(highlighted(l, r))).collect()
                     }),
                 )
                 .track_scroll(self.inspector.body_scroll.clone())

@@ -30,6 +30,7 @@ mod profiles;
 mod search;
 mod aql_syntax;
 mod editor;
+mod highlight;
 mod inspector;
 mod inspector_ui;
 mod settings;
@@ -1859,7 +1860,7 @@ impl Explorer {
                     n,
                     cx.processor(|this, range: Range<usize>, _w, _cx| {
                         let lines = if this.comp_tab == CompTab::Json { &this.comp_json } else { &this.comp_flat };
-                        range.map(|i| div().h(px(20.)).px_3().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).whitespace_nowrap().child(lines[i].clone())).collect()
+                        range.map(|i| div().h(px(20.)).px_3().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).whitespace_nowrap().child(inspector_ui::highlighted(&lines[i], &highlight::json_line(&lines[i])))).collect()
                     }),
                 )
                 .track_scroll(self.comp_scroll.clone())

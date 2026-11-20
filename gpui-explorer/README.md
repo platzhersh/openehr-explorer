@@ -173,6 +173,7 @@ method, URL, request/response headers (`Authorization`, `Cookie`, `Set-Cookie` r
 The list holds the newest 500 requests and can be filtered by path text, method and status class (2xx/3xx/4xx/5xx/failed); *Clear* asks for confirmation.
 The detail view has Request/Response tabs with a summary, headers, a Pretty/Raw body viewer (virtualized, so 2 MB bodies scroll smoothly), *Copy* for the body and *Copy cURL*.
 The model and helpers (`src/inspector.rs`) are pure and unit-tested; the panel is `src/inspector_ui.rs`.
-Not ported: the tree/FLAT/XML body viewers and the guided tour (bodies are shown as text; long lines are clipped, there is no horizontal scroll).
+Response and request bodies are syntax-highlighted as **JSON, XML or HTML** (`src/highlight.rs`: language from the Content-Type, else sniffed; JSON keys/strings/numbers/literals, tags/attributes/values/comments/doctype/entities with comment and tag state carried across lines). *Pretty* pretty-prints JSON and re-indents minified XML/HTML; *Raw* shows the body as received. The composition screen's JSON and FLAT views use the same JSON highlighting.
+Not ported: the Tauri tree/FLAT body viewers and the guided tour (long lines are clipped, there is no horizontal scroll).
 
 ![Request Inspector](screenshots/gpui-inspector-half.png)
