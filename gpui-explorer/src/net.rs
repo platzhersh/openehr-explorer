@@ -82,6 +82,7 @@ impl Profile {
     pub fn new(base_url: &str, api_prefix: Option<String>, auth: Auth) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
             .user_agent("openEHR-Explorer-gpui-poc")
             .build()
             .expect("http client");
@@ -90,6 +91,29 @@ impl Profile {
             api_prefix: api_prefix.unwrap_or_else(|| "/rest/openehr/v1".to_string()),
             auth,
             client,
+        }
+    }
+
+    /// Build a request profile from a stored/resolved server profile (secrets already resolved).
+    pub fn from_server(p: &crate::profiles::ServerProfile) -> Self {
+        use crate::profiles::AuthMethod;
+        let auth = match &p.auth_method {
+            AuthMethod::None => Auth::None,
+            AuthMethod::Basic { username, password } => Auth::Basic { user: username.clone(), password: password.clone() },
+            AuthMethod::Bearer { token } => Auth::Bearer(token.clone()),
+        };
+        Self::new(&p.base_url, p.api_path_prefix.clone(), auth)
+    }
+
+    /// The same check as the Tauri app's "Test Connection": an authenticated GET of the template list; any 2xx passes.
+    pub async fn test_http(&self) -> Result<String, String> {
+        let url = format!("{}/definition/template/adl1.4", self.api_root());
+        let resp = self.req(Method::GET, &url).header("Accept", "application/json").send().await.map_err(|e| format!("Request failed: {e}"))?;
+        let status = resp.status();
+        if status.is_success() {
+            Ok(format!("Connected successfully (HTTP {})", status.as_u16()))
+        } else {
+            Err(format!("Server returned HTTP {}", status.as_u16()))
         }
     }
 

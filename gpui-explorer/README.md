@@ -3,8 +3,8 @@
 A ~700-line [GPUI](https://crates.io/crates/gpui) (Zed's GPU UI framework) port of four screens of
 openEHR Explorer: **Dashboard, EHR Browser, Templates (Web Template tree), AQL Runner**.
 It is a toy. By default data is in-process and mirrors `scripts/demo-assets/mock.js`. With `--server` it talks to a
-real openEHR CDR (see below). Still missing: text editing (the AQL query comes from `--query`), a server-profile UI,
-keychain storage, Request Inspector, composition viewer, filters/search, writes (create/edit/delete).
+real openEHR CDR (see below). Still missing: text editing in the AQL editor (the query comes from `--query`), Request Inspector,
+composition viewer, filters/search, writes (create/edit/delete).
 
 ```bash
 cd gpui-explorer
@@ -38,6 +38,27 @@ Web Template trees, compositions, and AQL all work (`gpui-sandbox-*.png`). That 
 `/rest/status` answers XML unless `Accept: application/json` is sent, and the template list needs to be virtualized.
 EHRBase 2.33 still rejects `ORDER BY` on EHR attributes, so the retry path is needed. Not tested against Better Platform,
 and writes are not implemented.
+
+## Server profiles (Servers tab) — compatible with the Tauri app
+
+The **Servers** tab reads and writes the *same* profiles the Tauri app uses, so you can switch between the two:
+
+* `<config>/openehr-explorer/profiles.json` (`$XDG_CONFIG_HOME`, else `~/.config`, exactly as the Tauri app resolves it),
+  same JSON shape, secrets stripped.
+* Secrets go to the OS keychain (service `openehr-explorer`, account `<profile id>:<field>`), or the encrypted-file
+  fallback (`credentials.enc` + `.key`). This uses the **very same `credentials.rs`** the Tauri app compiles
+  (`#[path = "../../src-tauri/src/credentials.rs"]`), so the formats cannot drift.
+* Behaviour mirrors the Tauri commands: empty password/token on save = keep the stored one, saving preserves the default
+  flag, delete removes all four secret fields, "Set default" toggles, and the active profile on launch is the default one
+  (else the first). Test Connection is the same authenticated `GET …/definition/template/adl1.4`.
+
+Form: name, base URL, server type, auth (none/basic/bearer), API path prefix, terminology URL, with a small built-in text
+field (typing, paste, arrows, Home/End, Tab, `Ctrl+U` clear, Enter = save, Esc = cancel; no IME or selection yet). Admin
+credentials are preserved as stored but not editable here. Launching with no flags connects to the active stored profile;
+use `--demo` for the built-in demo data, or `--server URL` to override.
+
+Verified two ways: unit tests against a `profiles.json` fixture in the Tauri format, and a cross-check running the Tauri
+app's own `load_stored_profiles`/`get_profile_by_id`/`save_server_profile` against files written by this app and vice versa.
 
 ## Analytics (Aptabase)
 

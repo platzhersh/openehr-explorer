@@ -15,15 +15,21 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    div, point, px, rgb, size, uniform_list, App, Application, Bounds, AppContext, Context, Div, FontWeight, InteractiveElement,
+    div, point, px, rgb, size, uniform_list, App, AppContext, Application, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, MouseButton, Stateful,
     IntoElement, ParentElement, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
 };
 mod analytics;
+// The very same file the Tauri app compiles, so the keychain/encrypted-store formats cannot drift.
+#[allow(dead_code)]
+#[path = "../../src-tauri/src/credentials.rs"]
+mod credentials;
 mod net;
+mod profiles;
 
 use analytics::Analytics;
 use serde_json::json;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::time::{Duration, Instant};
 
@@ -47,6 +53,7 @@ enum View {
     Ehrs,
     Templates,
     Aql,
+    Servers,
 }
 
 struct Ehr {
@@ -137,11 +144,12 @@ fn demo_tree() -> Vec<TreeRow> {
     DEMO_TREE.iter().map(|(d, l, r, p)| TreeRow { depth: *d, label: (*l).into(), rm: (*r).into(), path: (*p).into() }).collect()
 }
 
-const NAV: [(View, &str); 4] = [
+const NAV: [(View, &str); 5] = [
     (View::Dashboard, "Dashboard"),
     (View::Ehrs, "EHR Browser"),
     (View::Templates, "Templates"),
     (View::Aql, "AQL Runner"),
+    (View::Servers, "Servers"),
 ];
 
 const QUERY: &str = "SELECT c/uid/value,\n       o/data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude AS systolic\nFROM EHR e\nCONTAINS COMPOSITION c\nCONTAINS OBSERVATION o[openEHR-EHR-OBSERVATION.vital_signs.v2]";
@@ -215,6 +223,9 @@ struct Explorer {
     comps: Vec<Composition>,
     comps_loading: bool,
     server: Option<net::Profile>,
+    server_name: Option<SharedString>,
+    active_profile: Option<String>,
+    profiles_ui: ProfilesUi,
     conn: Conn,
     error: Option<SharedString>,
     ehrs_has_more: bool,
@@ -249,6 +260,110 @@ fn rss_kb() -> u64 {
         .unwrap_or(0)
 }
 
+// ---------------------------------------------------------------------------
+// Server profile form: a minimal single-line text field (GPUI ships none) + form state
+// ---------------------------------------------------------------------------
+
+const F_NAME: usize = 0;
+const F_URL: usize = 1;
+const F_PREFIX: usize = 2;
+const F_TERM: usize = 3;
+const F_USER: usize = 4;
+const F_PASS: usize = 5;
+const F_TOKEN: usize = 6;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AuthKind {
+    None,
+    Basic,
+    Bearer,
+}
+
+/// Single-line text input. Cursor is counted in chars. No IME/selection; supports typing, paste, arrows, home/end.
+struct Field {
+    text: String,
+    cursor: usize,
+    masked: bool,
+    placeholder: &'static str,
+    focus: FocusHandle,
+}
+
+impl Field {
+    fn new(cx: &mut App, text: &str, masked: bool, placeholder: &'static str) -> Self {
+        Self { cursor: text.chars().count(), text: text.to_string(), masked, placeholder, focus: cx.focus_handle().tab_stop(true) }
+    }
+    fn byte(&self, chars: usize) -> usize {
+        self.text.char_indices().nth(chars).map(|(i, _)| i).unwrap_or(self.text.len())
+    }
+    fn len(&self) -> usize {
+        self.text.chars().count()
+    }
+    fn insert(&mut self, s: &str) {
+        let clean: String = s.chars().filter(|c| !c.is_control()).collect();
+        let at = self.byte(self.cursor);
+        self.text.insert_str(at, &clean);
+        self.cursor += clean.chars().count();
+    }
+    fn backspace(&mut self) {
+        if self.cursor > 0 {
+            let (a, b) = (self.byte(self.cursor - 1), self.byte(self.cursor));
+            self.text.replace_range(a..b, "");
+            self.cursor -= 1;
+        }
+    }
+    fn delete(&mut self) {
+        if self.cursor < self.len() {
+            let (a, b) = (self.byte(self.cursor), self.byte(self.cursor + 1));
+            self.text.replace_range(a..b, "");
+        }
+    }
+}
+
+struct ProfileForm {
+    /// `Some(id)` when editing a stored profile; `None` for a new one.
+    editing: Option<String>,
+    id: String,
+    fields: Vec<Field>,
+    server_type: profiles::ServerType,
+    auth: AuthKind,
+    /// A secret is already stored for this profile (empty password/token then means "keep").
+    has_secret: bool,
+    /// Admin auth is not editable here; it is kept exactly as stored.
+    admin: Option<profiles::StoredAuthMethod>,
+    result: Option<Result<String, String>>,
+    testing: bool,
+}
+
+#[derive(Default)]
+struct ProfilesUi {
+    profiles: Vec<profiles::StoredProfile>,
+    test: HashMap<String, Result<String, String>>,
+    testing: HashSet<String>,
+    confirm_delete: Option<String>,
+    form: Option<ProfileForm>,
+}
+
+fn btn<F>(id: impl Into<ElementId>, label: impl Into<SharedString>, accent: bool, on_click: F) -> Stateful<Div>
+where
+    F: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+{
+    div()
+        .id(id)
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded(px(6.))
+        .cursor_pointer()
+        .text_size(px(12.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(rgb(if accent { BG } else { TEXT2 }))
+        .bg(rgb(if accent { PRIMARY } else { SURFACE_HOVER }))
+        .hover(|s| s.opacity(0.85))
+        .on_click(on_click)
+        .child(label.into())
+}
+
 struct Opts {
     boot: Instant,
     view: View,
@@ -258,6 +373,9 @@ struct Opts {
     run: bool,
     bench_scroll: bool,
     server: Option<net::Profile>,
+    server_name: Option<String>,
+    active_profile: Option<String>,
+    startup_error: Option<String>,
     query: Option<String>,
     analytics: Analytics,
 }
@@ -299,7 +417,10 @@ impl Explorer {
             comps_loading: false,
             conn: if demo { Conn::Demo } else { Conn::Connecting },
             server,
-            error: None,
+            server_name: o.server_name.map(SharedString::from),
+            active_profile: o.active_profile,
+            profiles_ui: ProfilesUi { profiles: profiles::load_stored(), ..Default::default() },
+            error: o.startup_error.map(SharedString::from),
             ehrs_has_more: false,
             ehrs_loading: false,
             aql_loading: false,
@@ -369,7 +490,11 @@ impl Explorer {
             match res {
                 Ok((desc, templates, page)) => {
                     this.analytics.track("connection_result", Some(json!({ "ok": true })));
-                    this.conn = Conn::Connected(desc.into());
+                    let label = match &this.server_name {
+                        Some(n) => format!("{n} · {desc}"),
+                        None => desc,
+                    };
+                    this.conn = Conn::Connected(label.into());
                     this.templates = templates.into_iter().map(|t| Template { id: t.id.into(), concept: t.concept.into(), archetype: t.archetype.into() }).collect();
                     this.ehrs = page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }).collect();
                     this.ehrs_has_more = page.has_more;
@@ -524,6 +649,541 @@ impl Explorer {
         self.run_clicked_at = Some(t);
     }
 
+    // ---- server profiles ------------------------------------------------------------------------
+
+    fn reload_profiles(&mut self) {
+        self.profiles_ui.profiles = profiles::load_stored();
+    }
+
+    fn open_form(&mut self, editing: Option<profiles::StoredProfile>, cx: &mut Context<Self>) {
+        use profiles::StoredAuthMethod as S;
+        let (id, name, url, prefix, term, user, kind, st, has_secret, admin) = match &editing {
+            Some(p) => (
+                p.id.clone(),
+                p.name.clone(),
+                p.base_url.clone(),
+                p.api_path_prefix.clone().unwrap_or_default(),
+                p.terminology_url.clone().unwrap_or_default(),
+                if let S::Basic { username } = &p.auth_method { username.clone() } else { String::new() },
+                match p.auth_method {
+                    S::None => AuthKind::None,
+                    S::Basic { .. } => AuthKind::Basic,
+                    S::Bearer => AuthKind::Bearer,
+                },
+                p.server_type,
+                profiles::has_stored_secret(p),
+                p.admin_auth_method.clone(),
+            ),
+            None => (uuid::Uuid::new_v4().to_string(), String::new(), "http://localhost:8080/ehrbase".to_string(), String::new(), String::new(), String::new(), AuthKind::Basic, profiles::ServerType::Ehrbase, false, None),
+        };
+        let keep = "leave empty to keep the stored secret";
+        let fields = vec![
+            Field::new(cx, &name, false, "Local EHRBase"),
+            Field::new(cx, &url, false, "http://localhost:8080/ehrbase"),
+            Field::new(cx, &prefix, false, "/rest/openehr/v1 (default)"),
+            Field::new(cx, &term, false, "optional terminology server URL"),
+            Field::new(cx, &user, false, "username"),
+            Field::new(cx, "", true, if has_secret { keep } else { "password" }),
+            Field::new(cx, "", true, if has_secret { keep } else { "token" }),
+        ];
+        // Editing keeps an empty api_path_prefix field = default only if it was stored as None; "" is a real value.
+        self.profiles_ui.form = Some(ProfileForm { editing: editing.map(|p| p.id), id, fields, server_type: st, auth: kind, has_secret, admin, result: None, testing: false });
+        self.profiles_ui.confirm_delete = None;
+    }
+
+    /// Validate the form into the same input struct the Tauri `save_server_profile` takes.
+    fn form_input(&self) -> Result<profiles::ProfileInput, String> {
+        use profiles::AuthMethod as A;
+        let f = self.profiles_ui.form.as_ref().ok_or("No form open")?;
+        let t = |i: usize| f.fields[i].text.trim().to_string();
+        let name = t(F_NAME);
+        let url = t(F_URL);
+        if name.is_empty() {
+            return Err("Name is required".into());
+        }
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err("Base URL must start with http:// or https://".into());
+        }
+        let auth = match f.auth {
+            AuthKind::None => A::None,
+            AuthKind::Basic => {
+                if t(F_USER).is_empty() {
+                    return Err("Username is required for Basic auth".into());
+                }
+                A::Basic { username: t(F_USER), password: f.fields[F_PASS].text.clone() }
+            }
+            AuthKind::Bearer => A::Bearer { token: f.fields[F_TOKEN].text.clone() },
+        };
+        // Admin auth isn't editable in this PoC: pass the stored shape with empty secrets so stored ones are kept.
+        let admin = f.admin.as_ref().map(|a| match a {
+            profiles::StoredAuthMethod::None => A::None,
+            profiles::StoredAuthMethod::Basic { username } => A::Basic { username: username.clone(), password: String::new() },
+            profiles::StoredAuthMethod::Bearer => A::Bearer { token: String::new() },
+        });
+        let prefix = t(F_PREFIX);
+        Ok(profiles::ProfileInput {
+            id: f.id.clone(),
+            name,
+            base_url: url,
+            server_type: f.server_type,
+            auth_method: auth,
+            admin_auth_method: admin,
+            terminology_url: Some(t(F_TERM)).filter(|s| !s.is_empty()),
+            // Blank = use the default (None); the Tauri form distinguishes it the same way.
+            api_path_prefix: if prefix.is_empty() { None } else { Some(prefix) },
+        })
+    }
+
+    fn save_form(&mut self, cx: &mut Context<Self>) {
+        let input = match self.form_input() {
+            Ok(i) => i,
+            Err(e) => {
+                if let Some(f) = self.profiles_ui.form.as_mut() {
+                    f.result = Some(Err(e));
+                }
+                return;
+            }
+        };
+        let id = input.id.clone();
+        match profiles::save(input) {
+            Ok(list) => {
+                self.profiles_ui.profiles = list;
+                self.profiles_ui.form = None;
+                // Like the Tauri store: the first saved profile becomes active if none is.
+                if self.active_profile.is_none() {
+                    self.use_profile(&id, cx);
+                } else if self.active_profile.as_deref() == Some(id.as_str()) {
+                    // Edited the active profile: reconnect with the new settings.
+                    self.use_profile(&id, cx);
+                }
+            }
+            Err(e) => {
+                if let Some(f) = self.profiles_ui.form.as_mut() {
+                    f.result = Some(Err(e));
+                }
+            }
+        }
+    }
+
+    fn test_form(&mut self, cx: &mut Context<Self>) {
+        let input = match self.form_input() {
+            Ok(i) => i,
+            Err(e) => {
+                if let Some(f) = self.profiles_ui.form.as_mut() {
+                    f.result = Some(Err(e));
+                }
+                return;
+            }
+        };
+        // "Leave empty to keep": fall back to the stored secret, like `test_unsaved_connection`.
+        let mut sp = profiles::ServerProfile {
+            id: input.id.clone(),
+            name: input.name.clone(),
+            base_url: input.base_url.clone(),
+            server_type: input.server_type,
+            auth_method: input.auth_method.clone(),
+            api_path_prefix: profiles::normalize_api_path_prefix(input.api_path_prefix.clone()),
+        };
+        if let Some(stored) = self.profiles_ui.profiles.iter().find(|p| p.id == input.id) {
+            if let Ok(resolved) = profiles::resolve(stored) {
+                match (&mut sp.auth_method, resolved.auth_method) {
+                    (profiles::AuthMethod::Basic { password, .. }, profiles::AuthMethod::Basic { password: old, .. }) if password.is_empty() => *password = old,
+                    (profiles::AuthMethod::Bearer { token }, profiles::AuthMethod::Bearer { token: old }) if token.is_empty() => *token = old,
+                    _ => {}
+                }
+            }
+        }
+        if let profiles::AuthMethod::Bearer { token } = &mut sp.auth_method {
+            match profiles::normalize_bearer_token(token) {
+                Ok(t) => *token = t,
+                Err(e) => {
+                    if let Some(f) = self.profiles_ui.form.as_mut() {
+                        f.result = Some(Err(e));
+                    }
+                    return;
+                }
+            }
+        }
+        if let Some(f) = self.profiles_ui.form.as_mut() {
+            f.testing = true;
+            f.result = None;
+        }
+        let stype = sp.server_type.as_str();
+        let net_profile = net::Profile::from_server(&sp);
+        let id = input.id;
+        self.spawn_net(cx, async move { net_profile.test_http().await }, move |this, res, _cx| {
+            if res.is_ok() {
+                // Coarse event only (CDR platform type), same as the Tauri app.
+                this.analytics.track("server_connected", Some(json!({ "server_type": stype })));
+            }
+            if let Some(f) = this.profiles_ui.form.as_mut() {
+                if f.id == id {
+                    f.testing = false;
+                    f.result = Some(res);
+                }
+            }
+        });
+    }
+
+    fn test_profile(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(stored) = self.profiles_ui.profiles.iter().find(|p| p.id == id).cloned() else { return };
+        let sp = match profiles::resolve(&stored) {
+            Ok(p) => p,
+            Err(e) => {
+                self.profiles_ui.test.insert(id.to_string(), Err(e));
+                return;
+            }
+        };
+        let stype = sp.server_type.as_str();
+        let np = net::Profile::from_server(&sp);
+        let id = id.to_string();
+        self.profiles_ui.testing.insert(id.clone());
+        self.spawn_net(cx, async move { np.test_http().await }, move |this, res, _cx| {
+            if res.is_ok() {
+                this.analytics.track("server_connected", Some(json!({ "server_type": stype })));
+            }
+            this.profiles_ui.testing.remove(&id);
+            this.profiles_ui.test.insert(id, res);
+        });
+    }
+
+    /// Make a stored profile the active one and (re)load all data from it.
+    fn use_profile(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(stored) = self.profiles_ui.profiles.iter().find(|p| p.id == id).cloned() else { return };
+        match profiles::resolve(&stored) {
+            Ok(p) => {
+                self.server = Some(net::Profile::from_server(&p));
+                self.server_name = Some(p.name.into());
+                self.active_profile = Some(stored.id);
+                self.ehrs.clear();
+                self.selected_ehr = None;
+                self.comps.clear();
+                self.templates.clear();
+                self.tree.clear();
+                self.selected_template = 0;
+                self.table = None;
+                self.ehrs_has_more = false;
+                self.connect(cx);
+            }
+            Err(e) => self.error = Some(e.into()),
+        }
+    }
+
+    fn delete_profile(&mut self, id: &str) {
+        match profiles::delete(id) {
+            Ok(list) => {
+                self.profiles_ui.profiles = list;
+                self.profiles_ui.test.remove(id);
+                if self.active_profile.as_deref() == Some(id) {
+                    // Like the Tauri store: the app keeps running on whatever was loaded, but no profile is "active".
+                    self.active_profile = None;
+                }
+            }
+            Err(e) => self.error = Some(e.into()),
+        }
+        self.profiles_ui.confirm_delete = None;
+    }
+
+    fn toggle_default(&mut self, id: &str) {
+        match profiles::set_default(id) {
+            Ok(list) => self.profiles_ui.profiles = list,
+            Err(e) => self.error = Some(e.into()),
+        }
+    }
+
+    fn form_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let ks = &ev.keystroke;
+        let m = &ks.modifiers;
+        match ks.key.as_str() {
+            "tab" => {
+                if m.shift {
+                    window.focus_prev();
+                } else {
+                    window.focus_next();
+                }
+                cx.notify();
+                return;
+            }
+            "enter" => {
+                self.save_form(cx);
+                cx.notify();
+                return;
+            }
+            "escape" => {
+                self.profiles_ui.form = None;
+                cx.notify();
+                return;
+            }
+            _ => {}
+        }
+        let paste = if (m.control || m.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
+        let Some(form) = self.profiles_ui.form.as_mut() else { return };
+        let Some(f) = form.fields.iter_mut().find(|f| f.focus.is_focused(window)) else { return };
+        match ks.key.as_str() {
+            "backspace" => f.backspace(),
+            "delete" => f.delete(),
+            "left" => f.cursor = f.cursor.saturating_sub(1),
+            "right" => f.cursor = (f.cursor + 1).min(f.len()),
+            "home" => f.cursor = 0,
+            "end" => f.cursor = f.len(),
+            "u" if m.control => {
+                f.text.clear();
+                f.cursor = 0;
+            }
+            _ => {
+                if let Some(text) = paste {
+                    // Pasted secrets/URLs often carry a trailing newline.
+                    f.insert(text.trim_end_matches(['\r', '\n']));
+                } else if !m.control && !m.platform && !m.alt {
+                    if let Some(ch) = &ks.key_char {
+                        f.insert(ch);
+                    }
+                }
+            }
+        }
+        cx.notify();
+        cx.stop_propagation();
+    }
+
+    fn field_view(&self, form: &ProfileForm, idx: usize, label: &'static str, window: &Window) -> Div {
+        let f = &form.fields[idx];
+        let focused = f.focus.is_focused(window);
+        let shown = |t: &str| -> String {
+            if f.masked {
+                "•".repeat(t.chars().count())
+            } else {
+                t.replace(' ', "\u{00a0}")
+            }
+        };
+        let (before, after): (String, String) = (f.text.chars().take(f.cursor).collect(), f.text.chars().skip(f.cursor).collect());
+        let handle = f.focus.clone();
+        let content = if f.text.is_empty() && !focused {
+            div().text_color(rgb(MUTED)).child(f.placeholder)
+        } else {
+            div()
+                .flex()
+                .items_center()
+                .text_color(rgb(TEXT))
+                .child(shown(&before))
+                .children(focused.then(|| div().w(px(1.5)).h(px(17.)).bg(rgb(PRIMARY))))
+                .child(shown(&after))
+        };
+        div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(label)).child(
+            div()
+                .id(("field", idx))
+                .track_focus(&f.focus)
+                .h(px(34.))
+                .px_3()
+                .flex()
+                .items_center()
+                .rounded(px(6.))
+                .border_1()
+                .border_color(rgb(if focused { PRIMARY } else { BORDER }))
+                .bg(rgb(0x11182e))
+                .text_size(px(13.))
+                .overflow_hidden()
+                .cursor_text()
+                .on_mouse_down(MouseButton::Left, move |_, window, _cx| handle.focus(window))
+                .child(content),
+        )
+    }
+
+    fn servers_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let backend = if self.profiles_ui.profiles.is_empty() { "—" } else { profiles::credential_backend() };
+        let mut cards = div().flex().flex_col().gap_2().px_4().pb_4();
+        let list: Vec<profiles::StoredProfile> = self.profiles_ui.profiles.clone();
+        for p in list.iter() {
+            let id = p.id.clone();
+            let active = self.active_profile.as_deref() == Some(p.id.as_str());
+            let confirming = self.profiles_ui.confirm_delete.as_deref() == Some(p.id.as_str());
+            let auth = match &p.auth_method {
+                profiles::StoredAuthMethod::None => "no auth".to_string(),
+                profiles::StoredAuthMethod::Basic { username } => format!("basic · {username}"),
+                profiles::StoredAuthMethod::Bearer => "bearer".to_string(),
+            };
+            let result_line = if self.profiles_ui.testing.contains(&p.id) {
+                Some((MUTED, "Testing…".to_string()))
+            } else {
+                self.profiles_ui.test.get(&p.id).map(|r| match r {
+                    Ok(m) => (SUCCESS, m.clone()),
+                    Err(e) => (0xff7b7b, e.clone()),
+                })
+            };
+            let (i1, i2, i3, i4, i5) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
+            let ps = p.clone();
+            cards = cards.child(
+                div()
+                    .p_3()
+                    .rounded(px(6.))
+                    .bg(rgb(SURFACE))
+                    .border_1()
+                    .border_color(rgb(if active { PRIMARY } else { BORDER }))
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(p.name.clone()))
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_2()
+                                    .children(p.is_default.then(|| div().text_size(px(11.)).text_color(rgb(0xffd93d)).child("★ default")))
+                                    .children(active.then(|| div().text_size(px(11.)).text_color(rgb(PRIMARY)).child("● active")))
+                                    .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(p.server_type.as_str())),
+                            ),
+                    )
+                    .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(TEXT2)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(p.base_url.clone()))
+                    .child(div().text_size(px(11.)).text_color(rgb(MUTED)).child(auth))
+                    .children(result_line.map(|(c, m)| div().text_size(px(12.)).text_color(rgb(c)).child(m)))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(btn(SharedString::from(format!("test-{}", i1)), "Test", false, cx.listener(move |this, _, _, cx| {
+                                this.test_profile(&i1, cx);
+                                cx.notify();
+                            })))
+                            .child(btn(SharedString::from(format!("use-{}", i2)), if active { "Reload" } else { "Use" }, active, cx.listener(move |this, _, _, cx| {
+                                this.use_profile(&i2, cx);
+                                cx.notify();
+                            })))
+                            .child(btn(SharedString::from(format!("def-{}", i3)), if p.is_default { "Unset default" } else { "Set default" }, false, cx.listener(move |this, _, _, cx| {
+                                this.toggle_default(&i3);
+                                cx.notify();
+                            })))
+                            .child(btn(SharedString::from(format!("edit-{}", i4)), "Edit", false, cx.listener(move |this, _, _, cx| {
+                                this.open_form(Some(ps.clone()), cx);
+                                cx.notify();
+                            })))
+                            .child(btn(SharedString::from(format!("del-{}", i5)), if confirming { "Confirm delete" } else { "Delete" }, false, cx.listener(move |this, _, _, cx| {
+                                if this.profiles_ui.confirm_delete.as_deref() == Some(i5.as_str()) {
+                                    this.delete_profile(&i5);
+                                } else {
+                                    this.profiles_ui.confirm_delete = Some(i5.clone());
+                                }
+                                cx.notify();
+                            }))),
+                    ),
+            );
+        }
+        if list.is_empty() {
+            cards = cards.child(div().p_4().text_size(px(13.)).text_color(rgb(MUTED)).child("No server profiles yet. Profiles are shared with the Tauri app (same profiles.json and credential store)."));
+        }
+
+        let left = div()
+            .w(px(520.))
+            .flex_none()
+            .h_full()
+            .flex()
+            .flex_col()
+            .border_r_1()
+            .border_color(rgb(BORDER))
+            .child(
+                div()
+                    .p_4()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .child(Self::page_title("Servers", format!("{} profiles · credentials: {backend}", list.len())))
+                    .child(btn("add-server", "Add Server", true, cx.listener(|this, _, _, cx| {
+                        this.open_form(None, cx);
+                        cx.notify();
+                    }))),
+            )
+            .child(div().id("profile-list").flex_1().overflow_y_scroll().child(cards));
+
+        let right = match &self.profiles_ui.form {
+            None => div().id("profile-form-empty").flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Select Edit on a profile or Add Server"),
+            Some(form) => {
+                let chip = |id: &'static str, label: String, on: bool, f: Box<dyn Fn(&mut Self, &mut Context<Self>)>, cx: &mut Context<Self>| {
+                    div()
+                        .id(id)
+                        .px_3()
+                        .h(px(28.))
+                        .flex()
+                        .items_center()
+                        .rounded(px(14.))
+                        .cursor_pointer()
+                        .text_size(px(12.))
+                        .border_1()
+                        .border_color(rgb(if on { PRIMARY } else { BORDER }))
+                        .text_color(rgb(if on { PRIMARY } else { TEXT2 }))
+                        .bg(rgb(if on { BG3 } else { SURFACE }))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            f(this, cx);
+                            cx.notify();
+                        }))
+                        .child(label)
+                };
+                let mut types = div().flex().gap_2();
+                for (i, t) in profiles::ServerType::ALL.iter().enumerate() {
+                    let t = *t;
+                    let id: &'static str = ["st0", "st1", "st2", "st3"][i];
+                    types = types.child(chip(id, t.as_str().to_string(), form.server_type == t, Box::new(move |this, _| {
+                        if let Some(f) = this.profiles_ui.form.as_mut() {
+                            f.server_type = t;
+                        }
+                    }), cx));
+                }
+                let mut auths = div().flex().gap_2();
+                for (id, label, kind) in [("au0", "None", AuthKind::None), ("au1", "Basic", AuthKind::Basic), ("au2", "Bearer", AuthKind::Bearer)] {
+                    auths = auths.child(chip(id, label.to_string(), form.auth == kind, Box::new(move |this, _| {
+                        if let Some(f) = this.profiles_ui.form.as_mut() {
+                            f.auth = kind;
+                        }
+                    }), cx));
+                }
+                let result = form.result.as_ref().map(|r| match r {
+                    Ok(m) => div().text_size(px(13.)).text_color(rgb(SUCCESS)).child(m.clone()),
+                    Err(e) => div().text_size(px(13.)).text_color(rgb(0xff7b7b)).child(e.clone()),
+                });
+                div()
+                    .id("profile-form")
+                    .flex_1()
+                    .p_6()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .overflow_y_scroll()
+                    .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.form_key(ev, window, cx)))
+                    .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(if form.editing.is_some() { "Edit Server" } else { "Add Server" }))
+                    .child(self.field_view(form, F_NAME, "Name", window))
+                    .child(self.field_view(form, F_URL, "Base URL", window))
+                    .child(div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child("Server type")).child(types))
+                    .child(div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child("Authentication")).child(auths))
+                    .children((form.auth == AuthKind::Basic).then(|| self.field_view(form, F_USER, "Username", window)))
+                    .children((form.auth == AuthKind::Basic).then(|| self.field_view(form, F_PASS, if form.has_secret { "Password (stored)" } else { "Password" }, window)))
+                    .children((form.auth == AuthKind::Bearer).then(|| self.field_view(form, F_TOKEN, if form.has_secret { "Bearer token (stored)" } else { "Bearer token" }, window)))
+                    .child(self.field_view(form, F_PREFIX, "API path prefix", window))
+                    .child(self.field_view(form, F_TERM, "Terminology URL", window))
+                    .children(form.admin.as_ref().map(|_| div().text_size(px(12.)).text_color(rgb(MUTED)).child("Admin credentials are kept as stored (edit them in the Tauri app).")))
+                    .children(result)
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(btn("form-test", if form.testing { "Testing…" } else { "Test Connection" }, false, cx.listener(|this, _, _, cx| {
+                                this.test_form(cx);
+                                cx.notify();
+                            })))
+                            .child(btn("form-save", "Save", true, cx.listener(|this, _, _, cx| {
+                                this.save_form(cx);
+                                cx.notify();
+                            })))
+                            .child(btn("form-cancel", "Cancel", false, cx.listener(|this, _, _, cx| {
+                                this.profiles_ui.form = None;
+                                cx.notify();
+                            }))),
+                    )
+            }
+        };
+        div().flex().size_full().child(left).child(right)
+    }
+
     fn page_title(title: &'static str, subtitle: String) -> Div {
         div().flex().flex_col().gap_1().pb_4().child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title)).child(div().text_size(px(13.)).text_color(rgb(MUTED)).child(subtitle))
     }
@@ -582,7 +1242,7 @@ impl Explorer {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(div().flex().items_center().gap_2().child(div().size(px(8.)).rounded_full().bg(rgb(dot))).child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(text)))
+                    .child(div().flex().items_center().gap_2().child(div().size(px(8.)).flex_none().rounded_full().bg(rgb(dot))).child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(text)))
                     .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(if self.analytics.enabled() { "v0.10.3 · gpui · analytics on" } else { "v0.10.3 · gpui" }))
             })
     }
@@ -977,6 +1637,7 @@ impl Render for Explorer {
             View::Ehrs => self.ehr_browser(cx),
             View::Templates => self.template_browser(cx),
             View::Aql => self.aql_runner(cx),
+            View::Servers => self.servers_view(window, cx),
         };
         let root = div()
             .flex()
@@ -1064,19 +1725,34 @@ fn main() {
         Some("ehrs") => View::Ehrs,
         Some("templates") => View::Templates,
         Some("aql") => View::Aql,
+        Some("servers") => View::Servers,
         _ => View::Dashboard,
     };
     let ehrs: usize = arg("--ehrs").and_then(|s| s.parse().ok()).unwrap_or(3);
     let rows: usize = arg("--rows").and_then(|s| s.parse().ok()).unwrap_or(3);
     let (select, run, bench_scroll) = (flag("--select"), flag("--run"), flag("--bench-scroll"));
-    let server = server_from_env();
+    // Explicit --server wins; otherwise use the stored default/first profile (like the Tauri app); --demo opts out.
+    let (mut server, mut server_name, mut active_profile, mut startup_error) = (server_from_env(), None, None, None);
+    if server.is_none() && !flag("--demo") {
+        let stored = profiles::load_stored();
+        if let Some(sp) = profiles::initial_active(&stored) {
+            match profiles::resolve(sp) {
+                Ok(p) => {
+                    server = Some(net::Profile::from_server(&p));
+                    server_name = Some(p.name);
+                    active_profile = Some(p.id);
+                }
+                Err(e) => startup_error = Some(e),
+            }
+        }
+    }
     let query = arg("--query");
     // Opt-in only; never during benchmarks.
     let analytics = Analytics::init(flag("--analytics") && !bench_scroll, arg("--analytics-host"));
     let max_seconds: Option<u64> = arg("--max-seconds").and_then(|s| s.parse().ok()).or(bench_scroll.then_some(120));
     Application::new().run(move |cx: &mut App| {
         let bounds = Bounds { origin: point(px(0.), px(0.)), size: size(px(1440.), px(960.)) };
-        let opts = Opts { boot, view, ehr_count: ehrs, rows, select, run, bench_scroll, server, query, analytics: analytics.clone() };
+        let opts = Opts { boot, view, ehr_count: ehrs, rows, select, run, bench_scroll, server, server_name, active_profile, startup_error, query, analytics: analytics.clone() };
         let handle = cx
             .open_window(
                 WindowOptions {

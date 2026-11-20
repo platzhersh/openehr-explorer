@@ -6,7 +6,7 @@ echo "# binary_bytes=$(stat -c %s "$BIN")"
 echo "# startup (5 cold launches, process spawn -> first render)"
 for i in 1 2 3 4 5; do
   T0=$(date +%s%3N)
-  "$BIN" --view dashboard 2> /tmp/gpui-start.log &
+  "$BIN" --demo --view dashboard 2> /tmp/gpui-start.log &
   PID=$!
   sleep 2.5
   PSS=$(grep Pss: /proc/$PID/smaps_rollup | awk '{print $2}')
@@ -16,6 +16,6 @@ for i in 1 2 3 4 5; do
 done
 echo "# aql scenarios"
 for N in ${@:-3 1000 10000 50000 1000000}; do
-  "$BIN" --view aql --run --rows $N --bench-scroll 2> /tmp/gpui-run.log > /tmp/gpui-run.out
+  "$BIN" --demo --view aql --run --rows $N --bench-scroll 2> /tmp/gpui-run.log > /tmp/gpui-run.out
   echo "rows=$N $(grep -o 'run_to_render_ms=[0-9.]*' /tmp/gpui-run.log) $(cat /tmp/gpui-run.out)"
 done
