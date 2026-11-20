@@ -9,11 +9,52 @@ name: GPUI Windows + VirusTotal (experiment)
 
 on:
   workflow_dispatch:
+    inputs:
+      lookup_shas:
+        description: "Optional: space-separated SHA-256s. If set, skip building and just poll VirusTotal for these hashes."
+        default: ""
+        required: false
 
 permissions: {}
 
 jobs:
+  lookup:
+    if: inputs.lookup_shas != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Poll VirusTotal for the given hashes
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          SHAS: ${{ inputs.lookup_shas }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## VirusTotal lookup"
+            echo
+            echo "| SHA-256 | malicious | suspicious | undetected | engines | Flagged by |"
+            echo "|---|---:|---:|---:|---:|---|"
+            for sha in $SHAS; do
+              [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "| invalid hash | | | | | |"; continue; }
+              out=""
+              for i in $(seq 1 120); do
+                json=$(curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/${sha}" 2>/dev/null || true)
+                if [ -n "$json" ]; then
+                  out=$(echo "$json" | jq -r '.data.attributes as $a | ($a.last_analysis_stats // {}) as $s
+                    | "\($s.malicious // 0) \($s.suspicious // 0) \($s.undetected // 0) \(($s|add) // 0) \([$a.last_analysis_results // {} | to_entries[] | select(.value.category=="malicious" or .value.category=="suspicious") | .key] | join(","))"')
+                  [ "$(echo "$out" | awk '{print $4}')" -ge 50 ] && break
+                fi
+                sleep 15
+              done
+              m="pending"; sus=""; u=""; t=""; f=""
+              [ -n "$out" ] && read -r m sus u t f <<< "$out"
+              echo "| [${sha}](https://www.virustotal.com/gui/file/${sha}) | $m | $sus | $u | $t | ${f:-none} |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
   build:
+    if: inputs.lookup_shas == ''
     runs-on: windows-latest
     permissions:
       contents: read
