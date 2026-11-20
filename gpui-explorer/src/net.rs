@@ -104,6 +104,11 @@ impl Profile {
         }
     }
 
+    /// The serialized server type name (shown in the dashboard's server card).
+    pub fn type_name(&self) -> &'static str {
+        self.server_type.as_str()
+    }
+
     /// Build a request profile from a stored/resolved server profile (secrets already resolved).
     pub fn from_server(p: &crate::profiles::ServerProfile) -> Self {
         use crate::profiles::AuthMethod;

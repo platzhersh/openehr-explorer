@@ -231,6 +231,8 @@ struct Explorer {
     comps: Vec<Composition>,
     comps_loading: bool,
     counts: Option<net::Counts>,
+    counts_error: Option<SharedString>,
+    server_version: Option<SharedString>,
     comp_sel: Option<usize>,
     comp_tab: CompTab,
     comp_json: Vec<SharedString>,
@@ -499,6 +501,8 @@ impl Explorer {
             comps,
             comps_loading: false,
             counts: None,
+            counts_error: None,
+            server_version: None,
             comp_sel: None,
             comp_tab: CompTab::Json,
             comp_json: Vec::new(),
@@ -578,14 +582,25 @@ impl Explorer {
             let desc = server.test_connection().await?;
             let templates = server.list_templates().await?;
             let page = server.list_ehrs(0, PAGE).await?;
-            let counts = server.dashboard_counts().await.ok();
+            let counts = server.dashboard_counts().await;
             Ok::<_, String>((desc, templates, page, counts))
         };
         self.spawn_net(cx, fut, |this, res, cx| {
             this.ehrs_loading = false;
             match res {
                 Ok((desc, templates, page, counts)) => {
-                    this.counts = counts;
+                    // A COUNT failure must not break the rest of the load, but it is shown on the dashboard.
+                    match counts {
+                        Ok(c) => {
+                            this.counts = Some(c);
+                            this.counts_error = None;
+                        }
+                        Err(e) => {
+                            this.counts = None;
+                            this.counts_error = Some(e.into());
+                        }
+                    }
+                    this.server_version = Some(desc.clone().into());
                     this.analytics.track("connection_result", Some(json!({ "ok": true })));
                     let label = match &this.server_name {
                         Some(n) => format!("{n} · {desc}"),
@@ -961,6 +976,8 @@ impl Explorer {
                 self.selected_template = 0;
                 self.table = None;
                 self.counts = None;
+                self.counts_error = None;
+                self.server_version = None;
                 self.reset_composition();
                 self.ehrs_has_more = false;
                 self.connect(cx);
@@ -1601,56 +1618,111 @@ impl Explorer {
             })
     }
 
-    fn dashboard(&self, cx: &mut Context<Self>) -> Div {
-        let card = |label: &'static str, value: String| {
-            div()
-                .flex_1()
-                .p_4()
-                .rounded(px(6.))
-                .bg(rgb(SURFACE))
-                .border_1()
-                .border_color(rgb(BORDER))
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(label))
-                .child(div().text_size(px(30.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child(value))
+    /// A stat card that links to the view it counts (as in the Tauri dashboard).
+    fn stat_card(label: &'static str, value: String, target: View, cx: &mut Context<Self>) -> Stateful<Div> {
+        div()
+            .id(SharedString::from(format!("stat-{label}")))
+            .flex_1()
+            .p_4()
+            .rounded(px(6.))
+            .bg(rgb(SURFACE))
+            .border_1()
+            .border_color(rgb(BORDER))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .cursor_pointer()
+            .hover(|s| s.bg(rgb(SURFACE_HOVER)).border_color(rgb(PRIMARY)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.view = target;
+                cx.notify();
+            }))
+            .child(div().text_size(px(30.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child(value))
+            .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(label))
+    }
+
+    /// Shown instead of live data when no profile is active: send the user to Servers.
+    fn onboarding_card(&self, cx: &mut Context<Self>) -> Div {
+        let (title, body, button) = if self.profiles_ui.profiles.is_empty() {
+            ("Welcome to openEHR Explorer", "Connect your first openEHR CDR (EHRBase, Better Platform, FerroEHR or any generic openEHR REST server) to see live EHR, composition and template counts here.", "+ Add Your First Server")
+        } else {
+            ("No server selected", "Select a server profile to see its live EHR, composition and template counts.", "Go to Servers")
         };
+        div()
+            .p_4()
+            .rounded(px(6.))
+            .bg(rgb(SURFACE))
+            .border_1()
+            .border_color(rgb(BORDER))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(div().text_size(px(16.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(title))
+            .child(div().text_size(px(13.)).text_color(rgb(TEXT2)).child(body))
+            .child(div().flex().child(btn("onboard-servers", button, true, cx.listener(|this, _, _, cx| {
+                this.view = View::Servers;
+                cx.notify();
+            }))))
+    }
+
+    /// "Connected Server" card (links to Servers): name, URL, type, status, version.
+    fn server_card(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let row = |k: &'static str, v: Div| div().flex().items_center().gap_3().child(div().w(px(70.)).flex_none().text_size(px(12.)).text_color(rgb(MUTED)).child(k)).child(v);
+        let text = |t: String| div().text_size(px(13.)).text_color(rgb(TEXT)).child(t);
+        let (status, color) = match &self.conn {
+            Conn::Connected(_) => ("connected", SUCCESS),
+            Conn::Connecting => ("connecting", 0xffd93d),
+            Conn::Failed(_) => ("error", 0xff7b7b),
+            Conn::Demo => ("unknown", MUTED),
+        };
+        let status_row = div().flex().items_center().gap_2().child(div().size(px(8.)).flex_none().rounded_full().bg(rgb(color))).child(text(status.to_string()));
+        let url = self.server.as_ref().map(|s| s.base_url.clone()).unwrap_or_default();
+        let stype = self.server.as_ref().map(|s| s.type_name()).unwrap_or("generic");
+        div()
+            .id("server-card")
+            .p_4()
+            .rounded(px(6.))
+            .bg(rgb(SURFACE))
+            .border_1()
+            .border_color(rgb(BORDER))
+            .flex()
+            .flex_col()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|s| s.bg(rgb(SURFACE_HOVER)).border_color(rgb(PRIMARY)))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.view = View::Servers;
+                cx.notify();
+            }))
+            .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child("Connected Server"))
+            .child(row("Name", text(self.server_name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "(from --server)".to_string()))))
+            .child(row("URL", div().text_size(px(13.)).font_family(MONO).text_color(rgb(TEXT)).child(url)))
+            .child(row("Type", div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(stype)))
+            .child(row("Status", status_row))
+            .children(self.server_version.clone().map(|v| row("Version", text(v.to_string()))))
+    }
+
+    fn dashboard(&self, cx: &mut Context<Self>) -> Div {
         let demo = self.server.is_none();
         let (ehr_count, comps, tpl_count) = self.dashboard_numbers();
-        let (status_dot, status_text): (u32, SharedString) = match &self.conn {
-            Conn::Demo => (SUCCESS, "Connected — EHRBase 2.7.0, openEHR SDK 2.19.0 (demo data)".into()),
-            Conn::Connecting => (0xffd93d, "Connecting…".into()),
-            Conn::Connected(d) => (SUCCESS, format!("Connected — {d}").into()),
-            Conn::Failed(e) => (0xff7b7b, format!("Connection failed — {e}").into()),
-        };
+        let subtitle = if demo { format!("Local EHRBase · hospital.example.org ({})", self.server_label()) } else { self.server_label() };
         div()
             .flex()
             .flex_col()
             .p_6()
             .gap_4()
-            .child(self.titled_header("Dashboard", if demo { format!("Local EHRBase · hospital.example.org ({})", self.server_label()) } else { self.server_label() }, false, cx))
+            .child(self.titled_header("Overview", subtitle, false, cx))
+            .children(demo.then(|| self.onboarding_card(cx)))
+            .children(self.counts_error.clone().map(|e| div().text_size(px(13.)).text_color(rgb(0xff7b7b)).child(format!("Failed to load counts: {e}"))))
             .child(
                 div()
                     .flex()
                     .gap_4()
-                    .child(card("EHRs", ehr_count))
-                    .child(card("Compositions", comps))
-                    .child(card("Templates", tpl_count)),
+                    .child(Self::stat_card("EHRs", ehr_count, View::Ehrs, cx))
+                    .child(Self::stat_card("Compositions", comps, View::Ehrs, cx))
+                    .child(Self::stat_card("Templates", tpl_count, View::Templates, cx)),
             )
-            .child(
-                div()
-                    .p_4()
-                    .rounded(px(6.))
-                    .bg(rgb(SURFACE))
-                    .border_1()
-                    .border_color(rgb(BORDER))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(status_dot)))
-                    .child(div().text_size(px(13.)).text_color(rgb(TEXT)).child(status_text)),
-            )
+            .children((!demo).then(|| self.server_card(cx)))
     }
 
     fn ehr_browser(&mut self, cx: &mut Context<Self>) -> Div {

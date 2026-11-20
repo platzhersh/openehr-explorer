@@ -66,7 +66,7 @@ Dashboard, EHR Browser (including its composition screen), Templates and AQL Run
 the first; change it with *Use* on the Servers tab, which reloads everything). Each tab header names the server it is
 showing, or says "demo data" when no profile is active.
 
-* **Dashboard:** server-side counts exactly like the Tauri dashboard (`COUNT` on concrete leaf paths, since EHRBase rejects
+* **Dashboard ("Overview"):** the stat cards are links like in the Tauri app (EHRs and Compositions open EHR Browser, Templates opens Templates), the "Connected Server" card (name, URL, type, status, version) opens Servers, and with no active profile an onboarding card ("+ Add Your First Server" / "Go to Servers") points there. Counts are server-side exactly like the Tauri dashboard (`COUNT` on concrete leaf paths, since EHRBase rejects
   `COUNT` on whole objects; integer, float or string results all parse) plus the template count, with Refresh.
 * **EHR Browser:** paged EHR list from the server (+ Refresh, Load more), compositions of the selected EHR.
 * **Composition screen** (opened from EHR Browser, like the Tauri app; there is no Compositions tab): click a composition to fetch it in canonical **JSON** and **FLAT**
