@@ -51,7 +51,7 @@ const MONO: &str = "DejaVu Sans Mono";
 enum View {
     Dashboard,
     Ehrs,
-    Compositions,
+    Composition,
     Templates,
     Aql,
     Servers,
@@ -152,10 +152,9 @@ fn demo_tree() -> Vec<TreeRow> {
     DEMO_TREE.iter().map(|(d, l, r, p)| TreeRow { depth: *d, label: (*l).into(), rm: (*r).into(), path: (*p).into() }).collect()
 }
 
-const NAV: [(View, &str); 6] = [
+const NAV: [(View, &str); 5] = [
     (View::Dashboard, "Dashboard"),
     (View::Ehrs, "EHR Browser"),
-    (View::Compositions, "Compositions"),
     (View::Templates, "Templates"),
     (View::Aql, "AQL Runner"),
     (View::Servers, "Servers"),
@@ -1333,7 +1332,7 @@ impl Explorer {
 
     fn open_composition(&mut self, i: usize, cx: &mut Context<Self>) {
         let Some(c) = self.comps.get(i).cloned() else { return };
-        self.view = View::Compositions;
+        self.view = View::Composition;
         self.comp_sel = Some(i);
         self.comp_json_err = None;
         self.comp_flat_err = None;
@@ -1435,77 +1434,24 @@ impl Explorer {
             .children(rows)
     }
 
+    /// The composition screen: opened by clicking a composition in EHR Browser, Back returns there.
     fn compositions_view(&mut self, cx: &mut Context<Self>) -> Div {
-        let ehr = self.selected_ehr.and_then(|i| self.ehrs.get(i)).map(|e| e.id.to_string());
-        let scope = match &ehr {
-            Some(id) => format!("EHR {}…", id.chars().take(8).collect::<String>()),
-            None => "no EHR selected".to_string(),
-        };
-        let list: Div = if ehr.is_none() {
-            div().p_4().flex().flex_col().gap_3().child(div().text_size(px(13.)).text_color(rgb(MUTED)).child("Pick an EHR first; its compositions are listed here.")).child(btn("to-ehrs", "Open EHR Browser", true, cx.listener(|this, _, _, cx| {
-                this.view = View::Ehrs;
-                cx.notify();
-            })))
-        } else if self.comps_loading {
-            div().p_4().text_color(rgb(MUTED)).child("Loading compositions…")
-        } else {
-            let rows = uniform_list(
-                "comp-list",
-                self.comps.len(),
-                cx.processor(|this, range: Range<usize>, _w, cx| {
-                    range
-                        .map(|i| {
-                            let c = this.comps[i].clone();
-                            let sel = this.comp_sel == Some(i);
-                            div().w_full().h(px(72.)).px_4().py_1().child(
-                                div()
-                                    .id(("compn", i))
-                                    .size_full()
-                                    .px_3()
-                                    .rounded(px(6.))
-                                    .border_1()
-                                    .border_color(rgb(if sel { PRIMARY } else { BORDER }))
-                                    .bg(rgb(if sel { BG3 } else { SURFACE }))
-                                    .hover(|s| s.bg(rgb(SURFACE_HOVER)))
-                                    .cursor_pointer()
-                                    .flex()
-                                    .flex_col()
-                                    .justify_center()
-                                    .gap_1()
-                                    .overflow_hidden()
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.open_composition(i, cx);
-                                        cx.notify();
-                                    }))
-                                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(c.name))
-                                    .child(div().text_size(px(11.)).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(format!("{} · {}", c.template, c.committed))),
-                            )
-                        })
-                        .collect()
-                }),
-            )
-            .w_full()
-            .flex_1();
-            div().flex().flex_col().flex_1().child(rows)
-        };
-        let left = div()
-            .w(px(420.))
-            .flex_none()
-            .h_full()
-            .flex()
-            .flex_col()
-            .border_r_1()
-            .border_color(rgb(BORDER))
-            .child(div().p_4().child(Self::page_title("Compositions", format!("{} · {scope}", self.server_label()))))
-            .child(list);
-        div().flex().size_full().child(left).child(self.composition_viewer(cx))
+        div().flex().size_full().child(self.composition_viewer(cx))
+    }
+
+    fn back_to_ehrs(cx: &mut Context<Self>) -> Stateful<Div> {
+        btn("back-ehrs", "← EHR Browser", false, cx.listener(|this, _, _, cx| {
+            this.view = View::Ehrs;
+            cx.notify();
+        }))
     }
 
     fn composition_viewer(&mut self, cx: &mut Context<Self>) -> Div {
         let Some(c) = self.comp_sel.and_then(|i| self.comps.get(i)).cloned() else {
-            return div().flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Select a composition");
+            return div().flex_1().p_6().flex().flex_col().gap_3().child(Self::back_to_ehrs(cx)).child(div().text_color(rgb(MUTED)).child("Open a composition from an EHR in EHR Browser"));
         };
         let tab = self.comp_tab;
+        let ehr_short: String = self.selected_ehr.and_then(|i| self.ehrs.get(i)).map(|e| e.id.chars().take(8).collect()).unwrap_or_default();
         let (lines, err, loading) = match tab {
             CompTab::Json => (&self.comp_json, &self.comp_json_err, self.comp_json_loading),
             CompTab::Flat => (&self.comp_flat, &self.comp_flat_err, self.comp_flat_loading),
@@ -1547,8 +1493,22 @@ impl Explorer {
             .flex()
             .flex_col()
             .gap_3()
-            .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(c.name))
-            .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(if c.uid.is_empty() { c.template.clone() } else { c.uid.clone() }))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(c.name))
+                            .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).child(if c.uid.is_empty() { c.template.clone() } else { c.uid.clone() }))
+                            .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(format!("EHR {} · {}", ehr_short, self.server_label()))),
+                    )
+                    .child(Self::back_to_ehrs(cx)),
+            )
             .child(tabs)
             .child(div().flex().flex_col().flex_1().rounded(px(6.)).border_1().border_color(rgb(BORDER)).bg(rgb(SURFACE)).overflow_hidden().child(body))
     }
@@ -1584,7 +1544,8 @@ impl Explorer {
     fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut nav = div().flex().flex_col().gap_1().p_3();
         for (view, label) in NAV {
-            let active = self.view == view;
+            // The composition viewer is a screen inside EHR Browser (as in the Tauri app), not a tab of its own.
+            let active = self.view == view || (view == View::Ehrs && self.view == View::Composition);
             nav = nav.child(
                 div()
                     .id(label)
@@ -2018,7 +1979,7 @@ impl Render for Explorer {
         let content = match self.view {
             View::Dashboard => self.dashboard(cx),
             View::Ehrs => self.ehr_browser(cx),
-            View::Compositions => self.compositions_view(cx),
+            View::Composition => self.compositions_view(cx),
             View::Templates => self.template_browser(cx),
             View::Aql => self.aql_runner(window, cx),
             View::Servers => self.servers_view(window, cx),

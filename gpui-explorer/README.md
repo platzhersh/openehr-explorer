@@ -62,14 +62,14 @@ app's own `load_stored_profiles`/`get_profile_by_id`/`save_server_profile` again
 
 ## Every tab follows the active server profile
 
-Dashboard, EHR Browser, Compositions, Templates and AQL Runner all read from the **active profile** (the default one, else
+Dashboard, EHR Browser (including its composition screen), Templates and AQL Runner all read from the **active profile** (the default one, else
 the first; change it with *Use* on the Servers tab, which reloads everything). Each tab header names the server it is
 showing, or says "demo data" when no profile is active.
 
 * **Dashboard:** server-side counts exactly like the Tauri dashboard (`COUNT` on concrete leaf paths, since EHRBase rejects
   `COUNT` on whole objects; integer, float or string results all parse) plus the template count, with Refresh.
 * **EHR Browser:** paged EHR list from the server (+ Refresh, Load more), compositions of the selected EHR.
-* **Compositions:** click a composition (in EHR Browser or the Compositions tab) to fetch it in canonical **JSON** and **FLAT**
+* **Composition screen** (opened from EHR Browser, like the Tauri app; there is no Compositions tab): click a composition to fetch it in canonical **JSON** and **FLAT**
   (FLAT media type chosen by server type, as in the Tauri backend); the two requests are independent, so JSON shows
   as soon as it arrives and a server/template without FLAT support only affects its own tab.
 * **Templates:** template list and Web Template trees of the active server.
