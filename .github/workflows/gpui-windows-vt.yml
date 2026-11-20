@@ -1,7 +1,7 @@
 # Experiment (see gpui-explorer/README.md, OEH-130): separate "packaging" from "UI stack" when explaining
 # VirusTotal detections. Scans four files and reports signing status for each:
-#   1. GPUI toy, bare exe                  (artifact from an earlier run of this workflow)
-#   2. GPUI toy wrapped in a minimal NSIS installer
+#   1. GPUI PoC, bare exe                  (built fresh in the `build` job from this checkout)
+#   2. GPUI PoC wrapped in a minimal NSIS installer
 #   3. The real Tauri app exe, extracted from the latest release installer
 #   4. The latest release's Tauri NSIS installer
 # Not part of the release pipeline.
@@ -9,18 +9,29 @@ name: GPUI Windows + VirusTotal (experiment)
 
 on:
   workflow_dispatch:
-    inputs:
-      gpui_run_id:
-        description: Earlier run whose openehr-explorer-gpui-windows artifact to reuse
-        default: "44701128848"
-        required: true
 
 permissions:
   contents: read
   actions: read
 
 jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build GPUI PoC (release)
+        working-directory: gpui-explorer
+        run: cargo build --release --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openehr-explorer-gpui-windows
+          path: gpui-explorer/target/release/openehr-explorer-gpui.exe
+
   packaging-test:
+    needs: build
     runs-on: windows-latest
     defaults:
       run:
@@ -28,13 +39,16 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       VT_API_KEY: ${{ secrets.VT_API_KEY }}
-      GPUI_RUN_ID: ${{ inputs.gpui_run_id }}
     steps:
-      - name: Fetch GPUI exe and latest release installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: openehr-explorer-gpui-windows
+          path: work/gpui
+
+      - name: Fetch latest release installer
         run: |
           set -euo pipefail
-          mkdir -p work/gpui work/tauri
-          gh run download "$GPUI_RUN_ID" -R "$GITHUB_REPOSITORY" -n openehr-explorer-gpui-windows -D work/gpui
+          mkdir -p work/tauri
           gh release download -R "$GITHUB_REPOSITORY" --pattern '*-setup.exe' -D work/tauri
           gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName > work/tag.txt
           ls -la work/gpui work/tauri
@@ -131,8 +145,8 @@ jobs:
             echo
             echo "| File | Size | Authenticode | malicious | suspicious | undetected | engines | Flagged by | Report |"
             echo "|---|---:|---|---:|---:|---:|---:|---|---|"
-            row "GPUI toy, bare exe" gpui/openehr-explorer-gpui.exe
-            row "GPUI toy in minimal NSIS installer" gpui-setup.exe
+            row "GPUI PoC, bare exe" gpui/openehr-explorer-gpui.exe
+            row "GPUI PoC in minimal NSIS installer" gpui-setup.exe
             row "Tauri app exe, extracted from $TAG installer" tauri-app.exe
             row "Tauri NSIS installer $TAG" "$(ls tauri/*-setup.exe | head -1)"
           } | tee -a "$GITHUB_STEP_SUMMARY"
