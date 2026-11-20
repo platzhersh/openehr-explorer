@@ -31,8 +31,13 @@ EHRBase does), `/definition/template/adl1.4` (+ Web Template with `application/o
 `/query/aql`. A shared Tokio runtime does the I/O; results are applied on GPUI's thread. Rows are stored flat
 (`Vec<SharedString>` + column count), so arbitrary AQL result shapes cost no extra per-row allocation.
 
-No real CDR was available when this was written, so it was tested against `bench/mock-cdr.mjs`, an EHRBase-like
-mock (Basic auth, rejects `ORDER BY` on EHR attributes). It has **not** been run against a real EHRBase or Better.
+Tested two ways. `bench/mock-cdr.mjs` is an EHRBase-like mock (Basic auth, rejects `ORDER BY` on EHR attributes) used for
+auth, paging and analytics checks. It was also run, **read-only**, against the public sandbox
+`https://sandbox.ehrbase.org/ehrbase` (EHRBase 2.33.0, reads need no credentials): EHR paging, 506 templates with
+Web Template trees, compositions, and AQL all work (`gpui-sandbox-*.png`). That run caught two bugs the mock could not:
+`/rest/status` answers XML unless `Accept: application/json` is sent, and the template list needs to be virtualized.
+EHRBase 2.33 still rejects `ORDER BY` on EHR attributes, so the retry path is needed. Not tested against Better Platform,
+and writes are not implemented.
 
 ## Analytics (Aptabase)
 

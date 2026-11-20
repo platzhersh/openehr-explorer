@@ -88,6 +88,10 @@ enum Conn {
 }
 
 const PAGE: usize = 100;
+/// Usable table width at the default 1440px window (window minus sidebar and padding).
+const TABLE_FIT_PX: f32 = 1120.0;
+/// The composition query is capped; show "100+" when the cap is hit.
+const COMPS_LIMIT: usize = 100;
 
 const DEMO_TEMPLATES: [(&str, &str, &str); 4] = [
     ("vital_signs.v1", "Vital Signs", "openEHR-EHR-COMPOSITION.encounter.v1"),
@@ -175,7 +179,10 @@ impl AqlTable {
                 let body = cells.iter().skip(c).step_by(ncols).take(50).map(|v| v.chars().count()).max().unwrap_or(0);
                 (head.max(body) as f32 * 7.4 + 28.0).clamp(90.0, 460.0)
             })
-            .collect();
+            .collect::<Vec<f32>>();
+        // No horizontal scrolling yet: shrink columns proportionally (min 90px) so the table fits the pane.
+        let total: f32 = widths.iter().sum();
+        let widths = if total > TABLE_FIT_PX { widths.iter().map(|w| (w * TABLE_FIT_PX / total).max(90.0)).collect() } else { widths };
         Self { columns, cells, widths, exec_ms }
     }
     fn ncols(&self) -> usize {
@@ -222,6 +229,7 @@ struct Explorer {
     ehr_scroll: UniformListScrollHandle,
     aql_scroll: UniformListScrollHandle,
     tree_scroll: UniformListScrollHandle,
+    tpl_scroll: UniformListScrollHandle,
     boot: Instant,
     first_render_reported: bool,
     run_clicked_at: Option<Instant>,
@@ -304,6 +312,7 @@ impl Explorer {
             ehr_scroll: UniformListScrollHandle::new(),
             aql_scroll: UniformListScrollHandle::new(),
             tree_scroll: UniformListScrollHandle::new(),
+            tpl_scroll: UniformListScrollHandle::new(),
             boot: o.boot,
             first_render_reported: false,
             run_clicked_at: None,
@@ -758,7 +767,7 @@ impl Explorer {
                             .child(kv("Created", e.created.clone()))
                             .child(kv("Subject", if self.server.is_some() { "—".into() } else { e.subject.clone() })),
                     )
-                    .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(if self.comps_loading { "Compositions (loading…)".to_string() } else { format!("Compositions ({})", self.comps.len()) }))
+                    .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(if self.comps_loading { "Compositions (loading…)".to_string() } else { format!("Compositions ({}{})", self.comps.len(), if self.comps.len() >= COMPS_LIMIT { "+" } else { "" }) }))
                     .child(comps)
             }
         };
@@ -766,31 +775,44 @@ impl Explorer {
     }
 
     fn template_browser(&mut self, cx: &mut Context<Self>) -> Div {
-        let mut list = div().flex().flex_col().gap_2().px_4();
-        for (i, t) in self.templates.iter().enumerate() {
-            let sel = self.selected_template == i;
-            list = list.child(
-                div()
-                    .id(("tpl", i))
-                    .p_3()
-                    .rounded(px(6.))
-                    .cursor_pointer()
-                    .border_1()
-                    .border_color(rgb(if sel { PRIMARY } else { BORDER }))
-                    .bg(rgb(if sel { BG3 } else { SURFACE }))
-                    .hover(|s| s.bg(rgb(SURFACE_HOVER)))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_template(i, cx);
-                        cx.notify();
-                    }))
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(t.concept.clone()))
-                    .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).child(t.id.clone()))
-                    .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(t.archetype.clone())),
-            );
-        }
+        let list = uniform_list(
+            "tpl-list",
+            self.templates.len(),
+            cx.processor(|this, range: Range<usize>, _w, cx| {
+                range
+                    .map(|i| {
+                        let t = this.templates[i].clone();
+                        let sel = this.selected_template == i;
+                        div().w_full().h(px(104.)).px_4().py_1().child(
+                            div()
+                                .id(("tpl", i))
+                                .size_full()
+                                .p_3()
+                                .rounded(px(6.))
+                                .overflow_hidden()
+                                .cursor_pointer()
+                                .border_1()
+                                .border_color(rgb(if sel { PRIMARY } else { BORDER }))
+                                .bg(rgb(if sel { BG3 } else { SURFACE }))
+                                .hover(|s| s.bg(rgb(SURFACE_HOVER)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.select_template(i, cx);
+                                    cx.notify();
+                                }))
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(t.concept))
+                                .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(t.id))
+                                .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(t.archetype)),
+                        )
+                    })
+                    .collect()
+            }),
+        )
+        .track_scroll(self.tpl_scroll.clone())
+        .w_full()
+        .flex_1();
         let concept: SharedString = self.templates.get(self.selected_template).map(|t| t.concept.clone()).unwrap_or_else(|| "No template".into());
         let tree = uniform_list(
             "tpl-tree",
@@ -808,9 +830,9 @@ impl Explorer {
                             .pl(px(12. + depth as f32 * 22.))
                             .border_b_1()
                             .border_color(rgb(BORDER))
-                            .child(div().text_size(px(13.)).text_color(rgb(TEXT)).w(px(170.)).child(label))
-                            .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(PRIMARY)).w(px(110.)).child(rm))
-                            .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).child(path))
+                            .child(div().text_size(px(13.)).text_color(rgb(TEXT)).w(px(170.)).flex_none().whitespace_nowrap().text_ellipsis().overflow_hidden().child(label))
+                            .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(PRIMARY)).w(px(110.)).flex_none().whitespace_nowrap().overflow_hidden().child(rm))
+                            .child(div().text_size(px(11.)).font_family(MONO).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().min_w_0().child(path))
                     })
                     .collect()
             }),
@@ -910,7 +932,7 @@ impl Explorer {
                                     .font_family(MONO)
                                     .text_size(px(12.))
                                     .text_color(rgb(TEXT))
-                                    .children(r.iter().enumerate().map(|(c, v)| div().w(px(t.widths[c])).flex_none().px_3().child(v.clone())))
+                                    .children(r.iter().enumerate().map(|(c, v)| div().w(px(t.widths[c])).flex_none().px_3().overflow_hidden().whitespace_nowrap().text_ellipsis().child(v.clone())))
                             })
                             .collect()
                     }),

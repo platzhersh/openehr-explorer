@@ -122,7 +122,8 @@ impl Profile {
     pub async fn test_connection(&self) -> Result<String, String> {
         // EHRBase exposes /rest/status outside the openEHR root; other CDRs may not.
         let status_url = format!("{}/rest/status", self.base_url);
-        if let Ok(v) = self.send_json(self.req(Method::GET, &status_url)).await {
+        // EHRBase answers /rest/status in XML unless JSON is requested explicitly.
+        if let Ok(v) = self.send_json(self.req(Method::GET, &status_url).header("Accept", "application/json")).await {
             if let Some(ver) = v.get("ehrbase_version").and_then(|x| x.as_str()) {
                 return Ok(format!("EHRBase {ver}"));
             }
@@ -137,7 +138,7 @@ impl Profile {
         let url = format!("{}/query/aql", self.api_root());
         let t = Instant::now();
         let body = self
-            .send_json(self.req(Method::POST, &url).header("Content-Type", "application/json").json(&json!({ "q": query })))
+            .send_json(self.req(Method::POST, &url).header("Content-Type", "application/json").header("Accept", "application/json").json(&json!({ "q": query })))
             .await?;
         let columns = body
             .get("columns")
