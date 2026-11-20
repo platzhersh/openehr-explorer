@@ -18,6 +18,7 @@ use gpui::{
     div, point, px, rgb, size, uniform_list, App, AppContext, Application, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, Keystroke, MouseButton, Stateful,
     IntoElement, ParentElement, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
+    ClipboardItem, FontStyle, HighlightStyle, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollHandle, StyledText,
 };
 mod analytics;
 // The very same file the Tauri app compiles, so the keychain/encrypted-store formats cannot drift.
@@ -27,6 +28,8 @@ mod credentials;
 mod net;
 mod profiles;
 mod search;
+mod aql_syntax;
+mod editor;
 mod settings;
 
 use analytics::Analytics;
@@ -271,7 +274,7 @@ struct Explorer {
     comp_json_loading: bool,
     comp_flat_loading: bool,
     comp_scroll: UniformListScrollHandle,
-    aql_editor: Option<Field>,
+    aql_editor: Option<AqlEd>,
     server: Option<net::Profile>,
     server_name: Option<SharedString>,
     active_profile: Option<String>,
@@ -345,10 +348,6 @@ struct Field {
 impl Field {
     fn new(cx: &mut App, text: &str, masked: bool, placeholder: &'static str) -> Self {
         Self { cursor: text.chars().count(), text: text.to_string(), masked, multiline: false, placeholder, focus: cx.focus_handle().tab_stop(true) }
-    }
-    fn multiline(mut self) -> Self {
-        self.multiline = true;
-        self
     }
     fn byte(&self, chars: usize) -> usize {
         self.text.char_indices().nth(chars).map(|(i, _)| i).unwrap_or(self.text.len())
@@ -480,6 +479,94 @@ where
         .child(label.into())
 }
 
+/// The AQL editor widget: pure model (`editor::Editor`) plus the GPUI bits (focus, scroll, drag, completion).
+struct AqlEd {
+    ed: editor::Editor,
+    focus: FocusHandle,
+    scroll: ScrollHandle,
+    dragging: bool,
+    sugg_sel: usize,
+    /// Caret position where the completion popup was dismissed with Esc.
+    dismissed_at: Option<usize>,
+    toks: Vec<Vec<(Range<usize>, aql_syntax::Tok)>>,
+    toks_version: Option<u64>,
+    char_w: f32,
+}
+
+impl AqlEd {
+    const LINE_H: f32 = 20.0;
+    const PAD: f32 = 8.0;
+    const GUTTER: f32 = 44.0;
+    const FONT: f32 = 13.0;
+    const MAX_H: f32 = 260.0;
+
+    fn new(cx: &mut App, text: &str) -> Self {
+        Self { ed: editor::Editor::new(text), focus: cx.focus_handle().tab_stop(true), scroll: ScrollHandle::new(), dragging: false, sugg_sel: 0, dismissed_at: None, toks: vec![], toks_version: None, char_w: Self::FONT * 0.602 }
+    }
+
+    /// Advance width of one monospace glyph, measured once from the font.
+    fn measure_char_w(&mut self, window: &Window) -> f32 {
+        let ts = window.text_system();
+        let id = ts.resolve_font(&gpui::font(MONO));
+        if let Ok(sz) = ts.advance(id, px(Self::FONT), 'm') {
+            self.char_w = f32::from(sz.width);
+        }
+        self.char_w
+    }
+
+    fn refresh_tokens(&mut self) {
+        if self.toks_version != Some(self.ed.version) || self.toks.len() != self.ed.line_count() {
+            self.toks = aql_syntax::tokenize(&self.ed.text());
+            self.toks_version = Some(self.ed.version);
+        }
+    }
+
+    /// (line text, word being typed before the caret).
+    fn prefix(&self) -> (usize, String) {
+        let (line, col) = self.ed.line_col(self.ed.cursor);
+        let s = self.ed.line_start(self.ed.cursor);
+        let text: String = self.ed.chars[s..self.ed.line_end(s)].iter().collect();
+        (line, aql_syntax::word_before(&text, col))
+    }
+
+    fn suggestions(&self) -> Vec<&'static str> {
+        if self.ed.has_selection() || self.dismissed_at == Some(self.ed.cursor) {
+            return vec![];
+        }
+        aql_syntax::suggest(&self.prefix().1)
+    }
+
+    /// Window point -> char index in the buffer.
+    fn pos_from_point(&self, p: gpui::Point<gpui::Pixels>, _window: &Window) -> usize {
+        let b = self.scroll.bounds();
+        let off = self.scroll.offset();
+        let x = f32::from(p.x - b.origin.x) - Self::GUTTER - Self::PAD;
+        let y = f32::from(p.y - b.origin.y) - f32::from(off.y) - Self::PAD;
+        let line = (y / Self::LINE_H).floor().max(0.0) as usize;
+        let col = (x / self.char_w).round().max(0.0) as usize;
+        self.ed.pos_at(line.min(self.ed.line_count() - 1), col)
+    }
+
+    /// Scroll so the caret line is visible.
+    fn reveal_cursor(&mut self) {
+        let (line, _) = self.ed.line_col(self.ed.cursor);
+        let top = Self::PAD + line as f32 * Self::LINE_H;
+        let view_h = f32::from(self.scroll.bounds().size.height);
+        if view_h <= 0.0 {
+            return;
+        }
+        let off = -f32::from(self.scroll.offset().y);
+        let new = if top < off {
+            top - Self::PAD
+        } else if top + Self::LINE_H + Self::PAD > off + view_h {
+            top + Self::LINE_H + Self::PAD - view_h
+        } else {
+            return;
+        };
+        self.scroll.set_offset(point(px(0.), px(-new.max(0.0))));
+    }
+}
+
 /// Editable copy of the settings shown on the Settings screen (applied on Save, like the Tauri form).
 struct SettingsUi {
     terminology: Field,
@@ -605,7 +692,7 @@ impl Explorer {
     }
 
     fn start(&mut self, cx: &mut Context<Self>) {
-        self.aql_editor = Some(Field::new(cx, &self.query, false, "AQL query").multiline());
+        self.aql_editor = Some(AqlEd::new(cx, &self.query));
         self.settings_ui = Some(SettingsUi::new(cx, &self.settings));
         self.search_field = Some(Field::new(cx, "", false, "Search by EHR ID, subject:P-123, hasCompositions:true …"));
         let mode = if self.server.is_some() { "server" } else { "demo" };
@@ -1466,63 +1553,233 @@ impl Explorer {
     }
 
     fn run_from_editor(&mut self, cx: &mut Context<Self>) {
-        if let Some(ed) = &self.aql_editor {
-            self.query = ed.text.clone().into();
+        if let Some(ae) = &self.aql_editor {
+            self.query = ae.ed.text().into();
         }
         self.run_query(cx);
+    }
+
+    fn format_query(&mut self) {
+        if let Some(ae) = self.aql_editor.as_mut() {
+            let formatted = aql_syntax::format(&ae.ed.text());
+            ae.ed.set_text(&formatted);
+            ae.dismissed_at = None;
+            ae.reveal_cursor();
+        }
     }
 
     fn editor_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let ks = &ev.keystroke;
         let m = &ks.modifiers;
-        if ks.key == "enter" && (m.control || m.platform) {
+        let ctrl = m.control || m.platform;
+        if ks.key == "enter" && ctrl {
             self.run_from_editor(cx);
             cx.notify();
             cx.stop_propagation();
             return;
         }
-        let paste = if (m.control || m.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
-        let Some(ed) = self.aql_editor.as_mut() else { return };
-        if !ed.focus.is_focused(window) {
+        let paste = if ctrl && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
+        let Some(ae) = self.aql_editor.as_mut() else { return };
+        if !ae.focus.is_focused(window) {
             return;
         }
-        ed.handle_key(ks, paste);
-        cx.notify();
-        cx.stop_propagation();
+        // Autocomplete popup: navigate / accept / dismiss.
+        let sugg = ae.suggestions();
+        if !sugg.is_empty() && !ctrl {
+            let handled = match ks.key.as_str() {
+                "down" => {
+                    ae.sugg_sel = (ae.sugg_sel + 1) % sugg.len();
+                    true
+                }
+                "up" => {
+                    ae.sugg_sel = (ae.sugg_sel + sugg.len() - 1) % sugg.len();
+                    true
+                }
+                "tab" | "enter" => {
+                    let (_, prefix) = ae.prefix();
+                    let pick = sugg[ae.sugg_sel.min(sugg.len() - 1)];
+                    ae.ed.accept_completion(prefix.chars().count(), pick);
+                    ae.sugg_sel = 0;
+                    ae.reveal_cursor();
+                    true
+                }
+                "escape" => {
+                    ae.dismissed_at = Some(ae.ed.cursor);
+                    true
+                }
+                _ => false,
+            };
+            if handled {
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+        }
+        let key = editor::Key { name: ks.key.as_str(), ch: ks.key_char.as_deref(), ctrl, shift: m.shift, alt: m.alt };
+        let out = ae.ed.key(&key, paste);
+        if out.handled {
+            ae.sugg_sel = 0;
+            ae.reveal_cursor();
+            if let Some(text) = out.clipboard {
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+            }
+            cx.notify();
+            cx.stop_propagation();
+        }
     }
 
-    fn editor_view(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
-        let nb = |s: &str| s.replace(' ', "\u{00a0}");
-        let base = div()
+    fn editor_mouse(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ae) = self.aql_editor.as_mut() else { return };
+        ae.focus.focus(window);
+        let pos = ae.pos_from_point(ev.position, window);
+        match ev.click_count {
+            2 => ae.ed.select_word_at(pos),
+            n if n >= 3 => ae.ed.select_line_at(pos),
+            _ => ae.ed.click(pos, ev.modifiers.shift),
+        }
+        ae.dragging = ev.click_count == 1;
+        ae.reveal_cursor();
+        cx.notify();
+    }
+
+    fn editor_drag(&mut self, ev: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ae) = self.aql_editor.as_mut() else { return };
+        if !ae.dragging || ev.pressed_button != Some(MouseButton::Left) {
+            ae.dragging = false;
+            return;
+        }
+        let pos = ae.pos_from_point(ev.position, window);
+        ae.ed.click(pos, true);
+        ae.reveal_cursor();
+        cx.notify();
+    }
+
+    fn tok_style(t: aql_syntax::Tok) -> HighlightStyle {
+        use aql_syntax::Tok;
+        let color = match t {
+            Tok::Keyword => PRIMARY,
+            Tok::Function => 0x82aaff,
+            Tok::Type => 0xffcb6b,
+            Tok::Archetype => 0xc792ea,
+            Tok::Path => 0x8fd3ff,
+            Tok::Alias => TEXT,
+            Tok::String => 0xc3e88d,
+            Tok::Number => 0xf78c6c,
+            Tok::Param => 0xff9cac,
+            Tok::Comment => MUTED,
+            Tok::Operator => 0x89ddff,
+            Tok::Punct => TEXT2,
+            Tok::Plain => TEXT,
+        };
+        HighlightStyle {
+            color: Some(rgb(color).into()),
+            font_style: (t == Tok::Comment).then_some(FontStyle::Italic),
+            font_weight: (t == Tok::Keyword).then_some(FontWeight::SEMIBOLD),
+            ..Default::default()
+        }
+    }
+
+    fn editor_line(line: &str, toks: &[(Range<usize>, aql_syntax::Tok)]) -> StyledText {
+        let bytes: Vec<usize> = line.char_indices().map(|(i, _)| i).chain(std::iter::once(line.len())).collect();
+        let runs: Vec<(Range<usize>, HighlightStyle)> = toks.iter().map(|(r, t)| (bytes[r.start]..bytes[r.end.min(bytes.len() - 1)], Self::tok_style(*t))).collect();
+        StyledText::new(line.to_string()).with_highlights(runs)
+    }
+
+    fn editor_view(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let Some(ae) = self.aql_editor.as_mut() else { return div() };
+        let char_w = ae.measure_char_w(window);
+        ae.refresh_tokens();
+        let focused = ae.focus.is_focused(window);
+        let ed = &ae.ed;
+        let (sel_a, sel_b) = ed.selection();
+        let (cur_line, cur_col) = ed.line_col(ed.cursor);
+        let text = ed.text();
+        let mut starts = vec![0usize];
+        for (i, c) in ed.chars.iter().enumerate() {
+            if *c == '\n' {
+                starts.push(i + 1);
+            }
+        }
+        let nlines = starts.len();
+        let mut gutter = div().w(px(AqlEd::GUTTER)).flex_none().flex().flex_col().pt(px(AqlEd::PAD)).pr_2().text_size(px(12.)).font_family(MONO).items_end();
+        let mut body = div().relative().flex_1().min_w_0().pt(px(AqlEd::PAD)).pl(px(AqlEd::PAD));
+        for (i, line) in text.split('\n').enumerate() {
+            let is_cur = i == cur_line;
+            gutter = gutter.child(div().h(px(AqlEd::LINE_H)).flex().items_center().text_color(rgb(if is_cur && focused { TEXT } else { MUTED })).child((i + 1).to_string()));
+            let (rs, re) = (starts[i], starts[i] + line.chars().count());
+            let mut row = div().relative().h(px(AqlEd::LINE_H)).whitespace_nowrap();
+            if is_cur && focused && sel_a == sel_b {
+                row = row.bg(rgb(0x16203d));
+            }
+            if sel_a < sel_b && sel_a <= re && sel_b > rs {
+                let from = sel_a.max(rs) - rs;
+                let to = sel_b.min(re) - rs;
+                let extra = if sel_b > re { 0.6 } else { 0.0 };
+                row = row.child(div().absolute().top_0().left(px(from as f32 * char_w)).w(px((to - from) as f32 * char_w + extra * char_w)).h(px(AqlEd::LINE_H)).bg(rgb(0x2b4a7d)));
+            }
+            if is_cur && focused {
+                row = row.child(div().absolute().top(px(1.)).left(px(cur_col as f32 * char_w - 0.75)).w(px(1.5)).h(px(AqlEd::LINE_H - 2.)).bg(rgb(PRIMARY)));
+            }
+            if !line.is_empty() {
+                row = row.child(Self::editor_line(line, &ae.toks[i]));
+            }
+            body = body.child(row);
+        }
+        // Autocomplete popup anchored under the caret.
+        let sugg = if focused { ae.suggestions() } else { vec![] };
+        let popup = (!sugg.is_empty()).then(|| {
+            let (_, prefix) = ae.prefix();
+            let scroll_y = f32::from(ae.scroll.offset().y);
+            let x = AqlEd::GUTTER + AqlEd::PAD + (cur_col - prefix.chars().count()) as f32 * char_w;
+            let y = AqlEd::PAD + (cur_line + 1) as f32 * AqlEd::LINE_H + scroll_y;
+            let sel = ae.sugg_sel.min(sugg.len() - 1);
+            div()
+                .absolute()
+                .left(px(x))
+                .top(px(y))
+                .w(px(180.))
+                .flex()
+                .flex_col()
+                .rounded(px(6.))
+                .border_1()
+                .border_color(rgb(BORDER))
+                .bg(rgb(SURFACE))
+                .shadow_md()
+                .py_1()
+                .font_family(MONO)
+                .text_size(px(12.))
+                .children(sugg.iter().enumerate().map(|(i, s)| div().px_2().h(px(22.)).flex().items_center().text_color(rgb(if i == sel { BG } else { TEXT })).bg(rgb(if i == sel { PRIMARY } else { SURFACE })).child(*s)))
+        });
+        let height = (nlines as f32 * AqlEd::LINE_H + AqlEd::PAD * 2.0).clamp(96.0, AqlEd::MAX_H);
+        let scroll = ae.scroll.clone();
+        let handle = ae.focus.clone();
+        let editor = div()
             .id("aql-editor")
-            .p_3()
+            .track_focus(&handle)
+            .track_scroll(&scroll)
+            .h(px(height))
+            .w_full()
+            .flex()
             .rounded(px(6.))
             .bg(rgb(0x11182e))
             .border_1()
-            .font_family(MONO)
-            .text_size(px(13.))
-            .max_h(px(230.))
-            .overflow_y_scroll()
-            .cursor_text();
-        let Some(ed) = self.aql_editor.as_ref() else { return base.border_color(rgb(BORDER)) };
-        let focused = ed.focus.is_focused(window);
-        let (cur_line, cur_col) = ed.line_col();
-        let handle = ed.focus.clone();
-        let rows = ed.text.split('\n').enumerate().map(|(i, line)| {
-            let kw = ["SELECT", "FROM", "CONTAINS", "WHERE", "ORDER", "LIMIT", "OFFSET"].iter().any(|k| line.trim_start().to_ascii_uppercase().starts_with(k));
-            let row = div().h(px(20.)).flex().items_center().whitespace_nowrap().text_color(rgb(if kw { PRIMARY } else { TEXT }));
-            if focused && i == cur_line {
-                let (before, after): (String, String) = (line.chars().take(cur_col).collect(), line.chars().skip(cur_col).collect());
-                row.child(nb(&before)).child(div().w(px(1.5)).h(px(17.)).bg(rgb(PRIMARY))).child(nb(&after))
-            } else {
-                row.child(nb(line))
-            }
-        });
-        base.track_focus(&ed.focus)
             .border_color(rgb(if focused { PRIMARY } else { BORDER }))
-            .on_mouse_down(MouseButton::Left, move |_, window, _cx| handle.focus(window))
+            .font_family(MONO)
+            .text_size(px(AqlEd::FONT))
+            .text_color(rgb(TEXT))
+            .overflow_y_scroll()
+            .cursor_text()
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, ev: &MouseDownEvent, window, cx| this.editor_mouse(ev, window, cx)))
+            .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, window, cx| this.editor_drag(ev, window, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, _| {
+                if let Some(ae) = this.aql_editor.as_mut() {
+                    ae.dragging = false;
+                }
+            }))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.editor_key(ev, window, cx)))
-            .children(rows)
+            .child(gutter)
+            .child(body);
+        div().relative().w_full().child(editor).children(popup)
     }
 
     /// The composition screen: opened by clicking a composition in EHR Browser, Back returns there.
@@ -2052,7 +2309,7 @@ impl Explorer {
             .pb_4()
             .min_w_0()
             .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title))
-            .child(div().text_size(px(13.)).text_color(rgb(MUTED)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(subtitle))
+            .child(div().w_full().text_size(px(13.)).text_color(rgb(MUTED)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(subtitle))
     }
 
     fn nav_item(&self, label: &'static str, view: View, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -2486,6 +2743,10 @@ impl Explorer {
                 cx.notify();
             }))
             .child(if self.aql_loading { "Running…" } else { "Run (Ctrl+Enter)" });
+        let format_btn = btn("format-aql", "Format", false, cx.listener(|this, _, _, cx| {
+            this.format_query();
+            cx.notify();
+        }));
         let status = match &self.table {
             Some(t) => format!("{} rows · {} in {:.1} ms", t.row_count(), if self.server.is_some() { "fetched" } else { "built" }, t.exec_ms),
             None => "No results yet".to_string(),
@@ -2535,7 +2796,8 @@ impl Explorer {
             .gap_3()
             .child(Self::page_title("AQL Runner", if self.server.is_some() { self.server_label() } else { "demo data — the query is not executed; pick a server in Servers".to_string() }))
             .child(editor)
-            .child(div().flex().items_center().gap_4().child(run).child(div().text_size(px(13.)).text_color(rgb(TEXT2)).child(status)))
+            .child(div().flex().items_center().gap_3().child(run).child(format_btn).child(div().text_size(px(13.)).text_color(rgb(TEXT2)).child(status)))
+            .child(Self::help("Ctrl+Enter run · Tab/Shift+Tab indent · Ctrl+/ comment · Ctrl+Z/Y undo · Ctrl+D duplicate line · drag, double-click and triple-click select"))
             .child(results)
     }
 }

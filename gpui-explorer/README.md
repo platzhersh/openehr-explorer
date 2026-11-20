@@ -86,8 +86,16 @@ showing, or says "demo data" when no profile is active.
   (FLAT media type chosen by server type, as in the Tauri backend); the two requests are independent, so JSON shows
   as soon as it arrives and a server/template without FLAT support only affects its own tab.
 * **Templates:** template list and Web Template trees of the active server.
-* **AQL Runner:** an editable multi-line query box (typing, paste, arrows incl. Up/Down, Home/End, Enter, Tab, `Ctrl+U`
-  clear) that runs against the active server with **Ctrl+Enter** or the Run button. In demo mode the query is not executed.
+* **AQL Runner:** a real code editor (`src/editor.rs`, pure and unit-tested) with AQL syntax highlighting (`src/aql_syntax.rs`):
+  keywords, functions, RM types, archetype/node predicates, paths, strings, numbers, `$params` and `--` comments get their own
+  colours; line-number gutter and current-line highlight. Editing: selection (Shift+arrows, mouse drag, double-click word,
+  triple-click line, Ctrl+A), Ctrl+C/X/V, undo/redo with typing coalescing (Ctrl+Z / Ctrl+Y), word navigation and deletion
+  (Ctrl+arrows/Backspace/Delete), smart Home, auto-indent on Enter, bracket and quote auto-closing (skip-over, pair delete,
+  wrap selection), Tab/Shift+Tab indent, Ctrl+/ comment toggle, Ctrl+D duplicate line, keyword autocomplete popup
+  (Up/Down, Tab/Enter, Esc) and a **Format** button (upper-case keywords/types, one clause per line). Runs with
+  **Ctrl+Enter** or the Run button; in demo mode the query is not executed. Not implemented: IME, find/replace, multi-cursor.
+
+![AQL editor](screenshots/gpui-aql-editor-selection.png)
 
 Checked against the mock and the public sandbox (switching profiles from the Servers tab repoints all of the above:
 the sandbox shows its own 1,422 EHRs / 11,504 compositions / 506 templates).
