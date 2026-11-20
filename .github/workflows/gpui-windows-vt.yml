@@ -22,7 +22,7 @@ jobs:
 
       - name: Build GPUI clone (release)
         working-directory: gpui-explorer
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Hash and upload artifact
         id: hash
@@ -37,13 +37,14 @@ jobs:
           name: openehr-explorer-gpui-windows
           path: gpui-explorer/target/release/openehr-explorer-gpui.exe
 
-      - name: VirusTotal scan (GPUI exe)
-        uses: crazy-max/ghaction-virustotal@v5
-        with:
-          vt_api_key: ${{ secrets.VT_API_KEY }}
-          request_rate: 4
-          files: |
-            gpui-explorer/target/release/openehr-explorer-gpui.exe
+      - name: Submit GPUI exe to VirusTotal
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          set -euo pipefail
+          # Public submission (the file is a toy build with no secrets). Upload limit is 32 MB.
+          curl -fsS -H "x-apikey: $VT_API_KEY" -F "file=@gpui-explorer/target/release/openehr-explorer-gpui.exe" \
+            https://www.virustotal.com/api/v3/files | jq -r '"analysis id: " + .data.id'
 
       - name: Compare VirusTotal reports
         env:
@@ -53,8 +54,9 @@ jobs:
           GPUI_SIZE: ${{ steps.hash.outputs.size }}
         run: |
           set -euo pipefail
-          report() { # $1 = sha256 ; prints "malicious suspicious undetected harmless total flagged-engines"
-            curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/$1" \
+          report() { # arg: sha256 ; prints "malicious suspicious undetected harmless total flagged-engines"
+            local sha="$1"
+            curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/${sha}" \
               | jq -r '.data.attributes as $a | ($a.last_analysis_stats // {}) as $s
                 | "\($s.malicious // 0) \($s.suspicious // 0) \($s.undetected // 0) \($s.harmless // 0) \(($s|add) // 0) \([$a.last_analysis_results // {} | to_entries[] | select(.value.category=="malicious" or .value.category=="suspicious") | .key] | join(","))"'
           }
@@ -82,8 +84,8 @@ jobs:
             echo
             echo "| Binary | Size | malicious | suspicious | undetected | harmless | engines | Flagged by | Report |"
             echo "|---|---:|---:|---:|---:|---:|---:|---|---|"
-            if [ -n "$G" ]; then set -- $G; echo "| GPUI clone (exe) | $GPUI_SIZE | $1 | $2 | $3 | $4 | $5 | ${6:-none} | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"
+            if [ -n "$G" ]; then read -r gm gs gu gh gt gf <<< "$G"; echo "| GPUI clone (exe) | $GPUI_SIZE | $gm | $gs | $gu | $gh | $gt | ${gf:-none} | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"
             else echo "| GPUI clone (exe) | $GPUI_SIZE | n/a (analysis not ready) | | | | | | [report](https://www.virustotal.com/gui/file/$GPUI_SHA) |"; fi
-            if [ -n "$T" ]; then set -- $T; echo "| Tauri installer $TAG ($TNAME) | $TSIZE | $1 | $2 | $3 | $4 | $5 | ${6:-none} | [report](https://www.virustotal.com/gui/file/$TSHA) |"
+            if [ -n "$T" ]; then read -r tm ts tu th tt tf <<< "$T"; echo "| Tauri installer $TAG ($TNAME) | $TSIZE | $tm | $ts | $tu | $th | $tt | ${tf:-none} | [report](https://www.virustotal.com/gui/file/$TSHA) |"
             else echo "| Tauri installer ${TAG:-?} | | no VirusTotal report found | | | | | | |"; fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
