@@ -310,11 +310,36 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      # Portable build: the plain app executable plus LICENSE in a zip, for users
+      # who can't or won't run an installer. Needs the WebView2 runtime already
+      # installed (Windows 11 and current Windows 10 ship it) and has no
+      # auto-update, so the installer stays the primary download. The name uses
+      # dots instead of spaces because GitHub rewrites spaces in asset names.
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $dir = "portable/openEHR.Explorer_${version}_x64-portable"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item src-tauri/target/release/openehr-explorer.exe $dir/
+          Copy-Item LICENSE $dir/
+          Compress-Archive -Path "$dir/*" -DestinationPath "portable/openEHR.Explorer_${version}_x64-portable.zip"
+          Get-ChildItem portable/*.zip
+
       - name: Upload NSIS installer artifact
         uses: actions/upload-artifact@v6
         with:
           name: openehr-explorer-windows-nsis
           path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Upload MSI and portable zip artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: openehr-explorer-windows-msi-portable
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            portable/*.zip
           if-no-files-found: error
 
       - name: Upload Windows updater signature
@@ -331,6 +356,8 @@ jobs:
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/msi/*.msi
+            portable/*.zip
 
       # Transparency scan — see ADR-0019. Submits the Windows installers to
       # VirusTotal and appends the per-file analysis URLs to the release body.
@@ -345,6 +372,7 @@ jobs:
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
+            portable/*.zip
 
   build-linux:
     name: Build Linux (Tauri)
@@ -604,7 +632,7 @@ jobs:
           BODY=$(echo "$RELEASE_JSON" | jq -r '.body // ""')
 
           SECTION=""
-          for SUFFIX in "-setup.exe" ".msi"; do
+          for SUFFIX in "-setup.exe" ".msi" "-portable.zip"; do
             ASSET=$(echo "$RELEASE_JSON" | jq -c --arg s "$SUFFIX" \
               '[.assets[] | select(.name | endswith($s))][0] // empty')
             [ -z "$ASSET" ] && continue
