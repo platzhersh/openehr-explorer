@@ -887,7 +887,7 @@ impl Explorer {
     /// rendered so far and ask for another frame.
     fn bench_tick(&mut self, cx: &mut Context<Self>) {
         let Some(b) = self.bench.as_ref() else { return };
-        let n = self.table.as_ref().map(|t| t.row_count()).unwrap_or(0);
+        let n = self.table.as_ref().map(AqlTable::row_count).unwrap_or(0);
         if n > 0 {
             let ix = (b.frame * (n / b.total_frames).max(1)).min(n - 1);
             self.aql_scroll.scroll_to_item(ix, ScrollStrategy::Top);

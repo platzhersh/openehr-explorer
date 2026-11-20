@@ -58,7 +58,7 @@ function ehrList(ob, offset, limit) {
 
 // Each predicate narrows the EHR list when its pattern occurs in the query.
 const SEARCH_FILTERS = [
-  [/\/subject\/external_ref\/id\/value LIKE '%(.*?)%'/i, (e, m) => (subjectOf(e.i) ?? "").includes(m[1].replace(/''/g, "'"))],
+  [/\/subject\/external_ref\/id\/value LIKE '%(.*?)%'/i, (e, m) => (subjectOf(e.i) ?? "").includes(m[1].replaceAll("''", "'"))],
   [/external_ref\/namespace = '(.*?)'/i, (e, m) => subjectOf(e.i) !== null && m[1] === "nhs"],
   [/e\/system_id\/value = '(.*?)'/i, (e, m) => systemOf(e.i) === m[1]],
   [/is_modifiable = (true|false)/i, (e, m) => modifiableOf(e.i) === (m[1] === "true")],
@@ -148,7 +148,7 @@ http.createServer((req, res) => {
   req.on("data", (c) => (body += c));
   req.on("end", () => {
     const send = (code, obj) => {
-      if (obj && obj.__raw !== undefined) { res.writeHead(code, { "content-type": obj.type }); return res.end(obj.__raw); }
+      if (obj?.__raw !== undefined) { res.writeHead(code, { "content-type": obj.type }); return res.end(obj.__raw); }
       res.writeHead(code, { "content-type": "application/json" });
       res.end(JSON.stringify(obj));
     };

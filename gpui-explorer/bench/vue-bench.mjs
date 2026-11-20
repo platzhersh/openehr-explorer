@@ -77,8 +77,11 @@ async function addServer(page) {
 
 const result = { startup: [], scenarios: {} };
 
+// Run `fn` for each item strictly one after another (a measurement must never overlap the next one).
+const inSequence = (items, fn) => items.reduce((prev, item, i) => prev.then(() => fn(item, i)), Promise.resolve());
+
 // ---------- startup (5 cold launches) ----------
-for (let i = 0; i < 5; i++) {
+await inSequence([0, 1, 2, 3, 4], async (i) => {
   const s = await open();
   const pids = descendants(browserPid());
   if (i === 4) {
@@ -87,7 +90,7 @@ for (let i = 0; i < 5; i++) {
   }
   result.startup.push({ browser_launch_ms: +s.tLaunch.toFixed(0), page_load_to_ui_ms: +s.tNav.toFixed(0) });
   await s.browser.close();
-}
+});
 
 // ---------- screenshots + scenarios ----------
 const { browser, page } = await open();
@@ -150,7 +153,7 @@ async function scrollBench() {
   });
 }
 
-for (const n of [3, 1000, 10000, 50000]) {
+await inSequence([3, 1000, 10000, 50000], async (n) => {
   const ms = await runAql(n);
   await page.waitForTimeout(400);
   if (n === 3) { await page.mouse.move(1439, 959); await page.screenshot({ path: path.join(outDir, "vue-04-aql.png") }); }
@@ -162,7 +165,7 @@ for (const n of [3, 1000, 10000, 50000]) {
   }
   result.scenarios[n] = sc;
   console.error("done", n);
-}
+});
 result.startup_median = {
   browser_launch_ms: median(result.startup.map((s) => s.browser_launch_ms)),
   page_load_to_ui_ms: median(result.startup.map((s) => s.page_load_to_ui_ms)),
