@@ -30,6 +30,7 @@ pub enum Auth {
 #[derive(Clone)]
 pub struct Profile {
     pub base_url: String,
+    server_type: crate::profiles::ServerType,
     api_prefix: String,
     auth: Auth,
     client: reqwest::Client,
@@ -72,6 +73,13 @@ pub struct TreeRow {
     pub path: String,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Counts {
+    pub ehrs: u64,
+    pub compositions: u64,
+    pub templates: u64,
+}
+
 pub struct AqlOut {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<String>>,
@@ -88,6 +96,8 @@ impl Profile {
             .expect("http client");
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
+            // `--server` has no profile; Generic and EHRBase share the same FLAT media type.
+            server_type: crate::profiles::ServerType::Generic,
             api_prefix: api_prefix.unwrap_or_else(|| "/rest/openehr/v1".to_string()),
             auth,
             client,
@@ -102,7 +112,9 @@ impl Profile {
             AuthMethod::Basic { username, password } => Auth::Basic { user: username.clone(), password: password.clone() },
             AuthMethod::Bearer { token } => Auth::Bearer(token.clone()),
         };
-        Self::new(&p.base_url, p.api_path_prefix.clone(), auth)
+        let mut profile = Self::new(&p.base_url, p.api_path_prefix.clone(), auth);
+        profile.server_type = p.server_type;
+        profile
     }
 
     /// The same check as the Tauri app's "Test Connection": an authenticated GET of the template list; any 2xx passes.
@@ -232,6 +244,47 @@ impl Profile {
             .collect())
     }
 
+    /// Same three numbers as the Tauri dashboard: COUNT on concrete leaf paths (EHRBase rejects COUNT on whole
+    /// RM objects) plus the template list length.
+    pub async fn dashboard_counts(&self) -> Result<Counts, String> {
+        let ehrs = self.aql_count("SELECT COUNT(e/ehr_id/value) FROM EHR e").await?;
+        let compositions = self.aql_count("SELECT COUNT(c/uid/value) FROM EHR e CONTAINS COMPOSITION c").await?;
+        let templates = self.list_templates().await?.len() as u64;
+        Ok(Counts { ehrs, compositions, templates })
+    }
+
+    async fn aql_count(&self, q: &str) -> Result<u64, String> {
+        let out = self.aql(q).await?;
+        let cell = out.rows.first().and_then(|r| r.first()).ok_or_else(|| format!("COUNT query returned no rows: {q}"))?;
+        parse_count(cell).ok_or_else(|| format!("COUNT query returned a non-numeric value: {cell}"))
+    }
+
+    /// Canonical JSON composition.
+    pub async fn composition(&self, ehr_id: &str, uid: &str) -> Result<Value, String> {
+        let url = self.composition_url(ehr_id, uid)?;
+        self.send_json(self.req(Method::GET, &url).header("Accept", "application/json")).await
+    }
+
+    /// FLAT composition; the media type depends on the server (same mapping as the Tauri backend).
+    pub async fn composition_flat(&self, ehr_id: &str, uid: &str) -> Result<Value, String> {
+        use crate::profiles::ServerType;
+        let accept = match self.server_type {
+            ServerType::FerroEhr | ServerType::BetterPlatform => "application/openehr.wt.flat+json",
+            ServerType::Ehrbase | ServerType::Generic => "application/openehr.wt.flat.schema+json",
+        };
+        let url = self.composition_url(ehr_id, uid)?;
+        self.send_json(self.req(Method::GET, &url).header("Accept", accept)).await
+    }
+
+    /// Ids end up in the URL path, so only accept what composition UIDs/EHR ids can contain.
+    fn composition_url(&self, ehr_id: &str, uid: &str) -> Result<String, String> {
+        let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'));
+        if !ok(ehr_id) || !ok(uid) {
+            return Err("Refusing to request: EHR id or composition uid has unexpected characters".to_string());
+        }
+        Ok(format!("{}/ehr/{}/composition/{}", self.api_root(), ehr_id, uid))
+    }
+
     pub async fn list_templates(&self) -> Result<Vec<TemplateRow>, String> {
         let url = format!("{}/definition/template/adl1.4", self.api_root());
         let v = self.send_json(self.req(Method::GET, &url).header("Accept", "application/json")).await?;
@@ -267,6 +320,11 @@ fn flatten(node: &Value, depth: u8, out: &mut Vec<TreeRow>) {
     }
 }
 
+/// COUNT() comes back as an integer, a float (3.0) or a numeric string depending on the CDR.
+fn parse_count(v: &str) -> Option<u64> {
+    v.parse::<u64>().ok().or_else(|| v.parse::<f64>().ok().filter(|f| *f >= 0.0).map(|f| f as u64))
+}
+
 fn cell_to_string(v: &Value) -> String {
     match v {
         Value::Null => "—".to_string(),
@@ -291,4 +349,27 @@ fn urlencode(s: &str) -> String {
             _ => format!("%{b:02X}"),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn count_parsing_matches_tauri() {
+        assert_eq!(parse_count("42"), Some(42));
+        assert_eq!(parse_count("3.0"), Some(3));
+        assert_eq!(parse_count("17"), Some(17));
+        assert_eq!(parse_count("not a number"), None);
+        assert_eq!(parse_count("—"), None);
+    }
+
+    #[test]
+    fn composition_url_rejects_path_tricks() {
+        let p = Profile::new("http://h", None, Auth::None);
+        assert!(p.composition_url("9c2c5c5e-1c1b", "c1a2::local.ehrbase.org::1").is_ok());
+        assert!(p.composition_url("../x", "u").is_err());
+        assert!(p.composition_url("e", "u?x=1").is_err());
+        assert!(p.composition_url("e", "a/b").is_err());
+    }
 }

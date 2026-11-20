@@ -15,7 +15,7 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    div, point, px, rgb, size, uniform_list, App, AppContext, Application, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, MouseButton, Stateful,
+    div, point, px, rgb, size, uniform_list, App, AppContext, Application, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, Keystroke, MouseButton, Stateful,
     IntoElement, ParentElement, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
 };
@@ -51,6 +51,7 @@ const MONO: &str = "DejaVu Sans Mono";
 enum View {
     Dashboard,
     Ehrs,
+    Compositions,
     Templates,
     Aql,
     Servers,
@@ -65,6 +66,7 @@ struct Ehr {
 
 #[derive(Clone)]
 struct Composition {
+    uid: SharedString,
     name: SharedString,
     template: SharedString,
     composer: SharedString,
@@ -84,6 +86,12 @@ struct TreeRow {
     label: SharedString,
     rm: SharedString,
     path: SharedString,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CompTab {
+    Json,
+    Flat,
 }
 
 #[derive(Clone)]
@@ -136,7 +144,7 @@ fn demo_comps(n: usize) -> Vec<Composition> {
     DEMO_COMPOSITIONS
         .iter()
         .take(n)
-        .map(|(n, t, c, d)| Composition { name: (*n).into(), template: (*t).into(), composer: (*c).into(), committed: (*d).into() })
+        .map(|(n, t, c, d)| Composition { uid: SharedString::default(), name: (*n).into(), template: (*t).into(), composer: (*c).into(), committed: (*d).into() })
         .collect()
 }
 
@@ -144,9 +152,10 @@ fn demo_tree() -> Vec<TreeRow> {
     DEMO_TREE.iter().map(|(d, l, r, p)| TreeRow { depth: *d, label: (*l).into(), rm: (*r).into(), path: (*p).into() }).collect()
 }
 
-const NAV: [(View, &str); 5] = [
+const NAV: [(View, &str); 6] = [
     (View::Dashboard, "Dashboard"),
     (View::Ehrs, "EHR Browser"),
+    (View::Compositions, "Compositions"),
     (View::Templates, "Templates"),
     (View::Aql, "AQL Runner"),
     (View::Servers, "Servers"),
@@ -222,6 +231,17 @@ struct Explorer {
     tree: Vec<TreeRow>,
     comps: Vec<Composition>,
     comps_loading: bool,
+    counts: Option<net::Counts>,
+    comp_sel: Option<usize>,
+    comp_tab: CompTab,
+    comp_json: Vec<SharedString>,
+    comp_flat: Vec<SharedString>,
+    comp_json_err: Option<SharedString>,
+    comp_flat_err: Option<SharedString>,
+    comp_json_loading: bool,
+    comp_flat_loading: bool,
+    comp_scroll: UniformListScrollHandle,
+    aql_editor: Option<Field>,
     server: Option<net::Profile>,
     server_name: Option<SharedString>,
     active_profile: Option<String>,
@@ -279,18 +299,24 @@ enum AuthKind {
     Bearer,
 }
 
-/// Single-line text input. Cursor is counted in chars. No IME/selection; supports typing, paste, arrows, home/end.
+/// Text input (single-line, or multi-line for the AQL editor). Cursor is counted in chars.
+/// No IME/selection; supports typing, paste, arrows, Home/End and (multi-line) Enter/Up/Down/Tab.
 struct Field {
     text: String,
     cursor: usize,
     masked: bool,
+    multiline: bool,
     placeholder: &'static str,
     focus: FocusHandle,
 }
 
 impl Field {
     fn new(cx: &mut App, text: &str, masked: bool, placeholder: &'static str) -> Self {
-        Self { cursor: text.chars().count(), text: text.to_string(), masked, placeholder, focus: cx.focus_handle().tab_stop(true) }
+        Self { cursor: text.chars().count(), text: text.to_string(), masked, multiline: false, placeholder, focus: cx.focus_handle().tab_stop(true) }
+    }
+    fn multiline(mut self) -> Self {
+        self.multiline = true;
+        self
     }
     fn byte(&self, chars: usize) -> usize {
         self.text.char_indices().nth(chars).map(|(i, _)| i).unwrap_or(self.text.len())
@@ -299,7 +325,8 @@ impl Field {
         self.text.chars().count()
     }
     fn insert(&mut self, s: &str) {
-        let clean: String = s.chars().filter(|c| !c.is_control()).collect();
+        let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
+        let clean: String = normalized.chars().filter(|c| !c.is_control() || (self.multiline && *c == '\n')).collect();
         let at = self.byte(self.cursor);
         self.text.insert_str(at, &clean);
         self.cursor += clean.chars().count();
@@ -315,6 +342,63 @@ impl Field {
         if self.cursor < self.len() {
             let (a, b) = (self.byte(self.cursor), self.byte(self.cursor + 1));
             self.text.replace_range(a..b, "");
+        }
+    }
+    /// (line, column) of the cursor.
+    fn line_col(&self) -> (usize, usize) {
+        let before: String = self.text.chars().take(self.cursor).collect();
+        (before.matches('\n').count(), before.rsplit('\n').next().map(|l| l.chars().count()).unwrap_or(0))
+    }
+    fn line_len(&self, line: usize) -> usize {
+        self.text.split('\n').nth(line).map(|l| l.chars().count()).unwrap_or(0)
+    }
+    fn move_vertical(&mut self, delta: isize) {
+        let lines: Vec<usize> = self.text.split('\n').map(|l| l.chars().count()).collect();
+        let (line, col) = self.line_col();
+        let target = (line as isize + delta).clamp(0, lines.len() as isize - 1) as usize;
+        let start: usize = lines[..target].iter().map(|n| n + 1).sum();
+        self.cursor = start + col.min(lines[target]);
+    }
+    fn home(&mut self) {
+        let col = if self.multiline { self.line_col().1 } else { self.cursor };
+        self.cursor -= col;
+    }
+    fn end(&mut self) {
+        if self.multiline {
+            let (line, col) = self.line_col();
+            self.cursor += self.line_len(line) - col;
+        } else {
+            self.cursor = self.len();
+        }
+    }
+    /// Apply one keystroke. `paste` is the clipboard text when the key is Ctrl/Cmd+V.
+    fn handle_key(&mut self, ks: &Keystroke, paste: Option<String>) {
+        let m = &ks.modifiers;
+        match ks.key.as_str() {
+            "backspace" => self.backspace(),
+            "delete" => self.delete(),
+            "left" => self.cursor = self.cursor.saturating_sub(1),
+            "right" => self.cursor = (self.cursor + 1).min(self.len()),
+            "home" => self.home(),
+            "end" => self.end(),
+            "up" if self.multiline => self.move_vertical(-1),
+            "down" if self.multiline => self.move_vertical(1),
+            "enter" if self.multiline => self.insert("\n"),
+            "tab" if self.multiline => self.insert("  "),
+            "u" if m.control => {
+                self.text.clear();
+                self.cursor = 0;
+            }
+            _ => {
+                if let Some(text) = paste {
+                    // Pasted secrets/URLs often carry a trailing newline.
+                    self.insert(if self.multiline { &text } else { text.trim_end_matches(['\r', '\n']) });
+                } else if !m.control && !m.platform && !m.alt {
+                    if let Some(ch) = &ks.key_char {
+                        self.insert(ch);
+                    }
+                }
+            }
         }
     }
 }
@@ -415,6 +499,17 @@ impl Explorer {
             tree: if demo { demo_tree() } else { Vec::new() },
             comps,
             comps_loading: false,
+            counts: None,
+            comp_sel: None,
+            comp_tab: CompTab::Json,
+            comp_json: Vec::new(),
+            comp_flat: Vec::new(),
+            comp_json_err: None,
+            comp_flat_err: None,
+            comp_json_loading: false,
+            comp_flat_loading: false,
+            comp_scroll: UniformListScrollHandle::new(),
+            aql_editor: None,
             conn: if demo { Conn::Demo } else { Conn::Connecting },
             server,
             server_name: o.server_name.map(SharedString::from),
@@ -443,6 +538,7 @@ impl Explorer {
     }
 
     fn start(&mut self, cx: &mut Context<Self>) {
+        self.aql_editor = Some(Field::new(cx, &self.query, false, "AQL query").multiline());
         let mode = if self.server.is_some() { "server" } else { "demo" };
         self.analytics.track("app_started", Some(json!({ "mode": mode })));
         if self.server.is_some() {
@@ -483,12 +579,14 @@ impl Explorer {
             let desc = server.test_connection().await?;
             let templates = server.list_templates().await?;
             let page = server.list_ehrs(0, PAGE).await?;
-            Ok::<_, String>((desc, templates, page))
+            let counts = server.dashboard_counts().await.ok();
+            Ok::<_, String>((desc, templates, page, counts))
         };
         self.spawn_net(cx, fut, |this, res, cx| {
             this.ehrs_loading = false;
             match res {
-                Ok((desc, templates, page)) => {
+                Ok((desc, templates, page, counts)) => {
+                    this.counts = counts;
                     this.analytics.track("connection_result", Some(json!({ "ok": true })));
                     let label = match &this.server_name {
                         Some(n) => format!("{n} · {desc}"),
@@ -535,6 +633,7 @@ impl Explorer {
 
     fn select_ehr(&mut self, i: usize, cx: &mut Context<Self>) {
         self.selected_ehr = Some(i);
+        self.reset_composition();
         let Some(server) = self.server.clone() else {
             self.comps = demo_comps(self.ehrs[i].compositions.min(3) as usize);
             return;
@@ -550,7 +649,7 @@ impl Explorer {
             this.comps_loading = false;
             match res {
                 Ok(rows) => {
-                    this.comps = rows.into_iter().map(|c| Composition { name: c.name.into(), template: c.template.into(), composer: c.composer.into(), committed: c.committed.into() }).collect();
+                    this.comps = rows.into_iter().map(|c| Composition { uid: c.uid.into(), name: c.name.into(), template: c.template.into(), composer: c.composer.into(), committed: c.committed.into() }).collect();
                     if let Some(e) = this.ehrs.get_mut(i) {
                         e.compositions = this.comps.len() as u32;
                     }
@@ -862,6 +961,8 @@ impl Explorer {
                 self.tree.clear();
                 self.selected_template = 0;
                 self.table = None;
+                self.counts = None;
+                self.reset_composition();
                 self.ehrs_has_more = false;
                 self.connect(cx);
             }
@@ -919,28 +1020,7 @@ impl Explorer {
         let paste = if (m.control || m.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
         let Some(form) = self.profiles_ui.form.as_mut() else { return };
         let Some(f) = form.fields.iter_mut().find(|f| f.focus.is_focused(window)) else { return };
-        match ks.key.as_str() {
-            "backspace" => f.backspace(),
-            "delete" => f.delete(),
-            "left" => f.cursor = f.cursor.saturating_sub(1),
-            "right" => f.cursor = (f.cursor + 1).min(f.len()),
-            "home" => f.cursor = 0,
-            "end" => f.cursor = f.len(),
-            "u" if m.control => {
-                f.text.clear();
-                f.cursor = 0;
-            }
-            _ => {
-                if let Some(text) = paste {
-                    // Pasted secrets/URLs often carry a trailing newline.
-                    f.insert(text.trim_end_matches(['\r', '\n']));
-                } else if !m.control && !m.platform && !m.alt {
-                    if let Some(ch) = &ks.key_char {
-                        f.insert(ch);
-                    }
-                }
-            }
-        }
+        f.handle_key(ks, paste);
         cx.notify();
         cx.stop_propagation();
     }
@@ -1209,6 +1289,294 @@ impl Explorer {
         div().flex().size_full().child(left).child(right)
     }
 
+    // ---- compositions / editor / labels ---------------------------------------------------------
+
+    /// Which server the data on screen comes from, for tab headers.
+    fn server_label(&self) -> String {
+        match (&self.server, &self.server_name) {
+            (Some(_), Some(n)) => format!("{n} · {}", self.server.as_ref().map(|s| s.base_url.as_str()).unwrap_or("")),
+            (Some(s), None) => s.base_url.clone(),
+            (None, _) => "demo data — pick a server in Servers".to_string(),
+        }
+    }
+
+    fn reset_composition(&mut self) {
+        self.comp_sel = None;
+        self.comp_json.clear();
+        self.comp_flat.clear();
+        self.comp_json_err = None;
+        self.comp_flat_err = None;
+        self.comp_json_loading = false;
+        self.comp_flat_loading = false;
+    }
+
+    fn json_lines(v: &serde_json::Value) -> Vec<SharedString> {
+        // Non-breaking spaces so indentation survives text layout.
+        serde_json::to_string_pretty(v).unwrap_or_default().lines().map(|l| SharedString::from(l.replace(' ', "\u{00a0}"))).collect()
+    }
+
+    /// Metadata-only stand-in so the Compositions tab is usable in demo mode.
+    fn demo_composition(c: &Composition) -> (serde_json::Value, serde_json::Value) {
+        let canonical = json!({
+            "_type": "COMPOSITION",
+            "name": { "_type": "DV_TEXT", "value": c.name },
+            "archetype_details": { "template_id": { "value": c.template } },
+            "composer": { "_type": "PARTY_IDENTIFIED", "name": c.composer },
+            "context": { "start_time": { "value": c.committed } },
+        });
+        let flat = json!({
+            "ctx/language": "en", "ctx/territory": "DE", "ctx/composer_name": c.composer,
+            "ctx/time": c.committed, "ctx/template_id": c.template,
+        });
+        (canonical, flat)
+    }
+
+    fn open_composition(&mut self, i: usize, cx: &mut Context<Self>) {
+        let Some(c) = self.comps.get(i).cloned() else { return };
+        self.view = View::Compositions;
+        self.comp_sel = Some(i);
+        self.comp_json_err = None;
+        self.comp_flat_err = None;
+        let Some(server) = self.server.clone() else {
+            let (j, f) = Self::demo_composition(&c);
+            self.comp_json = Self::json_lines(&j);
+            self.comp_flat = Self::json_lines(&f);
+            return;
+        };
+        let Some(ehr) = self.selected_ehr.and_then(|e| self.ehrs.get(e)).map(|e| e.id.to_string()) else { return };
+        self.comp_json.clear();
+        self.comp_flat.clear();
+        self.comp_json_loading = true;
+        self.comp_flat_loading = true;
+        let uid = c.uid.to_string();
+        self.analytics.track("composition_viewed", None);
+        // Two independent requests: JSON shows as soon as it arrives, and FLAT (optional per server/template)
+        // reports its own error without blocking or failing the other.
+        let (s2, e2, u2) = (server.clone(), ehr.clone(), uid.clone());
+        self.spawn_net(cx, async move { server.composition(&ehr, &uid).await }, move |this, res, _cx| {
+            if this.comp_sel != Some(i) {
+                return;
+            }
+            this.comp_json_loading = false;
+            match res {
+                Ok(v) => this.comp_json = Self::json_lines(&v),
+                Err(e) => this.comp_json_err = Some(e.into()),
+            }
+        });
+        self.spawn_net(cx, async move { s2.composition_flat(&e2, &u2).await }, move |this, res, _cx| {
+            if this.comp_sel != Some(i) {
+                return;
+            }
+            this.comp_flat_loading = false;
+            match res {
+                Ok(v) => this.comp_flat = Self::json_lines(&v),
+                Err(e) => this.comp_flat_err = Some(e.into()),
+            }
+        });
+    }
+
+    fn run_from_editor(&mut self, cx: &mut Context<Self>) {
+        if let Some(ed) = &self.aql_editor {
+            self.query = ed.text.clone().into();
+        }
+        self.run_query(cx);
+    }
+
+    fn editor_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let ks = &ev.keystroke;
+        let m = &ks.modifiers;
+        if ks.key == "enter" && (m.control || m.platform) {
+            self.run_from_editor(cx);
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+        let paste = if (m.control || m.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
+        let Some(ed) = self.aql_editor.as_mut() else { return };
+        if !ed.focus.is_focused(window) {
+            return;
+        }
+        ed.handle_key(ks, paste);
+        cx.notify();
+        cx.stop_propagation();
+    }
+
+    fn editor_view(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        let nb = |s: &str| s.replace(' ', "\u{00a0}");
+        let base = div()
+            .id("aql-editor")
+            .p_3()
+            .rounded(px(6.))
+            .bg(rgb(0x11182e))
+            .border_1()
+            .font_family(MONO)
+            .text_size(px(13.))
+            .max_h(px(230.))
+            .overflow_y_scroll()
+            .cursor_text();
+        let Some(ed) = self.aql_editor.as_ref() else { return base.border_color(rgb(BORDER)) };
+        let focused = ed.focus.is_focused(window);
+        let (cur_line, cur_col) = ed.line_col();
+        let handle = ed.focus.clone();
+        let rows = ed.text.split('\n').enumerate().map(|(i, line)| {
+            let kw = ["SELECT", "FROM", "CONTAINS", "WHERE", "ORDER", "LIMIT", "OFFSET"].iter().any(|k| line.trim_start().to_ascii_uppercase().starts_with(k));
+            let row = div().h(px(20.)).flex().items_center().whitespace_nowrap().text_color(rgb(if kw { PRIMARY } else { TEXT }));
+            if focused && i == cur_line {
+                let (before, after): (String, String) = (line.chars().take(cur_col).collect(), line.chars().skip(cur_col).collect());
+                row.child(nb(&before)).child(div().w(px(1.5)).h(px(17.)).bg(rgb(PRIMARY))).child(nb(&after))
+            } else {
+                row.child(nb(line))
+            }
+        });
+        base.track_focus(&ed.focus)
+            .border_color(rgb(if focused { PRIMARY } else { BORDER }))
+            .on_mouse_down(MouseButton::Left, move |_, window, _cx| handle.focus(window))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.editor_key(ev, window, cx)))
+            .children(rows)
+    }
+
+    fn compositions_view(&mut self, cx: &mut Context<Self>) -> Div {
+        let ehr = self.selected_ehr.and_then(|i| self.ehrs.get(i)).map(|e| e.id.to_string());
+        let scope = match &ehr {
+            Some(id) => format!("EHR {}…", id.chars().take(8).collect::<String>()),
+            None => "no EHR selected".to_string(),
+        };
+        let list: Div = if ehr.is_none() {
+            div().p_4().flex().flex_col().gap_3().child(div().text_size(px(13.)).text_color(rgb(MUTED)).child("Pick an EHR first; its compositions are listed here.")).child(btn("to-ehrs", "Open EHR Browser", true, cx.listener(|this, _, _, cx| {
+                this.view = View::Ehrs;
+                cx.notify();
+            })))
+        } else if self.comps_loading {
+            div().p_4().text_color(rgb(MUTED)).child("Loading compositions…")
+        } else {
+            let rows = uniform_list(
+                "comp-list",
+                self.comps.len(),
+                cx.processor(|this, range: Range<usize>, _w, cx| {
+                    range
+                        .map(|i| {
+                            let c = this.comps[i].clone();
+                            let sel = this.comp_sel == Some(i);
+                            div().w_full().h(px(72.)).px_4().py_1().child(
+                                div()
+                                    .id(("compn", i))
+                                    .size_full()
+                                    .px_3()
+                                    .rounded(px(6.))
+                                    .border_1()
+                                    .border_color(rgb(if sel { PRIMARY } else { BORDER }))
+                                    .bg(rgb(if sel { BG3 } else { SURFACE }))
+                                    .hover(|s| s.bg(rgb(SURFACE_HOVER)))
+                                    .cursor_pointer()
+                                    .flex()
+                                    .flex_col()
+                                    .justify_center()
+                                    .gap_1()
+                                    .overflow_hidden()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.open_composition(i, cx);
+                                        cx.notify();
+                                    }))
+                                    .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(c.name))
+                                    .child(div().text_size(px(11.)).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(format!("{} · {}", c.template, c.committed))),
+                            )
+                        })
+                        .collect()
+                }),
+            )
+            .w_full()
+            .flex_1();
+            div().flex().flex_col().flex_1().child(rows)
+        };
+        let left = div()
+            .w(px(420.))
+            .flex_none()
+            .h_full()
+            .flex()
+            .flex_col()
+            .border_r_1()
+            .border_color(rgb(BORDER))
+            .child(div().p_4().child(Self::page_title("Compositions", format!("{} · {scope}", self.server_label()))))
+            .child(list);
+        div().flex().size_full().child(left).child(self.composition_viewer(cx))
+    }
+
+    fn composition_viewer(&mut self, cx: &mut Context<Self>) -> Div {
+        let Some(c) = self.comp_sel.and_then(|i| self.comps.get(i)).cloned() else {
+            return div().flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Select a composition");
+        };
+        let tab = self.comp_tab;
+        let (lines, err, loading) = match tab {
+            CompTab::Json => (&self.comp_json, &self.comp_json_err, self.comp_json_loading),
+            CompTab::Flat => (&self.comp_flat, &self.comp_flat_err, self.comp_flat_loading),
+        };
+        let body: Div = if loading {
+            div().p_4().text_color(rgb(MUTED)).child("Loading…")
+        } else if let Some(e) = err {
+            div().p_4().text_size(px(13.)).text_color(rgb(0xff7b7b)).child(format!("{} view unavailable: {e}", if tab == CompTab::Json { "JSON" } else { "FLAT" }))
+        } else {
+            let n = lines.len();
+            div().flex().flex_col().flex_1().child(
+                uniform_list(
+                    "comp-lines",
+                    n,
+                    cx.processor(|this, range: Range<usize>, _w, _cx| {
+                        let lines = if this.comp_tab == CompTab::Json { &this.comp_json } else { &this.comp_flat };
+                        range.map(|i| div().h(px(20.)).px_3().font_family(MONO).text_size(px(12.)).text_color(rgb(TEXT)).whitespace_nowrap().child(lines[i].clone())).collect()
+                    }),
+                )
+                .track_scroll(self.comp_scroll.clone())
+                .w_full()
+                .flex_1(),
+            )
+        };
+        let tabs = div()
+            .flex()
+            .gap_2()
+            .child(btn("tab-json", "JSON", tab == CompTab::Json, cx.listener(|this, _, _, cx| {
+                this.comp_tab = CompTab::Json;
+                cx.notify();
+            })))
+            .child(btn("tab-flat", "FLAT", tab == CompTab::Flat, cx.listener(|this, _, _, cx| {
+                this.comp_tab = CompTab::Flat;
+                cx.notify();
+            })));
+        div()
+            .flex_1()
+            .p_6()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(c.name))
+            .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(MUTED)).whitespace_nowrap().text_ellipsis().overflow_hidden().child(if c.uid.is_empty() { c.template.clone() } else { c.uid.clone() }))
+            .child(tabs)
+            .child(div().flex().flex_col().flex_1().rounded(px(6.)).border_1().border_color(rgb(BORDER)).bg(rgb(SURFACE)).overflow_hidden().child(body))
+    }
+
+    fn dashboard_numbers(&self) -> (String, String, String) {
+        if self.server.is_none() {
+            let comps: u32 = self.ehrs.iter().map(|e| e.compositions).sum();
+            return (self.ehrs.len().to_string(), comps.to_string(), self.templates.len().to_string());
+        }
+        match (&self.counts, &self.conn) {
+            (Some(c), _) => (c.ehrs.to_string(), c.compositions.to_string(), c.templates.to_string()),
+            (None, Conn::Connecting) => ("…".to_string(), "…".to_string(), "…".to_string()),
+            // COUNT is unsupported on some CDRs: fall back to what is loaded, and say so with a dash for the rest.
+            (None, _) => (format!("{}{}", self.ehrs.len(), if self.ehrs_has_more { "+" } else { "" }), "—".to_string(), self.templates.len().to_string()),
+        }
+    }
+
+    /// Title row with a Refresh button (server mode only); re-runs the connection and all loads.
+    fn titled_header(&self, title: &'static str, subtitle: String, padded: bool, cx: &mut Context<Self>) -> Div {
+        let refresh = self.server.is_some().then(|| {
+            btn(SharedString::from(format!("refresh-{title}")), if matches!(self.conn, Conn::Connecting) { "Loading…" } else { "Refresh" }, false, cx.listener(|this, _, _, cx| {
+                this.connect(cx);
+                cx.notify();
+            }))
+        });
+        div().p(px(if padded { 16. } else { 0. })).flex().items_start().justify_between().child(Self::page_title(title, subtitle)).children(refresh)
+    }
+
     fn page_title(title: &'static str, subtitle: String) -> Div {
         div().flex().flex_col().gap_1().pb_4().child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title)).child(div().text_size(px(13.)).text_color(rgb(MUTED)).child(subtitle))
     }
@@ -1272,7 +1640,7 @@ impl Explorer {
             })
     }
 
-    fn dashboard(&self) -> Div {
+    fn dashboard(&self, cx: &mut Context<Self>) -> Div {
         let card = |label: &'static str, value: String| {
             div()
                 .flex_1()
@@ -1288,8 +1656,7 @@ impl Explorer {
                 .child(div().text_size(px(30.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child(value))
         };
         let demo = self.server.is_none();
-        let comps = if demo { self.ehrs.iter().map(|e| e.compositions).sum::<u32>().to_string() } else { "—".to_string() };
-        let ehr_count = format!("{}{}", self.ehrs.len(), if self.ehrs_has_more { "+" } else { "" });
+        let (ehr_count, comps, tpl_count) = self.dashboard_numbers();
         let (status_dot, status_text): (u32, SharedString) = match &self.conn {
             Conn::Demo => (SUCCESS, "Connected — EHRBase 2.7.0, openEHR SDK 2.19.0 (demo data)".into()),
             Conn::Connecting => (0xffd93d, "Connecting…".into()),
@@ -1301,14 +1668,14 @@ impl Explorer {
             .flex_col()
             .p_6()
             .gap_4()
-            .child(Self::page_title("Dashboard", if demo { "Local EHRBase · hospital.example.org".to_string() } else { self.server.as_ref().map(|s| s.base_url.clone()).unwrap_or_default() }))
+            .child(self.titled_header("Dashboard", if demo { format!("Local EHRBase · hospital.example.org ({})", self.server_label()) } else { self.server_label() }, false, cx))
             .child(
                 div()
                     .flex()
                     .gap_4()
                     .child(card("EHRs", ehr_count))
                     .child(card("Compositions", comps))
-                    .child(card("Templates", self.templates.len().to_string())),
+                    .child(card("Templates", tpl_count)),
             )
             .child(
                 div()
@@ -1371,7 +1738,7 @@ impl Explorer {
             .flex_col()
             .border_r_1()
             .border_color(rgb(BORDER))
-            .child(div().p_4().child(Self::page_title("EHR Browser", format!("{count}{} EHRs", if self.ehrs_has_more { "+" } else { "" }))))
+            .child(self.titled_header("EHR Browser", format!("{count}{} EHRs · {}", if self.ehrs_has_more { "+" } else { "" }, self.server_label()), true, cx))
             .child(list)
             .children(self.server.is_some().then(|| {
                 let label = if self.ehrs_loading { "Loading…" } else if self.ehrs_has_more { "Load more" } else { "End of list" };
@@ -1407,9 +1774,16 @@ impl Explorer {
                         .child(div().text_size(px(13.)).font_family(MONO).text_color(rgb(TEXT)).child(v))
                 };
                 let mut comps = div().flex().flex_col().gap_2();
-                for c in self.comps.iter() {
+                for (ci, c) in self.comps.iter().enumerate() {
                     comps = comps.child(
                         div()
+                            .id(("comp-card", ci))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgb(SURFACE_HOVER)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.open_composition(ci, cx);
+                                cx.notify();
+                            }))
                             .p_3()
                             .rounded(px(6.))
                             .bg(rgb(SURFACE))
@@ -1537,7 +1911,7 @@ impl Explorer {
                     .flex_col()
                     .border_r_1()
                     .border_color(rgb(BORDER))
-                    .child(div().p_4().child(Self::page_title("Templates", format!("{} templates", self.templates.len()))))
+                    .child(div().p_4().child(Self::page_title("Templates", format!("{} templates · {}", self.templates.len(), self.server_label()))))
                     .child(list),
             )
             .child(
@@ -1552,24 +1926,8 @@ impl Explorer {
             )
     }
 
-    fn aql_runner(&mut self, cx: &mut Context<Self>) -> Div {
-        let editor = div()
-            .p_3()
-            .rounded(px(6.))
-            .bg(rgb(0x11182e))
-            .border_1()
-            .border_color(rgb(BORDER))
-            .font_family(MONO)
-            .text_size(px(13.))
-            .text_color(rgb(TEXT))
-            .whitespace_nowrap()
-            .children(self.query.lines().map(|l| {
-                let mut line = div().h(px(20.));
-                if l.trim_start().starts_with("SELECT") || l.trim_start().starts_with("FROM") || l.trim_start().starts_with("CONTAINS") {
-                    line = line.text_color(rgb(PRIMARY));
-                }
-                line.child(l.replace(' ', "\u{00a0}"))
-            }));
+    fn aql_runner(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let editor = self.editor_view(window, cx);
         let run = div()
             .id("run")
             .px_4()
@@ -1583,7 +1941,7 @@ impl Explorer {
             .font_weight(FontWeight::SEMIBOLD)
             .text_size(px(13.))
             .on_click(cx.listener(|this, _, _, cx| {
-                this.run_query(cx);
+                this.run_from_editor(cx);
                 cx.notify();
             }))
             .child(if self.aql_loading { "Running…" } else { "Run (Ctrl+Enter)" });
@@ -1634,7 +1992,7 @@ impl Explorer {
             .size_full()
             .p_6()
             .gap_3()
-            .child(Self::page_title("AQL Runner", "Template context: vital_signs.v1".into()))
+            .child(Self::page_title("AQL Runner", if self.server.is_some() { self.server_label() } else { "demo data — the query is not executed; pick a server in Servers".to_string() }))
             .child(editor)
             .child(div().flex().items_center().gap_4().child(run).child(div().text_size(px(13.)).text_color(rgb(TEXT2)).child(status)))
             .child(results)
@@ -1658,10 +2016,11 @@ impl Render for Explorer {
         }
 
         let content = match self.view {
-            View::Dashboard => self.dashboard(),
+            View::Dashboard => self.dashboard(cx),
             View::Ehrs => self.ehr_browser(cx),
+            View::Compositions => self.compositions_view(cx),
             View::Templates => self.template_browser(cx),
-            View::Aql => self.aql_runner(cx),
+            View::Aql => self.aql_runner(window, cx),
             View::Servers => self.servers_view(window, cx),
         };
         let root = div()

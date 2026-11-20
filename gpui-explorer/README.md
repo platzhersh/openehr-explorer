@@ -3,8 +3,8 @@
 A ~700-line [GPUI](https://crates.io/crates/gpui) (Zed's GPU UI framework) port of four screens of
 openEHR Explorer: **Dashboard, EHR Browser, Templates (Web Template tree), AQL Runner**.
 It is a toy. By default data is in-process and mirrors `scripts/demo-assets/mock.js`. With `--server` it talks to a
-real openEHR CDR (see below). Still missing: text editing in the AQL editor (the query comes from `--query`), Request Inspector,
-composition viewer, filters/search, writes (create/edit/delete).
+real openEHR CDR (see below). Still missing: Request Inspector, filters/search/sort in EHR Browser, horizontal scrolling for wide content, composition
+versions/directory/contributions, writes (create/edit/delete).
 
 ```bash
 cd gpui-explorer
@@ -59,6 +59,25 @@ use `--demo` for the built-in demo data, or `--server URL` to override.
 
 Verified two ways: unit tests against a `profiles.json` fixture in the Tauri format, and a cross-check running the Tauri
 app's own `load_stored_profiles`/`get_profile_by_id`/`save_server_profile` against files written by this app and vice versa.
+
+## Every tab follows the active server profile
+
+Dashboard, EHR Browser, Compositions, Templates and AQL Runner all read from the **active profile** (the default one, else
+the first; change it with *Use* on the Servers tab, which reloads everything). Each tab header names the server it is
+showing, or says "demo data" when no profile is active.
+
+* **Dashboard:** server-side counts exactly like the Tauri dashboard (`COUNT` on concrete leaf paths, since EHRBase rejects
+  `COUNT` on whole objects; integer, float or string results all parse) plus the template count, with Refresh.
+* **EHR Browser:** paged EHR list from the server (+ Refresh, Load more), compositions of the selected EHR.
+* **Compositions:** click a composition (in EHR Browser or the Compositions tab) to fetch it in canonical **JSON** and **FLAT**
+  (FLAT media type chosen by server type, as in the Tauri backend); the two requests are independent, so JSON shows
+  as soon as it arrives and a server/template without FLAT support only affects its own tab.
+* **Templates:** template list and Web Template trees of the active server.
+* **AQL Runner:** an editable multi-line query box (typing, paste, arrows incl. Up/Down, Home/End, Enter, Tab, `Ctrl+U`
+  clear) that runs against the active server with **Ctrl+Enter** or the Run button. In demo mode the query is not executed.
+
+Checked against the mock and the public sandbox (switching profiles from the Servers tab repoints all of the above:
+the sandbox shows its own 1,422 EHRs / 11,504 compositions / 506 templates).
 
 ## Analytics (Aptabase)
 

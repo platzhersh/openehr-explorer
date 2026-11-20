@@ -40,6 +40,8 @@ function aql(q) {
   if (/ORDER BY e\//i.test(q) && !process.env.MOCK_ACCEPT_ORDER) {
     return [400, { error: "Bad Request", message: "AQL ORDER_BY on EHR attributes is not implemented" }];
   }
+  if (/SELECT COUNT\(e\/ehr_id\/value\) FROM EHR e$/i.test(q.trim())) return [200, { columns: [{ name: "#0" }], rows: [[N]] }];
+  if (/SELECT COUNT\(c\/uid\/value\)/i.test(q)) return [200, { columns: [{ name: "#0" }], rows: [[3.0]] }]; // float, as some CDRs return
   if (/SELECT e\/ehr_id\/value, e\/time_created\/value, e\/system_id\/value FROM EHR e/i.test(q)) {
     const rows = [];
     for (let i = offset; i < Math.min(offset + limit, N); i++) rows.push([uuid(i), created(i), "hospital.example.org"]);
@@ -77,6 +79,13 @@ http.createServer((req, res) => {
     const R = "/rest/openehr/v1";
     if (path === `${R}/definition/template/adl1.4`) return send(200, TEMPLATES);
     if (path.startsWith(`${R}/definition/template/adl1.4/`)) return send(200, WEB_TEMPLATE(decodeURIComponent(path.split("/").pop())));
+    const cm = new RegExp(`^${R}/ehr/([^/]+)/composition/([^/]+)$`).exec(path);
+    if (cm && req.method === "GET") {
+      const flat = /flat/.test(req.headers.accept || "");
+      if (flat) return send(200, { "vital_signs/context/start_time": "2026-08-20T09:15:00Z", "vital_signs/vital_signs/systolic|magnitude": 128, "vital_signs/vital_signs/systolic|unit": "mm[Hg]", "vital_signs/composer|name": "Dr. A. Kessler" });
+      return send(200, { _type: "COMPOSITION", name: { _type: "DV_TEXT", value: "Vital Signs" }, uid: { _type: "OBJECT_VERSION_ID", value: decodeURIComponent(cm[2]) }, archetype_details: { template_id: { value: "vital_signs.v1" } }, composer: { _type: "PARTY_IDENTIFIED", name: "Dr. A. Kessler" },
+        content: [{ _type: "OBSERVATION", name: { value: "Vital Signs" }, data: { events: [{ data: { items: [{ name: { value: "Systolic" }, value: { magnitude: 128, units: "mm[Hg]" } }] } }] } }] });
+    }
     if (path === `${R}/query/aql` && req.method === "POST") { const [c, o] = aql(JSON.parse(body).q); return send(c, o); }
     send(404, { error: "Not Found", path });
   });
