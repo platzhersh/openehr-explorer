@@ -27,6 +27,7 @@ mod credentials;
 mod net;
 mod profiles;
 mod search;
+mod settings;
 
 use analytics::Analytics;
 use search::{Criteria, SortDir, SortField};
@@ -57,6 +58,7 @@ enum View {
     Templates,
     Aql,
     Servers,
+    Settings,
 }
 
 #[derive(Clone)]
@@ -283,6 +285,8 @@ struct Explorer {
     auto_select: bool,
     query: SharedString,
     analytics: Analytics,
+    settings: settings::GlobalSettings,
+    settings_ui: Option<SettingsUi>,
     table: Option<AqlTable>,
     row_target: usize,
     ehr_scroll: UniformListScrollHandle,
@@ -476,6 +480,27 @@ where
         .child(label.into())
 }
 
+/// Editable copy of the settings shown on the Settings screen (applied on Save, like the Tauri form).
+struct SettingsUi {
+    terminology: Field,
+    check_updates: bool,
+    tours: bool,
+    analytics: bool,
+    message: Option<Result<String, String>>,
+}
+
+impl SettingsUi {
+    fn new(cx: &mut App, s: &settings::GlobalSettings) -> Self {
+        Self {
+            terminology: Field::new(cx, s.terminology_server_url.as_deref().unwrap_or(""), false, "https://tx.fhir.ch/r4"),
+            check_updates: s.check_updates_on_startup,
+            tours: s.tours_enabled,
+            analytics: s.analytics_enabled,
+            message: None,
+        }
+    }
+}
+
 struct Opts {
     boot: Instant,
     view: View,
@@ -490,6 +515,7 @@ struct Opts {
     startup_error: Option<String>,
     query: Option<String>,
     analytics: Analytics,
+    settings: settings::GlobalSettings,
 }
 
 impl Explorer {
@@ -562,6 +588,8 @@ impl Explorer {
             auto_select: o.select,
             query: o.query.unwrap_or_else(|| QUERY.to_string()).into(),
             analytics: o.analytics,
+            settings: o.settings,
+            settings_ui: None,
             table: None,
             row_target: o.rows,
             ehr_scroll: UniformListScrollHandle::new(),
@@ -578,6 +606,7 @@ impl Explorer {
 
     fn start(&mut self, cx: &mut Context<Self>) {
         self.aql_editor = Some(Field::new(cx, &self.query, false, "AQL query").multiline());
+        self.settings_ui = Some(SettingsUi::new(cx, &self.settings));
         self.search_field = Some(Field::new(cx, "", false, "Search by EHR ID, subject:P-123, hasCompositions:true …"));
         let mode = if self.server.is_some() { "server" } else { "demo" };
         self.analytics.track("app_started", Some(json!({ "mode": mode })));
@@ -1855,6 +1884,166 @@ impl Explorer {
             .children((!enabled).then(|| div().text_size(px(12.)).text_color(rgb(0xffd93d)).child("Sorting isn't supported by this server — showing default order.")))
     }
 
+    // ---- Settings (shared settings.json with the Tauri app) ---------------------------------------
+
+    fn save_settings(&mut self) {
+        let Some(ui) = self.settings_ui.as_mut() else { return };
+        let mut next = self.settings.clone();
+        let url = ui.terminology.text.trim().to_string();
+        next.terminology_server_url = if url.is_empty() { None } else { Some(url) };
+        next.check_updates_on_startup = ui.check_updates;
+        next.tours_enabled = ui.tours;
+        next.analytics_enabled = ui.analytics;
+        ui.message = Some(match settings::save(&next) {
+            Ok(()) => {
+                // Opting out takes effect immediately and flushes what is pending; opting in starts collection.
+                self.analytics.set_enabled(next.analytics_enabled);
+                self.settings = next;
+                Ok("Settings saved".to_string())
+            }
+            Err(e) => Err(format!("Could not save settings: {e}")),
+        });
+    }
+
+    fn settings_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let ks = &ev.keystroke;
+        let paste = if (ks.modifiers.control || ks.modifiers.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
+        if ks.key == "enter" {
+            self.save_settings();
+            cx.notify();
+            return;
+        }
+        let Some(ui) = self.settings_ui.as_mut() else { return };
+        if ui.terminology.focus.is_focused(window) {
+            ui.terminology.handle_key(ks, paste);
+            ui.message = None;
+            cx.notify();
+            cx.stop_propagation();
+        }
+    }
+
+    fn toggle<F>(id: &'static str, label: &'static str, on: bool, apply: F, cx: &mut Context<Self>) -> Stateful<Div>
+    where
+        F: Fn(&mut SettingsUi) + 'static,
+    {
+        let pill = div().w(px(38.)).h(px(20.)).p(px(2.)).flex().items_center().rounded_full().bg(rgb(if on { PRIMARY } else { BORDER })).when(on, |d| d.justify_end()).child(div().size(px(16.)).rounded_full().bg(rgb(if on { BG } else { MUTED })));
+        div()
+            .id(id)
+            .flex()
+            .items_center()
+            .gap_3()
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(ui) = this.settings_ui.as_mut() {
+                    apply(ui);
+                    ui.message = None;
+                }
+                cx.notify();
+            }))
+            .child(pill)
+            .child(div().text_size(px(13.)).text_color(rgb(TEXT)).child(label))
+    }
+
+    fn help(text: impl Into<SharedString>) -> Div {
+        div().text_size(px(12.)).text_color(rgb(MUTED)).max_w(px(700.)).child(text.into())
+    }
+
+    fn settings_section(title: &'static str, body: Div) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(div().text_size(px(16.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(TEXT)).child(title))
+            .child(div().h(px(1.)).w_full().bg(rgb(BORDER)))
+            .child(body)
+    }
+
+    fn settings_files_panel(cx: &mut Context<Self>) -> Div {
+        let dir = profiles::config_dir();
+        let shown = dir.display().to_string();
+        let rows = settings::config_files().into_iter().map(|(name, what, present)| {
+            div()
+                .flex()
+                .gap_3()
+                .child(div().w(px(130.)).flex_none().text_size(px(12.)).font_family(MONO).text_color(rgb(if present { TEXT } else { MUTED })).child(name))
+                .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(format!("{what}{}", if present { "" } else { " (not created yet)" })))
+        });
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::help("Application data is stored in the following files (shared with the Tauri app):"))
+            .children(rows)
+            .child(div().text_size(px(12.)).font_family(MONO).text_color(rgb(TEXT2)).child(shown))
+            .child(div().flex().child(btn("open-config-dir", "Open Directory", false, cx.listener(move |this, _, _, cx| {
+                if let Err(e) = settings::open_dir(&profiles::config_dir()) {
+                    if let Some(ui) = this.settings_ui.as_mut() {
+                        ui.message = Some(Err(e));
+                    }
+                }
+                cx.notify();
+            }))))
+    }
+
+    fn settings_view(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let Some(ui) = self.settings_ui.as_ref() else { return div() };
+        let terminology = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child("Default terminology server URL"))
+            .child(Self::input_box(&ui.terminology, ElementId::from("settings-terminology"), window))
+            .child(Self::help("Used for resolving external codes (SNOMED CT, LOINC, etc.) unless a server profile overrides it. Leave empty to disable code resolution globally. This PoC has no terminology browser, so the value is only stored (the Tauri app uses it)."));
+        let updates = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::toggle("tg-updates", "Check for updates on app startup", ui.check_updates, |u| u.check_updates = !u.check_updates, cx))
+            .child(Self::help("Stored in the shared settings.json for the Tauri app. This PoC has no updater, so it does not check for updates itself."));
+        let tours = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::toggle("tg-tours", "Automatically show feature tours and What's New on updates", ui.tours, |u| u.tours = !u.tours, cx))
+            .child(Self::help("Stored in the shared settings.json for the Tauri app. This PoC has no product tours."));
+        let key_note = if Analytics::has_key() { "This build has an Aptabase App Key." } else { "This build has no Aptabase App Key, so nothing is sent even when this is on." };
+        let analytics = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(Self::toggle("tg-analytics", "Help improve openEHR Explorer by sharing anonymous usage data", ui.analytics, |u| u.analytics = !u.analytics, cx))
+            .child(Self::help("When enabled, this PoC sends coarse, anonymous feature-usage events to Aptabase (a privacy-first analytics service): app_started, view_opened, connection_result, aql_run, composition_viewed, ehr_search_used, ehr_list_sorted and app_exited, plus the CDR platform type and the standard system info that accompanies every event (app version, OS name and version). It never sends server URLs, credentials, patient data, EHR IDs, composition content, query text or anything you type. Unlike the Tauri app it sends no crash reports and no unconditional session ping: nothing is sent at all until you opt in. Default is off."))
+            .child(Self::help(key_note));
+        let message = ui.message.as_ref().map(|m| match m {
+            Ok(t) => div().text_size(px(13.)).text_color(rgb(SUCCESS)).child(t.clone()),
+            Err(e) => div().text_size(px(13.)).text_color(rgb(0xff7b7b)).child(e.clone()),
+        });
+        div().size_full().child(div()
+            .id("settings-scroll")
+            .size_full()
+            .overflow_y_scroll()
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.settings_key(ev, window, cx)))
+            .child(
+                div()
+                    .p_6()
+                    .flex()
+                    .flex_col()
+                    .gap_5()
+                    .w_full()
+                    .max_w(px(780.))
+                    .child(div().flex().flex_col().gap_1().child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child("Global Settings")).child(Self::help("Shared with the Tauri app (settings.json).")))
+                    .child(Self::settings_section("Terminology", terminology))
+                    .child(Self::settings_section("Updates", updates))
+                    .child(Self::settings_section("Product Tours", tours))
+                    .child(Self::settings_section("Analytics", analytics))
+                    .child(div().flex().items_center().gap_3().child(btn("settings-save", "Save", true, cx.listener(|this, _, _, cx| {
+                        this.save_settings();
+                        cx.notify();
+                    }))).children(message))
+                    .child(Self::settings_section("Settings Files", Self::settings_files_panel(cx))),
+            ))
+    }
+
     fn page_title(title: &'static str, subtitle: String) -> Div {
         div()
             .flex()
@@ -1866,32 +2055,53 @@ impl Explorer {
             .child(div().text_size(px(13.)).text_color(rgb(MUTED)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(subtitle))
     }
 
+    fn nav_item(&self, label: &'static str, view: View, cx: &mut Context<Self>) -> Stateful<Div> {
+        // The composition viewer is a screen inside EHR Browser (as in the Tauri app), not a tab of its own.
+        let active = self.view == view || (view == View::Ehrs && self.view == View::Composition);
+        div()
+            .id(label)
+            .flex()
+            .items_center()
+            .h(px(38.))
+            .px_3()
+            .rounded(px(6.))
+            .cursor_pointer()
+            .text_size(px(14.))
+            .text_color(rgb(if active { PRIMARY } else { TEXT2 }))
+            .bg(rgb(if active { BG3 } else { BG2 }))
+            .hover(|s| s.bg(rgb(SURFACE_HOVER)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.view = view;
+                this.analytics.track("view_opened", Some(json!({ "view": label })));
+                cx.notify();
+            }))
+            .child(label)
+    }
+
     fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut nav = div().flex().flex_col().gap_1().p_3();
         for (view, label) in NAV {
-            // The composition viewer is a screen inside EHR Browser (as in the Tauri app), not a tab of its own.
-            let active = self.view == view || (view == View::Ehrs && self.view == View::Composition);
-            nav = nav.child(
-                div()
-                    .id(label)
-                    .flex()
-                    .items_center()
-                    .h(px(38.))
-                    .px_3()
-                    .rounded(px(6.))
-                    .cursor_pointer()
-                    .text_size(px(14.))
-                    .text_color(rgb(if active { PRIMARY } else { TEXT2 }))
-                    .bg(rgb(if active { BG3 } else { BG2 }))
-                    .hover(|s| s.bg(rgb(SURFACE_HOVER)))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.view = view;
-                        this.analytics.track("view_opened", Some(json!({ "view": label })));
-                        cx.notify();
-                    }))
-                    .child(label),
-            );
+            nav = nav.child(self.nav_item(label, view, cx));
         }
+        let (dot, text) = match &self.conn {
+            Conn::Demo => (MUTED, SharedString::from("Demo data (no server)")),
+            Conn::Connecting => (0xffd93d, SharedString::from("Connecting…")),
+            Conn::Connected(d) => (SUCCESS, d.clone()),
+            Conn::Failed(_) => (0xff7b7b, SharedString::from("Connection failed")),
+        };
+        let footer = div()
+            .flex()
+            .flex_col()
+            .child(div().px_3().pb_1().child(self.nav_item("Settings", View::Settings, cx)))
+            .child(
+                div()
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(div().flex().items_center().gap_2().child(div().size(px(8.)).flex_none().rounded_full().bg(rgb(dot))).child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(text)))
+                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(if self.analytics.enabled() { "v0.10.3 · gpui · analytics on" } else { "v0.10.3 · gpui" })),
+            );
         div()
             .w(px(240.))
             .h_full()
@@ -1902,28 +2112,8 @@ impl Explorer {
             .bg(rgb(BG2))
             .border_r_1()
             .border_color(rgb(BORDER))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(div().px_4().py_4().text_size(px(17.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child("openEHR Explorer"))
-                    .child(nav),
-            )
-            .child({
-                let (dot, text) = match &self.conn {
-                    Conn::Demo => (MUTED, SharedString::from("Demo data (no server)")),
-                    Conn::Connecting => (0xffd93d, SharedString::from("Connecting…")),
-                    Conn::Connected(d) => (SUCCESS, d.clone()),
-                    Conn::Failed(_) => (0xff7b7b, SharedString::from("Connection failed")),
-                };
-                div()
-                    .p_4()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(div().flex().items_center().gap_2().child(div().size(px(8.)).flex_none().rounded_full().bg(rgb(dot))).child(div().text_size(px(12.)).text_color(rgb(TEXT2)).child(text)))
-                    .child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(if self.analytics.enabled() { "v0.10.3 · gpui · analytics on" } else { "v0.10.3 · gpui" }))
-            })
+            .child(div().flex().flex_col().child(div().px_4().py_4().text_size(px(17.)).font_weight(FontWeight::BOLD).text_color(rgb(PRIMARY)).child("openEHR Explorer")).child(nav))
+            .child(footer)
     }
 
     /// A stat card that links to the view it counts (as in the Tauri dashboard).
@@ -2373,6 +2563,7 @@ impl Render for Explorer {
             View::Templates => self.template_browser(cx),
             View::Aql => self.aql_runner(window, cx),
             View::Servers => self.servers_view(window, cx),
+            View::Settings => self.settings_view(window, cx),
         };
         let root = div()
             .flex()
@@ -2461,6 +2652,7 @@ fn main() {
         Some("templates") => View::Templates,
         Some("aql") => View::Aql,
         Some("servers") => View::Servers,
+        Some("settings") => View::Settings,
         _ => View::Dashboard,
     };
     let ehrs: usize = arg("--ehrs").and_then(|s| s.parse().ok()).unwrap_or(3);
@@ -2483,11 +2675,13 @@ fn main() {
     }
     let query = arg("--query");
     // Opt-in only; never during benchmarks.
-    let analytics = Analytics::init(flag("--analytics") && !bench_scroll, arg("--analytics-host"));
+    let settings = settings::load();
+    // Opt-in only (Settings toggle or --analytics); never during benchmarks.
+    let analytics = Analytics::init((flag("--analytics") || settings.analytics_enabled) && !bench_scroll, arg("--analytics-host"));
     let max_seconds: Option<u64> = arg("--max-seconds").and_then(|s| s.parse().ok()).or(bench_scroll.then_some(120));
     Application::new().run(move |cx: &mut App| {
         let bounds = Bounds { origin: point(px(0.), px(0.)), size: size(px(1440.), px(960.)) };
-        let opts = Opts { boot, view, ehr_count: ehrs, rows, select, run, bench_scroll, server, server_name, active_profile, startup_error, query, analytics: analytics.clone() };
+        let opts = Opts { boot, view, ehr_count: ehrs, rows, select, run, bench_scroll, server, server_name, active_profile, startup_error, query, analytics: analytics.clone(), settings: settings.clone() };
         let handle = cx
             .open_window(
                 WindowOptions {

@@ -151,3 +151,8 @@ AQL Runner, click *Run* → rows on screen, then scroll the whole table in 300 f
   update, layout and two animation frames. The real app would add JSON (de)serialization over IPC.
 * Memory is PSS (shared pages split across processes), summed over the Chromium process tree.
 * One run per scenario (startup: median of 5). Treat differences under ~20% as noise.
+
+## Settings
+
+The Settings view edits the same `settings.json` as the Tauri app (terminology server URL, update check, tours, analytics opt-in).
+Fields this PoC does not use (updates, tours) are preserved and written back unchanged. Analytics stays opt-in and the toggle applies immediately; it is off by default.
