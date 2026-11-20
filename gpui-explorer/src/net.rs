@@ -2,6 +2,7 @@
 //! EHR listing via AQL, templates via `/definition/template/adl1.4`, Web Templates, and AQL execution.
 
 use reqwest::Method;
+use crate::search::{self, Criteria, SortDir, SortField};
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -41,6 +42,20 @@ pub struct EhrRow {
     pub id: String,
     pub created: String,
     pub system_id: String,
+}
+
+/// A search result row (more columns than the plain list).
+#[derive(Clone, Debug)]
+pub struct SearchHit {
+    pub id: String,
+    pub created: String,
+    pub subject_id: Option<String>,
+    pub system_id: Option<String>,
+}
+
+pub struct SearchResponse {
+    pub hits: Vec<SearchHit>,
+    pub limit_reached: bool,
 }
 
 pub struct EhrPage {
@@ -175,12 +190,15 @@ impl Profile {
         Ok("openEHR CDR".to_string())
     }
 
-    pub async fn aql(&self, query: &str) -> Result<AqlOut, String> {
+    /// POST an AQL query and return the raw JSON result set.
+    async fn aql_body(&self, query: &str) -> Result<Value, String> {
         let url = format!("{}/query/aql", self.api_root());
+        self.send_json(self.req(Method::POST, &url).header("Content-Type", "application/json").header("Accept", "application/json").json(&json!({ "q": query }))).await
+    }
+
+    pub async fn aql(&self, query: &str) -> Result<AqlOut, String> {
         let t = Instant::now();
-        let body = self
-            .send_json(self.req(Method::POST, &url).header("Content-Type", "application/json").header("Accept", "application/json").json(&json!({ "q": query })))
-            .await?;
+        let body = self.aql_body(query).await?;
         let columns = body
             .get("columns")
             .and_then(|c| c.as_array())
@@ -204,20 +222,14 @@ impl Profile {
         Ok(AqlOut { columns, rows, server_ms: Some(t.elapsed().as_secs_f64() * 1000.0) })
     }
 
-    /// One page of EHRs. Requests `limit + 1` rows to learn whether another page exists, and retries without
-    /// ORDER BY if the CDR rejects it (EHRBase does), exactly like the real backend.
-    pub async fn list_ehrs(&self, offset: usize, limit: usize) -> Result<EhrPage, String> {
+    /// One page of EHRs in the requested order. Requests `limit + 1` rows to learn whether another page exists, and
+    /// retries without ORDER BY if the CDR rejects it (EHRBase does), exactly like the real backend; `sort_applied`
+    /// then tells the UI the order was not honored.
+    pub async fn list_ehrs(&self, offset: usize, limit: usize, field: SortField, dir: SortDir) -> Result<EhrPage, String> {
         let fetch = limit + 1;
-        let sorted = format!(
-            "SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e \
-             ORDER BY e/time_created/value DESC, e/ehr_id/value ASC LIMIT {fetch} OFFSET {offset}"
-        );
-        let (out, sort_applied) = match self.aql(&sorted).await {
+        let (out, sort_applied) = match self.aql(&search::build_list_aql(offset, fetch, field, dir)).await {
             Ok(o) => (o, true),
-            Err(e) if e.to_ascii_lowercase().contains("order_by") || e.to_ascii_lowercase().contains("order by") => {
-                let unsorted = format!("SELECT e/ehr_id/value, e/time_created/value, e/system_id/value FROM EHR e LIMIT {fetch} OFFSET {offset}");
-                (self.aql(&unsorted).await?, false)
-            }
+            Err(e) if search::is_order_by_unsupported(&e) => (self.aql(&search::build_list_aql_unsorted(offset, fetch)).await?, false),
             Err(e) => return Err(e),
         };
         let mut rows: Vec<EhrRow> = out
@@ -229,6 +241,93 @@ impl Profile {
         let has_more = rows.len() > limit;
         rows.truncate(limit);
         Ok(EhrPage { rows, has_more, sort_applied })
+    }
+
+    // ---- search (ehr.rs: search_ehrs) --------------------------------------------------------
+
+    /// Run an EHR search. A *partial* id prefix has no working AQL predicate, so the CDR is paged through in chunks
+    /// and filtered client-side (bounded by a scan cap); everything else is one capped query.
+    pub async fn search_ehrs(&self, c: &Criteria) -> Result<SearchResponse, String> {
+        match search::has_partial_prefix(c) {
+            Some(prefix) => self.scan_for_prefix(c, prefix).await,
+            None => {
+                let rows = self.search_rows(c, search::SEARCH_DISPLAY_LIMIT, 0).await?;
+                // Reflects the raw result set (before the directory post-filter), so "refine your search" stays truthful.
+                let limit_reached = rows.len() >= search::SEARCH_DISPLAY_LIMIT;
+                let hits = match c.has_directory {
+                    Some(want) => self.filter_by_directory(rows, want).await,
+                    None => rows,
+                };
+                Ok(SearchResponse { hits, limit_reached })
+            }
+        }
+    }
+
+    async fn search_rows(&self, c: &Criteria, limit: usize, offset: usize) -> Result<Vec<SearchHit>, String> {
+        let body = self.aql_body(&search::build_search_aql(c, limit, offset)?).await?;
+        Ok(parse_hits(body.get("rows").and_then(|r| r.as_array()).map(Vec::as_slice).unwrap_or(&[])))
+    }
+
+    async fn scan_for_prefix(&self, c: &Criteria, prefix: &str) -> Result<SearchResponse, String> {
+        let mut matches: Vec<SearchHit> = Vec::new();
+        let mut offset = 0usize;
+        let mut limit_reached = false;
+        loop {
+            let page = self.search_rows(c, search::ID_SCAN_CHUNK, offset).await?;
+            let raw_len = page.len();
+            let mut page_matches: Vec<SearchHit> = page.into_iter().filter(|h| h.id.starts_with(prefix)).collect();
+            if let Some(want) = c.has_directory {
+                // Applied per page (not once at the end) so the display cap counts only genuine matches.
+                page_matches = self.filter_by_directory(page_matches, want).await;
+            }
+            matches.extend(page_matches);
+            offset += search::ID_SCAN_CHUNK;
+            if matches.len() >= search::SEARCH_DISPLAY_LIMIT {
+                matches.truncate(search::SEARCH_DISPLAY_LIMIT);
+                limit_reached = true;
+                break;
+            }
+            if raw_len < search::ID_SCAN_CHUNK {
+                break; // the source ran out of rows: nothing further can match
+            }
+            if offset >= search::ID_SCAN_CAP {
+                limit_reached = true;
+                break;
+            }
+        }
+        Ok(SearchResponse { hits: matches, limit_reached })
+    }
+
+    /// `GET /ehr/{id}/directory`: 404/204 = none, success = has one. Any other outcome is *not* treated as "absent":
+    /// the EHR is dropped from the result instead of being misclassified (same policy as the Tauri backend).
+    async fn has_directory(&self, ehr_id: &str) -> Result<bool, String> {
+        let url = self.composition_url(ehr_id, "x").map(|_| format!("{}/ehr/{}/directory", self.api_root(), ehr_id))?;
+        let resp = self.req(Method::GET, &url).header("Accept", "application/json").send().await.map_err(|e| e.to_string())?;
+        match resp.status().as_u16() {
+            404 | 204 => Ok(false),
+            200..=299 => Ok(true),
+            other => Err(format!("HTTP {other}")),
+        }
+    }
+
+    /// One directory fetch per candidate, at most 8 at a time, keeping the original order.
+    async fn filter_by_directory(&self, hits: Vec<SearchHit>, want: bool) -> Vec<SearchHit> {
+        let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(8));
+        let mut set = tokio::task::JoinSet::new();
+        for (i, h) in hits.iter().enumerate() {
+            let (this, id, sem) = (self.clone(), h.id.clone(), sem.clone());
+            set.spawn(async move {
+                let _permit = sem.acquire_owned().await.ok();
+                (i, this.has_directory(&id).await)
+            });
+        }
+        let mut keep = vec![false; hits.len()];
+        while let Some(done) = set.join_next().await {
+            if let Ok((i, Ok(has))) = done {
+                keep[i] = has == want;
+            }
+        }
+        hits.into_iter().zip(keep).filter_map(|(h, k)| k.then_some(h)).collect()
     }
 
     pub async fn ehr_compositions(&self, ehr_id: &str) -> Result<Vec<CompositionRow>, String> {
@@ -323,6 +422,16 @@ fn flatten(node: &Value, depth: u8, out: &mut Vec<TreeRow>) {
             flatten(c, depth + 1, out);
         }
     }
+}
+
+fn parse_hits(rows: &[Value]) -> Vec<SearchHit> {
+    rows.iter()
+        .filter_map(|row| {
+            let arr = row.as_array()?;
+            let text = |i: usize| arr.get(i).and_then(|v| v.as_str()).map(String::from);
+            Some(SearchHit { id: text(0)?, created: text(1).unwrap_or_default(), subject_id: text(2), system_id: text(6) })
+        })
+        .collect()
 }
 
 /// COUNT() comes back as an integer, a float (3.0) or a numeric string depending on the CDR.

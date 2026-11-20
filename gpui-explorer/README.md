@@ -68,7 +68,20 @@ showing, or says "demo data" when no profile is active.
 
 * **Dashboard ("Overview"):** the stat cards are links like in the Tauri app (EHRs and Compositions open EHR Browser, Templates opens Templates), the "Connected Server" card (name, URL, type, status, version) opens Servers, and with no active profile an onboarding card ("+ Add Your First Server" / "Go to Servers") points there. Counts are server-side exactly like the Tauri dashboard (`COUNT` on concrete leaf paths, since EHRBase rejects
   `COUNT` on whole objects; integer, float or string results all parse) plus the template count, with Refresh.
-* **EHR Browser:** paged EHR list from the server (+ Refresh, Load more), compositions of the selected EHR.
+* **EHR Browser:** paged EHR list from the server (+ Refresh, Load more), compositions of the selected EHR, and search + sort as in
+  the Tauri app:
+  * **Search** is the same small query language (`src/search.rs`, ported from `EhrBrowser.vue` + `ehr.rs`): a bare token
+    is an EHR-id prefix, with `subject:`, `namespace:`, `system:`, `modifiable:true|false`, `hasCompositions:true`,
+    `hasDirectory:true|false` and `created-on|before|after:YYYY-MM-DD` keys. It runs 600 ms after you stop typing or
+    on Enter, Esc/Clear returns to the list, validation errors and filter chips use the Tauri wording. A full UUID uses
+    equality; a *partial* id prefix has no working AQL predicate, so the CDR is paged in 200-row chunks (cap 2000) and
+    filtered client-side; `hasDirectory` checks `GET /ehr/{id}/directory` (8 at a time). Results are capped at 200
+    ("Showing first 200 results"). As in Tauri, `hasCompositions:false` and the date filters are rejected with the same
+    messages (EHRBase can't express them).
+  * **Sort** by Created date / EHR ID / System ID with an Asc/Desc toggle (`ORDER BY` with an `e/ehr_id/value ASC`
+    tiebreaker). If the CDR rejects `ORDER BY` (EHRBase does) the list is re-fetched unsorted, the controls dim and
+    "Sorting isn't supported by this server — showing default order." appears.
+  Not ported: the Filters modal and search history (the query syntax covers the same criteria).
 * **Composition screen** (opened from EHR Browser, like the Tauri app; there is no Compositions tab): click a composition to fetch it in canonical **JSON** and **FLAT**
   (FLAT media type chosen by server type, as in the Tauri backend); the two requests are independent, so JSON shows
   as soon as it arrives and a server/template without FLAT support only affects its own tab.

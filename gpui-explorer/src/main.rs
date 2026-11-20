@@ -26,8 +26,10 @@ mod analytics;
 mod credentials;
 mod net;
 mod profiles;
+mod search;
 
 use analytics::Analytics;
+use search::{Criteria, SortDir, SortField};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -57,6 +59,7 @@ enum View {
     Servers,
 }
 
+#[derive(Clone)]
 struct Ehr {
     id: SharedString,
     created: SharedString,
@@ -86,6 +89,14 @@ struct TreeRow {
     label: SharedString,
     rm: SharedString,
     path: SharedString,
+}
+
+/// An active EHR search (replaces the paged list while set).
+struct SearchState {
+    criteria: Criteria,
+    results: Vec<Ehr>,
+    limit_reached: bool,
+    loading: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -177,6 +188,11 @@ fn fake_uuid(seed: &mut u64) -> String {
     format!("{a:08x}-{b:04x}-4{:03x}-9{:03x}-{e:012x}", c & 0xfff, d & 0xfff)
 }
 
+/// Demo data cannot answer these criteria.
+fn criteria_unsupported_in_demo(c: Option<&Criteria>) -> bool {
+    c.map(|c| c.subject_namespace.is_some() || c.system_id.is_some() || c.modifiable.is_some() || c.has_compositions.is_some() || c.has_directory.is_some() || c.created_on.is_some() || c.created_before.is_some() || c.created_after.is_some()).unwrap_or(false)
+}
+
 /// Row-major flat cell storage (no per-row allocation, so memory stays flat for very large results).
 struct AqlTable {
     columns: Vec<SharedString>,
@@ -230,6 +246,17 @@ struct Explorer {
     tree: Vec<TreeRow>,
     comps: Vec<Composition>,
     comps_loading: bool,
+    sort_field: SortField,
+    sort_dir: SortDir,
+    sort_applied: bool,
+    search_field: Option<Field>,
+    search: Option<SearchState>,
+    search_error: Option<SharedString>,
+    search_warning: Option<SharedString>,
+    /// Debounce token: only the latest scheduled search fires.
+    search_gen: u64,
+    /// Id of the latest executed search; stale answers are dropped.
+    search_run: u64,
     counts: Option<net::Counts>,
     counts_error: Option<SharedString>,
     server_version: Option<SharedString>,
@@ -500,6 +527,15 @@ impl Explorer {
             tree: if demo { demo_tree() } else { Vec::new() },
             comps,
             comps_loading: false,
+            sort_field: SortField::TimeCreated,
+            sort_dir: SortDir::Desc,
+            sort_applied: true,
+            search_field: None,
+            search: None,
+            search_error: None,
+            search_warning: None,
+            search_gen: 0,
+            search_run: 0,
             counts: None,
             counts_error: None,
             server_version: None,
@@ -542,6 +578,7 @@ impl Explorer {
 
     fn start(&mut self, cx: &mut Context<Self>) {
         self.aql_editor = Some(Field::new(cx, &self.query, false, "AQL query").multiline());
+        self.search_field = Some(Field::new(cx, "", false, "Search by EHR ID, subject:P-123, hasCompositions:true …"));
         let mode = if self.server.is_some() { "server" } else { "demo" };
         self.analytics.track("app_started", Some(json!({ "mode": mode })));
         if self.server.is_some() {
@@ -578,10 +615,11 @@ impl Explorer {
         self.conn = Conn::Connecting;
         self.error = None;
         self.ehrs_loading = true;
+        let (sort_field, sort_dir) = (self.sort_field, self.sort_dir);
         let fut = async move {
             let desc = server.test_connection().await?;
             let templates = server.list_templates().await?;
-            let page = server.list_ehrs(0, PAGE).await?;
+            let page = server.list_ehrs(0, PAGE, sort_field, sort_dir).await?;
             let counts = server.dashboard_counts().await;
             Ok::<_, String>((desc, templates, page, counts))
         };
@@ -610,6 +648,7 @@ impl Explorer {
                     this.templates = templates.into_iter().map(|t| Template { id: t.id.into(), concept: t.concept.into(), archetype: t.archetype.into() }).collect();
                     this.ehrs = page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }).collect();
                     this.ehrs_has_more = page.has_more;
+                    this.sort_applied = page.sort_applied;
                     if !this.templates.is_empty() {
                         this.select_template(0, cx);
                     }
@@ -633,7 +672,8 @@ impl Explorer {
         }
         self.ehrs_loading = true;
         let offset = self.ehrs.len();
-        self.spawn_net(cx, async move { server.list_ehrs(offset, PAGE).await }, |this, res, _cx| {
+        let (sort_field, sort_dir) = (self.sort_field, self.sort_dir);
+        self.spawn_net(cx, async move { server.list_ehrs(offset, PAGE, sort_field, sort_dir).await }, |this, res, _cx| {
             this.ehrs_loading = false;
             match res {
                 Ok(page) => {
@@ -649,10 +689,10 @@ impl Explorer {
         self.selected_ehr = Some(i);
         self.reset_composition();
         let Some(server) = self.server.clone() else {
-            self.comps = demo_comps(self.ehrs[i].compositions.min(3) as usize);
+            self.comps = demo_comps(self.shown()[i].compositions.min(3) as usize);
             return;
         };
-        let id = self.ehrs[i].id.to_string();
+        let id = self.shown()[i].id.to_string();
         self.comps.clear();
         self.comps_loading = true;
         self.spawn_net(cx, async move { server.ehr_compositions(&id).await }, move |this, res, _cx| {
@@ -664,8 +704,9 @@ impl Explorer {
             match res {
                 Ok(rows) => {
                     this.comps = rows.into_iter().map(|c| Composition { uid: c.uid.into(), name: c.name.into(), template: c.template.into(), composer: c.composer.into(), committed: c.committed.into() }).collect();
-                    if let Some(e) = this.ehrs.get_mut(i) {
-                        e.compositions = this.comps.len() as u32;
+                    let n = this.comps.len() as u32;
+                    if let Some(e) = this.shown_mut().get_mut(i) {
+                        e.compositions = n;
                     }
                 }
                 Err(e) => this.error = Some(e.into()),
@@ -969,6 +1010,7 @@ impl Explorer {
                 self.server_name = Some(p.name.into());
                 self.active_profile = Some(stored.id);
                 self.ehrs.clear();
+                self.clear_search_state();
                 self.selected_ehr = None;
                 self.comps.clear();
                 self.templates.clear();
@@ -1041,8 +1083,8 @@ impl Explorer {
         cx.stop_propagation();
     }
 
-    fn field_view(&self, form: &ProfileForm, idx: usize, label: &'static str, window: &Window) -> Div {
-        let f = &form.fields[idx];
+    /// The styled single-line input (focus ring, masking, caret), shared by the profile form and the search box.
+    fn input_box(f: &Field, id: ElementId, window: &Window) -> Stateful<Div> {
         let focused = f.focus.is_focused(window);
         let shown = |t: &str| -> String {
             if f.masked {
@@ -1054,34 +1096,37 @@ impl Explorer {
         let (before, after): (String, String) = (f.text.chars().take(f.cursor).collect(), f.text.chars().skip(f.cursor).collect());
         let handle = f.focus.clone();
         let content = if f.text.is_empty() && !focused {
-            div().text_color(rgb(MUTED)).child(f.placeholder)
+            div().text_color(rgb(MUTED)).whitespace_nowrap().child(f.placeholder)
         } else {
             div()
                 .flex()
                 .items_center()
+                .whitespace_nowrap()
                 .text_color(rgb(TEXT))
                 .child(shown(&before))
                 .children(focused.then(|| div().w(px(1.5)).h(px(17.)).bg(rgb(PRIMARY))))
                 .child(shown(&after))
         };
-        div().flex().flex_col().gap_1().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child(label)).child(
-            div()
-                .id(("field", idx))
-                .track_focus(&f.focus)
-                .h(px(34.))
-                .px_3()
-                .flex()
-                .items_center()
-                .rounded(px(6.))
-                .border_1()
-                .border_color(rgb(if focused { PRIMARY } else { BORDER }))
-                .bg(rgb(0x11182e))
-                .text_size(px(13.))
-                .overflow_hidden()
-                .cursor_text()
-                .on_mouse_down(MouseButton::Left, move |_, window, _cx| handle.focus(window))
-                .child(content),
-        )
+        div()
+            .id(id)
+            .track_focus(&f.focus)
+            .h(px(34.))
+            .px_3()
+            .flex()
+            .items_center()
+            .rounded(px(6.))
+            .border_1()
+            .border_color(rgb(if focused { PRIMARY } else { BORDER }))
+            .bg(rgb(0x11182e))
+            .text_size(px(13.))
+            .overflow_hidden()
+            .cursor_text()
+            .on_mouse_down(MouseButton::Left, move |_, window, _cx| handle.focus(window))
+            .child(content)
+    }
+
+    fn field_view(&self, form: &ProfileForm, idx: usize, label: &'static str, window: &Window) -> Div {
+        Self::labelled(label, div().child(Self::input_box(&form.fields[idx], ElementId::from(("field", idx)), window)))
     }
 
     /// A pill toggle (server type / auth kind).
@@ -1359,7 +1404,7 @@ impl Explorer {
             self.comp_flat = Self::json_lines(&f);
             return;
         };
-        let Some(ehr) = self.selected_ehr.and_then(|e| self.ehrs.get(e)).map(|e| e.id.to_string()) else { return };
+        let Some(ehr) = self.selected_ehr_ref().map(|e| e.id.to_string()) else { return };
         self.comp_json.clear();
         self.comp_flat.clear();
         self.comp_json_loading = true;
@@ -1468,7 +1513,7 @@ impl Explorer {
             return div().flex_1().p_6().flex().flex_col().gap_3().child(Self::back_to_ehrs(cx)).child(div().text_color(rgb(MUTED)).child("Open a composition from an EHR in EHR Browser"));
         };
         let tab = self.comp_tab;
-        let ehr_short: String = self.selected_ehr.and_then(|i| self.ehrs.get(i)).map(|e| e.id.chars().take(8).collect()).unwrap_or_default();
+        let ehr_short: String = self.selected_ehr_ref().map(|e| e.id.chars().take(8).collect()).unwrap_or_default();
         let (lines, err, loading) = match tab {
             CompTab::Json => (&self.comp_json, &self.comp_json_err, self.comp_json_loading),
             CompTab::Flat => (&self.comp_flat, &self.comp_flat_err, self.comp_flat_loading),
@@ -1551,11 +1596,274 @@ impl Explorer {
                 cx.notify();
             }))
         });
-        div().p(px(if padded { 16. } else { 0. })).flex().items_start().justify_between().child(Self::page_title(title, subtitle)).children(refresh)
+        div().p(px(if padded { 16. } else { 0. })).flex().items_start().justify_between().gap_2().child(div().flex_1().min_w_0().child(Self::page_title(title, subtitle))).children(refresh.map(|r| r.flex_none()))
+    }
+
+    // ---- EHR search + sort (ported from the Tauri EHR Browser) -------------------------------------
+
+    /// The list on screen: search results while a search is active, else the paged list.
+    fn shown(&self) -> &Vec<Ehr> {
+        self.search.as_ref().map(|s| &s.results).unwrap_or(&self.ehrs)
+    }
+
+    fn shown_mut(&mut self) -> &mut Vec<Ehr> {
+        match self.search.as_mut() {
+            Some(s) => &mut s.results,
+            None => &mut self.ehrs,
+        }
+    }
+
+    fn selected_ehr_ref(&self) -> Option<&Ehr> {
+        self.selected_ehr.and_then(|i| self.shown().get(i))
+    }
+
+    fn clear_search_state(&mut self) {
+        self.search = None;
+        self.search_error = None;
+        self.search_warning = None;
+        self.search_gen += 1;
+        self.search_run += 1;
+        if let Some(f) = self.search_field.as_mut() {
+            f.text.clear();
+            f.cursor = 0;
+        }
+    }
+
+    fn reset_selection(&mut self) {
+        self.selected_ehr = None;
+        self.comps.clear();
+        self.reset_composition();
+    }
+
+    fn clear_search(&mut self) {
+        self.clear_search_state();
+        self.reset_selection();
+    }
+
+    /// Called after every edit of the search box: validate on Enter/after 600 ms, clear when emptied.
+    fn on_search_input(&mut self, cx: &mut Context<Self>) {
+        self.search_error = None;
+        self.search_gen += 1;
+        let empty = self.search_field.as_ref().map(|f| f.text.trim().is_empty()).unwrap_or(true);
+        if empty {
+            if self.search.is_some() {
+                self.clear_search();
+            }
+            return;
+        }
+        let gen = self.search_gen;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_millis(600)).await;
+            this.update(cx, |this, cx| {
+                if this.search_gen == gen {
+                    this.execute_search(cx);
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn execute_search(&mut self, cx: &mut Context<Self>) {
+        self.search_gen += 1; // cancels any pending debounce
+        self.search_error = None;
+        self.search_warning = None;
+        let raw = self.search_field.as_ref().map(|f| f.text.clone()).unwrap_or_default();
+        let (criteria, warning) = match search::parse_input(&raw) {
+            Ok(Some(parsed)) => parsed,
+            Ok(None) => {
+                self.clear_search();
+                return;
+            }
+            Err(e) => {
+                self.search_error = Some(e.into());
+                return;
+            }
+        };
+        self.search_warning = warning.map(SharedString::from);
+        self.reset_selection();
+        self.search_run += 1;
+        let run = self.search_run;
+        self.analytics.track("ehr_search_used", Some(json!({ "criteria": search::chips(&criteria).len() })));
+        let Some(server) = self.server.clone() else {
+            self.search = Some(SearchState { results: self.demo_search(&criteria), criteria, limit_reached: false, loading: false });
+            if self.search_warning.is_none() && (criteria_unsupported_in_demo(self.search.as_ref().map(|s| &s.criteria))) {
+                self.search_warning = Some("Demo data only supports ID prefix and subject filters.".into());
+            }
+            return;
+        };
+        self.search = Some(SearchState { criteria: criteria.clone(), results: Vec::new(), limit_reached: false, loading: true });
+        self.spawn_net(cx, async move { server.search_ehrs(&criteria).await }, move |this, res, _cx| {
+            if this.search_run != run {
+                return; // superseded by a newer search or cleared
+            }
+            match res {
+                Ok(r) => {
+                    if let Some(s) = this.search.as_mut() {
+                        s.loading = false;
+                        s.limit_reached = r.limit_reached;
+                        s.results = r
+                            .hits
+                            .into_iter()
+                            .map(|h| Ehr { id: h.id.into(), created: h.created.into(), subject: h.subject_id.or(h.system_id).unwrap_or_else(|| "—".to_string()).into(), compositions: 0 })
+                            .collect();
+                    }
+                }
+                Err(e) => {
+                    this.search = None;
+                    this.search_error = Some(e.into());
+                }
+            }
+        });
+    }
+
+    /// Local stand-in so search is usable on demo data (ID prefix + subject only).
+    fn demo_search(&self, c: &Criteria) -> Vec<Ehr> {
+        self.ehrs
+            .iter()
+            .filter(|e| c.ehr_id_prefix.as_deref().map(|p| e.id.starts_with(p)).unwrap_or(true))
+            .filter(|e| c.subject_id.as_deref().map(|p| e.subject.contains(p)).unwrap_or(true))
+            .take(search::SEARCH_DISPLAY_LIMIT)
+            .cloned()
+            .collect()
+    }
+
+    fn set_sort(&mut self, field: SortField, dir: SortDir, cx: &mut Context<Self>) {
+        self.sort_field = field;
+        self.sort_dir = dir;
+        self.analytics.track("ehr_list_sorted", Some(json!({ "field": field.label() })));
+        let Some(server) = self.server.clone() else {
+            // Demo data: sort locally by the same field/direction.
+            self.ehrs.sort_by(|a, b| match field {
+                SortField::TimeCreated => a.created.cmp(&b.created),
+                SortField::EhrId | SortField::SystemId => a.id.cmp(&b.id),
+            });
+            if dir == SortDir::Desc {
+                self.ehrs.reverse();
+            }
+            self.reset_selection();
+            return;
+        };
+        self.reset_selection();
+        self.ehrs_loading = true;
+        self.spawn_net(cx, async move { server.list_ehrs(0, PAGE, field, dir).await }, move |this, res, _cx| {
+            this.ehrs_loading = false;
+            // Ignore an answer for a sort the user has already changed again.
+            if this.sort_field != field || this.sort_dir != dir {
+                return;
+            }
+            match res {
+                Ok(page) => {
+                    this.ehrs = page.rows.into_iter().map(|r| Ehr { id: r.id.into(), created: r.created.into(), subject: r.system_id.into(), compositions: 0 }).collect();
+                    this.ehrs_has_more = page.has_more;
+                    this.sort_applied = page.sort_applied;
+                }
+                Err(e) => this.error = Some(e.into()),
+            }
+        });
+    }
+
+    fn search_key(&mut self, ev: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let ks = &ev.keystroke;
+        let paste = if (ks.modifiers.control || ks.modifiers.platform) && ks.key == "v" { cx.read_from_clipboard().and_then(|c| c.text()) } else { None };
+        let Some(f) = self.search_field.as_mut() else { return };
+        if !f.focus.is_focused(window) {
+            return;
+        }
+        match ks.key.as_str() {
+            "enter" => self.execute_search(cx),
+            "escape" => self.clear_search(),
+            _ => {
+                f.handle_key(ks, paste);
+                self.on_search_input(cx);
+            }
+        }
+        cx.notify();
+        cx.stop_propagation();
+    }
+
+    fn search_bar(&self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let Some(f) = self.search_field.as_ref() else { return div() };
+        let has_text = !f.text.is_empty();
+        let clear = has_text.then(|| {
+            btn("search-clear", "Clear", false, cx.listener(|this, _, _, cx| {
+                this.clear_search();
+                cx.notify();
+            }))
+        });
+        let chips = self.search.as_ref().map(|s| search::chips(&s.criteria)).unwrap_or_default();
+        div()
+            .px_4()
+            .pb_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| this.search_key(ev, window, cx)))
+            .child(div().flex().gap_2().child(div().flex_1().min_w_0().child(Self::input_box(f, ElementId::from("ehr-search"), window))).children(clear.map(|c| c.flex_none())))
+            .children(self.search_error.clone().map(|e| div().text_size(px(12.)).text_color(rgb(0xff7b7b)).child(e)))
+            .children(self.search_warning.clone().map(|w| div().text_size(px(12.)).text_color(rgb(0xffd93d)).child(w)))
+            .children((!chips.is_empty()).then(|| {
+                div().flex().flex_wrap().gap_1().children(chips.into_iter().map(|c| div().px_2().h(px(22.)).flex().items_center().rounded(px(11.)).bg(rgb(BG3)).text_size(px(11.)).text_color(rgb(PRIMARY)).child(c)))
+            }))
+    }
+
+    /// "Sort by [Created date | EHR ID | System ID] [↑ Asc/↓ Desc]"; disabled with a banner when the CDR rejected ORDER BY.
+    fn sort_bar(&self, cx: &mut Context<Self>) -> Div {
+        let enabled = self.sort_applied;
+        let mut fields = div().flex().gap_1();
+        for (i, f) in SortField::ALL.iter().copied().enumerate() {
+            let id: &'static str = ["sort-time", "sort-id", "sort-system"][i];
+            let on = self.sort_field == f;
+            fields = fields.child(
+                div()
+                    .id(id)
+                    .px_2()
+                    .h(px(24.))
+                    .flex()
+                    .items_center()
+                    .rounded(px(12.))
+                    .text_size(px(11.))
+                    .border_1()
+                    .border_color(rgb(if on { PRIMARY } else { BORDER }))
+                    .text_color(rgb(if on { PRIMARY } else { TEXT2 }))
+                    .bg(rgb(if on { BG3 } else { SURFACE }))
+                    .opacity(if enabled { 1.0 } else { 0.5 })
+                    .when(enabled, |d| d.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| {
+                        let dir = this.sort_dir;
+                        this.set_sort(f, dir, cx);
+                        cx.notify();
+                    })))
+                    .child(f.label()),
+            );
+        }
+        let dir_btn = btn("sort-dir", self.sort_dir.label(), false, cx.listener(|this, _, _, cx| {
+            if this.sort_applied {
+                let (f, d) = (this.sort_field, this.sort_dir.toggled());
+                this.set_sort(f, d, cx);
+                cx.notify();
+            }
+        }))
+        .opacity(if enabled { 1.0 } else { 0.5 });
+        div()
+            .px_4()
+            .pb_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(div().flex().items_center().gap_2().child(div().text_size(px(12.)).text_color(rgb(MUTED)).child("Sort by")).child(fields).child(dir_btn))
+            .children((!enabled).then(|| div().text_size(px(12.)).text_color(rgb(0xffd93d)).child("Sorting isn't supported by this server — showing default order.")))
     }
 
     fn page_title(title: &'static str, subtitle: String) -> Div {
-        div().flex().flex_col().gap_1().pb_4().child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title)).child(div().text_size(px(13.)).text_color(rgb(MUTED)).child(subtitle))
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .pb_4()
+            .min_w_0()
+            .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(rgb(PRIMARY)).child(title))
+            .child(div().text_size(px(13.)).text_color(rgb(MUTED)).whitespace_nowrap().overflow_hidden().text_ellipsis().child(subtitle))
     }
 
     fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1725,15 +2033,17 @@ impl Explorer {
             .children((!demo).then(|| self.server_card(cx)))
     }
 
-    fn ehr_browser(&mut self, cx: &mut Context<Self>) -> Div {
-        let count = self.ehrs.len();
+    fn ehr_browser(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let count = self.shown().len();
+        let searching = self.search.is_some();
+        let search_loading = self.search.as_ref().map(|s| s.loading).unwrap_or(false);
         let list = uniform_list(
             "ehr-list",
             count,
             cx.processor(|this, range: Range<usize>, _w, cx| {
                 range
                     .map(|i| {
-                        let e = &this.ehrs[i];
+                        let e = &this.shown()[i];
                         let sel = this.selected_ehr == Some(i);
                         div()
                             .id(("ehr", i))
@@ -1771,9 +2081,17 @@ impl Explorer {
             .flex_col()
             .border_r_1()
             .border_color(rgb(BORDER))
-            .child(self.titled_header("EHR Browser", format!("{count}{} EHRs · {}", if self.ehrs_has_more { "+" } else { "" }, self.server_label()), true, cx))
+            .child(self.titled_header(
+                "EHR Browser",
+                if searching { format!("{} · {}", if search_loading { "searching…".to_string() } else { format!("{count} results") }, self.server_label()) } else { format!("{count}{} EHRs · {}", if self.ehrs_has_more { "+" } else { "" }, self.server_label()) },
+                true,
+                cx,
+            ))
+            .child(self.search_bar(window, cx))
+            .children(self.search.as_ref().filter(|s| s.limit_reached).map(|_| div().px_4().pb_2().text_size(px(12.)).text_color(rgb(0xffd93d)).child(format!("Showing first {} results — refine your search to narrow down.", search::SEARCH_DISPLAY_LIMIT))))
+            .children((!searching).then(|| self.sort_bar(cx)))
             .child(list)
-            .children(self.server.is_some().then(|| {
+            .children((self.server.is_some() && !searching).then(|| {
                 let label = if self.ehrs_loading { "Loading…" } else if self.ehrs_has_more { "Load more" } else { "End of list" };
                 div().p_3().border_t_1().border_color(rgb(BORDER)).child(
                     div()
@@ -1797,7 +2115,7 @@ impl Explorer {
         let detail = match self.selected_ehr {
             None => div().flex_1().flex().items_center().justify_center().text_color(rgb(MUTED)).child("Select an EHR"),
             Some(i) => {
-                let e = &self.ehrs[i];
+                let e = &self.shown()[i];
                 let kv = |k: &'static str, v: SharedString| {
                     div()
                         .flex()
@@ -2050,7 +2368,7 @@ impl Render for Explorer {
 
         let content = match self.view {
             View::Dashboard => self.dashboard(cx),
-            View::Ehrs => self.ehr_browser(cx),
+            View::Ehrs => self.ehr_browser(window, cx),
             View::Composition => self.compositions_view(cx),
             View::Templates => self.template_browser(cx),
             View::Aql => self.aql_runner(window, cx),
