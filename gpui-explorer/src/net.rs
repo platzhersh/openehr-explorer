@@ -2,6 +2,7 @@
 //! EHR listing via AQL, templates via `/definition/template/adl1.4`, Web Templates, and AQL execution.
 
 use reqwest::Method;
+use crate::inspector::{self, LogEntry, State};
 use crate::search::{self, Criteria, SortDir, SortField};
 use serde_json::{json, Value};
 use std::sync::OnceLock;
@@ -19,6 +20,30 @@ pub fn runtime() -> &'static tokio::runtime::Runtime {
             .build()
             .expect("tokio runtime")
     })
+}
+
+/// What callers need from a logged response (the full body, not the capped log copy).
+struct Logged {
+    status: u16,
+    body: String,
+}
+
+fn new_entry(method: String, url: String) -> LogEntry {
+    LogEntry {
+        id: inspector::next_id(),
+        timestamp_ms: inspector::now_ms(),
+        method,
+        url,
+        request_headers: vec![],
+        request_body: None,
+        status: 0,
+        response_headers: vec![],
+        response_body: None,
+        duration_ms: 0,
+        body_truncated: false,
+        state: State::Pending,
+        error: None,
+    }
 }
 
 #[derive(Clone)]
@@ -140,12 +165,11 @@ impl Profile {
     /// The same check as the Tauri app's "Test Connection": an authenticated GET of the template list; any 2xx passes.
     pub async fn test_http(&self) -> Result<String, String> {
         let url = format!("{}/definition/template/adl1.4", self.api_root());
-        let resp = self.req(Method::GET, &url).header("Accept", "application/json").send().await.map_err(|e| format!("Request failed: {e}"))?;
-        let status = resp.status();
-        if status.is_success() {
-            Ok(format!("Connected successfully (HTTP {})", status.as_u16()))
+        let resp = self.send_logged(self.req(Method::GET, &url).header("Accept", "application/json")).await?;
+        if (200..300).contains(&resp.status) {
+            Ok(format!("Connected successfully (HTTP {})", resp.status))
         } else {
-            Err(format!("Server returned HTTP {}", status.as_u16()))
+            Err(format!("Server returned HTTP {}", resp.status))
         }
     }
 
@@ -163,13 +187,62 @@ impl Profile {
         }
     }
 
+    /// Send a request through the Request Inspector (same contract as the Tauri `send_instrumented`): a "pending" entry is
+    /// reported before sending and a "complete"/"failed" one with the same id afterwards.
+    async fn send_logged(&self, rb: reqwest::RequestBuilder) -> Result<Logged, String> {
+        let request = rb.build().map_err(|e| {
+            let msg = format!("Failed to build request: {e}");
+            let mut entry = new_entry("N/A".into(), e.url().map(|u| u.to_string()).unwrap_or_else(|| "(invalid request)".into()));
+            entry.state = State::Failed;
+            entry.error = Some(msg.clone());
+            inspector::emit(&entry);
+            msg
+        })?;
+        let header_pairs = |h: &reqwest::header::HeaderMap| -> Vec<(String, String)> { h.iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("[binary]").to_string())).collect() };
+        let mut entry = new_entry(request.method().to_string(), request.url().to_string());
+        entry.request_headers = inspector::redact_headers(header_pairs(request.headers()));
+        entry.request_body = request.body().and_then(|b| b.as_bytes()).map(|b| String::from_utf8_lossy(b).to_string());
+        inspector::emit(&entry);
+
+        let start = Instant::now();
+        let fail = |mut entry: LogEntry, message: String| -> String {
+            entry.duration_ms = start.elapsed().as_millis() as u64;
+            entry.state = State::Failed;
+            entry.error = Some(message.clone());
+            inspector::emit(&entry);
+            message
+        };
+        let resp = match self.client.execute(request).await {
+            Ok(r) => r,
+            Err(e) => return Err(fail(entry, format!("Request failed: {e}"))),
+        };
+        let status = resp.status().as_u16();
+        let resp_headers = inspector::redact_headers(header_pairs(resp.headers()));
+        let body = match resp.text().await {
+            Ok(b) => b,
+            Err(e) => {
+                entry.status = status;
+                entry.response_headers = resp_headers;
+                return Err(fail(entry, format!("Failed to read response: {e}")));
+            }
+        };
+        // The caller gets the full body; only the log keeps a capped copy.
+        let (kept, truncated) = inspector::log_body(&body);
+        entry.status = status;
+        entry.response_headers = resp_headers;
+        entry.response_body = Some(kept);
+        entry.body_truncated = truncated;
+        entry.duration_ms = start.elapsed().as_millis() as u64;
+        entry.state = State::Complete;
+        inspector::emit(&entry);
+        Ok(Logged { status, body })
+    }
+
     async fn send_json(&self, rb: reqwest::RequestBuilder) -> Result<Value, String> {
-        let resp = rb.send().await.map_err(|e| format!("Request failed: {e}"))?;
-        let status = resp.status();
-        let body = resp.text().await.map_err(|e| format!("Failed to read response: {e}"))?;
-        if !status.is_success() {
+        let Logged { status, body } = self.send_logged(rb).await?;
+        if !(200..300).contains(&status) {
             let snippet: String = body.chars().take(300).collect();
-            return Err(format!("Server returned HTTP {}: {}", status.as_u16(), snippet));
+            return Err(format!("Server returned HTTP {}: {}", status, snippet));
         }
         serde_json::from_str(&body).map_err(|e| format!("Failed to parse response: {e}"))
     }
@@ -302,8 +375,8 @@ impl Profile {
     /// the EHR is dropped from the result instead of being misclassified (same policy as the Tauri backend).
     async fn has_directory(&self, ehr_id: &str) -> Result<bool, String> {
         let url = self.composition_url(ehr_id, "x").map(|_| format!("{}/ehr/{}/directory", self.api_root(), ehr_id))?;
-        let resp = self.req(Method::GET, &url).header("Accept", "application/json").send().await.map_err(|e| e.to_string())?;
-        match resp.status().as_u16() {
+        let resp = self.send_logged(self.req(Method::GET, &url).header("Accept", "application/json")).await?;
+        match resp.status {
             404 | 204 => Ok(false),
             200..=299 => Ok(true),
             other => Err(format!("HTTP {other}")),

@@ -164,3 +164,15 @@ AQL Runner, click *Run* → rows on screen, then scroll the whole table in 300 f
 
 The Settings view edits the same `settings.json` as the Tauri app (terminology server URL, update check, tours, analytics opt-in).
 Fields this PoC does not use (updates, tours) are preserved and written back unchanged. Analytics stays opt-in and the toggle applies immediately; it is off by default.
+
+## Request Inspector
+
+A bottom drawer like the Tauri app's (ADR-0011): toggle with **Ctrl/Cmd+Shift+I** or by clicking the header (collapsed → half → full), or use the Collapse/Half/Full buttons.
+Every HTTP request the client sends is logged through one choke point (`net::Profile::send_logged`), with a *pending* entry that is updated in place when the response (or failure) arrives, exactly like the Tauri backend:
+method, URL, request/response headers (`Authorization`, `Cookie`, `Set-Cookie` redacted), request/response body (the log copy is capped at 2 MB, the caller still gets the full body), status, duration, error.
+The list holds the newest 500 requests and can be filtered by path text, method and status class (2xx/3xx/4xx/5xx/failed); *Clear* asks for confirmation.
+The detail view has Request/Response tabs with a summary, headers, a Pretty/Raw body viewer (virtualized, so 2 MB bodies scroll smoothly), *Copy* for the body and *Copy cURL*.
+The model and helpers (`src/inspector.rs`) are pure and unit-tested; the panel is `src/inspector_ui.rs`.
+Not ported: the tree/FLAT/XML body viewers and the guided tour (bodies are shown as text; long lines are clipped, there is no horizontal scroll).
+
+![Request Inspector](screenshots/gpui-inspector-half.png)

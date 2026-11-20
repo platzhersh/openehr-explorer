@@ -30,6 +30,8 @@ mod profiles;
 mod search;
 mod aql_syntax;
 mod editor;
+mod inspector;
+mod inspector_ui;
 mod settings;
 
 use analytics::Analytics;
@@ -297,6 +299,9 @@ struct Explorer {
     analytics: Analytics,
     settings: settings::GlobalSettings,
     settings_ui: Option<SettingsUi>,
+    inspector: inspector_ui::InspectorUi,
+    root_focus: FocusHandle,
+    root_focused: bool,
     table: Option<AqlTable>,
     row_target: usize,
     ehr_scroll: UniformListScrollHandle,
@@ -630,7 +635,7 @@ struct Opts {
 }
 
 impl Explorer {
-    fn new(o: Opts) -> Self {
+    fn new(o: Opts, cx: &mut Context<Self>) -> Self {
         let server = o.server;
         let mut ehrs = Vec::new();
         let mut comps = Vec::new();
@@ -701,6 +706,9 @@ impl Explorer {
             analytics: o.analytics,
             settings: o.settings,
             settings_ui: None,
+            inspector: inspector_ui::InspectorUi::new(cx),
+            root_focus: cx.focus_handle(),
+            root_focused: false,
             table: None,
             row_target: o.rows,
             ehr_scroll: UniformListScrollHandle::new(),
@@ -716,6 +724,7 @@ impl Explorer {
     }
 
     fn start(&mut self, cx: &mut Context<Self>) {
+        self.start_inspector(cx);
         self.aql_editor = Some(AqlEd::new(cx, &self.query));
         self.settings_ui = Some(SettingsUi::new(cx, &self.settings));
         self.search_field = Some(Field::new(cx, "", false, "Search by EHR ID, subject:P-123, hasCompositions:true …"));
@@ -2865,7 +2874,20 @@ impl Render for Explorer {
             View::Servers => self.servers_view(window, cx),
             View::Settings => self.settings_view(window, cx),
         };
+        if !self.root_focused {
+            self.root_focused = true;
+            window.focus(&self.root_focus);
+        }
         let root = div()
+            .id("root")
+            .track_focus(&self.root_focus)
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                let ks = &ev.keystroke;
+                if (ks.modifiers.control || ks.modifiers.platform) && ks.modifiers.shift && ks.key == "i" {
+                    this.inspector_cycle();
+                    cx.notify();
+                }
+            }))
             .flex()
             .size_full()
             .bg(rgb(BG))
@@ -2893,7 +2915,9 @@ impl Render for Explorer {
                         }))
                         .child(format!("{e}  (click to dismiss)"))
                 });
-                div().flex_1().h_full().min_w_0().relative().child(content).children(banner)
+                let main = div().flex_1().min_h_0().relative().child(content).children(banner);
+                let drawer = self.inspector_drawer(window, cx);
+                div().flex_1().h_full().min_w_0().flex().flex_col().child(main).child(drawer)
             });
 
         if let Some(b) = self.bench.as_mut() {
@@ -2991,7 +3015,7 @@ fn main() {
                 },
                 |_, cx| {
                     cx.new(|cx| {
-                        let mut this = Explorer::new(opts);
+                        let mut this = Explorer::new(opts, cx);
                         this.start(cx);
                         this
                     })
