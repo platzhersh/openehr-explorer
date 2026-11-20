@@ -129,19 +129,19 @@ Tauri-IPC mock (`scripts/demo-assets/mock.js`) — *not* the native Tauri/WebKit
 
 | | Vue (Chromium) | GPUI |
 |---|---|---|
-| Startup → first UI (median of 5) | 111 ms browser launch + 373 ms page load ≈ **485 ms** | **~77 ms** (spawn → first `render()`) |
-| Idle memory (PSS) | **348 MB** (8 processes) | **107 MB** (1 process) |
-| Frontend artifact | 1.1 MB `dist/` (+ a ~290 MB browser runtime) | 36 MB self-contained binary (25 MB before `reqwest`/`tokio`/TLS were added) |
+| Startup → first UI (median of 5) | 131 ms browser launch + 381 ms page load ≈ **512 ms** | **~67 ms** (spawn → first `render()`) |
+| Idle memory (PSS) | **338 MB** (8 processes) | **~109 MB** (1 process) |
+| Frontend artifact | 1.1 MB `dist/` (+ a ~290 MB browser runtime) | 39.6 MB self-contained binary (25 MB before `reqwest`/`tokio`/TLS were added) |
 
 AQL Runner, click *Run* → rows on screen, then scroll the whole table in 300 frames:
 
 | Rows | Vue: run→render | Vue: memory | Vue: DOM nodes | Vue: scroll fps (p95 frame) | GPUI: run→render | GPUI: memory | GPUI: `render()` CPU p95 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 3 | 29 ms | 388 MB | – | – | 1.3 ms | 105 MB | 0.04 ms |
-| 1,000 | 90 ms | 419 MB | 10,248 | 60 (16.7 ms) | 1.8 ms | 109 MB | 0.04 ms |
-| 10,000 | 927 ms | 737 MB | 100,248 | 44 (33 ms) | 6.5 ms | 110 MB | 0.06 ms |
-| 50,000 | 4.7 s | 2.1 GB | 500,248 | **6.7 (233 ms)** | 26 ms | 122 MB | 0.04 ms |
-| 1,000,000 | – | – | – | – | 513 ms | 381 MB | 0.05 ms |
+| 3 | 28.3 ms | 382 MB | – | – | 1.0 ms | 110 MB | 0.08 ms |
+| 1,000 | 91.5 ms | 414 MB | 10,248 | 60 (16.7 ms) | 1.5 ms | 113 MB | 0.07 ms |
+| 10,000 | 949 ms | 719 MB | 100,248 | 35.6 (33.4 ms) | 5.8 ms | 116 MB | 0.07 ms |
+| 50,000 | 4.8 s | 2.1 GB | 500,248 | **5.9 (266.6 ms)** | 27.0 ms | 127 MB | 0.09 ms |
+| 1,000,000 | – | – | – | – | 504 ms | 386 MB | 0.07 ms |
 
 ## Read this before believing the numbers
 
