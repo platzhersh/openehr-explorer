@@ -46,7 +46,7 @@ that need to stay in sync:
 `<section id="changelog">` in `website/src/pages/docs.astro`, following the existing
 format (version + one-line theme, then a bullet list of user-facing
 highlights), based on reviewing what actually changed since the previous
-tag — not a raw commit-message dump.
+tag — not a raw commit-message dump. Commits that only touch the experimental `gpui-explorer/` directory (see its README) are never mentioned in the changelog, What's New or release notes; use `git log <prev-tag>..HEAD -- . ':!gpui-explorer'` to review.
 
 **Comparison table check.** Reviews `website/src/pages/compare.astro` against
 the current releases of the other tools it lists, and against what this

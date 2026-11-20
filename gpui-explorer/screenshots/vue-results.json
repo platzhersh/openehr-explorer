@@ -1,0 +1,79 @@
+{
+  "startup": [
+    {
+      "browser_launch_ms": 4235,
+      "page_load_to_ui_ms": 453
+    },
+    {
+      "browser_launch_ms": 113,
+      "page_load_to_ui_ms": 381
+    },
+    {
+      "browser_launch_ms": 131,
+      "page_load_to_ui_ms": 380
+    },
+    {
+      "browser_launch_ms": 111,
+      "page_load_to_ui_ms": 448
+    },
+    {
+      "browser_launch_ms": 134,
+      "page_load_to_ui_ms": 143
+    }
+  ],
+  "scenarios": {
+    "3": {
+      "rows": 3,
+      "run_to_render_ms": 28.3,
+      "pss_mb": 382.5
+    },
+    "1000": {
+      "rows": 1000,
+      "run_to_render_ms": 91.5,
+      "pss_mb": 413.5,
+      "dom_nodes": 10248,
+      "scroll": {
+        "scrollable_px": 30491,
+        "frames": 300,
+        "avg_fps": 60,
+        "frame_ms_p50": 16.7,
+        "frame_ms_p95": 16.7,
+        "frame_ms_max": 16.8
+      }
+    },
+    "10000": {
+      "rows": 10000,
+      "run_to_render_ms": 948.8,
+      "pss_mb": 718.6,
+      "dom_nodes": 100248,
+      "scroll": {
+        "scrollable_px": 309491,
+        "frames": 300,
+        "avg_fps": 35.6,
+        "frame_ms_p50": 33.3,
+        "frame_ms_p95": 33.4,
+        "frame_ms_max": 50.1
+      }
+    },
+    "50000": {
+      "rows": 50000,
+      "run_to_render_ms": 4847.6,
+      "pss_mb": 2098.4,
+      "dom_nodes": 500248,
+      "scroll": {
+        "scrollable_px": 1549491,
+        "frames": 300,
+        "avg_fps": 5.9,
+        "frame_ms_p50": 150,
+        "frame_ms_p95": 266.6,
+        "frame_ms_max": 366.7
+      }
+    }
+  },
+  "idle_pss_mb": 338.1,
+  "idle_procs": 8,
+  "startup_median": {
+    "browser_launch_ms": 131,
+    "page_load_to_ui_ms": 381
+  }
+}
