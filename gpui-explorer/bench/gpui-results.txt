@@ -1,0 +1,18 @@
+# binary_bytes=25384488
+# startup (5 cold launches, process spawn -> first render)
+startup run=1 spawn_to_first_render_ms=73 idle_pss_kb_after_2.5s=103690
+0
+startup run=2 spawn_to_first_render_ms=69 idle_pss_kb_after_2.5s=103473
+0
+startup run=3 spawn_to_first_render_ms=73 idle_pss_kb_after_2.5s=103391
+0
+startup run=4 spawn_to_first_render_ms=89 idle_pss_kb_after_2.5s=103613
+0
+startup run=5 spawn_to_first_render_ms=67 idle_pss_kb_after_2.5s=103563
+0
+# aql scenarios
+rows=3 run_to_render_ms=1.3 {"frames":300,"avg_fps":38.6,"frame_ms_p50":31.95,"frame_ms_p95":32.02,"frame_ms_max":32.90,"build_ms_p50":0.028,"build_ms_p95":0.042,"pss_kb":104541}
+rows=1000 run_to_render_ms=1.8 {"frames":300,"avg_fps":31.3,"frame_ms_p50":32.00,"frame_ms_p95":32.02,"frame_ms_max":48.00,"build_ms_p50":0.027,"build_ms_p95":0.040,"pss_kb":108759}
+rows=10000 run_to_render_ms=6.5 {"frames":300,"avg_fps":31.4,"frame_ms_p50":32.00,"frame_ms_p95":32.05,"frame_ms_max":47.97,"build_ms_p50":0.025,"build_ms_p95":0.056,"pss_kb":110485}
+rows=50000 run_to_render_ms=26.3 {"frames":300,"avg_fps":31.3,"frame_ms_p50":32.00,"frame_ms_p95":32.03,"frame_ms_max":64.01,"build_ms_p50":0.025,"build_ms_p95":0.040,"pss_kb":121501}
+rows=1000000 run_to_render_ms=512.8 {"frames":300,"avg_fps":31.4,"frame_ms_p50":32.00,"frame_ms_p95":32.05,"frame_ms_max":47.99,"build_ms_p50":0.030,"build_ms_p95":0.046,"pss_kb":380637}
