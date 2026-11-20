@@ -80,7 +80,7 @@ jobs are the platform builds:
 | Job | Runs on | What it does |
 |---|---|---|
 | `build-macos` | tag push (also every push/PR, but only uploads on a tag) | Universal DMG, code-signs if Apple secrets are configured, uploads DMG + updater artifacts to the GitHub Release |
-| `build-windows` | tag push, manual `workflow_dispatch` with `build-windows: true`, or the `build-windows` label on a PR | NSIS installer, Authenticode-signs it via SignPath if configured (see ADR-0029), uploads to the Release, submits the installer to VirusTotal (tag pushes only) |
+| `build-windows` | tag push, manual `workflow_dispatch` with `build-windows: true`, or the `build-windows` label on a PR | NSIS installer, Authenticode-signs it via SignPath if configured (see ADR-0029), builds a portable zip (app exe + LICENSE), uploads the NSIS installer, the MSI and the portable zip to the Release, submits them to VirusTotal (tag pushes only) |
 | `build-linux` | tag push, manual `workflow_dispatch` with `build-linux: true`, or the `build-linux` label on a PR | `.deb` + `.AppImage`, uploads to the Release |
 | `publish-updater-manifest` | after all three builds, tag push only | Generates `latest.json` (used by the in-app Tauri updater) from the release assets and uploads it, then appends the VirusTotal report links (by SHA-256) for the Windows installers to the release notes |
 | `publish-homebrew-cask` | after `build-macos`, tag push only | Pushes an updated Cask to `platzhersh/homebrew-openehr-explorer` (needs `HOMEBREW_TAP_TOKEN`; no-ops if unset) |
