@@ -51,11 +51,15 @@ fn scan_while(c: &[char], mut i: usize, f: impl Fn(char) -> bool) -> usize {
     i
 }
 
-/// Quoted string starting at `i`; an unterminated one still colours to end of line, so typing a quote is visible at once.
+/// Quoted string starting at `i` (a backslash escapes the next char); an unterminated one still colours to end of line,
+/// so typing a quote is visible at once.
 fn scan_string(c: &[char], i: usize) -> usize {
     let q = c[i];
-    let end = scan_while(c, i + 1, |x| x != q);
-    (end + 1).min(c.len())
+    let mut j = i + 1;
+    while j < c.len() && c[j] != q {
+        j += if c[j] == '\\' { 2 } else { 1 };
+    }
+    (j + 1).min(c.len())
 }
 
 /// Bracketed predicate starting at `[`, up to the matching `]` (strings inside may contain brackets).
@@ -66,7 +70,9 @@ fn scan_bracket(c: &[char], mut i: usize) -> usize {
         let x = c[i];
         i += 1;
         if let Some(q) = quote {
-            if x == q {
+            if x == '\\' {
+                i += 1; // skip the escaped char
+            } else if x == q {
                 quote = None;
             }
             continue;
@@ -88,7 +94,7 @@ fn scan_bracket(c: &[char], mut i: usize) -> usize {
 
 /// Path starting at `/`: runs to whitespace or a delimiter, predicates included.
 fn scan_path(c: &[char], mut i: usize) -> usize {
-    while i < c.len() && !c[i].is_whitespace() && !matches!(c[i], ',' | ')' | '(' | '=' | '<' | '>' | '!') {
+    while i < c.len() && !c[i].is_whitespace() && !matches!(c[i], ',' | ')' | '(' | '=' | '<' | '>' | '!') && !(c[i] == '-' && c.get(i + 1) == Some(&'-')) {
         i = if c[i] == '[' { scan_bracket(c, i) } else { i + 1 };
     }
     i
@@ -285,6 +291,22 @@ mod tests {
             pos = r.end;
         }
         assert_eq!(pos, line.chars().count());
+    }
+
+    #[test]
+    fn escaped_quotes_do_not_end_strings_or_predicates() {
+        let k = kinds(r#"WHERE a = 'it\'s' AND b = "x\"y""#);
+        assert!(k.contains(&(r"'it\'s'".into(), Tok::String)));
+        assert!(k.contains(&(r#""x\"y""#.into(), Tok::String)));
+        let k = kinds(r#"o[name/value='a\']b'] x"#);
+        assert!(k.contains(&(r"[name/value='a\']b']".into(), Tok::Archetype)));
+    }
+
+    #[test]
+    fn comment_right_after_a_path_is_a_comment() {
+        let k = kinds("SELECT c/uid/value--note");
+        assert!(k.contains(&("/uid/value".into(), Tok::Path)));
+        assert!(k.contains(&("--note".into(), Tok::Comment)));
     }
 
     #[test]

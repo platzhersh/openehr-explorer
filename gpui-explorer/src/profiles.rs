@@ -103,8 +103,6 @@ pub struct ProfileInput {
     pub api_path_prefix: Option<String>,
 }
 
-pub const DEFAULT_API_PATH_PREFIX: &str = "/rest/openehr/v1";
-
 // ---------------------------------------------------------------------------
 // Paths + credential manager (same rules as the Tauri app, including its XDG/HOME logic)
 // ---------------------------------------------------------------------------
@@ -173,22 +171,45 @@ pub fn normalize_bearer_token(raw: &str) -> Result<String, String> {
 // Persistence
 // ---------------------------------------------------------------------------
 
-pub fn load_stored() -> Vec<StoredProfile> {
-    let path = profiles_path();
-    if path.exists() {
-        let data = fs::read_to_string(&path).unwrap_or_default();
-        serde_json::from_str::<ProfileStore>(&data).map(|s| s.profiles).unwrap_or_default()
-    } else {
-        Vec::new()
+/// Write `data` to `path` atomically: a sibling temp file is written and flushed completely (with `harden` applied), and only then
+/// renamed over the destination, so a failed write never leaves a truncated or half-written file behind.
+pub fn write_atomic(path: &std::path::Path, data: &str, harden: bool) -> Result<(), String> {
+    use std::io::Write;
+    let dir = path.parent().ok_or_else(|| "invalid path".to_string())?;
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!(".{}.tmp", path.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
+    let written = (|| -> Result<(), String> {
+        let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        if harden {
+            harden_file_permissions(&tmp);
+        }
+        f.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        f.sync_all().map_err(|e| e.to_string())
+    })();
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
     }
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        e.to_string()
+    })
+}
+
+/// An empty list only when `profiles.json` does not exist; an unreadable or unparseable file is an error, so callers
+/// never mutate (and thereby overwrite) a store they could not read.
+pub fn load_stored() -> Result<Vec<StoredProfile>, String> {
+    let path = profiles_path();
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let data = fs::read_to_string(&path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+    serde_json::from_str::<ProfileStore>(&data).map(|s| s.profiles).map_err(|e| format!("Could not parse {}: {e}. Fix or remove the file; nothing was changed.", path.display()))
 }
 
 fn save_stored(profiles: &[StoredProfile]) -> Result<(), String> {
-    let path = profiles_path();
     let data = serde_json::to_string_pretty(&ProfileStore { profiles: profiles.to_vec() }).map_err(|e| e.to_string())?;
-    fs::write(&path, &data).map_err(|e| e.to_string())?;
-    harden_file_permissions(&path);
-    Ok(())
+    write_atomic(&profiles_path(), &data, true)
 }
 
 fn to_stored_auth(auth: &AuthMethod) -> StoredAuthMethod {
@@ -199,27 +220,50 @@ fn to_stored_auth(auth: &AuthMethod) -> StoredAuthMethod {
     }
 }
 
-fn store_auth_secrets(mgr: &CredentialManager, id: &str, prefix: &str, auth: &AuthMethod, dir: &std::path::Path) -> Result<(), String> {
+/// Write the secrets this auth method carries (an empty password/token means "keep the stored one").
+fn put_auth_secrets(mgr: &CredentialManager, id: &str, prefix: &str, auth: &AuthMethod, dir: &std::path::Path) -> Result<(), String> {
     match auth {
-        AuthMethod::None => {
-            mgr.delete_secret(id, &format!("{prefix}password"), dir)?;
-            mgr.delete_secret(id, &format!("{prefix}token"), dir)?;
-        }
+        AuthMethod::None => {}
         AuthMethod::Basic { password, .. } => {
             if !password.is_empty() {
                 mgr.store_secret(id, &format!("{prefix}password"), password.clone(), dir)?;
             }
-            mgr.delete_secret(id, &format!("{prefix}token"), dir)?;
         }
         AuthMethod::Bearer { token } => {
+            // Normalise first: a whitespace-only token must keep the stored one, like an empty field.
+            let token = normalize_bearer_token(token)?;
             if !token.is_empty() {
-                let token = normalize_bearer_token(token)?;
                 mgr.store_secret(id, &format!("{prefix}token"), token, dir)?;
             }
-            mgr.delete_secret(id, &format!("{prefix}password"), dir)?;
         }
     }
     Ok(())
+}
+
+/// Secret fields this auth method makes obsolete; removed only after the profile itself was committed.
+fn stale_secret_fields(prefix: &str, auth: &AuthMethod) -> Vec<String> {
+    let drop: &[&str] = match auth {
+        AuthMethod::None => &["password", "token"],
+        AuthMethod::Basic { .. } => &["token"],
+        AuthMethod::Bearer { .. } => &["password"],
+    };
+    drop.iter().map(|f| format!("{prefix}{f}")).collect()
+}
+
+const SECRET_FIELDS: [&str; 4] = ["password", "token", "admin_password", "admin_token"];
+
+/// Current secrets of a profile, to restore them if committing the profile fails.
+fn snapshot_secrets(mgr: &CredentialManager, id: &str, dir: &std::path::Path) -> Result<Vec<(&'static str, Option<String>)>, String> {
+    SECRET_FIELDS.iter().map(|f| Ok((*f, mgr.load_secret(id, f, dir)?))).collect()
+}
+
+fn restore_secrets(mgr: &CredentialManager, id: &str, snapshot: &[(&'static str, Option<String>)], dir: &std::path::Path) {
+    for (field, value) in snapshot {
+        let _ = match value {
+            Some(v) => mgr.store_secret(id, field, v.clone(), dir),
+            None => mgr.delete_secret(id, field, dir),
+        };
+    }
 }
 
 fn resolve_auth(mgr: &CredentialManager, id: &str, prefix: &str, stored: &StoredAuthMethod, dir: &std::path::Path) -> Result<AuthMethod, String> {
@@ -257,18 +301,21 @@ pub fn has_stored_secret(stored: &StoredProfile) -> bool {
     matches!(cred_manager().load_secret(&stored.id, field, &dir), Ok(Some(s)) if !s.is_empty())
 }
 
-/// Insert or update (matched by id). Returns the refreshed list.
+/// Insert or update (matched by id). Returns the refreshed list. New secrets are staged first, the profile is committed,
+/// and only then are obsolete secrets removed; if the commit fails the previous secrets are restored.
 pub fn save(input: ProfileInput) -> Result<Vec<StoredProfile>, String> {
     let dir = config_dir();
     let mgr = cred_manager();
-    store_auth_secrets(mgr, &input.id, "", &input.auth_method, &dir)?;
-    if let Some(admin) = &input.admin_auth_method {
-        store_auth_secrets(mgr, &input.id, "admin_", admin, &dir)?;
-    } else {
-        mgr.delete_secret(&input.id, "admin_password", &dir)?;
-        mgr.delete_secret(&input.id, "admin_token", &dir)?;
+    let mut profiles = load_stored()?;
+    let snapshot = snapshot_secrets(mgr, &input.id, &dir)?;
+    let staged = put_auth_secrets(mgr, &input.id, "", &input.auth_method, &dir).and_then(|_| match &input.admin_auth_method {
+        Some(admin) => put_auth_secrets(mgr, &input.id, "admin_", admin, &dir),
+        None => Ok(()),
+    });
+    if let Err(e) = staged {
+        restore_secrets(mgr, &input.id, &snapshot, &dir);
+        return Err(e);
     }
-    let mut profiles = load_stored();
     // Preserve the existing default flag; the form doesn't carry it.
     let is_default = profiles.iter().find(|p| p.id == input.id).map(|p| p.is_default).unwrap_or(false);
     let stored = StoredProfile {
@@ -287,29 +334,47 @@ pub fn save(input: ProfileInput) -> Result<Vec<StoredProfile>, String> {
     } else {
         profiles.push(stored);
     }
-    save_stored(&profiles)?;
+    if let Err(e) = save_stored(&profiles) {
+        restore_secrets(mgr, &input.id, &snapshot, &dir);
+        return Err(e);
+    }
+    let mut stale = stale_secret_fields("", &input.auth_method);
+    match &input.admin_auth_method {
+        Some(admin) => stale.extend(stale_secret_fields("admin_", admin)),
+        None => stale.extend(["admin_password".to_string(), "admin_token".to_string()]),
+    }
+    for field in stale {
+        mgr.delete_secret(&input.id, &field, &dir)?;
+    }
     Ok(profiles)
 }
 
+/// Remove the profile from the store first, then its secrets: a failed write keeps both the profile and its credentials.
 pub fn delete(id: &str) -> Result<Vec<StoredProfile>, String> {
     let dir = config_dir();
     let mgr = cred_manager();
-    mgr.delete_all_secrets(id, &dir)?;
-    let mut profiles = load_stored();
+    let mut profiles = load_stored()?;
     profiles.retain(|p| p.id != id);
     save_stored(&profiles)?;
+    mgr.delete_all_secrets(id, &dir)?;
     Ok(profiles)
 }
 
 /// Toggle: clicking the current default clears it; otherwise it becomes the sole default.
 pub fn set_default(id: &str) -> Result<Vec<StoredProfile>, String> {
-    let mut profiles = load_stored();
+    let mut profiles = load_stored()?;
+    toggle_default_flag(&mut profiles, id)?;
+    save_stored(&profiles)?;
+    Ok(profiles)
+}
+
+/// The in-memory part of `set_default`: clicking the current default clears it, otherwise `id` becomes the only default.
+fn toggle_default_flag(profiles: &mut [StoredProfile], id: &str) -> Result<(), String> {
     let already = profiles.iter().find(|p| p.id == id).map(|p| p.is_default).ok_or_else(|| format!("Server profile '{id}' not found"))?;
     for p in profiles.iter_mut() {
         p.is_default = !already && p.id == id;
     }
-    save_stored(&profiles)?;
-    Ok(profiles)
+    Ok(())
 }
 
 /// The profile the app starts on: the default one, else the first (same rule as the Tauri store).
@@ -406,12 +471,89 @@ mod tests {
     #[test]
     fn default_toggle_semantics() {
         let mut ps: Vec<StoredProfile> = serde_json::from_str::<ProfileStore>(TAURI_FIXTURE).unwrap().profiles;
-        // clicking the current default clears it; first-of-list is then the fallback
-        let (id, already) = (ps[0].id.clone(), ps[0].is_default);
-        for p in ps.iter_mut() {
-            p.is_default = !already && p.id == id;
-        }
+        let id = ps[0].id.clone();
+        // Setting a default clears the flag on every other profile...
+        let other = ps[1].id.clone();
+        toggle_default_flag(&mut ps, &other).unwrap();
+        assert!(ps.iter().filter(|p| p.is_default).count() == 1 && ps[1].is_default);
+        // ...clicking the current default clears it; the first of the list is then the fallback.
+        toggle_default_flag(&mut ps, &other).unwrap();
         assert!(ps.iter().all(|p| !p.is_default));
-        assert_eq!(initial_active(&ps).unwrap().name, "Local EHRBase");
+        assert_eq!(initial_active(&ps).unwrap().id, id);
+        assert!(toggle_default_flag(&mut ps, "missing").is_err());
+    }
+
+    #[test]
+    fn stale_fields_follow_the_auth_method() {
+        assert_eq!(stale_secret_fields("", &AuthMethod::None), vec!["password", "token"]);
+        assert_eq!(stale_secret_fields("", &AuthMethod::Basic { username: "u".into(), password: String::new() }), vec!["token"]);
+        assert_eq!(stale_secret_fields("admin_", &AuthMethod::Bearer { token: String::new() }), vec!["admin_password"]);
+    }
+
+    #[test]
+    fn atomic_write_replaces_and_cleans_up() {
+        let dir = std::env::temp_dir().join(format!("oeh-atomic-{}", std::process::id()));
+        let file = dir.join("x.json");
+        write_atomic(&file, "one", true).unwrap();
+        write_atomic(&file, "two", true).unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), "two");
+        assert!(!dir.join(".x.json.tmp").exists());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn unreadable_store_is_an_error_not_an_empty_list() {
+        let dir = std::env::temp_dir().join(format!("oeh-load-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let bad = dir.join("profiles.json");
+        fs::write(&bad, "{ not json").unwrap();
+        assert!(serde_json::from_str::<ProfileStore>(&fs::read_to_string(&bad).unwrap()).is_err());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// End to end against a throw-away config dir (the only test that touches the process environment).
+    #[test]
+    fn save_switch_auth_and_delete_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("oeh-roundtrip-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        // Never write test secrets into a developer's real OS keychain.
+        if matches!(cred_manager().backend(), StorageBackend::OsKeychain) {
+            fs::remove_dir_all(&dir).ok();
+            return;
+        }
+        let input = |auth: AuthMethod| ProfileInput { id: "p1".into(), name: "P".into(), base_url: "http://h".into(), server_type: ServerType::Ehrbase, auth_method: auth, admin_auth_method: None, terminology_url: None, api_path_prefix: Some("/".into()) };
+
+        let list = save(input(AuthMethod::Basic { username: "u".into(), password: "pw".into() })).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].api_path_prefix.as_deref(), Some(""), "an explicit root survives as \"\"");
+        assert!(matches!(resolve(&list[0]).unwrap().auth_method, AuthMethod::Basic { ref password, .. } if password == "pw"));
+
+        // Empty password keeps the stored one; switching to bearer retires the password only after the commit.
+        let list = save(input(AuthMethod::Basic { username: "u2".into(), password: String::new() })).unwrap();
+        assert!(matches!(resolve(&list[0]).unwrap().auth_method, AuthMethod::Basic { ref password, .. } if password == "pw"));
+        let list = save(input(AuthMethod::Bearer { token: "  Bearer tok123 ".into() })).unwrap();
+        assert!(matches!(resolve(&list[0]).unwrap().auth_method, AuthMethod::Bearer { ref token } if token == "tok123"));
+        // Whitespace-only token = keep.
+        let list = save(input(AuthMethod::Bearer { token: "   ".into() })).unwrap();
+        assert!(matches!(resolve(&list[0]).unwrap().auth_method, AuthMethod::Bearer { ref token } if token == "tok123"));
+
+        // A store that cannot be read blocks every mutation and is left exactly as it was.
+        let path = dir.join("openehr-explorer").join("profiles.json");
+        fs::write(&path, "{ broken").unwrap();
+        assert!(save(input(AuthMethod::None)).is_err());
+        assert!(delete("p1").is_err());
+        assert!(set_default("p1").is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ broken");
+        assert!(load_stored().is_err());
+        fs::remove_file(&path).unwrap();
+        assert!(load_stored().unwrap().is_empty(), "a missing file is just an empty store");
+
+        // Delete removes profile and secrets.
+        let list = save(input(AuthMethod::Bearer { token: "t".into() })).unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(delete("p1").unwrap().is_empty());
+        assert!(matches!(cred_manager().load_secret("p1", "token", &config_dir()), Ok(None)));
+        fs::remove_dir_all(&dir).ok();
     }
 }

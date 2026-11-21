@@ -56,8 +56,9 @@ pub fn path() -> PathBuf {
     crate::profiles::config_dir().join("settings.json")
 }
 
-/// Load, falling back to defaults when the file is missing or unreadable (same as the Tauri app). Unlike the Tauri app
-/// this does not write the defaults back on first launch; nothing is written until the user saves.
+/// Load, falling back to defaults when the file is missing (same as the Tauri app). Unlike the Tauri app this does not write
+/// the defaults back on first launch; nothing is written until the user saves. A file that exists but cannot be read or
+/// parsed also yields defaults in memory, but `save` will not silently overwrite it (see `save`).
 pub fn load() -> GlobalSettings {
     match fs::read_to_string(path()) {
         Ok(data) => serde_json::from_str::<GlobalSettings>(&data).unwrap_or_default(),
@@ -65,13 +66,17 @@ pub fn load() -> GlobalSettings {
     }
 }
 
+/// Atomic write. If the existing file cannot be parsed it is first backed up to `settings.json.invalid`, so saving the
+/// defaults over a corrupted (or newer-format) file never destroys the only copy of its contents.
 pub fn save(settings: &GlobalSettings) -> Result<(), String> {
     let path = path();
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    if let Ok(existing) = fs::read_to_string(&path) {
+        if serde_json::from_str::<GlobalSettings>(&existing).is_err() {
+            fs::write(path.with_extension("json.invalid"), existing).map_err(|e| format!("Could not back up the unreadable settings file: {e}"))?;
+        }
     }
     let data = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    fs::write(&path, data).map_err(|e| e.to_string())
+    crate::profiles::write_atomic(&path, &data, false)
 }
 
 /// The files the app keeps in its config directory, for the "Settings Files" panel (name, what it holds, present?).

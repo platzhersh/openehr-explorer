@@ -149,9 +149,23 @@ jobs:
         run: |
           set -euo pipefail
           cd work
-          vt_get() { # arg: sha256 -> JSON on stdout, non-zero if unknown
-            local sha="$1"
-            curl -fsS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/${sha}"
+          # One pacing point for every VirusTotal call (public API quota is 4 requests/minute): bounded backoff on 429.
+          vt_curl() { # args: curl args -> body in $VT_BODY, HTTP status on stdout
+            local code attempt
+            for attempt in 1 2 3 4 5 6; do
+              code=$(curl -s -o "$VT_BODY" -w '%{http_code}' -H "x-apikey: $VT_API_KEY" "$@" || echo 000)
+              [ "$code" = "429" ] || break
+              echo "VirusTotal quota reached, waiting 60 s (attempt $attempt)" >&2
+              sleep 60
+            done
+            echo "$code"
+          }
+          VT_BODY=$(mktemp)
+          vt_get() { # arg: sha256 -> JSON on stdout when VirusTotal knows the file; non-zero otherwise (status on stderr)
+            local code
+            code=$(vt_curl "https://www.virustotal.com/api/v3/files/$1")
+            [ "$code" = "200" ] || { echo "$code" >&2; return 1; }
+            cat "$VT_BODY"
           }
           summary() { # arg: JSON -> "malicious suspicious undetected harmless engines flagged"
             jq -r '.data.attributes as $a | ($a.last_analysis_stats // {}) as $s
@@ -163,12 +177,18 @@ jobs:
             powershell -NoProfile -Command "(Get-AuthenticodeSignature -LiteralPath '$f').Status" | tr -d '\r'
           }
           row() { # args: label file
-            local label="$1" file="$2" sha size sig json out="" i
+            local label="$1" file="$2" sha size sig json out="" i code up
             sha=$(sha256sum "$file" | cut -d' ' -f1)
             size=$(stat -c %s "$file")
             sig=$(sigstatus "$file")
-            if ! json=$(vt_get "$sha" 2>/dev/null); then
-              curl -fsS -H "x-apikey: $VT_API_KEY" -F "file=@${file}" https://www.virustotal.com/api/v3/files > /dev/null
+            # Upload only when VirusTotal explicitly does not know the file (404): any other failure must not trigger an upload.
+            code=$(vt_curl "https://www.virustotal.com/api/v3/files/${sha}")
+            if [ "$code" = "404" ]; then
+              up=$(vt_curl -F "file=@${file}" https://www.virustotal.com/api/v3/files)
+              [ "$up" = "200" ] || { echo "upload of $label failed (HTTP $up)" >&2; exit 1; }
+            elif [ "$code" != "200" ]; then
+              echo "lookup of $label failed (HTTP $code)" >&2
+              exit 1
             fi
             for i in $(seq 1 40); do
               json=$(vt_get "$sha" 2>/dev/null || true)

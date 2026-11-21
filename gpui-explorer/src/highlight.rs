@@ -277,7 +277,7 @@ fn split_markup(body: &str) -> Vec<(bool, String)> {
     let mut parts: Vec<(bool, String)> = Vec::new();
     let mut cur = String::new();
     let mut in_tag = false;
-    let mut flush_text = |cur: &mut String, parts: &mut Vec<(bool, String)>| {
+    let flush_text = |cur: &mut String, parts: &mut Vec<(bool, String)>| {
         if !cur.trim().is_empty() {
             parts.push((false, cur.trim().to_string()));
         }
@@ -309,6 +309,9 @@ fn inline_element(parts: &[(bool, String)], i: usize) -> Option<(String, usize)>
     }
 }
 
+/// Deepest element nesting `format_markup` will indent.
+const MAX_FORMAT_DEPTH: usize = 64;
+
 fn is_open_tag(t: &str) -> bool {
     !t.starts_with("</") && !t.starts_with("<?") && !t.starts_with("<!") && !t.ends_with("/>")
 }
@@ -319,6 +322,7 @@ pub fn format_markup(body: &str) -> Vec<String> {
         return body.lines().map(str::to_string).collect();
     }
     let parts = split_markup(body);
+    let raw = || body.lines().map(str::to_string).collect::<Vec<_>>();
     let mut lines: Vec<String> = Vec::new();
     let mut depth = 0usize;
     let mut i = 0;
@@ -329,6 +333,10 @@ pub fn format_markup(body: &str) -> Vec<String> {
         }
         let pad = "  ".repeat(depth);
         if *is_tag && is_open_tag(text) {
+            // Pathological nesting would make the indentation quadratic: show the body as received instead.
+            if depth >= MAX_FORMAT_DEPTH {
+                return raw();
+            }
             if let Some((line, used)) = inline_element(&parts, i) {
                 lines.push(format!("{pad}{line}"));
                 i += used;
@@ -468,6 +476,12 @@ mod tests {
     fn minified_xml_is_reindented_with_inline_text() {
         let f = format_markup("<?xml version=\"1.0\"?><status><version>2.7</version><list><item/><item>x</item></list><empty></empty></status>");
         assert_eq!(f, vec!["<?xml version=\"1.0\"?>", "<status>", "  <version>2.7</version>", "  <list>", "    <item/>", "    <item>x</item>", "  </list>", "  <empty></empty>", "</status>"]);
+    }
+
+    #[test]
+    fn absurdly_deep_markup_is_left_alone() {
+        let body = format!("{}{}", "<a>".repeat(500), "</a>".repeat(500));
+        assert_eq!(format_markup(&body), vec![body.clone()]);
     }
 
     #[test]

@@ -35,6 +35,13 @@ pub struct LogEntry {
     pub error: Option<String>,
 }
 
+impl LogEntry {
+    /// A copy without the (possibly megabytes large) bodies, for rendering metadata.
+    pub fn without_bodies(&self) -> LogEntry {
+        LogEntry { request_body: None, response_body: None, ..self.clone() }
+    }
+}
+
 pub fn redact_headers(headers: impl IntoIterator<Item = (String, String)>) -> Vec<(String, String)> {
     let mut v: Vec<(String, String)> = headers
         .into_iter()
