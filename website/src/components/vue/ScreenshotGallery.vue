@@ -4,7 +4,7 @@
 // prev/next navigation. Ported from the vanilla-JS `LightboxGallery`
 // IIFE that used to live at the bottom of index.html, onto Vue's
 // reactivity instead of manual DOM classList/attribute juggling.
-import { ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
 interface Screenshot {
   src: string;
@@ -14,12 +14,63 @@ interface Screenshot {
   height: number;
 }
 
-defineProps<{ screenshots: Screenshot[] }>();
+const props = defineProps<{ screenshots: Screenshot[] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const closeBtn = ref<HTMLButtonElement | null>(null);
 const currentIndex = ref(0);
 let lastFocused: HTMLElement | null = null;
+
+// --- Carousel -------------------------------------------------------
+// A native scroll-snap track: touch swipe, trackpad and keyboard scrolling
+// come for free. We only add arrows, dots, and track the active slide.
+const track = ref<HTMLElement | null>(null);
+const slides = ref<HTMLElement[]>([]);
+const activeSlide = ref(0);
+const canPrev = ref(false);
+const canNext = ref(true);
+
+function updateScrollState() {
+  const el = track.value;
+  if (!el) return;
+  const max = el.scrollWidth - el.clientWidth;
+  canPrev.value = el.scrollLeft > 4;
+  canNext.value = el.scrollLeft < max - 4;
+  // Active slide = the one whose left edge is closest to the track's left edge.
+  let best = 0;
+  let bestDist = Infinity;
+  slides.value.forEach((slide, i) => {
+    const dist = Math.abs(slide.offsetLeft - el.offsetLeft - el.scrollLeft);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  });
+  activeSlide.value = canNext.value ? best : props.screenshots.length - 1;
+}
+
+function scrollToSlide(index: number) {
+  const el = track.value;
+  const slide = slides.value[index];
+  if (!el || !slide) return;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollTo({ left: slide.offsetLeft - el.offsetLeft, behavior: reduced ? "auto" : "smooth" });
+}
+
+function step(dir: 1 | -1) {
+  const next = Math.min(Math.max(activeSlide.value + dir, 0), props.screenshots.length - 1);
+  scrollToSlide(next);
+}
+
+let resizeObserver: ResizeObserver | null = null;
+onMounted(() => {
+  updateScrollState();
+  if (track.value && "ResizeObserver" in window) {
+    resizeObserver = new ResizeObserver(updateScrollState);
+    resizeObserver.observe(track.value);
+  }
+});
+onBeforeUnmount(() => resizeObserver?.disconnect());
 
 function open(index: number, screenshots: Screenshot[]) {
   lastFocused = document.activeElement as HTMLElement | null;
@@ -60,13 +111,62 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
 <template>
   <section class="gallery">
     <h2 class="section-heading">See it in action</h2>
-    <div class="gallery-grid">
-      <figure v-for="(shot, i) in screenshots" :key="shot.src" class="gallery-card">
-        <button type="button" class="lightbox-trigger" aria-haspopup="dialog" @click="open(i, screenshots)">
-          <img :src="shot.src" :alt="shot.alt" loading="lazy" :width="shot.width" :height="shot.height" />
-        </button>
-        <figcaption>{{ shot.caption }}</figcaption>
-      </figure>
+    <section class="carousel" aria-roledescription="carousel" aria-label="Screenshots">
+      <button
+        type="button"
+        class="carousel-nav carousel-prev"
+        aria-label="Previous screenshots"
+        :disabled="!canPrev"
+        @click="step(-1)"
+      >
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
+      <div class="carousel-track" ref="track" @scroll.passive="updateScrollState">
+        <figure
+          v-for="(shot, i) in screenshots"
+          :key="shot.src"
+          class="gallery-card carousel-slide"
+          ref="slides"
+          aria-roledescription="slide"
+          :aria-label="`${i + 1} of ${screenshots.length}`"
+        >
+          <button
+            type="button"
+            class="lightbox-trigger"
+            :class="{ crop: shot.width / shot.height < 2 }"
+            aria-haspopup="dialog"
+            @click="open(i, screenshots)"
+          >
+            <img :src="shot.src" :alt="shot.alt" loading="lazy" :width="shot.width" :height="shot.height" />
+          </button>
+          <figcaption>{{ shot.caption }}</figcaption>
+        </figure>
+      </div>
+      <button
+        type="button"
+        class="carousel-nav carousel-next"
+        aria-label="Next screenshots"
+        :disabled="!canNext"
+        @click="step(1)"
+      >
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
+    </section>
+    <div class="carousel-dots">
+      <button
+        v-for="(shot, i) in screenshots"
+        :key="shot.src"
+        type="button"
+        class="carousel-dot"
+        :class="{ active: i === activeSlide }"
+        :aria-label="`Go to screenshot ${i + 1}`"
+        :aria-current="i === activeSlide ? 'true' : undefined"
+        @click="scrollToSlide(i)"
+      ></button>
     </div>
   </section>
 
@@ -114,12 +214,125 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
   margin-bottom: 48px;
   color: var(--text);
 }
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
+.carousel {
+  position: relative;
   max-width: 1200px;
   margin: 0 auto;
+}
+.carousel-track {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding: 4px 0 8px;
+}
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+.carousel-slide {
+  flex: 0 0 calc((100% - 24px) / 2.15);
+  scroll-snap-align: start;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.carousel-slide .lightbox-trigger {
+  position: relative;
+  flex: none;
+  aspect-ratio: 2 / 1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.carousel-slide img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-bottom: none;
+}
+/* Tall screenshots fill the frame and are cropped from the bottom; the
+   lightbox always shows the full image. */
+.carousel-slide .lightbox-trigger.crop img {
+  object-fit: cover;
+  object-position: top left;
+}
+.carousel-slide figcaption {
+  min-height: 3.6em;
+}
+.carousel-nav {
+  position: absolute;
+  top: calc(50% - 40px);
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    opacity 0.2s;
+}
+.carousel-nav:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.carousel-nav:focus-visible,
+.carousel-dot:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.carousel-nav:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+.carousel-prev {
+  left: -22px;
+}
+.carousel-next {
+  right: -22px;
+}
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 20px;
+}
+.carousel-dot {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.carousel-dot::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.5;
+  transition:
+    background 0.2s,
+    opacity 0.2s,
+    transform 0.2s;
+}
+.carousel-dot.active::after {
+  background: var(--primary);
+  opacity: 1;
+  transform: scale(1.25);
 }
 .gallery-card {
   border: 1px solid var(--border);
@@ -243,6 +456,18 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
 }
 .lightbox-next {
   right: 20px;
+}
+
+@media (max-width: 900px) {
+  .carousel-slide {
+    flex-basis: 85%;
+  }
+  .carousel-prev {
+    left: 6px;
+  }
+  .carousel-next {
+    right: 6px;
+  }
 }
 
 @media (max-width: 640px) {
