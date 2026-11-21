@@ -35,26 +35,31 @@ const features = [
   {
     icon: "🖥️",
     title: "Native Desktop App",
+    href: "installation",
     body: "Cross-platform (macOS, Windows, Linux). No Docker, no backend, no runtime. Installs in seconds.",
   },
   {
     icon: "🔍",
     title: "Template-Aware Viewer",
+    href: "composition-viewer",
     body: 'Compositions render with human-readable archetype labels — at0006 becomes "Any Event", not noise.',
   },
   {
     icon: "⚡",
     title: "AQL Query Runner",
+    href: "aql-runner",
     body: "Write and execute AQL against your CDR. Results in a sortable table. Save queries, export CSV.",
   },
   {
     icon: "🗂️",
     title: "FLAT Path Panel",
+    href: "flat-path-panel",
     body: "One-click copy of any FLAT path from the Web Template tree. Built for SDK and integration developers.",
   },
   {
     icon: "🔌",
     title: "Multi-Server Profiles",
+    href: "server-profiles",
     body: "Save named connections to EHRBase, Better Platform, or any openEHR REST server. Switch instantly.",
   },
   {
@@ -197,7 +202,7 @@ const screenshots = [
     <section class="features" id="features">
       <h2 class="section-heading">Features</h2>
       <div class="features-grid">
-        {features.map((f) => <FeatureCard icon={f.icon} title={f.title}>{f.body}</FeatureCard>)}
+        {features.map((f) => <FeatureCard icon={f.icon} title={f.title} href={f.href && `${BASE}docs.html#${f.href}`}>{f.body}</FeatureCard>)}
       </div>
     </section>
 
