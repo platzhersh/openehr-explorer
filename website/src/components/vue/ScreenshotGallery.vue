@@ -111,7 +111,7 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
 <template>
   <section class="gallery">
     <h2 class="section-heading">See it in action</h2>
-    <div class="carousel" role="region" aria-roledescription="carousel" aria-label="Screenshots">
+    <section class="carousel" aria-roledescription="carousel" aria-label="Screenshots">
       <button
         type="button"
         class="carousel-nav carousel-prev"
@@ -129,7 +129,6 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
           :key="shot.src"
           class="gallery-card carousel-slide"
           ref="slides"
-          role="group"
           aria-roledescription="slide"
           :aria-label="`${i + 1} of ${screenshots.length}`"
         >
@@ -156,7 +155,7 @@ function handleKeydown(e: KeyboardEvent, screenshots: Screenshot[]) {
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </button>
-    </div>
+    </section>
     <div class="carousel-dots">
       <button
         v-for="(shot, i) in screenshots"
