@@ -5,13 +5,15 @@
 interface Props {
   icon: string;
   title: string;
+  /** Optional docs link; the title becomes a link and the whole card clickable. */
+  href?: string;
 }
-const { icon, title } = Astro.props;
+const { icon, title, href } = Astro.props;
 ---
 
-<div class="feature-card">
+<div class:list={["feature-card", { linked: href }]}>
   <div class="feature-icon" aria-hidden="true">{icon}</div>
-  <h3>{title}</h3>
+  <h3>{href ? <a href={href}>{title}</a> : title}</h3>
   <p><slot /></p>
 </div>
 
@@ -25,6 +27,27 @@ const { icon, title } = Astro.props;
   }
   .feature-card:hover {
     border-color: var(--primary-dim);
+  }
+  .feature-card.linked {
+    position: relative;
+  }
+  .feature-card h3 a {
+    color: inherit;
+    text-decoration: none;
+  }
+  /* Stretch the title link over the whole card so it is one click target. */
+  .feature-card h3 a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+  }
+  .feature-card h3 a:hover {
+    color: var(--primary);
+  }
+  .feature-card h3 a:focus-visible::after {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
   .feature-icon {
     font-size: 1.8rem;
