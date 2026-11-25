@@ -31,7 +31,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <h2>Data stored on your machine</h2>
       <ul>
         <li>
-          <strong>Server profiles</strong> (name, URL, server type, authentication method) are stored in a local configuration file, for example
+          <strong>Server profiles</strong> (name, URL, server type, authentication method) are stored in a local configuration file, for example{" "}
           <code>~/.config/openehr-explorer/profiles.json</code> on Linux and macOS or <code>%APPDATA%\openehr-explorer\profiles.json</code> on Windows.
         </li>
         <li>
@@ -53,7 +53,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
         </li>
         <li>
           <strong>Update checks.</strong> The app checks <a href="https://github.com/platzhersh/openehr-explorer/releases">GitHub Releases</a> for a newer
-          version. GitHub receives the request as it would from any download, including your IP address, under
+          version. GitHub receives the request as it would from any download, including your IP address, under{" "}
           <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer"
             >GitHub's privacy statement</a
           >.
@@ -86,7 +86,7 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <ul>
         <li>
           <strong>Usage data</strong>: an <code>app_launched</code> event with the app version and your platform string; which features you use (for
-          example that an AQL query was run or a composition was viewed); and the CDR platform type (<code>ehrbase</code>,
+          example that an AQL query was run or a composition was viewed); and the CDR platform type (<code>ehrbase</code>,{" "}
           <code>better_platform</code>, <code>ferro_ehr</code> or <code>generic</code>). These events carry the same system information as above.
         </li>
         <li>
@@ -98,9 +98,9 @@ import SimpleFooter from "../components/SimpleFooter.astro";
       <h3>Never sent</h3>
       <p>
         Analytics events never contain server URLs, credentials, patient data, EHR IDs, composition content, query text, template content or anything
-        you type. The design is documented in
+        you type. The design is documented in{" "}
         <a href="https://github.com/platzhersh/openehr-explorer/blob/main/docs/adr/ADR-0018-aptabase-opt-in-usage-analytics.md">ADR-0018</a> and the
-        source code is open for inspection. How Aptabase handles data it receives is described in
+        source code is open for inspection. How Aptabase handles data it receives is described in{" "}
         <a href="https://aptabase.com/legal/privacy" target="_blank" rel="noopener noreferrer">its privacy policy</a>.
       </p>
     </section>
