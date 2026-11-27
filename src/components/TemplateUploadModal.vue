@@ -11,8 +11,18 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const { dragOver, uploading, uploadStatus, uploadError, resetState, handleDrop, handleFileSelect } =
-  useTemplateUpload();
+const {
+  dragOver,
+  uploading,
+  uploadStatus,
+  uploadError,
+  pendingOverwrite,
+  confirmOverwrite,
+  cancelOverwrite,
+  resetState,
+  handleDrop,
+  handleFileSelect,
+} = useTemplateUpload();
 
 // Reset transient state whenever the modal is (re)opened, so a previous
 // upload's success/error message doesn't linger into the next visit.
@@ -65,6 +75,9 @@ function handleKeydown(event: KeyboardEvent) {
           :uploading="uploading"
           :upload-status="uploadStatus"
           :upload-error="uploadError"
+          :can-overwrite="pendingOverwrite !== null"
+          @overwrite="confirmOverwrite"
+          @cancel-overwrite="cancelOverwrite"
           @dragover="dragOver = true"
           @dragleave="dragOver = false"
           @drop="handleDrop"

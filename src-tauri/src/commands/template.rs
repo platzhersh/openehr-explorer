@@ -215,23 +215,65 @@ pub async fn get_template_opt(
     Ok(resp.body)
 }
 
+/// Extract the template ID (`<template_id><value>…</value></template_id>`) from OPT XML.
+fn extract_template_id(opt_xml: &str) -> Option<String> {
+    let mut reader = Reader::from_str(opt_xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut in_template_id = false;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"template_id" => in_template_id = true,
+            Ok(Event::Text(e)) if in_template_id => {
+                let text = e.xml10_content().ok()?;
+                let id = unescape(&text).ok()?.trim().to_string();
+                return if id.is_empty() { None } else { Some(id) };
+            }
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
+        buf.clear();
+    }
+}
+
+/// Upload an OPT. With `overwrite = false` a duplicate template ID is rejected by
+/// the server (HTTP 409); with `overwrite = true` the existing template is
+/// replaced via PUT.
 #[tauri::command]
 pub async fn upload_template(
     app: tauri::AppHandle,
     server_id: String,
     opt_xml: String,
+    overwrite: Option<bool>,
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let api_root = profile.api_root();
     let base = api_root.as_str();
+    let overwrite = overwrite.unwrap_or(false);
 
-    let url = format!("{}/definition/template/adl1.4", base);
+    let (method, url) = if overwrite {
+        let template_id = extract_template_id(&opt_xml)
+            .ok_or_else(|| "Could not find a template ID in the OPT file".to_string())?;
+        (
+            reqwest::Method::PUT,
+            format!(
+                "{}/definition/template/adl1.4/{}",
+                base,
+                urlencoding::encode(&template_id)
+            ),
+        )
+    } else {
+        (
+            reqwest::Method::POST,
+            format!("{}/definition/template/adl1.4", base),
+        )
+    };
 
     let resp = send_instrumented(
         &app,
         &client,
-        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+        make_request(&client, method, &url, &profile.auth_method)
             .header("Content-Type", "application/xml")
             .body(opt_xml),
     )
@@ -239,7 +281,8 @@ pub async fn upload_template(
 
     if resp.is_success || resp.status == 201 || resp.status == 204 {
         Ok(format!(
-            "Template uploaded successfully (HTTP {})",
+            "Template {} successfully (HTTP {})",
+            if overwrite { "overwritten" } else { "uploaded" },
             resp.status
         ))
     } else {
@@ -469,5 +512,21 @@ mod tests {
         assert_eq!(bindings[3].terminology, "ICD-10");
         assert_eq!(bindings[3].code, "A41.9");
         assert_eq!(bindings[3].node_id, "at0003");
+    }
+}
+
+#[cfg(test)]
+mod extract_template_id_tests {
+    use super::extract_template_id;
+
+    #[test]
+    fn extracts_template_id() {
+        let xml = r#"<template xmlns="http://schemas.openehr.org/v1"><language><code_string>en</code_string></language><template_id><value>vital_signs.v1</value></template_id></template>"#;
+        assert_eq!(extract_template_id(xml).as_deref(), Some("vital_signs.v1"));
+    }
+
+    #[test]
+    fn returns_none_without_template_id() {
+        assert_eq!(extract_template_id("<template></template>"), None);
     }
 }

@@ -96,8 +96,8 @@ export const useTemplateStore = defineStore("template", () => {
     }
   }
 
-  async function uploadTemplate(serverId: string, optXml: string) {
-    return invoke<string>("upload_template", { serverId, optXml });
+  async function uploadTemplate(serverId: string, optXml: string, overwrite = false) {
+    return invoke<string>("upload_template", { serverId, optXml, overwrite });
   }
 
   return {

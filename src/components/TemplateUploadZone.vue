@@ -8,6 +8,8 @@ defineProps<{
   uploading: boolean;
   uploadStatus: string | null;
   uploadError: string | null;
+  /** True when the server rejected the upload as a duplicate and the user may overwrite. */
+  canOverwrite?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -15,6 +17,8 @@ const emit = defineEmits<{
   dragleave: [];
   drop: [event: DragEvent];
   chooseFile: [];
+  overwrite: [];
+  cancelOverwrite: [];
 }>();
 </script>
 
@@ -34,6 +38,19 @@ const emit = defineEmits<{
     </div>
     <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
     <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
+    <div v-if="canOverwrite" class="overwrite-actions">
+      <button type="button" class="btn btn-sm" :disabled="uploading" @click="emit('overwrite')">
+        Overwrite existing template
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-secondary"
+        :disabled="uploading"
+        @click="emit('cancelOverwrite')"
+      >
+        Cancel
+      </button>
+    </div>
   </div>
 </template>
 
@@ -59,6 +76,12 @@ const emit = defineEmits<{
 }
 .upload-zone p {
   margin: 0;
+}
+
+.overwrite-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .upload-msg {

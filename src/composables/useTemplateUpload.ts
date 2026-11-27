@@ -22,30 +22,56 @@ export function useTemplateUpload() {
   const uploadStatus = ref<string | null>(null);
   const uploadError = ref<string | null>(null);
 
+  // OPT text held back after the server rejected it as a duplicate (HTTP 409),
+  // awaiting the user's explicit decision to overwrite.
+  const pendingOverwrite = ref<string | null>(null);
+
   function resetState() {
     dragOver.value = false;
     uploading.value = false;
     uploadStatus.value = null;
     uploadError.value = null;
+    pendingOverwrite.value = null;
   }
 
-  async function performUpload(text: string) {
+  async function performUpload(text: string, overwrite = false) {
     if (!serverStore.activeServerId) return;
 
     uploading.value = true;
     uploadStatus.value = null;
     uploadError.value = null;
+    pendingOverwrite.value = null;
 
     try {
-      const result = await templateStore.uploadTemplate(serverStore.activeServerId, text);
+      const result = await templateStore.uploadTemplate(
+        serverStore.activeServerId,
+        text,
+        overwrite,
+      );
       uploadStatus.value = result;
-      void analytics.track("template_uploaded");
+      void analytics.track(overwrite ? "template_overwritten" : "template_uploaded");
       await templateStore.fetchTemplates(serverStore.activeServerId);
     } catch (e) {
-      uploadError.value = String(e);
+      const message = String(e);
+      if (!overwrite && message.includes("HTTP 409")) {
+        pendingOverwrite.value = text;
+        uploadError.value = "A template with this ID already exists on the server.";
+      } else {
+        uploadError.value = message;
+      }
     } finally {
       uploading.value = false;
     }
+  }
+
+  async function confirmOverwrite() {
+    if (pendingOverwrite.value === null) return;
+    await performUpload(pendingOverwrite.value, true);
+  }
+
+  function cancelOverwrite() {
+    pendingOverwrite.value = null;
+    uploadError.value = null;
   }
 
   async function handleDrop(event: DragEvent) {
@@ -83,6 +109,9 @@ export function useTemplateUpload() {
     uploading,
     uploadStatus,
     uploadError,
+    pendingOverwrite,
+    confirmOverwrite,
+    cancelOverwrite,
     resetState,
     handleDrop,
     handleFileSelect,
