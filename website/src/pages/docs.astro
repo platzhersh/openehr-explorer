@@ -144,12 +144,12 @@ const navGroups = [
         <p><strong>Debian/Ubuntu (.deb, manual download):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.10.3_amd64.deb" }]}
+          segments={[{ comment: "# Download the .deb from GitHub Releases, then:" }, { cmd: "sudo apt install ./openEHR.Explorer_0.11.0_amd64.deb" }]}
         />
         <p><strong>AppImage (any distro):</strong></p>
         <CodeBlock
           client:load
-          segments={[{ cmd: "chmod +x openEHR.Explorer_0.10.3_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.10.3_amd64.AppImage" }]}
+          segments={[{ cmd: "chmod +x openEHR.Explorer_0.11.0_amd64.AppImage" }, { cmd: "./openEHR.Explorer_0.11.0_amd64.AppImage" }]}
         />
         <p>
           An AUR package (<code>open-ehr-explorer-bin</code>) is prepared and will be published once <a href="https://aur.archlinux.org">AUR</a> account
@@ -586,6 +586,15 @@ const navGroups = [
 
       <section id="changelog">
         <h2><a class="heading-anchor" href="#changelog">Changelog</a></h2>
+
+        <h3 id="v0-11-0">v0.11.0 &mdash; Template Overwrite &amp; Inspector Polish</h3>
+        <ul>
+          <li><strong>Template Upload:</strong> Uploading an OPT for a template that already exists can now overwrite it, and a duplicate upload to Better Platform is treated as &ldquo;nothing changed&rdquo; instead of an error</li>
+          <li><strong>Better Platform Templates:</strong> Web templates now show RM type badges in the Template Browser</li>
+          <li><strong>Inspector:</strong> XML and HTML request bodies are now syntax-highlighted, and Clear asks for confirmation and uses a trash icon</li>
+          <li><strong>Server List:</strong> Servers are still listed when the OS keychain can&rsquo;t be read, and the startup keychain probe is gone</li>
+          <li><strong>Website:</strong> The screenshot gallery is now a carousel, landing page feature cards link to their docs sections, and the comparison page has an &ldquo;Is it free?&rdquo; FAQ entry</li>
+        </ul>
 
         <h3 id="v0-10-3">v0.10.3 &mdash; Accessible Dialogs</h3>
         <ul>

@@ -27,6 +27,35 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: "0.11.0",
+    date: "2026-11-27",
+    highlights: [
+      {
+        title: "Overwrite templates on upload",
+        description:
+          "Uploading an OPT for a template that already exists can now replace it. On Better Platform, re-uploading an identical template is no longer reported as an error.",
+        tourId: "templates",
+        routePath: "/templates",
+      },
+      {
+        title: "RM type badges for Better Platform",
+        description:
+          "Web templates from Better Platform now show RM type badges in the Template Browser, just like on other servers.",
+      },
+      {
+        title: "Better Request Inspector",
+        description:
+          "XML and HTML request bodies are now syntax-highlighted, and Clear asks for confirmation before wiping the log.",
+        tourId: "inspector",
+      },
+      {
+        title: "Server list survives keychain problems",
+        description:
+          "Your servers are still listed when the OS keychain can't be read, and the app no longer probes the keychain at startup.",
+      },
+    ],
+  },
+  {
     version: "0.10.3",
     date: "2026-11-13",
     highlights: [
