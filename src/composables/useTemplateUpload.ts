@@ -1,7 +1,7 @@
 import { computed, ref, watch } from "vue";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
-import { optTemplateId } from "../lib/optTemplateId";
+import { invoke } from "@tauri-apps/api/core";
 import { useAnalytics } from "./useAnalytics";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -26,13 +26,12 @@ export function useTemplateUpload() {
   // OPT text held back after the server rejected it as a duplicate (HTTP 409),
   // awaiting the user's explicit decision to overwrite. It is pinned to the
   // server that returned the 409 so a confirmation can never reach another one.
-  const pending = ref<{ text: string; serverId: string } | null>(null);
+  const pending = ref<{ text: string; serverId: string; templateId: string | null } | null>(null);
   const pendingOverwrite = computed(() => pending.value?.text ?? null);
 
-  // For the overwrite confirmation: which template would be replaced, and on which server.
-  const pendingTemplateId = computed(() =>
-    pending.value ? optTemplateId(pending.value.text) : null,
-  );
+  // For the overwrite confirmation: which template would be replaced (as the backend reads
+  // it from the OPT, so it is exactly the one the overwrite targets) and on which server.
+  const pendingTemplateId = computed(() => pending.value?.templateId ?? null);
   const pendingServerName = computed(
     () => serverStore.profiles.find((p) => p.id === pending.value?.serverId)?.name ?? null,
   );
@@ -79,7 +78,12 @@ export function useTemplateUpload() {
       if (!isLatest() || !serverStillActive()) return;
       const message = String(e);
       if (!overwrite && message.includes("HTTP 409")) {
-        pending.value = { text, serverId };
+        const templateId = await invoke<string | null>("parse_opt_template_id", {
+          optXml: text,
+        }).catch(() => null);
+        // The user may have moved on while the backend parsed the OPT.
+        if (!isLatest() || !serverStillActive()) return;
+        pending.value = { text, serverId, templateId };
         uploadError.value = "A template with this ID already exists on the server.";
       } else {
         uploadError.value = message;

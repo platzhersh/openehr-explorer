@@ -266,6 +266,15 @@ fn extract_template_id(opt_xml: &str) -> Option<String> {
     }
 }
 
+/// Template ID of an OPT, exactly as `upload_template` extracts it for an overwrite.
+///
+/// The overwrite confirmation shows this value, so what the user confirms is by
+/// construction the template that the PUT targets (`None` if it can't be read).
+#[tauri::command]
+pub fn parse_opt_template_id(opt_xml: String) -> Option<String> {
+    extract_template_id(&opt_xml)
+}
+
 /// Upload an OPT. With `overwrite = false` a duplicate template ID is rejected by
 /// the server (HTTP 409); with `overwrite = true` the existing template is
 /// replaced via PUT.
@@ -573,6 +582,14 @@ mod extract_template_id_tests {
         let spaced =
             "<template><template_id>\n  <value>  s.v1 \n</value>\n</template_id></template>";
         assert_eq!(extract_template_id(spaced).as_deref(), Some("s.v1"));
+    }
+
+    #[test]
+    fn ignores_template_id_lookalikes_in_comments_and_cdata() {
+        let comment = "<!-- <template_id><value>example.v1</value></template_id> --><template><template_id><value>live.v1</value></template_id></template>";
+        assert_eq!(extract_template_id(comment).as_deref(), Some("live.v1"));
+        let cdata = "<template><language><code_string><![CDATA[<template_id><value>example.v1</value></template_id>]]></code_string></language><template_id><value>live.v1</value></template_id></template>";
+        assert_eq!(extract_template_id(cdata).as_deref(), Some("live.v1"));
     }
 
     #[test]

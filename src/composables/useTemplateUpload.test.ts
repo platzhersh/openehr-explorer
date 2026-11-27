@@ -29,6 +29,7 @@ function mockServer(calls: Call[], gate?: Promise<void>) {
       if (!args.overwrite) throw new Error("Upload failed (HTTP 409): exists");
       return "Template overwritten successfully (HTTP 204)";
     }
+    if (cmd === "parse_opt_template_id") return "vital_signs.v1";
     return [];
   });
 }
@@ -47,6 +48,8 @@ describe("useTemplateUpload overwrite flow", () => {
 
     await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
     expect(upload.pendingOverwrite.value).toBe("<opt/>");
+    // The confirmation names the template as the backend reads it, not a second parser.
+    expect(upload.pendingTemplateId.value).toBe("vital_signs.v1");
 
     await upload.confirmOverwrite();
     const uploads = calls.filter((c) => c.cmd === "upload_template");
@@ -92,7 +95,7 @@ describe("useTemplateUpload overwrite flow", () => {
   it("ignores a late 409 from a superseded upload so the prompt keeps its own OPT", async () => {
     const releases: Array<() => void> = [];
     invoke.mockImplementation(async (cmd: string, args: Record<string, unknown>) => {
-      if (cmd !== "upload_template") return [];
+      if (cmd !== "upload_template") return cmd === "parse_opt_template_id" ? null : [];
       await new Promise<void>((resolve) => releases.push(resolve));
       if (!args.overwrite) throw new Error("Upload failed (HTTP 409): exists");
       return "Template overwritten successfully (HTTP 204)";
@@ -137,7 +140,7 @@ describe("useTemplateUpload overwrite flow", () => {
         await new Promise<void>((resolve) => releases.push(resolve));
         return "Template uploaded successfully (HTTP 201)";
       }
-      return [];
+      return cmd === "parse_opt_template_id" ? null : [];
     });
     const { upload } = setup("A");
 
