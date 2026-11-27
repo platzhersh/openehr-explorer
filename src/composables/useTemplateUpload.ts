@@ -49,7 +49,7 @@ export function useTemplateUpload() {
         overwrite,
       );
       uploadStatus.value = result;
-      void analytics.track(overwrite ? "template_overwritten" : "template_uploaded");
+      void analytics.track("template_uploaded");
       await templateStore.fetchTemplates(serverStore.activeServerId);
     } catch (e) {
       const message = String(e);
