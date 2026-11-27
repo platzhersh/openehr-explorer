@@ -53,7 +53,7 @@ export function useTemplateUpload() {
       await templateStore.fetchTemplates(serverStore.activeServerId);
       // An overwrite keeps the template ID, so the open template's details
       // (Web Template, OPT, term bindings) must be reloaded explicitly.
-      if (overwrite) await templateStore.reloadSelected();
+      if (overwrite) templateStore.requestDetailReload();
     } catch (e) {
       const message = String(e);
       if (!overwrite && message.includes("HTTP 409")) {

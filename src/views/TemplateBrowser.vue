@@ -127,6 +127,17 @@ watch(
   { immediate: true },
 );
 
+// An overwrite keeps the template ID, so reload the open template's details
+// (Web Template, OPT and term bindings) when the upload flow asks for it.
+watch(
+  () => templateStore.detailReloadToken,
+  () => {
+    if (selectedTemplateId.value && serverStore.activeServerId) {
+      void loadTemplateDetail(serverStore.activeServerId, selectedTemplateId.value);
+    }
+  },
+);
+
 watch(selectedTemplateId, (id) => {
   if (id && serverStore.activeServerId) {
     void loadTemplateDetail(serverStore.activeServerId, id);

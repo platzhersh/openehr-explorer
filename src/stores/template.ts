@@ -61,12 +61,7 @@ export const useTemplateStore = defineStore("template", () => {
     }
   }
 
-  // Remembered so the selected template can be reloaded after it is overwritten
-  // on the server (the route, and so the browser's detail watchers, don't change).
-  let lastSelection: { serverId: string; templateId: string } | null = null;
-
   async function fetchWebTemplate(serverId: string, templateId: string) {
-    lastSelection = { serverId, templateId };
     const requestId = ++webTemplateRequestId;
     beginLoading();
     error.value = null;
@@ -107,11 +102,12 @@ export const useTemplateStore = defineStore("template", () => {
     }
   }
 
-  /** Re-fetch the currently displayed template's details (no-op if none is selected). */
-  async function reloadSelected() {
-    if (!lastSelection || !selectedWebTemplate.value) return;
-    const { serverId, templateId } = lastSelection;
-    await Promise.all([fetchWebTemplate(serverId, templateId), fetchOpt(serverId, templateId)]);
+  // Bumped when the open template was overwritten on the server. The ID doesn't
+  // change, so the browser's route watchers don't fire; it watches this instead
+  // and reloads the template's details (Web Template, OPT and term bindings).
+  const detailReloadToken = ref(0);
+  function requestDetailReload() {
+    detailReloadToken.value++;
   }
 
   return {
@@ -123,7 +119,8 @@ export const useTemplateStore = defineStore("template", () => {
     fetchTemplates,
     fetchWebTemplate,
     fetchOpt,
-    reloadSelected,
+    detailReloadToken,
+    requestDetailReload,
     uploadTemplate,
   };
 });
