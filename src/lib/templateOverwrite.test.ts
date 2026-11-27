@@ -23,8 +23,14 @@ describe("duplicateWithoutOverwriteMessage", () => {
     expect(message).toContain("new template ID or version");
   });
 
+  it("says nothing changed on Better Platform, which versions templates", () => {
+    const message = duplicateWithoutOverwriteMessage("better_platform");
+    expect(message).toContain("nothing changed");
+    expect(message).toContain("new active version");
+  });
+
   it("stays general for other server types", () => {
-    for (const type of ["better_platform", "generic", undefined] as const) {
+    for (const type of ["generic", undefined] as const) {
       expect(duplicateWithoutOverwriteMessage(type)).toContain(
         "Overwriting isn't supported for this server type",
       );
@@ -33,9 +39,9 @@ describe("duplicateWithoutOverwriteMessage", () => {
 });
 
 describe("duplicateMayReplace", () => {
-  it("asks first everywhere except FerroEHR, which always refuses a duplicate", () => {
+  it("asks first except on FerroEHR (always refuses) and Better (versions templates)", () => {
     expect(duplicateMayReplace("ehrbase")).toBe(true);
-    expect(duplicateMayReplace("better_platform")).toBe(true);
+    expect(duplicateMayReplace("better_platform")).toBe(false);
     expect(duplicateMayReplace("generic")).toBe(true);
     expect(duplicateMayReplace(undefined)).toBe(true);
     expect(duplicateMayReplace("ferro_ehr")).toBe(false);

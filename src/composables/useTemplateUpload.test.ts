@@ -249,6 +249,19 @@ describe("useTemplateUpload overwrite flow", () => {
       expect(upload.uploadError.value).toContain("immutable");
     });
 
+    it("does not ask on Better Platform, which versions templates", async () => {
+      const calls: Call[] = [];
+      mockServer(calls);
+      const { upload } = setup("A", "better_platform");
+      useTemplateStore().templates = listed();
+
+      await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
+
+      expect(uploads(calls)).toEqual([false]); // sent straight away
+      expect(upload.pendingOverwrite.value).toBeNull();
+      expect(upload.uploadError.value).toContain("nothing changed");
+    });
+
     it("uploads normally when a different template is listed", async () => {
       const calls: Call[] = [];
       mockServer(calls, undefined, true);
