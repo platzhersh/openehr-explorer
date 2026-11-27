@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
-import { extractFlatPaths, classifyCodedTextNode } from "../lib/webtemplate";
+import { extractFlatPaths, classifyCodedTextNode, normalizeWebTemplate } from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
@@ -242,7 +242,10 @@ function buildWtTree(node: Record<string, unknown>, parentPath = ""): WtNode {
 
 const wtTree = computed(() => {
   if (!templateStore.selectedWebTemplate) return null;
-  const tree = templateStore.selectedWebTemplate.tree as Record<string, unknown> | undefined;
+  // Better returns snake_case keys (`rm_type`, `aql_path`); normalize to the
+  // camelCase shape EHRBase uses so the type badges and paths render for both.
+  const normalized = normalizeWebTemplate(templateStore.selectedWebTemplate);
+  const tree = normalized.tree as Record<string, unknown> | undefined;
   return tree ? buildWtTree(tree) : null;
 });
 
