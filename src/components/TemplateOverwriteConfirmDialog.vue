@@ -23,14 +23,18 @@ onMounted(() => cancelButton.value?.focus());
 </script>
 
 <template>
-  <div class="dialog-overlay" role="presentation" @click.self="emit('cancel')">
+  <div
+    class="dialog-overlay"
+    role="presentation"
+    @click.self="emit('cancel')"
+    @keydown.esc.stop="emit('cancel')"
+  >
     <div
       class="dialog"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="overwrite-title"
       aria-describedby="overwrite-desc"
-      @keydown.esc.stop="emit('cancel')"
     >
       <div class="dialog-header">
         <h2 id="overwrite-title">Overwrite existing template?</h2>

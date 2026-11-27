@@ -17,5 +17,5 @@ export function optTemplateId(optXml: string): string | null {
   const id = match?.[1]
     ?.replace(/&(lt|gt|quot|apos|amp);/g, (_, name: string) => ENTITIES[name])
     .trim();
-  return id ? id : null;
+  return id || null;
 }
