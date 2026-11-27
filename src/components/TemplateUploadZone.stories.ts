@@ -23,6 +23,8 @@ const meta: Meta<typeof TemplateUploadZone> = {
     onDragleave: fn(),
     onDrop: fn(),
     onChooseFile: fn(),
+    onOverwrite: fn(),
+    onCancelOverwrite: fn(),
   },
   render: (args) => ({
     components: { TemplateUploadZone },
@@ -34,6 +36,9 @@ const meta: Meta<typeof TemplateUploadZone> = {
       :uploading="args.uploading"
       :upload-status="args.uploadStatus"
       :upload-error="args.uploadError"
+      :can-overwrite="args.canOverwrite"
+      @overwrite="args.onOverwrite"
+      @cancel-overwrite="args.onCancelOverwrite"
       @dragover="args.onDragover"
       @dragleave="args.onDragleave"
       @drop="args.onDrop"
@@ -69,5 +74,20 @@ export const UploadSucceeded: Story = {
 export const UploadFailed: Story = {
   args: {
     uploadError: "Failed to upload template: a template with this ID already exists.",
+  },
+};
+
+/** The server rejected the OPT as a duplicate (HTTP 409); the user can explicitly overwrite it. */
+export const DuplicateOverwritePrompt: Story = {
+  args: {
+    uploadError: "A template with this ID already exists on the server.",
+    canOverwrite: true,
+  },
+};
+
+/** The existing template was replaced after the user confirmed the overwrite. */
+export const OverwriteSucceeded: Story = {
+  args: {
+    uploadStatus: "Template overwritten successfully (HTTP 204)",
   },
 };
