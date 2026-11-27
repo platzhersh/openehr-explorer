@@ -601,7 +601,7 @@ mod tests {
 
 #[cfg(test)]
 mod extract_template_id_tests {
-    use super::extract_template_id;
+    use super::{ehrbase_admin_template_url, ehrbase_overwrite_error, extract_template_id};
 
     #[test]
     fn extracts_template_id() {
