@@ -208,6 +208,13 @@ async function openApiRoot(profile: ServerProfile) {
               >
                 ⚠️ HTTP
               </span>
+              <output
+                v-if="profile.credentials_unavailable"
+                class="badge warning-badge"
+                data-tooltip="The saved password/token could not be read from the credential store (keychain access denied or cancelled?). Allow access when prompted, or edit the server and re-enter it."
+              >
+                Credentials unavailable
+              </output>
               <span
                 class="badge secure-badge"
                 :data-tooltip="`Credentials stored via ${credentialBackendLabel(profile.credential_backend)}`"

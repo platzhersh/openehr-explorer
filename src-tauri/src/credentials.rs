@@ -1,9 +1,10 @@
 use aes_gcm::aead::{Aead, Generate, KeyInit, Nonce};
 use aes_gcm::{Aes256Gcm, Key};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use zeroize::Zeroize;
 
 const SERVICE_NAME: &str = "openehr-explorer";
@@ -24,39 +25,256 @@ struct EncryptedStore {
     entries: HashMap<String, String>,
 }
 
-/// Manages credential storage with OS keychain primary and encrypted-file fallback.
-pub struct CredentialManager {
+/// Keychain item holding ALL secrets as one JSON map. macOS asks for access
+/// per keychain item, so one item per secret meant one prompt per secret (per
+/// server) on an unsigned build; a single item means a single prompt.
+const VAULT_ACCOUNT: &str = "__secrets_v2__";
+
+/// Minimal named-item store, so the vault logic is testable without a keychain.
+trait ItemStore: Send + Sync {
+    fn get(&self, account: &str) -> Result<Option<String>, String>;
+    fn set(&self, account: &str, value: &str) -> Result<(), String>;
+    fn delete(&self, account: &str) -> Result<(), String>;
+}
+
+/// [`ItemStore`] backed by the OS keychain. Every call builds a fresh `Entry`.
+struct KeyringItems;
+
+impl KeyringItems {
+    fn entry(account: &str) -> Result<keyring::Entry, String> {
+        keyring::Entry::new(SERVICE_NAME, account).map_err(|e| format!("Keychain entry error: {e}"))
+    }
+}
+
+impl ItemStore for KeyringItems {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        match Self::entry(account)?.get_password() {
+            Ok(s) => Ok(Some(s)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(format!("Keychain load error: {e}")),
+        }
+    }
+
+    fn set(&self, account: &str, value: &str) -> Result<(), String> {
+        Self::entry(account)?
+            .set_password(value)
+            .map_err(|e| format!("Keychain store error: {e}"))
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        match Self::entry(account)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(format!("Keychain delete error: {e}")),
+        }
+    }
+}
+
+#[derive(Default)]
+struct VaultCache {
+    /// Decoded vault; `None` until first needed (one keychain read per run).
+    map: Option<HashMap<String, String>>,
+    /// Legacy per-secret items already looked up, so a missing secret is
+    /// not probed again.
+    legacy_checked: HashSet<String>,
+}
+
+/// All secrets in a single keychain item, cached in memory after the first
+/// read. Secrets stored by older versions as one item each are migrated into
+/// the vault the first time they are loaded.
+struct KeychainVault {
+    items: Box<dyn ItemStore>,
+    cache: Mutex<VaultCache>,
+}
+
+impl KeychainVault {
+    fn new(items: Box<dyn ItemStore>) -> Self {
+        Self {
+            items,
+            cache: Mutex::new(VaultCache::default()),
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, VaultCache> {
+        self.cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn ensure_loaded(&self, cache: &mut VaultCache) -> Result<(), String> {
+        if cache.map.is_none() {
+            let map = match self.items.get(VAULT_ACCOUNT)? {
+                Some(json) => serde_json::from_str(&json)
+                    .map_err(|e| format!("Keychain vault is corrupt: {e}"))?,
+                None => HashMap::new(),
+            };
+            cache.map = Some(map);
+        }
+        Ok(())
+    }
+
+    /// Write the vault and verify it by reading it back.
+    fn persist(&self, map: &HashMap<String, String>) -> Result<(), String> {
+        let json = serde_json::to_string(map).map_err(|e| e.to_string())?;
+        self.items.set(VAULT_ACCOUNT, &json)?;
+        // Read back to catch backends that accept a write but never persist it.
+        match self.items.get(VAULT_ACCOUNT)? {
+            Some(back) if back == json => Ok(()),
+            _ => Err("Keychain verification failed: stored value does not match".to_string()),
+        }
+    }
+
+    fn load(&self, account: &str) -> Result<Option<String>, String> {
+        let mut guard = self.lock();
+        self.ensure_loaded(&mut guard)?;
+        let VaultCache {
+            map,
+            legacy_checked,
+        } = &mut *guard;
+        let map = map.as_mut().ok_or("Keychain vault not loaded")?;
+        if let Some(v) = map.get(account) {
+            return Ok(Some(v.clone()));
+        }
+        if !legacy_checked.insert(account.to_string()) {
+            return Ok(None);
+        }
+        // Migrate a secret stored by an older version as its own item.
+        match self.items.get(account)? {
+            Some(legacy) => {
+                map.insert(account.to_string(), legacy.clone());
+                if let Err(e) = self.persist(map) {
+                    map.remove(account);
+                    return Err(e);
+                }
+                self.items.delete(account).ok();
+                Ok(Some(legacy))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn store(&self, account: &str, secret: &str) -> Result<(), String> {
+        let mut guard = self.lock();
+        self.ensure_loaded(&mut guard)?;
+        let map = guard.map.as_mut().ok_or("Keychain vault not loaded")?;
+        let previous = map.insert(account.to_string(), secret.to_string());
+        if let Err(e) = self.persist(map) {
+            match previous {
+                Some(p) => map.insert(account.to_string(), p),
+                None => map.remove(account),
+            };
+            return Err(e);
+        }
+        // Drop a stale per-secret item from an older version (no-op if absent).
+        self.items.delete(account).ok();
+        Ok(())
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        let mut guard = self.lock();
+        self.ensure_loaded(&mut guard)?;
+        let map = guard.map.as_mut().ok_or("Keychain vault not loaded")?;
+        if let Some(previous) = map.remove(account) {
+            if let Err(e) = self.persist(map) {
+                map.insert(account.to_string(), previous);
+                return Err(e);
+            }
+        }
+        self.items.delete(account).ok();
+        Ok(())
+    }
+}
+
+/// Name of the marker file (in the config dir) that records which backend
+/// holds the secrets, so it never flips between launches.
+const BACKEND_MARKER: &str = "credential_backend";
+
+#[derive(Debug)]
+struct State {
     backend: StorageBackend,
     /// AES-256 key bytes, only loaded when using encrypted-file backend.
     file_key: Option<Vec<u8>>,
+    /// True once the backend choice is persisted (marker written or legacy
+    /// encrypted store found). An unconfirmed keychain backend is verified
+    /// by the first successful `store_secret`, never by a startup probe.
+    confirmed: bool,
+}
+
+/// Manages credential storage with OS keychain primary and encrypted-file fallback.
+///
+/// Startup performs **no keychain access**: on macOS every keychain operation
+/// on an unsigned build can raise an ACL prompt, so the backend is chosen from
+/// on-disk state only (see [`choose_initial_backend`]).
+pub struct CredentialManager {
+    state: Mutex<State>,
+    vault: KeychainVault,
+}
+
+/// Pure backend choice from on-disk state: the persisted marker wins; without
+/// one, an existing `credentials.enc` means the legacy fallback was in use;
+/// otherwise the OS keychain is assumed (unconfirmed). Returns
+/// `(backend, confirmed)`.
+fn choose_initial_backend(
+    marker: Option<StorageBackend>,
+    encrypted_store_exists: bool,
+) -> (StorageBackend, bool) {
+    match marker {
+        Some(b) => (b, true),
+        None if encrypted_store_exists => (StorageBackend::EncryptedFile, true),
+        None => (StorageBackend::OsKeychain, false),
+    }
 }
 
 impl CredentialManager {
-    /// Initialise the credential manager, probing keychain availability.
+    /// Initialise the credential manager without touching the keychain.
     pub fn new(config_dir: &std::path::Path) -> Self {
-        if Self::keychain_available() {
-            return Self {
-                backend: StorageBackend::OsKeychain,
-                file_key: None,
-            };
-        }
-
-        // Fall back to encrypted file
-        let key = Self::load_or_create_file_key(config_dir);
+        let marker = Self::read_marker(config_dir);
+        let (backend, confirmed) =
+            choose_initial_backend(marker, Self::encrypted_store_path(config_dir).exists());
+        let file_key = (backend == StorageBackend::EncryptedFile)
+            .then(|| Self::load_or_create_file_key(config_dir));
         Self {
-            backend: StorageBackend::EncryptedFile,
-            file_key: Some(key),
+            state: Mutex::new(State {
+                backend,
+                file_key,
+                confirmed,
+            }),
+            vault: KeychainVault::new(Box::new(KeyringItems)),
         }
     }
 
-    pub fn backend(&self) -> &StorageBackend {
-        &self.backend
+    pub fn backend(&self) -> StorageBackend {
+        self.lock().backend.clone()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn read_marker(config_dir: &std::path::Path) -> Option<StorageBackend> {
+        match fs::read_to_string(config_dir.join(BACKEND_MARKER))
+            .ok()?
+            .trim()
+        {
+            "os_keychain" => Some(StorageBackend::OsKeychain),
+            "encrypted_file" => Some(StorageBackend::EncryptedFile),
+            _ => None,
+        }
+    }
+
+    fn write_marker(config_dir: &std::path::Path, backend: &StorageBackend) {
+        let value = match backend {
+            StorageBackend::OsKeychain => "os_keychain",
+            StorageBackend::EncryptedFile => "encrypted_file",
+        };
+        fs::create_dir_all(config_dir).ok();
+        fs::write(config_dir.join(BACKEND_MARKER), value).ok();
     }
 
     /// Store a secret for a profile field (e.g. "abc-123:password").
-    /// For the OS keychain backend, performs a read-back verification
-    /// using a FRESH Entry object (not the one that wrote) to ensure
-    /// the secret was truly persisted to the system store.
+    /// The OS keychain backend writes the single secrets item and verifies it
+    /// by reading it back.
     pub fn store_secret(
         &self,
         profile_id: &str,
@@ -65,38 +283,55 @@ impl CredentialManager {
         config_dir: &std::path::Path,
     ) -> Result<(), String> {
         let account = format!("{profile_id}:{field}");
-        let result = match &self.backend {
-            StorageBackend::OsKeychain => {
-                let entry = keyring::Entry::new(SERVICE_NAME, &account)
-                    .map_err(|e| format!("Keychain entry error: {e}"))?;
-                entry
-                    .set_password(&secret)
-                    .map_err(|e| format!("Keychain store error: {e}"))?;
-                // Read-back with a FRESH entry to catch phantom writes where
-                // the Entry object caches the value in-memory but never
-                // actually persists it to the system credential store.
-                let verify = keyring::Entry::new(SERVICE_NAME, &account)
-                    .map_err(|e| format!("Keychain verify entry error: {e}"))?;
-                let readback = verify
-                    .get_password()
-                    .map_err(|e| format!("Keychain read-back failed: {e}"))?;
-                if readback != secret {
-                    return Err(
-                        "Keychain verification failed: stored value does not match".to_string()
-                    );
-                }
-                Ok(())
-            }
-            StorageBackend::EncryptedFile => {
-                let key = self.file_key.as_ref().ok_or("Encryption key not loaded")?;
-                let encrypted = Self::encrypt(key, secret.as_bytes())?;
-                let mut store = Self::load_encrypted_store(config_dir);
-                store.entries.insert(account, base64_encode(&encrypted));
-                Self::save_encrypted_store(config_dir, &store)
-            }
-        };
+        let result = self.store_inner(&account, &secret, config_dir);
         secret.zeroize();
         result
+    }
+
+    fn store_inner(
+        &self,
+        account: &str,
+        secret: &str,
+        config_dir: &std::path::Path,
+    ) -> Result<(), String> {
+        let (backend, confirmed) = {
+            let st = self.lock();
+            (st.backend.clone(), st.confirmed)
+        };
+        if backend == StorageBackend::OsKeychain {
+            match self.vault.store(account, secret) {
+                Ok(()) => {
+                    if !confirmed {
+                        Self::write_marker(config_dir, &StorageBackend::OsKeychain);
+                        self.lock().confirmed = true;
+                    }
+                    return Ok(());
+                }
+                // Only a never-confirmed keychain may fall back, and never on
+                // macOS: there a failure usually means a denied/cancelled ACL
+                // prompt, and switching would strand existing keychain secrets.
+                Err(e) if confirmed || cfg!(target_os = "macos") => return Err(e),
+                Err(_) => {
+                    let key = Self::load_or_create_file_key(config_dir);
+                    Self::write_marker(config_dir, &StorageBackend::EncryptedFile);
+                    let mut st = self.lock();
+                    st.backend = StorageBackend::EncryptedFile;
+                    st.file_key = Some(key);
+                    st.confirmed = true;
+                }
+            }
+        }
+        let key = self
+            .lock()
+            .file_key
+            .clone()
+            .ok_or("Encryption key not loaded")?;
+        let encrypted = Self::encrypt(&key, secret.as_bytes())?;
+        let mut store = Self::load_encrypted_store(config_dir);
+        store
+            .entries
+            .insert(account.to_string(), base64_encode(&encrypted));
+        Self::save_encrypted_store(config_dir, &store)
     }
 
     /// Load a secret for a profile field. Returns None if not found.
@@ -107,18 +342,14 @@ impl CredentialManager {
         config_dir: &std::path::Path,
     ) -> Result<Option<String>, String> {
         let account = format!("{profile_id}:{field}");
-        match &self.backend {
-            StorageBackend::OsKeychain => {
-                let entry = keyring::Entry::new(SERVICE_NAME, &account)
-                    .map_err(|e| format!("Keychain entry error: {e}"))?;
-                match entry.get_password() {
-                    Ok(s) => Ok(Some(s)),
-                    Err(keyring::Error::NoEntry) => Ok(None),
-                    Err(e) => Err(format!("Keychain load error: {e}")),
-                }
-            }
+        let (backend, file_key) = {
+            let st = self.lock();
+            (st.backend.clone(), st.file_key.clone())
+        };
+        match backend {
+            StorageBackend::OsKeychain => self.vault.load(&account),
             StorageBackend::EncryptedFile => {
-                let key = self.file_key.as_ref().ok_or("Encryption key not loaded")?;
+                let key = file_key.as_ref().ok_or("Encryption key not loaded")?;
                 let store = Self::load_encrypted_store(config_dir);
                 match store.entries.get(&account) {
                     Some(encoded) => {
@@ -143,16 +374,9 @@ impl CredentialManager {
         config_dir: &std::path::Path,
     ) -> Result<(), String> {
         let account = format!("{profile_id}:{field}");
-        match &self.backend {
-            StorageBackend::OsKeychain => {
-                let entry = keyring::Entry::new(SERVICE_NAME, &account)
-                    .map_err(|e| format!("Keychain entry error: {e}"))?;
-                match entry.delete_credential() {
-                    Ok(()) => Ok(()),
-                    Err(keyring::Error::NoEntry) => Ok(()), // already gone
-                    Err(e) => Err(format!("Keychain delete error: {e}")),
-                }
-            }
+        let backend = self.backend();
+        match backend {
+            StorageBackend::OsKeychain => self.vault.delete(&account),
             StorageBackend::EncryptedFile => {
                 let mut store = Self::load_encrypted_store(config_dir);
                 store.entries.remove(&account);
@@ -174,42 +398,6 @@ impl CredentialManager {
     }
 
     // --- Private helpers ---
-
-    /// Probe whether the OS keychain is usable by performing a full
-    /// write → read-back (fresh entry) → delete cycle. Uses a separate
-    /// Entry object for the read-back to catch backends that cache
-    /// values in-memory without actually persisting to the system store.
-    fn keychain_available() -> bool {
-        let probe_account = "__openehr_probe__";
-        let probe_secret = "__probe_value__";
-
-        // Write with one Entry object
-        let write_entry = match keyring::Entry::new(SERVICE_NAME, probe_account) {
-            Ok(e) => e,
-            Err(_) => return false,
-        };
-        if write_entry.set_password(probe_secret).is_err() {
-            return false;
-        }
-
-        // Read back with a FRESH Entry object to verify true persistence
-        let read_entry = match keyring::Entry::new(SERVICE_NAME, probe_account) {
-            Ok(e) => e,
-            Err(_) => {
-                let _ = write_entry.delete_credential();
-                return false;
-            }
-        };
-        let read_ok = match read_entry.get_password() {
-            Ok(val) => val == probe_secret,
-            Err(_) => false,
-        };
-
-        // Clean up
-        let _ = write_entry.delete_credential();
-
-        read_ok
-    }
 
     /// Load or generate the file-encryption key.
     fn load_or_create_file_key(config_dir: &std::path::Path) -> Vec<u8> {
@@ -332,8 +520,12 @@ mod tests {
         // Create manager with file backend by forcing it
         let key = CredentialManager::load_or_create_file_key(&dir);
         let mgr = CredentialManager {
-            backend: StorageBackend::EncryptedFile,
-            file_key: Some(key),
+            state: Mutex::new(State {
+                backend: StorageBackend::EncryptedFile,
+                file_key: Some(key),
+                confirmed: true,
+            }),
+            vault: KeychainVault::new(Box::new(KeyringItems)),
         };
 
         mgr.store_secret("prof-1", "password", "secret123".to_string(), &dir)
@@ -378,5 +570,129 @@ mod tests {
             assert_eq!(perms.mode() & 0o777, 0o600);
         }
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn marker_wins_over_everything() {
+        assert_eq!(
+            choose_initial_backend(Some(StorageBackend::OsKeychain), true),
+            (StorageBackend::OsKeychain, true)
+        );
+        assert_eq!(
+            choose_initial_backend(Some(StorageBackend::EncryptedFile), false),
+            (StorageBackend::EncryptedFile, true)
+        );
+    }
+
+    #[test]
+    fn legacy_encrypted_store_keeps_file_backend() {
+        assert_eq!(
+            choose_initial_backend(None, true),
+            (StorageBackend::EncryptedFile, true)
+        );
+    }
+
+    #[test]
+    fn fresh_install_assumes_unconfirmed_keychain() {
+        assert_eq!(
+            choose_initial_backend(None, false),
+            (StorageBackend::OsKeychain, false)
+        );
+    }
+
+    #[test]
+    fn new_never_touches_keychain_and_reads_marker() {
+        let dir = std::env::temp_dir().join("openehr-test-marker");
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(&dir).unwrap();
+        let fresh = CredentialManager::new(&dir);
+        assert_eq!(fresh.backend(), StorageBackend::OsKeychain);
+        CredentialManager::write_marker(&dir, &StorageBackend::EncryptedFile);
+        let again = CredentialManager::new(&dir);
+        assert_eq!(again.backend(), StorageBackend::EncryptedFile);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// In-memory item store that counts reads of each account.
+    #[derive(Clone, Default)]
+    struct MemItems {
+        items: std::sync::Arc<Mutex<HashMap<String, String>>>,
+        gets: std::sync::Arc<Mutex<Vec<String>>>,
+    }
+
+    impl ItemStore for MemItems {
+        fn get(&self, account: &str) -> Result<Option<String>, String> {
+            self.gets.lock().unwrap().push(account.to_string());
+            Ok(self.items.lock().unwrap().get(account).cloned())
+        }
+        fn set(&self, account: &str, value: &str) -> Result<(), String> {
+            self.items
+                .lock()
+                .unwrap()
+                .insert(account.to_string(), value.to_string());
+            Ok(())
+        }
+        fn delete(&self, account: &str) -> Result<(), String> {
+            self.items.lock().unwrap().remove(account);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn vault_roundtrip_uses_one_keychain_item() {
+        let mem = MemItems::default();
+        let vault = KeychainVault::new(Box::new(mem.clone()));
+        vault.store("p1:password", "s1").unwrap();
+        vault.store("p2:token", "s2").unwrap();
+        assert_eq!(vault.load("p1:password").unwrap(), Some("s1".into()));
+        assert_eq!(vault.load("p2:token").unwrap(), Some("s2".into()));
+        assert_eq!(mem.items.lock().unwrap().len(), 1);
+        vault.delete("p1:password").unwrap();
+        assert_eq!(vault.load("p1:password").unwrap(), None);
+    }
+
+    #[test]
+    fn vault_reads_the_keychain_once_for_many_secrets() {
+        let mem = MemItems::default();
+        let json = serde_json::to_string(&HashMap::from([
+            ("a:password".to_string(), "1".to_string()),
+            ("b:password".to_string(), "2".to_string()),
+            ("c:token".to_string(), "3".to_string()),
+        ]))
+        .unwrap();
+        mem.items.lock().unwrap().insert(VAULT_ACCOUNT.into(), json);
+        // Fresh process: new vault over the same keychain.
+        let vault = KeychainVault::new(Box::new(mem.clone()));
+        for acct in ["a:password", "b:password", "c:token"] {
+            assert!(vault.load(acct).unwrap().is_some());
+        }
+        let gets = mem.gets.lock().unwrap();
+        assert_eq!(gets.iter().filter(|g| *g == VAULT_ACCOUNT).count(), 1);
+        assert_eq!(gets.len(), 1);
+    }
+
+    #[test]
+    fn vault_migrates_legacy_items_and_removes_them() {
+        let mem = MemItems::default();
+        mem.items
+            .lock()
+            .unwrap()
+            .insert("old:password".into(), "legacy".into());
+        let vault = KeychainVault::new(Box::new(mem.clone()));
+        assert_eq!(vault.load("old:password").unwrap(), Some("legacy".into()));
+        assert!(!mem.items.lock().unwrap().contains_key("old:password"));
+        // Survives a restart via the vault item alone.
+        let again = KeychainVault::new(Box::new(mem));
+        assert_eq!(again.load("old:password").unwrap(), Some("legacy".into()));
+    }
+
+    #[test]
+    fn vault_does_not_reprobe_missing_secrets() {
+        let mem = MemItems::default();
+        let vault = KeychainVault::new(Box::new(mem.clone()));
+        assert_eq!(vault.load("x:password").unwrap(), None);
+        assert_eq!(vault.load("x:password").unwrap(), None);
+        let gets = mem.gets.lock().unwrap();
+        assert_eq!(gets.iter().filter(|g| *g == "x:password").count(), 1);
     }
 }

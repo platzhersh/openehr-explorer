@@ -23,6 +23,8 @@ export interface ServerProfile {
   api_path_prefix?: string | null;
   credential_backend: string;
   is_default: boolean;
+  /** Stored secret could not be read (e.g. keychain access denied); re-enter it or allow access. */
+  credentials_unavailable?: boolean;
 }
 
 /** Input profile sent to the backend during save — includes credential values. */

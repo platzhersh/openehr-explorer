@@ -131,6 +131,28 @@ export const Populated: Story = {
   },
 };
 
+export const CredentialsUnavailable: Story = {
+  render: withStores({
+    profiles: [
+      EHRBASE_PROFILE,
+      {
+        ...FERRO_PROFILE,
+        credential_backend: "os_keychain",
+        auth_method: { type: "basic", username: "ferro-user", has_password: false },
+        credentials_unavailable: true,
+      },
+    ],
+  }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A saved secret could not be read (e.g. macOS keychain access denied or cancelled). The server is still listed, with a warning badge, so the user can allow access or re-enter the password.",
+      },
+    },
+  },
+};
+
 export const Empty: Story = {
   render: withStores({ profiles: [] }),
   parameters: {
