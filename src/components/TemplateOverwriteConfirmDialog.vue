@@ -40,15 +40,13 @@ function onKeydown(event: KeyboardEvent) {
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
   const active = document.activeElement;
-  if (!dialog.value.contains(active)) {
+  const atEnd = event.shiftKey ? active === first : active === last;
+  if (!dialog.value.contains(active) || (atEnd && !event.shiftKey)) {
     event.preventDefault();
     first.focus();
-  } else if (event.shiftKey && active === first) {
+  } else if (atEnd) {
     event.preventDefault();
     last.focus();
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault();
-    first.focus();
   }
 }
 

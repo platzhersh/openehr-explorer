@@ -10,9 +10,9 @@ const NAMED_ENTITIES: Record<string, string> = {
 const TOKEN = /<!\[CDATA\[([\s\S]*?)\]\]>|&(#x[0-9a-f]+|#\d+|[a-z]+);|([^<&]+)/iy;
 
 function decodeReference(ref: string): string | null {
-  if (ref[0] === "#") {
-    const code =
-      ref[1].toLowerCase() === "x" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
+  if (ref.startsWith("#")) {
+    const isHex = ref[1].toLowerCase() === "x";
+    const code = isHex ? Number.parseInt(ref.slice(2), 16) : Number.parseInt(ref.slice(1), 10);
     return Number.isInteger(code) && code > 0 && code <= 0x10ffff
       ? String.fromCodePoint(code)
       : null;
@@ -40,6 +40,13 @@ function decodeContent(content: string): string | null {
   return result;
 }
 
+/** Raw content of the first `<name>…</name>` element (any namespace prefix), or null. */
+function elementContent(xml: string, name: string): string | null {
+  const open = String.raw`<(?:[\w.-]+:)?${name}\b[^>]*>`;
+  const close = String.raw`</(?:[\w.-]+:)?${name}\s*>`;
+  return new RegExp(`${open}([\\s\\S]*?)${close}`).exec(xml)?.[1] ?? null;
+}
+
 /**
  * Template ID of an OPT, for display in the overwrite confirmation (the backend
  * does the authoritative extraction). Tolerates namespace prefixes. Returns null
@@ -47,10 +54,7 @@ function decodeContent(content: string): string | null {
  * never names a different template than the one that would be overwritten.
  */
 export function optTemplateId(optXml: string): string | null {
-  const match =
-    /<(?:[\w.-]+:)?template_id\b[^>]*>\s*<(?:[\w.-]+:)?value\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?value\s*>/.exec(
-      optXml,
-    );
-  if (!match) return null;
-  return decodeContent(match[1])?.trim() || null;
+  const templateId = elementContent(optXml, "template_id");
+  const value = templateId === null ? null : elementContent(templateId, "value");
+  return value === null ? null : decodeContent(value)?.trim() || null;
 }
