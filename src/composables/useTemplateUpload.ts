@@ -1,4 +1,4 @@
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "./useAnalytics";
@@ -23,41 +23,45 @@ export function useTemplateUpload() {
   const uploadError = ref<string | null>(null);
 
   // OPT text held back after the server rejected it as a duplicate (HTTP 409),
-  // awaiting the user's explicit decision to overwrite.
-  const pendingOverwrite = ref<string | null>(null);
+  // awaiting the user's explicit decision to overwrite. It is pinned to the
+  // server that returned the 409 so a confirmation can never reach another one.
+  const pending = ref<{ text: string; serverId: string } | null>(null);
+  const pendingOverwrite = computed(() => pending.value?.text ?? null);
 
   function resetState() {
     dragOver.value = false;
     uploading.value = false;
     uploadStatus.value = null;
     uploadError.value = null;
-    pendingOverwrite.value = null;
+    pending.value = null;
   }
 
   async function performUpload(text: string, overwrite = false) {
-    if (!serverStore.activeServerId) return;
+    // Pin the target server: the user may switch servers while the request is in flight.
+    const serverId = serverStore.activeServerId;
+    if (!serverId) return;
+    const stillActive = () => serverStore.activeServerId === serverId;
 
     uploading.value = true;
     uploadStatus.value = null;
     uploadError.value = null;
-    pendingOverwrite.value = null;
+    pending.value = null;
 
     try {
-      const result = await templateStore.uploadTemplate(
-        serverStore.activeServerId,
-        text,
-        overwrite,
-      );
+      const result = await templateStore.uploadTemplate(serverId, text, overwrite);
+      // Drop results for a server the user has since left.
+      if (!stillActive()) return;
       uploadStatus.value = result;
       void analytics.track("template_uploaded");
-      await templateStore.fetchTemplates(serverStore.activeServerId);
+      await templateStore.fetchTemplates(serverId);
       // An overwrite keeps the template ID, so the open template's details
       // (Web Template, OPT, term bindings) must be reloaded explicitly.
-      if (overwrite) templateStore.requestDetailReload();
+      if (overwrite && stillActive()) templateStore.requestDetailReload();
     } catch (e) {
+      if (!stillActive()) return;
       const message = String(e);
       if (!overwrite && message.includes("HTTP 409")) {
-        pendingOverwrite.value = text;
+        pending.value = { text, serverId };
         uploadError.value = "A template with this ID already exists on the server.";
       } else {
         uploadError.value = message;
@@ -68,17 +72,22 @@ export function useTemplateUpload() {
   }
 
   async function confirmOverwrite() {
-    if (pendingOverwrite.value === null) return;
-    await performUpload(pendingOverwrite.value, true);
+    const current = pending.value;
+    if (!current) return;
+    // Verify the server again: only overwrite where the duplicate was reported.
+    if (current.serverId !== serverStore.activeServerId) {
+      cancelOverwrite();
+      return;
+    }
+    await performUpload(current.text, true);
   }
 
   function cancelOverwrite() {
-    pendingOverwrite.value = null;
+    pending.value = null;
     uploadError.value = null;
   }
 
-  // A pending duplicate prompt belongs to the server that returned HTTP 409;
-  // never let a later confirmation overwrite on a different server.
+  // A pending duplicate prompt belongs to the server that returned HTTP 409.
   watch(
     () => serverStore.activeServerId,
     () => cancelOverwrite(),
