@@ -95,7 +95,9 @@ impl KeychainVault {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, VaultCache> {
-        self.cache.lock().unwrap_or_else(|e| e.into_inner())
+        self.cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn ensure_loaded(&self, cache: &mut VaultCache) -> Result<(), String> {
@@ -245,7 +247,9 @@ impl CredentialManager {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn read_marker(config_dir: &std::path::Path) -> Option<StorageBackend> {
