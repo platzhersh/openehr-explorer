@@ -37,7 +37,13 @@ export function useTemplateUpload() {
     () => serverStore.profiles.find((p) => p.id === pending.value?.serverId)?.name ?? null,
   );
 
+  // Only the latest upload attempt may update the local upload state (status, error,
+  // overwrite prompt): a slower, superseded attempt must not replace it. Resetting also
+  // supersedes every attempt started before it.
+  let latestAttempt = 0;
+
   function resetState() {
+    latestAttempt++;
     dragOver.value = false;
     uploading.value = false;
     uploadStatus.value = null;
@@ -45,16 +51,13 @@ export function useTemplateUpload() {
     pending.value = null;
   }
 
-  // Only the latest upload attempt may update state: a slower, superseded attempt
-  // (or one for a server the user has left) must not replace the pending prompt.
-  let latestAttempt = 0;
-
   async function performUpload(text: string, overwrite = false) {
     // Pin the target server: the user may switch servers while the request is in flight.
     const serverId = serverStore.activeServerId;
     if (!serverId) return;
     const attempt = ++latestAttempt;
-    const stillActive = () => attempt === latestAttempt && serverStore.activeServerId === serverId;
+    const isLatest = () => attempt === latestAttempt;
+    const serverStillActive = () => serverStore.activeServerId === serverId;
 
     uploading.value = true;
     uploadStatus.value = null;
@@ -64,15 +67,16 @@ export function useTemplateUpload() {
     try {
       const result = await templateStore.uploadTemplate(serverId, text, overwrite);
       // Drop results for a server the user has since left.
-      if (!stillActive()) return;
-      uploadStatus.value = result;
+      if (!serverStillActive()) return;
+      if (isLatest()) uploadStatus.value = result;
       void analytics.track("template_uploaded");
+      // The upload changed the server even if a newer attempt owns the local state.
       await templateStore.fetchTemplates(serverId);
       // An overwrite keeps the template ID, so the open template's details
       // (Web Template, OPT, term bindings) must be reloaded explicitly.
-      if (overwrite && stillActive()) templateStore.requestDetailReload();
+      if (overwrite && serverStillActive()) templateStore.requestDetailReload();
     } catch (e) {
-      if (!stillActive()) return;
+      if (!isLatest() || !serverStillActive()) return;
       const message = String(e);
       if (!overwrite && message.includes("HTTP 409")) {
         pending.value = { text, serverId };
@@ -81,7 +85,7 @@ export function useTemplateUpload() {
         uploadError.value = message;
       }
     } finally {
-      if (attempt === latestAttempt) uploading.value = false;
+      if (isLatest()) uploading.value = false;
     }
   }
 

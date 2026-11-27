@@ -46,6 +46,13 @@ describe("optTemplateId", () => {
     ).toBeNull();
   });
 
+  it("ignores a commented-out template ID, like the backend does", () => {
+    const xml =
+      "<!-- <template_id><value>example.v1</value></template_id> -->" +
+      "<template><template_id><value>live.v1</value></template_id></template>";
+    expect(optTemplateId(xml)).toBe("live.v1");
+  });
+
   it("returns null when there is no template ID", () => {
     expect(optTemplateId("<template></template>")).toBeNull();
   });

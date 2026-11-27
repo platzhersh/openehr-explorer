@@ -68,7 +68,10 @@ function elementContent(xml: string, name: string): string | null {
  * never names a different template than the one that would be overwritten.
  */
 export function optTemplateId(optXml: string): string | null {
-  const templateId = elementContent(optXml, "template_id");
+  // Comments are skipped by the backend's XML reader, so skip them here too: a commented-out
+  // <template_id> must not be named in the confirmation.
+  const xml = optXml.replace(/<!--[\s\S]*?-->/g, "");
+  const templateId = elementContent(xml, "template_id");
   const value = templateId === null ? null : elementContent(templateId, "value");
   return value === null ? null : decodeContent(value)?.trim() || null;
 }

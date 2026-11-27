@@ -112,4 +112,44 @@ describe("useTemplateUpload overwrite flow", () => {
 
     expect(upload.pendingOverwrite.value).toBe("<second/>");
   });
+
+  it("ignores a 409 from an upload that started before the state was reset", async () => {
+    let release!: () => void;
+    mockServer([], new Promise<void>((resolve) => (release = resolve)));
+    const { upload } = setup("A");
+
+    const inFlight = upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
+    await nextTick();
+    upload.resetState(); // e.g. the modal was reopened
+    release();
+    await inFlight;
+
+    expect(upload.pendingOverwrite.value).toBeNull();
+    expect(upload.uploadError.value).toBeNull();
+  });
+
+  it("still refreshes the template list when a superseded upload succeeds", async () => {
+    const calls: Call[] = [];
+    const releases: Array<() => void> = [];
+    invoke.mockImplementation(async (cmd: string, args: Record<string, unknown>) => {
+      calls.push({ cmd, args });
+      if (cmd === "upload_template") {
+        await new Promise<void>((resolve) => releases.push(resolve));
+        return "Template uploaded successfully (HTTP 201)";
+      }
+      return [];
+    });
+    const { upload } = setup("A");
+
+    const first = upload.handleDrop(drop("<a/>") as unknown as DragEvent);
+    await nextTick();
+    const second = upload.handleDrop(drop("<b/>") as unknown as DragEvent);
+    await nextTick();
+    releases[1]();
+    await second;
+    releases[0](); // the older upload finishes last, after a newer attempt owns the state
+    await first;
+
+    expect(calls.filter((c) => c.cmd === "list_templates")).toHaveLength(2);
+  });
 });
