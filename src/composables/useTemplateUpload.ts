@@ -135,10 +135,11 @@ export function useTemplateUpload() {
     void analytics.track("template_uploaded");
     // The upload changed the server even if a newer attempt owns the local state.
     await templateStore.fetchTemplates(attempt.serverId);
-    // An overwrite keeps the template ID, so the open template's details
-    // (Web Template, OPT, term bindings) must be reloaded explicitly.
-    const mayHaveReplaced = options.overwrite || replaced;
-    if (mayHaveReplaced && attempt.serverStillActive()) templateStore.requestDetailReload();
+    // An upload under an existing ID keeps that ID (an overwrite, or on a server that
+    // versions templates a new version), so the open template's details (Web Template,
+    // OPT, term bindings) must be reloaded explicitly. Reloading after any success is
+    // simplest: it only re-fetches the template that is open.
+    if (attempt.serverStillActive()) templateStore.requestDetailReload();
   }
 
   async function onUploadFailed(

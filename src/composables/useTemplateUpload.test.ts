@@ -252,6 +252,20 @@ describe("useTemplateUpload overwrite flow", () => {
       expect(upload.uploadError.value).toContain(expected);
     });
 
+    it("reloads the open template's details after a plain upload that succeeds", async () => {
+      const calls: Call[] = [];
+      mockServer(calls, undefined, true); // permissive: accepts the upload (e.g. a new version)
+      const { upload } = setup("A", "better_platform");
+      const store = useTemplateStore();
+      store.templates = listed();
+      const before = store.detailReloadToken;
+
+      await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
+      await flush();
+
+      expect(store.detailReloadToken).toBe(before + 1);
+    });
+
     it("uploads normally when a different template is listed", async () => {
       const calls: Call[] = [];
       mockServer(calls, undefined, true);
