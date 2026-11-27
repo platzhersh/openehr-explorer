@@ -168,4 +168,14 @@ describe("useTemplateUpload overwrite flow", () => {
     expect(upload.pendingOverwrite.value).toBeNull();
     expect(upload.uploadError.value).toContain("isn't supported for this server type");
   });
+
+  it("explains immutability when a duplicate is refused on FerroEHR", async () => {
+    mockServer([]);
+    const { upload } = setup("A", "ferro_ehr");
+
+    await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
+
+    expect(upload.pendingOverwrite.value).toBeNull();
+    expect(upload.uploadError.value).toContain("immutable");
+  });
 });

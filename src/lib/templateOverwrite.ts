@@ -13,3 +13,18 @@ type ServerType = ServerProfile["server_type"];
 export function supportsTemplateOverwrite(serverType: ServerType | undefined): boolean {
   return serverType === "ehrbase";
 }
+
+/**
+ * What to tell the user when a duplicate upload is refused (HTTP 409) on a server type
+ * that can't overwrite. FerroEHR is specific: per its documentation templates are
+ * immutable once loaded, and only an admin extension can delete one (refused while any
+ * composition still uses it). For the other types nothing has been verified, so the
+ * message stays general.
+ */
+export function duplicateWithoutOverwriteMessage(serverType: ServerType | undefined): string {
+  const exists = "A template with this ID already exists on the server.";
+  if (serverType === "ferro_ehr") {
+    return `${exists} FerroEHR templates are immutable, so it can't be overwritten: upload it under a new template ID or version, or have an admin delete the old one first (only possible if no composition uses it).`;
+  }
+  return `${exists} Overwriting isn't supported for this server type; remove the existing template on the server first.`;
+}
