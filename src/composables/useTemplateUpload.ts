@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "./useAnalytics";
@@ -51,6 +51,9 @@ export function useTemplateUpload() {
       uploadStatus.value = result;
       void analytics.track("template_uploaded");
       await templateStore.fetchTemplates(serverStore.activeServerId);
+      // An overwrite keeps the template ID, so the open template's details
+      // (Web Template, OPT, term bindings) must be reloaded explicitly.
+      if (overwrite) await templateStore.reloadSelected();
     } catch (e) {
       const message = String(e);
       if (!overwrite && message.includes("HTTP 409")) {
@@ -73,6 +76,13 @@ export function useTemplateUpload() {
     pendingOverwrite.value = null;
     uploadError.value = null;
   }
+
+  // A pending duplicate prompt belongs to the server that returned HTTP 409;
+  // never let a later confirmation overwrite on a different server.
+  watch(
+    () => serverStore.activeServerId,
+    () => cancelOverwrite(),
+  );
 
   async function handleDrop(event: DragEvent) {
     event.preventDefault();

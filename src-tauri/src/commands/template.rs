@@ -215,24 +215,54 @@ pub async fn get_template_opt(
     Ok(resp.body)
 }
 
+/// Local part of a possibly namespace-prefixed XML name (`o:template_id` -> `template_id`).
+fn local_name(name: &str) -> &str {
+    name.rsplit(':').next().unwrap_or(name)
+}
+
 /// Extract the template ID (`<template_id><value>…</value></template_id>`) from OPT XML.
+///
+/// Accepts namespace-prefixed elements and reads the whole `<value>` content, so
+/// IDs split across text, entity/character references and CDATA are returned intact.
 fn extract_template_id(opt_xml: &str) -> Option<String> {
     let mut reader = Reader::from_str(opt_xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
     let mut in_template_id = false;
+    let mut in_value = false;
+    let mut id = String::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == "template_id" => in_template_id = true,
-            Ok(Event::Text(e)) if in_template_id => {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let name = e.name();
+                let name = local_name(name.as_ref());
+                if name == "template_id" {
+                    in_template_id = true;
+                } else if in_template_id && name == "value" {
+                    in_value = true;
+                }
+            }
+            Ok(Event::Text(e)) if in_value => {
                 let text = e.xml10_content();
-                let id = unescape(&text).ok()?.trim().to_string();
-                return if id.is_empty() { None } else { Some(id) };
+                id.push_str(&unescape(&text).ok()?);
+            }
+            Ok(Event::CData(e)) if in_value => id.push_str(&e.xml10_content()),
+            Ok(Event::GeneralRef(e)) if in_value => {
+                if let Ok(Some(c)) = e.resolve_char_ref() {
+                    id.push(c);
+                } else {
+                    let entity = format!("&{};", e.into_inner());
+                    id.push_str(&unescape(&entity).ok()?);
+                }
+            }
+            Ok(Event::End(e)) if in_value => {
+                let name = e.name();
+                if local_name(name.as_ref()) == "value" {
+                    let id = id.trim().to_string();
+                    return if id.is_empty() { None } else { Some(id) };
+                }
             }
             Ok(Event::Eof) | Err(_) => return None,
             _ => {}
         }
-        buf.clear();
     }
 }
 
@@ -523,6 +553,24 @@ mod extract_template_id_tests {
     fn extracts_template_id() {
         let xml = r#"<template xmlns="http://schemas.openehr.org/v1"><language><code_string>en</code_string></language><template_id><value>vital_signs.v1</value></template_id></template>"#;
         assert_eq!(extract_template_id(xml).as_deref(), Some("vital_signs.v1"));
+    }
+
+    #[test]
+    fn extracts_namespace_prefixed_template_id() {
+        let xml = r#"<o:template xmlns:o="http://schemas.openehr.org/v1"><o:template_id><o:value>ns.v1</o:value></o:template_id></o:template>"#;
+        assert_eq!(extract_template_id(xml).as_deref(), Some("ns.v1"));
+    }
+
+    #[test]
+    fn extracts_template_id_with_entities_cdata_and_whitespace() {
+        let entity = "<template><template_id><value>A&amp;B</value></template_id></template>";
+        assert_eq!(extract_template_id(entity).as_deref(), Some("A&B"));
+        let numeric = "<template><template_id><value>&#65;BC</value></template_id></template>";
+        assert_eq!(extract_template_id(numeric).as_deref(), Some("ABC"));
+        let cdata = "<template><template_id><value><![CDATA[cd.v2]]></value></template_id></template>";
+        assert_eq!(extract_template_id(cdata).as_deref(), Some("cd.v2"));
+        let spaced = "<template><template_id>\n  <value>  s.v1 \n</value>\n</template_id></template>";
+        assert_eq!(extract_template_id(spaced).as_deref(), Some("s.v1"));
     }
 
     #[test]
