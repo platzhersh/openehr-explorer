@@ -2,6 +2,7 @@ import { computed, ref, watch } from "vue";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { invoke } from "@tauri-apps/api/core";
+import { supportsTemplateOverwrite } from "../lib/templateOverwrite";
 import { useAnalytics } from "./useAnalytics";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -97,7 +98,14 @@ export function useTemplateUpload() {
       uploadError.value = message;
       return;
     }
-    // Duplicate: ask the backend which template it is, so the confirmation names exactly
+    // Duplicate. Only offer an overwrite where the server type can actually do one.
+    const serverType = serverStore.profiles.find((p) => p.id === attempt.serverId)?.server_type;
+    if (!supportsTemplateOverwrite(serverType)) {
+      uploadError.value =
+        "A template with this ID already exists on the server. Overwriting isn't supported for this server type; remove the existing template on the server first.";
+      return;
+    }
+    // Ask the backend which template it is, so the confirmation names exactly
     // the one an overwrite would replace.
     const templateId = await invoke<string | null>("parse_opt_template_id", {
       optXml: text,

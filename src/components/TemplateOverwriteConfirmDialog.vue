@@ -178,6 +178,9 @@ onBeforeUnmount(() => {
 .warning {
   color: var(--color-error);
 }
+.hint {
+  color: var(--color-text-secondary);
+}
 
 .dialog-actions {
   display: flex;

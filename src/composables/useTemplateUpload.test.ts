@@ -8,14 +8,17 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 vi.mock("@tauri-apps/plugin-fs", () => ({ readTextFile: vi.fn() }));
 vi.mock("./useAnalytics", () => ({ useAnalytics: () => ({ track: vi.fn() }) }));
 
-import { useServerStore } from "../stores/server";
+import { useServerStore, type ServerProfile } from "../stores/server";
 import { useTemplateUpload } from "./useTemplateUpload";
 
 type Call = { cmd: string; args: Record<string, unknown> };
 
-function setup(activeServerId: string) {
+function setup(activeServerId: string, serverType: ServerProfile["server_type"] = "ehrbase") {
   setActivePinia(createPinia());
   const serverStore = useServerStore();
+  serverStore.profiles = [
+    { id: activeServerId, name: "Local server", server_type: serverType },
+  ] as ServerProfile[];
   serverStore.activeServerId = activeServerId;
   return { serverStore, upload: useTemplateUpload() };
 }
@@ -154,5 +157,15 @@ describe("useTemplateUpload overwrite flow", () => {
     await first;
 
     expect(calls.filter((c) => c.cmd === "list_templates")).toHaveLength(2);
+  });
+
+  it("does not offer an overwrite on server types that can't do one", async () => {
+    mockServer([]);
+    const { upload } = setup("A", "generic");
+
+    await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
+
+    expect(upload.pendingOverwrite.value).toBeNull();
+    expect(upload.uploadError.value).toContain("isn't supported for this server type");
   });
 });

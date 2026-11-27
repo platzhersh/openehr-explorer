@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::server::{
-    create_client, get_profile_by_id, make_request, ServerType, DEFAULT_API_PATH_PREFIX,
+    create_client, get_profile_by_id, make_request, AuthMethod, ServerProfile, ServerType,
+    DEFAULT_API_PATH_PREFIX,
 };
 use crate::inspector::send_instrumented;
 
@@ -275,9 +276,54 @@ pub fn parse_opt_template_id(opt_xml: String) -> Option<String> {
     extract_template_id(&opt_xml)
 }
 
-/// Upload an OPT. With `overwrite = false` a duplicate template ID is rejected by
-/// the server (HTTP 409); with `overwrite = true` the existing template is
-/// replaced via PUT.
+/// URL of EHRbase's Admin API endpoint that replaces an existing template.
+fn ehrbase_admin_template_url(base_url: &str, template_id: &str) -> String {
+    format!(
+        "{}/rest/admin/template/{}",
+        base_url.trim_end_matches('/'),
+        urlencoding::encode(template_id)
+    )
+}
+
+/// Where, and with which credentials, to overwrite an existing template, if this
+/// server type can do it at all.
+///
+/// The openEHR REST API only defines POST for templates (a duplicate is rejected
+/// with 409), so replacing one is vendor-specific (ADR-0030). EHRbase offers
+/// `PUT /rest/admin/template/{template_id}` in its Admin API, mounted beside the
+/// openEHR root and needing the admin role. Other server types return `None`
+/// rather than a guessed request.
+fn overwrite_target(profile: &ServerProfile, template_id: &str) -> Option<(String, AuthMethod)> {
+    match profile.server_type {
+        ServerType::Ehrbase => {
+            let auth = profile
+                .admin_auth_method
+                .as_ref()
+                .unwrap_or(&profile.auth_method);
+            Some((
+                ehrbase_admin_template_url(&profile.base_url, template_id),
+                auth.clone(),
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// Explain a refused EHRbase template overwrite (statuses from its Admin API docs).
+fn ehrbase_overwrite_error(status: u16, body: &str) -> String {
+    let reason = match status {
+        401 => "the server rejected the credentials; overwriting uses the admin credentials of the server profile",
+        403 => "the account needs the EHRbase admin role; add admin credentials to the server profile",
+        404 => "EHRbase did not find the template, or its Admin API is not enabled on the server",
+        422 => "EHRbase cannot replace a template that is used by at least one composition",
+        _ => return format!("Overwrite failed (HTTP {}): {}", status, body),
+    };
+    format!("Overwrite failed (HTTP {}): {}", status, reason)
+}
+
+/// Upload an OPT. A duplicate template ID is rejected by the server (HTTP 409).
+/// With `overwrite = true` the existing template is replaced instead, which only
+/// works on server types that offer a way to do that (see `overwrite_target`).
 #[tauri::command]
 pub async fn upload_template(
     app: tauri::AppHandle,
@@ -291,28 +337,25 @@ pub async fn upload_template(
     let base = api_root.as_str();
     let overwrite = overwrite.unwrap_or(false);
 
-    let (method, url) = if overwrite {
+    let (method, url, auth) = if overwrite {
         let template_id = extract_template_id(&opt_xml)
             .ok_or_else(|| "Could not find a template ID in the OPT file".to_string())?;
-        (
-            reqwest::Method::PUT,
-            format!(
-                "{}/definition/template/adl1.4/{}",
-                base,
-                urlencoding::encode(&template_id)
-            ),
-        )
+        let (url, auth) = overwrite_target(&profile, &template_id).ok_or_else(|| {
+            "Overwriting an existing template is not supported for this server type".to_string()
+        })?;
+        (reqwest::Method::PUT, url, auth)
     } else {
         (
             reqwest::Method::POST,
             format!("{}/definition/template/adl1.4", base),
+            profile.auth_method.clone(),
         )
     };
 
     let resp = send_instrumented(
         &app,
         &client,
-        make_request(&client, method, &url, &profile.auth_method)
+        make_request(&client, method, &url, &auth)
             .header("Content-Type", "application/xml")
             .body(opt_xml),
     )
@@ -324,6 +367,8 @@ pub async fn upload_template(
             if overwrite { "overwritten" } else { "uploaded" },
             resp.status
         ))
+    } else if overwrite {
+        Err(ehrbase_overwrite_error(resp.status, &resp.body))
     } else {
         Err(format!(
             "Upload failed (HTTP {}): {}",
@@ -590,6 +635,26 @@ mod extract_template_id_tests {
         assert_eq!(extract_template_id(comment).as_deref(), Some("live.v1"));
         let cdata = "<template><language><code_string><![CDATA[<template_id><value>example.v1</value></template_id>]]></code_string></language><template_id><value>live.v1</value></template_id></template>";
         assert_eq!(extract_template_id(cdata).as_deref(), Some("live.v1"));
+    }
+
+    #[test]
+    fn ehrbase_admin_template_url_sits_beside_the_openehr_root() {
+        assert_eq!(
+            ehrbase_admin_template_url("http://localhost:8080/ehrbase/", "vital signs.v1"),
+            "http://localhost:8080/ehrbase/rest/admin/template/vital%20signs.v1"
+        );
+    }
+
+    #[test]
+    fn ehrbase_overwrite_errors_explain_the_admin_api_statuses() {
+        assert!(ehrbase_overwrite_error(403, "x").contains("admin role"));
+        assert!(ehrbase_overwrite_error(401, "x").contains("credentials"));
+        assert!(ehrbase_overwrite_error(404, "x").contains("Admin API is not enabled"));
+        assert!(ehrbase_overwrite_error(422, "x").contains("used by at least one composition"));
+        assert_eq!(
+            ehrbase_overwrite_error(500, "boom"),
+            "Overwrite failed (HTTP 500): boom"
+        );
     }
 
     #[test]

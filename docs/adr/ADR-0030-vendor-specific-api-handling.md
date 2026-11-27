@@ -38,6 +38,7 @@ Adding a new vendor quirk therefore means: write the keyed function (or the norm
 | FLAT media type | `...wt.flat.schema+json` (EHRBase), `...wt.flat+json` (spec, FerroEHR) | `...wt.flat+json` | `flat_composition_content_type` |
 | Template id header | `openehr-template-id` | `openEHR-TEMPLATE_ID` | `template_id_header` |
 | Web Template keys | camelCase, names present | snake_case, `name` missing on `context`/`category` | `normalizeWebTemplate` |
+| Template overwrite | spec defines only `POST` (duplicate → 409); no update operation. EHRBase: `PUT <base_url>/rest/admin/template/{id}` (Admin API, admin role, fails with 422 if a composition uses the template) | not implemented (unverified) | `overwrite_target` in `commands/template.rs`, `supportsTemplateOverwrite` in `src/lib/templateOverwrite.ts` |
 
 ## Consequences
 
