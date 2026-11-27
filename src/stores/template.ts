@@ -9,6 +9,12 @@ export interface TemplateSummary {
   created_timestamp: string | null;
 }
 
+// Stateless, so it lives outside the store closure. With `overwrite` the server
+// replaces an existing template of the same ID instead of rejecting the upload.
+function uploadTemplate(serverId: string, optXml: string, overwrite = false): Promise<string> {
+  return invoke<string>("upload_template", { serverId, optXml, overwrite });
+}
+
 export const useTemplateStore = defineStore("template", () => {
   const templates = ref<TemplateSummary[]>([]);
   const loading = ref(false);
@@ -96,8 +102,12 @@ export const useTemplateStore = defineStore("template", () => {
     }
   }
 
-  async function uploadTemplate(serverId: string, optXml: string) {
-    return invoke<string>("upload_template", { serverId, optXml });
+  // Bumped when the open template was overwritten on the server. The ID doesn't
+  // change, so the browser's route watchers don't fire; it watches this instead
+  // and reloads the template's details (Web Template, OPT and term bindings).
+  const detailReloadToken = ref(0);
+  function requestDetailReload() {
+    detailReloadToken.value++;
   }
 
   return {
@@ -109,6 +119,8 @@ export const useTemplateStore = defineStore("template", () => {
     fetchTemplates,
     fetchWebTemplate,
     fetchOpt,
+    detailReloadToken,
+    requestDetailReload,
     uploadTemplate,
   };
 });

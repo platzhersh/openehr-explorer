@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::server::{
-    create_client, get_profile_by_id, make_request, ServerType, DEFAULT_API_PATH_PREFIX,
+    create_client, get_profile_by_id, make_request, AuthMethod, ServerProfile, ServerType,
 };
 use crate::inspector::send_instrumented;
 
@@ -42,16 +42,8 @@ pub async fn get_template_example(
     // Better CDR doesn't implement the standard Definition API `/example`
     // endpoint; it exposes it on its own API instead (`<host>/rest/v1/template/<id>/example`).
     if resp.status == 404 && matches!(profile.server_type, ServerType::BetterPlatform) {
-        // Vendor endpoints hang off `base_url`. Only an empty prefix means
-        // `base_url` may itself already point at the API root, so strip that
-        // suffix then; a custom prefix keeps `base_url` as the root.
-        let base_url = profile.base_url.trim_end_matches('/');
-        let server_root = match profile.api_path_prefix.as_deref() {
-            Some(prefix) if !prefix.trim().trim_matches('/').is_empty() => base_url,
-            _ => base
-                .strip_suffix(DEFAULT_API_PATH_PREFIX)
-                .unwrap_or(base_url),
-        };
+        // Vendor endpoints hang off the server root (see `ServerProfile::server_root`).
+        let server_root = profile.server_root();
         let better_url = format!(
             "{}/rest/v1/template/{}/example?format=FLAT&exampleFilter=INPUT",
             server_root,
@@ -215,23 +207,155 @@ pub async fn get_template_opt(
     Ok(resp.body)
 }
 
+/// Local part of a possibly namespace-prefixed XML name (`o:template_id` -> `template_id`).
+fn local_name(name: &str) -> &str {
+    name.rsplit(':').next().unwrap_or(name)
+}
+
+/// Extract the template ID (`<template_id><value>…</value></template_id>`) from OPT XML.
+///
+/// Accepts namespace-prefixed elements and reads the whole `<value>` content, so
+/// IDs split across text, entity/character references and CDATA are returned intact.
+fn extract_template_id(opt_xml: &str) -> Option<String> {
+    let mut reader = Reader::from_str(opt_xml);
+    let mut in_template_id = false;
+    let mut in_value = false;
+    let mut id = String::new();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let name = e.name();
+                let name = local_name(name.as_ref());
+                if name == "template_id" {
+                    in_template_id = true;
+                } else if in_template_id && name == "value" {
+                    in_value = true;
+                }
+            }
+            Ok(Event::Text(e)) if in_value => {
+                let text = e.xml10_content();
+                id.push_str(&unescape(&text).ok()?);
+            }
+            Ok(Event::CData(e)) if in_value => id.push_str(&e.xml10_content()),
+            Ok(Event::GeneralRef(e)) if in_value => {
+                if let Ok(Some(c)) = e.resolve_char_ref() {
+                    id.push(c);
+                } else {
+                    let entity = format!("&{};", e.into_inner());
+                    id.push_str(&unescape(&entity).ok()?);
+                }
+            }
+            Ok(Event::End(e)) if in_value => {
+                let name = e.name();
+                if local_name(name.as_ref()) == "value" {
+                    let id = id.trim().to_string();
+                    return if id.is_empty() { None } else { Some(id) };
+                }
+            }
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
+    }
+}
+
+/// Template ID of an OPT, exactly as `upload_template` extracts it for an overwrite.
+///
+/// The overwrite confirmation shows this value, so what the user confirms is by
+/// construction the template that the PUT targets (`None` if it can't be read).
+#[tauri::command]
+pub fn parse_opt_template_id(opt_xml: String) -> Option<String> {
+    extract_template_id(&opt_xml)
+}
+
+/// URL of EHRbase's Admin API endpoint that replaces an existing template.
+fn ehrbase_admin_template_url(base_url: &str, template_id: &str) -> String {
+    format!(
+        "{}/rest/admin/template/{}",
+        base_url.trim_end_matches('/'),
+        urlencoding::encode(template_id)
+    )
+}
+
+/// Where, and with which credentials, to overwrite an existing template, if this
+/// server type can do it at all.
+///
+/// The openEHR REST API only defines POST for templates (a duplicate is rejected
+/// with 409), so replacing one is vendor-specific (ADR-0030). EHRbase offers
+/// `PUT /rest/admin/template/{template_id}` in its Admin API, mounted beside the
+/// openEHR root and needing the admin role. Other server types return `None`
+/// rather than a guessed request.
+fn overwrite_target(profile: &ServerProfile, template_id: &str) -> Option<(String, AuthMethod)> {
+    match profile.server_type {
+        ServerType::Ehrbase => {
+            let auth = profile
+                .admin_auth_method
+                .as_ref()
+                .unwrap_or(&profile.auth_method);
+            Some((
+                ehrbase_admin_template_url(&profile.server_root(), template_id),
+                auth.clone(),
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// Explain a refused EHRbase template overwrite (statuses from its Admin API docs).
+fn ehrbase_overwrite_error(status: u16, body: &str) -> String {
+    let reason = match status {
+        401 => "the server rejected the credentials; overwriting uses the admin credentials of the server profile",
+        403 => "the account needs the EHRbase admin role; add admin credentials to the server profile",
+        404 => "EHRbase did not find the template, or its Admin API is not enabled; if this server is not EHRbase, check the server type in its profile",
+        422 => "EHRbase cannot replace a template that is used by at least one composition",
+        _ => return format!("Overwrite failed (HTTP {}): {}", status, body),
+    };
+    // Keep what the server said: it tells "no such route" apart from "no such template".
+    let said: String = body.trim().chars().take(200).collect();
+    if said.is_empty() {
+        format!("Overwrite failed (HTTP {}): {}", status, reason)
+    } else {
+        format!(
+            "Overwrite failed (HTTP {}): {}. Server said: {}",
+            status, reason, said
+        )
+    }
+}
+
+/// Upload an OPT. A duplicate template ID is rejected by the server (HTTP 409).
+/// With `overwrite = true` the existing template is replaced instead, which only
+/// works on server types that offer a way to do that (see `overwrite_target`).
 #[tauri::command]
 pub async fn upload_template(
     app: tauri::AppHandle,
     server_id: String,
     opt_xml: String,
+    overwrite: Option<bool>,
 ) -> Result<String, String> {
     let profile = get_profile_by_id(&server_id)?;
     let client = create_client(&profile);
     let api_root = profile.api_root();
     let base = api_root.as_str();
+    let overwrite = overwrite.unwrap_or(false);
 
-    let url = format!("{}/definition/template/adl1.4", base);
+    let (method, url, auth) = if overwrite {
+        let template_id = extract_template_id(&opt_xml)
+            .ok_or_else(|| "Could not find a template ID in the OPT file".to_string())?;
+        let (url, auth) = overwrite_target(&profile, &template_id).ok_or_else(|| {
+            "Overwriting an existing template is not supported for this server type".to_string()
+        })?;
+        (reqwest::Method::PUT, url, auth)
+    } else {
+        (
+            reqwest::Method::POST,
+            format!("{}/definition/template/adl1.4", base),
+            profile.auth_method.clone(),
+        )
+    };
 
     let resp = send_instrumented(
         &app,
         &client,
-        make_request(&client, reqwest::Method::POST, &url, &profile.auth_method)
+        make_request(&client, method, &url, &auth)
             .header("Content-Type", "application/xml")
             .body(opt_xml),
     )
@@ -239,9 +363,12 @@ pub async fn upload_template(
 
     if resp.is_success || resp.status == 201 || resp.status == 204 {
         Ok(format!(
-            "Template uploaded successfully (HTTP {})",
+            "Template {} successfully (HTTP {})",
+            if overwrite { "overwritten" } else { "uploaded" },
             resp.status
         ))
+    } else if overwrite {
+        Err(ehrbase_overwrite_error(resp.status, &resp.body))
     } else {
         Err(format!(
             "Upload failed (HTTP {}): {}",
@@ -469,5 +596,77 @@ mod tests {
         assert_eq!(bindings[3].terminology, "ICD-10");
         assert_eq!(bindings[3].code, "A41.9");
         assert_eq!(bindings[3].node_id, "at0003");
+    }
+}
+
+#[cfg(test)]
+mod extract_template_id_tests {
+    use super::{ehrbase_admin_template_url, ehrbase_overwrite_error, extract_template_id};
+
+    #[test]
+    fn extracts_template_id() {
+        let xml = r#"<template xmlns="http://schemas.openehr.org/v1"><language><code_string>en</code_string></language><template_id><value>vital_signs.v1</value></template_id></template>"#;
+        assert_eq!(extract_template_id(xml).as_deref(), Some("vital_signs.v1"));
+    }
+
+    #[test]
+    fn extracts_namespace_prefixed_template_id() {
+        let xml = r#"<o:template xmlns:o="http://schemas.openehr.org/v1"><o:template_id><o:value>ns.v1</o:value></o:template_id></o:template>"#;
+        assert_eq!(extract_template_id(xml).as_deref(), Some("ns.v1"));
+    }
+
+    #[test]
+    fn extracts_template_id_with_entities_cdata_and_whitespace() {
+        let entity = "<template><template_id><value>A&amp;B</value></template_id></template>";
+        assert_eq!(extract_template_id(entity).as_deref(), Some("A&B"));
+        let numeric = "<template><template_id><value>&#65;BC</value></template_id></template>";
+        assert_eq!(extract_template_id(numeric).as_deref(), Some("ABC"));
+        let cdata =
+            "<template><template_id><value><![CDATA[cd.v2]]></value></template_id></template>";
+        assert_eq!(extract_template_id(cdata).as_deref(), Some("cd.v2"));
+        let spaced =
+            "<template><template_id>\n  <value>  s.v1 \n</value>\n</template_id></template>";
+        assert_eq!(extract_template_id(spaced).as_deref(), Some("s.v1"));
+    }
+
+    #[test]
+    fn ignores_template_id_lookalikes_in_comments_and_cdata() {
+        let comment = "<!-- <template_id><value>example.v1</value></template_id> --><template><template_id><value>live.v1</value></template_id></template>";
+        assert_eq!(extract_template_id(comment).as_deref(), Some("live.v1"));
+        let cdata = "<template><language><code_string><![CDATA[<template_id><value>example.v1</value></template_id>]]></code_string></language><template_id><value>live.v1</value></template_id></template>";
+        assert_eq!(extract_template_id(cdata).as_deref(), Some("live.v1"));
+    }
+
+    #[test]
+    fn ehrbase_admin_template_url_sits_beside_the_openehr_root() {
+        assert_eq!(
+            ehrbase_admin_template_url("http://localhost:8080/ehrbase/", "vital signs.v1"),
+            "http://localhost:8080/ehrbase/rest/admin/template/vital%20signs.v1"
+        );
+    }
+
+    #[test]
+    fn ehrbase_overwrite_errors_explain_the_admin_api_statuses() {
+        assert!(ehrbase_overwrite_error(403, "x").contains("admin role"));
+        assert!(ehrbase_overwrite_error(401, "x").contains("credentials"));
+        let not_found = ehrbase_overwrite_error(404, "x");
+        assert!(not_found.contains("Admin API is not enabled"));
+        assert!(not_found.contains("server type"));
+        assert!(ehrbase_overwrite_error(422, "x").contains("used by at least one composition"));
+        let routing =
+            ehrbase_overwrite_error(404, r#"{"detail":"no resource is served at this path"}"#);
+        assert!(
+            routing.contains("Server said: {\"detail\":\"no resource is served at this path\"}")
+        );
+        assert!(!ehrbase_overwrite_error(403, "  ").contains("Server said"));
+        assert_eq!(
+            ehrbase_overwrite_error(500, "boom"),
+            "Overwrite failed (HTTP 500): boom"
+        );
+    }
+
+    #[test]
+    fn returns_none_without_template_id() {
+        assert_eq!(extract_template_id("<template></template>"), None);
     }
 }

@@ -127,6 +127,17 @@ watch(
   { immediate: true },
 );
 
+// An overwrite keeps the template ID, so reload the open template's details
+// (Web Template, OPT and term bindings) when the upload flow asks for it.
+watch(
+  () => templateStore.detailReloadToken,
+  () => {
+    if (selectedTemplateId.value && serverStore.activeServerId) {
+      void loadTemplateDetail(serverStore.activeServerId, selectedTemplateId.value);
+    }
+  },
+);
+
 watch(selectedTemplateId, (id) => {
   if (id && serverStore.activeServerId) {
     void loadTemplateDetail(serverStore.activeServerId, id);
@@ -503,6 +514,11 @@ onUnmounted(() => {
             :uploading="inlineUpload.uploading.value"
             :upload-status="inlineUpload.uploadStatus.value"
             :upload-error="inlineUpload.uploadError.value"
+            :can-overwrite="inlineUpload.pendingOverwrite.value !== null"
+            :overwrite-template-id="inlineUpload.pendingTemplateId.value"
+            :overwrite-server-name="inlineUpload.pendingServerName.value"
+            @overwrite="inlineUpload.confirmOverwrite"
+            @cancel-overwrite="inlineUpload.cancelOverwrite"
             @dragover="inlineUpload.dragOver.value = true"
             @dragleave="inlineUpload.dragOver.value = false"
             @drop="inlineUpload.handleDrop"

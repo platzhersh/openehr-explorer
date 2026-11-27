@@ -3,11 +3,19 @@
 // empty-server inline state in TemplateBrowser.vue — the actual upload
 // logic lives in the useTemplateUpload composable; this component only
 // owns the markup/CSS so neither caller has to duplicate it.
-defineProps<{
+import { ref, watch } from "vue";
+import TemplateOverwriteConfirmDialog from "./TemplateOverwriteConfirmDialog.vue";
+
+const props = defineProps<{
   dragOver: boolean;
   uploading: boolean;
   uploadStatus: string | null;
   uploadError: string | null;
+  /** True when the server rejected the upload as a duplicate and the user may overwrite. */
+  canOverwrite?: boolean;
+  /** For the overwrite confirmation: the template that would be replaced and where. */
+  overwriteTemplateId?: string | null;
+  overwriteServerName?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -15,7 +23,23 @@ const emit = defineEmits<{
   dragleave: [];
   drop: [event: DragEvent];
   chooseFile: [];
+  overwrite: [];
+  cancelOverwrite: [];
 }>();
+
+// Overwriting destroys the existing template, so it needs an explicit second step.
+const confirming = ref(false);
+watch(
+  () => props.canOverwrite,
+  (can) => {
+    if (!can) confirming.value = false;
+  },
+);
+
+function confirmOverwrite() {
+  confirming.value = false;
+  emit("overwrite");
+}
 </script>
 
 <template>
@@ -34,6 +58,26 @@ const emit = defineEmits<{
     </div>
     <div v-if="uploadStatus" class="upload-msg success">{{ uploadStatus }}</div>
     <div v-if="uploadError" class="upload-msg error">{{ uploadError }}</div>
+    <div v-if="canOverwrite" class="overwrite-actions">
+      <button type="button" class="btn btn-sm" :disabled="uploading" @click="confirming = true">
+        Overwrite existing template
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-secondary"
+        :disabled="uploading"
+        @click="emit('cancelOverwrite')"
+      >
+        Cancel
+      </button>
+    </div>
+    <TemplateOverwriteConfirmDialog
+      v-if="canOverwrite && confirming"
+      :template-id="overwriteTemplateId ?? null"
+      :server-name="overwriteServerName ?? null"
+      @confirm="confirmOverwrite"
+      @cancel="confirming = false"
+    />
   </div>
 </template>
 
@@ -59,6 +103,12 @@ const emit = defineEmits<{
 }
 .upload-zone p {
   margin: 0;
+}
+
+.overwrite-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .upload-msg {
