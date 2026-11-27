@@ -227,6 +227,7 @@ pub fn run() {
             template::get_web_template,
             template::get_template_opt,
             template::upload_template,
+            template::delete_template,
             template::parse_opt_template_id,
             template::get_template_example,
             template::get_term_bindings,

@@ -321,6 +321,81 @@ fn ehrbase_overwrite_error(status: u16, body: &str) -> String {
     }
 }
 
+/// Where, and with which credentials, to delete a template, if this server type
+/// offers a delete route at all.
+///
+/// The openEHR REST API has no template delete, so this is vendor-specific
+/// (ADR-0030). EHRbase: `DELETE {server_root}/rest/admin/template/{id}` (202). FerroEHR
+/// nests its admin API under the openEHR API root, as for EHR deletion (204). Both need
+/// the admin API enabled and an admin account. Other types return `None` rather than a
+/// guessed request (Better Platform has not been checked).
+fn delete_target(profile: &ServerProfile, template_id: &str) -> Option<(String, AuthMethod)> {
+    let auth = profile
+        .admin_auth_method
+        .as_ref()
+        .unwrap_or(&profile.auth_method)
+        .clone();
+    match profile.server_type {
+        ServerType::Ehrbase => Some((
+            ehrbase_admin_template_url(&profile.server_root(), template_id),
+            auth,
+        )),
+        ServerType::FerroEhr => Some((
+            format!(
+                "{}/admin/template/{}",
+                profile.api_root().trim_end_matches('/'),
+                urlencoding::encode(template_id)
+            ),
+            auth,
+        )),
+        _ => None,
+    }
+}
+
+/// Explain a refused template deletion.
+fn delete_template_error(status: u16, body: &str) -> String {
+    let reason = match status {
+        401 => "the server rejected the credentials; deleting uses the admin credentials of the server profile",
+        403 => "the account needs admin rights; add admin credentials to the server profile",
+        404 => "the server did not find the template, or its Admin API is not enabled",
+        409 | 422 => "the template is still used by at least one composition, so it can't be deleted",
+        _ => return format!("Delete failed (HTTP {}): {}", status, body),
+    };
+    let said: String = body.trim().chars().take(200).collect();
+    if said.is_empty() {
+        format!("Delete failed (HTTP {}): {}", status, reason)
+    } else {
+        format!(
+            "Delete failed (HTTP {}): {}. Server said: {}",
+            status, reason, said
+        )
+    }
+}
+
+/// Permanently delete a template through the vendor admin API (see `delete_target`).
+#[tauri::command]
+pub async fn delete_template(
+    app: tauri::AppHandle,
+    server_id: String,
+    template_id: String,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let client = create_client(&profile);
+    let (url, auth) = delete_target(&profile, &template_id)
+        .ok_or_else(|| "Deleting templates is not supported for this server type".to_string())?;
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::DELETE, &url, &auth),
+    )
+    .await?;
+    if resp.is_success {
+        Ok(format!("Template {} deleted", template_id))
+    } else {
+        Err(delete_template_error(resp.status, &resp.body))
+    }
+}
+
 /// Upload an OPT. A duplicate template ID is rejected by the server (HTTP 409).
 /// With `overwrite = true` the existing template is replaced instead, which only
 /// works on server types that offer a way to do that (see `overwrite_target`).
@@ -601,7 +676,23 @@ mod tests {
 
 #[cfg(test)]
 mod extract_template_id_tests {
-    use super::{ehrbase_admin_template_url, ehrbase_overwrite_error, extract_template_id};
+    use super::{
+        delete_template_error, ehrbase_admin_template_url, ehrbase_overwrite_error,
+        extract_template_id,
+    };
+
+    #[test]
+    fn delete_errors_explain_the_statuses() {
+        assert!(delete_template_error(403, "").contains("admin rights"));
+        assert!(delete_template_error(401, "").contains("credentials"));
+        assert!(delete_template_error(404, "").contains("did not find"));
+        assert!(delete_template_error(422, "").contains("used by at least one composition"));
+        assert!(delete_template_error(409, "").contains("used by at least one composition"));
+        assert_eq!(
+            delete_template_error(500, "boom"),
+            "Delete failed (HTTP 500): boom"
+        );
+    }
 
     #[test]
     fn extracts_template_id() {
