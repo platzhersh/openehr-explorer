@@ -159,6 +159,24 @@ const isResponseHtml = computed(() => isHtmlResponse(selected.value));
 // XML and HTML share the markup viewer / "xml" tab.
 const isResponseXml = computed(() => isXmlResponse(selected.value) || isResponseHtml.value);
 
+// Request body markup detection: by content-type header, falling back to a
+// body sniff (an XML declaration / root element, or an HTML doctype).
+const requestMarkupKind = computed<"xml" | "html" | null>(() => {
+  const entry = selected.value;
+  if (!entry?.request_body) return null;
+  const headerKey = Object.keys(entry.request_headers).find(
+    (k) => k.toLowerCase() === "content-type",
+  );
+  const contentType = (headerKey ? entry.request_headers[headerKey] : "").toLowerCase();
+  if (contentType.includes("html")) return "html";
+  if (contentType.includes("xml")) return "xml";
+  if (contentType.includes("json") || requestJson.value !== undefined) return null;
+  const body = entry.request_body;
+  if (/^\s*<(!doctype\s+html|html[\s>])/i.test(body)) return "html";
+  if (/^\s*<(\?xml\s|[A-Za-z_][\w:.-]*[\s>/])/.test(body)) return "xml";
+  return null;
+});
+
 const curlCommand = computed(() => (selected.value ? generateCurl(selected.value) : ""));
 
 // Auto-switch to XML tab when XML response is detected
@@ -375,7 +393,10 @@ function doClear() {
 
               <div v-if="selected.request_body" class="detail-section">
                 <div class="section-header">Request Body</div>
-                <div class="body-view-tabs">
+                <div v-if="requestMarkupKind" class="xml-container">
+                  <XmlViewer :xml="selected.request_body" :html="requestMarkupKind === 'html'" />
+                </div>
+                <div v-if="!requestMarkupKind" class="body-view-tabs">
                   <button
                     :class="['tab-btn-sm', { active: bodyViewTab === 'tree' }]"
                     @click="bodyViewTab = 'tree'"
@@ -390,18 +411,22 @@ function doClear() {
                   </button>
                 </div>
                 <div
-                  v-if="bodyViewTab === 'tree' && requestJson !== undefined"
+                  v-if="!requestMarkupKind && bodyViewTab === 'tree' && requestJson !== undefined"
                   class="tree-container"
                 >
                   <JsonTreeNode label="root" :value="requestJson" :depth="0" />
                 </div>
                 <div
-                  v-else-if="bodyViewTab === 'raw' && requestJson !== undefined"
+                  v-else-if="
+                    !requestMarkupKind && bodyViewTab === 'raw' && requestJson !== undefined
+                  "
                   class="raw-container"
                 >
                   <JsonViewer :value="requestJson" />
                 </div>
-                <pre v-else class="raw-body">{{ selected.request_body }}</pre>
+                <pre v-else-if="!requestMarkupKind" class="raw-body">{{
+                  selected.request_body
+                }}</pre>
               </div>
 
               <div class="detail-section">
