@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { duplicateWithoutOverwriteMessage, supportsTemplateOverwrite } from "./templateOverwrite";
+import {
+  duplicateMayReplace,
+  duplicateWithoutOverwriteMessage,
+  supportsTemplateOverwrite,
+} from "./templateOverwrite";
 
 describe("supportsTemplateOverwrite", () => {
   it("is only implemented for EHRbase", () => {
@@ -25,5 +29,15 @@ describe("duplicateWithoutOverwriteMessage", () => {
         "Overwriting isn't supported for this server type",
       );
     }
+  });
+});
+
+describe("duplicateMayReplace", () => {
+  it("asks first everywhere except FerroEHR, which always refuses a duplicate", () => {
+    expect(duplicateMayReplace("ehrbase")).toBe(true);
+    expect(duplicateMayReplace("better_platform")).toBe(true);
+    expect(duplicateMayReplace("generic")).toBe(true);
+    expect(duplicateMayReplace(undefined)).toBe(true);
+    expect(duplicateMayReplace("ferro_ehr")).toBe(false);
   });
 });

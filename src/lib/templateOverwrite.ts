@@ -28,3 +28,13 @@ export function duplicateWithoutOverwriteMessage(serverType: ServerType | undefi
   }
   return `${exists} Overwriting isn't supported for this server type; remove the existing template on the server first.`;
 }
+
+/**
+ * Whether uploading a template whose ID already exists might silently replace it, so the
+ * user should be asked first. Servers differ: the EHRbase sandbox replaces on a plain
+ * upload, others answer 409. Only FerroEHR is known to always refuse (it documents
+ * templates as immutable once loaded), so only there is the question pointless.
+ */
+export function duplicateMayReplace(serverType: ServerType | undefined): boolean {
+  return serverType !== "ferro_ehr";
+}

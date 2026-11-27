@@ -115,6 +115,10 @@ onBeforeUnmount(() => {
             The existing template is lost and can't be restored from this app. Download it first if
             you may need it.
           </p>
+          <p class="hint">
+            If the server refuses a plain upload, EHRbase can only replace a template that no
+            composition uses, and needs admin rights.
+          </p>
         </div>
         <div class="dialog-actions">
           <button
