@@ -567,9 +567,11 @@ mod extract_template_id_tests {
         assert_eq!(extract_template_id(entity).as_deref(), Some("A&B"));
         let numeric = "<template><template_id><value>&#65;BC</value></template_id></template>";
         assert_eq!(extract_template_id(numeric).as_deref(), Some("ABC"));
-        let cdata = "<template><template_id><value><![CDATA[cd.v2]]></value></template_id></template>";
+        let cdata =
+            "<template><template_id><value><![CDATA[cd.v2]]></value></template_id></template>";
         assert_eq!(extract_template_id(cdata).as_deref(), Some("cd.v2"));
-        let spaced = "<template><template_id>\n  <value>  s.v1 \n</value>\n</template_id></template>";
+        let spaced =
+            "<template><template_id>\n  <value>  s.v1 \n</value>\n</template_id></template>";
         assert_eq!(extract_template_id(spaced).as_deref(), Some("s.v1"));
     }
 
