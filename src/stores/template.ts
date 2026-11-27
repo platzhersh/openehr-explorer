@@ -9,6 +9,12 @@ export interface TemplateSummary {
   created_timestamp: string | null;
 }
 
+// Stateless, so it lives outside the store closure. With `overwrite` the server
+// replaces an existing template of the same ID instead of rejecting the upload.
+function uploadTemplate(serverId: string, optXml: string, overwrite = false): Promise<string> {
+  return invoke<string>("upload_template", { serverId, optXml, overwrite });
+}
+
 export const useTemplateStore = defineStore("template", () => {
   const templates = ref<TemplateSummary[]>([]);
   const loading = ref(false);
@@ -106,10 +112,6 @@ export const useTemplateStore = defineStore("template", () => {
     if (!lastSelection || !selectedWebTemplate.value) return;
     const { serverId, templateId } = lastSelection;
     await Promise.all([fetchWebTemplate(serverId, templateId), fetchOpt(serverId, templateId)]);
-  }
-
-  async function uploadTemplate(serverId: string, optXml: string, overwrite = false) {
-    return invoke<string>("upload_template", { serverId, optXml, overwrite });
   }
 
   return {
