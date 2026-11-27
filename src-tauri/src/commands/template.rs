@@ -223,9 +223,9 @@ fn extract_template_id(opt_xml: &str) -> Option<String> {
     let mut in_template_id = false;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"template_id" => in_template_id = true,
+            Ok(Event::Start(e)) if e.name().as_ref() == "template_id" => in_template_id = true,
             Ok(Event::Text(e)) if in_template_id => {
-                let text = e.xml10_content().ok()?;
+                let text = e.xml10_content();
                 let id = unescape(&text).ok()?.trim().to_string();
                 return if id.is_empty() { None } else { Some(id) };
             }
