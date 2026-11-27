@@ -26,15 +26,20 @@ export function duplicateWithoutOverwriteMessage(serverType: ServerType | undefi
   if (serverType === "ferro_ehr") {
     return `${exists} FerroEHR templates are immutable, so it can't be overwritten: upload it under a new template ID or version, or have an admin delete the old one first (only possible if no composition uses it).`;
   }
+  if (serverType === "better_platform") {
+    return "An identical template with this ID is already installed on the server, so nothing changed. Better versions templates: uploading a changed template under the same ID adds a new active version.";
+  }
   return `${exists} Overwriting isn't supported for this server type; remove the existing template on the server first.`;
 }
 
 /**
  * Whether uploading a template whose ID already exists might silently replace it, so the
  * user should be asked first. Servers differ: the EHRbase sandbox replaces on a plain
- * upload, others answer 409. Only FerroEHR is known to always refuse (it documents
- * templates as immutable once loaded), so only there is the question pointless.
+ * upload, others answer 409. The question is pointless on FerroEHR, which documents
+ * templates as immutable once loaded and always refuses, and on Better Platform, which
+ * versions templates: a changed upload becomes a new active version (nothing is lost)
+ * and an identical one answers 409 without changing anything.
  */
 export function duplicateMayReplace(serverType: ServerType | undefined): boolean {
-  return serverType !== "ferro_ehr";
+  return serverType !== "ferro_ehr" && serverType !== "better_platform";
 }

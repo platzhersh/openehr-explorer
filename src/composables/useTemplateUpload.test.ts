@@ -236,17 +236,34 @@ describe("useTemplateUpload overwrite flow", () => {
       expect(upload.pendingOverwrite.value).toBeNull();
     });
 
-    it("does not ask on FerroEHR, which always refuses a duplicate", async () => {
+    it.each([
+      ["ferro_ehr", "immutable"], // always refuses a duplicate
+      ["better_platform", "nothing changed"], // versions templates, nothing is lost
+    ] as const)("does not ask on %s", async (serverType, expected) => {
       const calls: Call[] = [];
       mockServer(calls);
-      const { upload } = setup("A", "ferro_ehr");
+      const { upload } = setup("A", serverType);
       useTemplateStore().templates = listed();
 
       await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
 
       expect(uploads(calls)).toEqual([false]); // sent straight away
       expect(upload.pendingOverwrite.value).toBeNull();
-      expect(upload.uploadError.value).toContain("immutable");
+      expect(upload.uploadError.value).toContain(expected);
+    });
+
+    it("reloads the open template's details after a plain upload that succeeds", async () => {
+      const calls: Call[] = [];
+      mockServer(calls, undefined, true); // permissive: accepts the upload (e.g. a new version)
+      const { upload } = setup("A", "better_platform");
+      const store = useTemplateStore();
+      store.templates = listed();
+      const before = store.detailReloadToken;
+
+      await upload.handleDrop(drop("<opt/>") as unknown as DragEvent);
+      await flush();
+
+      expect(store.detailReloadToken).toBe(before + 1);
     });
 
     it("uploads normally when a different template is listed", async () => {
