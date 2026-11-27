@@ -164,12 +164,12 @@ See the full, always-up-to-date **[Tool Comparison](https://openehr-explorer.dev
 
 ## Star History
 
-<a href="https://www.star-history.com/#platzhersh/openehr-explorer&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=platzhersh/openehr-explorer&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=platzhersh/openehr-explorer&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=platzhersh/openehr-explorer&type=Date" />
-  </picture>
+<a href="https://www.star-history.com/?repos=platzhersh%2Fopenehr-explorer&type=date&releases=&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=platzhersh/openehr-explorer&type=date&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=platzhersh/openehr-explorer&type=date&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=platzhersh/openehr-explorer&type=date&legend=bottom-right" />
+ </picture>
 </a>
 
 ## Code signing policy
