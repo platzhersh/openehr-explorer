@@ -17,6 +17,8 @@ import JsonViewer from "./JsonViewer.vue";
 import XmlViewer from "./XmlViewer.vue";
 import BashViewer from "./BashViewer.vue";
 import CompassIcon from "./CompassIcon.vue";
+import TrashIcon from "./TrashIcon.vue";
+import ConfirmDialog from "./ConfirmDialog.vue";
 import DrawerStateIcon from "./DrawerStateIcon.vue";
 import CopyButton from "./CopyButton.vue";
 import { useModifierHeld } from "../composables/useModifierHeld";
@@ -266,14 +268,30 @@ function doClear() {
         >
           <CompassIcon />
         </button>
-        <button v-if="store.entries.length > 0" class="btn btn-sm" @click="confirmClear">
+        <button
+          v-if="store.entries.length > 0"
+          type="button"
+          class="btn btn-sm clear-btn"
+          @click="confirmClear"
+        >
+          <TrashIcon />
           Clear
         </button>
-        <div v-if="showClearConfirm" class="clear-confirm">
-          <span>Clear request history?</span>
-          <button class="btn btn-sm btn-danger" @click="doClear">Yes</button>
-          <button class="btn btn-sm" @click="showClearConfirm = false">No</button>
-        </div>
+        <ConfirmDialog
+          v-if="showClearConfirm"
+          title="Clear request history?"
+          confirm-label="Clear history"
+          id-prefix="inspector-clear"
+          @confirm="doClear"
+          @cancel="showClearConfirm = false"
+        >
+          <p class="clear-text">
+            This removes all {{ store.entries.length }} logged request{{
+              store.entries.length === 1 ? "" : "s"
+            }}
+            from the inspector. It can't be undone.
+          </p>
+        </ConfirmDialog>
         <fieldset class="drawer-state-group">
           <legend class="sr-only">Panel height</legend>
           <button
@@ -669,12 +687,14 @@ function doClear() {
   gap: 4px;
 }
 
-.clear-confirm {
-  display: flex;
+.clear-btn {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
+}
+
+.clear-text {
+  margin: 0 0 12px;
 }
 
 /* Drawer height state buttons — collapsed / half / expanded, each a
