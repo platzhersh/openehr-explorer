@@ -4,7 +4,7 @@
  * focused by default so a stray Enter never overwrites, and Escape closes only
  * this dialog (not the upload modal behind it).
  */
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
 defineProps<{
   /** ID of the template that will be replaced; null if it couldn't be read from the OPT. */
@@ -18,8 +18,50 @@ const emit = defineEmits<{
   cancel: [];
 }>();
 
+const dialog = ref<HTMLElement | null>(null);
 const cancelButton = ref<HTMLButtonElement | null>(null);
-onMounted(() => cancelButton.value?.focus());
+let previouslyFocused: HTMLElement | null = null;
+
+// Handled in the capture phase on window so Escape closes only this dialog even when
+// focus has drifted to the page body (the upload modal behind it listens on window
+// in the bubble phase), and so Tab can't leave the dialog.
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    event.stopPropagation();
+    event.preventDefault();
+    emit("cancel");
+    return;
+  }
+  if (event.key !== "Tab" || !dialog.value) return;
+  const focusable = Array.from(
+    dialog.value.querySelectorAll<HTMLElement>("button:not([disabled])"),
+  );
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (!dialog.value.contains(active)) {
+    event.preventDefault();
+    first.focus();
+  } else if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+onMounted(() => {
+  previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  window.addEventListener("keydown", onKeydown, true);
+  cancelButton.value?.focus();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown, true);
+  if (previouslyFocused?.isConnected) previouslyFocused.focus();
+});
 </script>
 
 <template>
@@ -30,6 +72,7 @@ onMounted(() => cancelButton.value?.focus());
     @keydown.esc.stop="emit('cancel')"
   >
     <div
+      ref="dialog"
       class="dialog"
       role="alertdialog"
       aria-modal="true"

@@ -21,6 +21,31 @@ describe("optTemplateId", () => {
     ).toBe("A&B");
   });
 
+  it("reads CDATA content and numeric character references in full", () => {
+    expect(
+      optTemplateId(
+        "<template><template_id><value><![CDATA[cd<1>.v2]]></value></template_id></template>",
+      ),
+    ).toBe("cd<1>.v2");
+    expect(
+      optTemplateId("<template><template_id><value>&#65;B&#x43;</value></template_id></template>"),
+    ).toBe("ABC");
+    expect(
+      optTemplateId(
+        "<template><template_id><value>x<![CDATA[y]]>&amp;z</value></template_id></template>",
+      ),
+    ).toBe("xy&z");
+  });
+
+  it("returns null instead of a partial ID when the value can't be fully decoded", () => {
+    expect(
+      optTemplateId("<template><template_id><value>a&unknown;b</value></template_id></template>"),
+    ).toBeNull();
+    expect(
+      optTemplateId("<template><template_id><value>a<b/>c</value></template_id></template>"),
+    ).toBeNull();
+  });
+
   it("returns null when there is no template ID", () => {
     expect(optTemplateId("<template></template>")).toBeNull();
   });

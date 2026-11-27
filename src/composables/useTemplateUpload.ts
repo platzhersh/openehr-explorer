@@ -45,11 +45,16 @@ export function useTemplateUpload() {
     pending.value = null;
   }
 
+  // Only the latest upload attempt may update state: a slower, superseded attempt
+  // (or one for a server the user has left) must not replace the pending prompt.
+  let latestAttempt = 0;
+
   async function performUpload(text: string, overwrite = false) {
     // Pin the target server: the user may switch servers while the request is in flight.
     const serverId = serverStore.activeServerId;
     if (!serverId) return;
-    const stillActive = () => serverStore.activeServerId === serverId;
+    const attempt = ++latestAttempt;
+    const stillActive = () => attempt === latestAttempt && serverStore.activeServerId === serverId;
 
     uploading.value = true;
     uploadStatus.value = null;
@@ -76,7 +81,7 @@ export function useTemplateUpload() {
         uploadError.value = message;
       }
     } finally {
-      uploading.value = false;
+      if (attempt === latestAttempt) uploading.value = false;
     }
   }
 
@@ -99,7 +104,11 @@ export function useTemplateUpload() {
   // A pending duplicate prompt belongs to the server that returned HTTP 409.
   watch(
     () => serverStore.activeServerId,
-    () => cancelOverwrite(),
+    () => {
+      latestAttempt++; // invalidate any in-flight upload for the server being left
+      uploading.value = false;
+      cancelOverwrite();
+    },
   );
 
   async function handleDrop(event: DragEvent) {

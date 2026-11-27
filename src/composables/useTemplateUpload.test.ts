@@ -88,4 +88,28 @@ describe("useTemplateUpload overwrite flow", () => {
     await upload.confirmOverwrite();
     expect(calls.some((c) => c.cmd === "upload_template" && c.args.overwrite === true)).toBe(false);
   });
+
+  it("ignores a late 409 from a superseded upload so the prompt keeps its own OPT", async () => {
+    const releases: Array<() => void> = [];
+    invoke.mockImplementation(async (cmd: string, args: Record<string, unknown>) => {
+      if (cmd !== "upload_template") return [];
+      await new Promise<void>((resolve) => releases.push(resolve));
+      if (!args.overwrite) throw new Error("Upload failed (HTTP 409): exists");
+      return "Template overwritten successfully (HTTP 204)";
+    });
+    const { upload } = setup("A");
+
+    const first = upload.handleDrop(drop("<first/>") as unknown as DragEvent);
+    await nextTick();
+    const second = upload.handleDrop(drop("<second/>") as unknown as DragEvent);
+    await nextTick();
+    // The newer upload answers first and opens the prompt; the older one answers late.
+    releases[1]();
+    await second;
+    expect(upload.pendingOverwrite.value).toBe("<second/>");
+    releases[0]();
+    await first;
+
+    expect(upload.pendingOverwrite.value).toBe("<second/>");
+  });
 });
