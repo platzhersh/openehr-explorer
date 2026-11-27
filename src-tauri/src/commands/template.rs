@@ -6,7 +6,6 @@ use serde_json::Value;
 
 use super::server::{
     create_client, get_profile_by_id, make_request, AuthMethod, ServerProfile, ServerType,
-    DEFAULT_API_PATH_PREFIX,
 };
 use crate::inspector::send_instrumented;
 
@@ -43,16 +42,8 @@ pub async fn get_template_example(
     // Better CDR doesn't implement the standard Definition API `/example`
     // endpoint; it exposes it on its own API instead (`<host>/rest/v1/template/<id>/example`).
     if resp.status == 404 && matches!(profile.server_type, ServerType::BetterPlatform) {
-        // Vendor endpoints hang off `base_url`. Only an empty prefix means
-        // `base_url` may itself already point at the API root, so strip that
-        // suffix then; a custom prefix keeps `base_url` as the root.
-        let base_url = profile.base_url.trim_end_matches('/');
-        let server_root = match profile.api_path_prefix.as_deref() {
-            Some(prefix) if !prefix.trim().trim_matches('/').is_empty() => base_url,
-            _ => base
-                .strip_suffix(DEFAULT_API_PATH_PREFIX)
-                .unwrap_or(base_url),
-        };
+        // Vendor endpoints hang off the server root (see `ServerProfile::server_root`).
+        let server_root = profile.server_root();
         let better_url = format!(
             "{}/rest/v1/template/{}/example?format=FLAT&exampleFilter=INPUT",
             server_root,
@@ -301,7 +292,7 @@ fn overwrite_target(profile: &ServerProfile, template_id: &str) -> Option<(Strin
                 .as_ref()
                 .unwrap_or(&profile.auth_method);
             Some((
-                ehrbase_admin_template_url(&profile.base_url, template_id),
+                ehrbase_admin_template_url(&profile.server_root(), template_id),
                 auth.clone(),
             ))
         }

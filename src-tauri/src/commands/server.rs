@@ -64,12 +64,35 @@ pub fn join_api_root(base_url: &str, prefix: Option<&str>) -> String {
     }
 }
 
+/// The server root that vendor-specific (non-openEHR) endpoints hang off, e.g. EHRbase's
+/// `/rest/admin` or Better's `/rest/v1`.
+///
+/// That is `base_url`, except when the profile sets an explicit empty prefix: then
+/// `base_url` is documented to be the openEHR API root itself, so the default openEHR
+/// path is stripped from it (if present). `None` and a custom prefix both leave
+/// `base_url` as the root, because the prefix is appended to it to reach the API root.
+pub fn join_server_root(base_url: &str, prefix: Option<&str>) -> String {
+    let base = base_url.trim_end_matches('/');
+    match prefix {
+        Some(p) if p.trim().trim_matches('/').is_empty() => base
+            .strip_suffix(DEFAULT_API_PATH_PREFIX)
+            .unwrap_or(base)
+            .to_string(),
+        _ => base.to_string(),
+    }
+}
+
 impl ServerProfile {
     /// The openEHR REST API root (e.g. `https://host/rest/openehr/v1`), with no
     /// trailing slash. Spec-defined resource paths (`/ehr`, `/query/aql`, …) are
     /// appended to this.
     pub fn api_root(&self) -> String {
         join_api_root(&self.base_url, self.api_path_prefix.as_deref())
+    }
+
+    /// The server root vendor-specific endpoints hang off (see `join_server_root`).
+    pub fn server_root(&self) -> String {
+        join_server_root(&self.base_url, self.api_path_prefix.as_deref())
     }
 }
 
@@ -938,9 +961,9 @@ mod tests {
     }
 
     use super::{
-        connection_test_url, join_api_root, keep_stored_secret, normalize_api_path_prefix,
-        to_public_profile, AuthMethod, ServerProfile, ServerProfileInput, ServerType,
-        StoredProfile, DEFAULT_API_PATH_PREFIX,
+        connection_test_url, join_api_root, join_server_root, keep_stored_secret,
+        normalize_api_path_prefix, to_public_profile, AuthMethod, ServerProfile,
+        ServerProfileInput, ServerType, StoredProfile, DEFAULT_API_PATH_PREFIX,
     };
     use crate::credentials::StorageBackend;
 
@@ -1153,6 +1176,33 @@ mod tests {
         assert_eq!(
             join_api_root("https://cdr.example.com/openehr/v1/", Some("")),
             "https://cdr.example.com/openehr/v1"
+        );
+    }
+
+    #[test]
+    fn server_root_is_base_url_with_the_default_or_a_custom_prefix() {
+        // The prefix is appended to base_url to reach the API root, so base_url is the root.
+        assert_eq!(
+            join_server_root("https://cdr.example.com/ehrbase/", None),
+            "https://cdr.example.com/ehrbase"
+        );
+        assert_eq!(
+            join_server_root("https://cdr.example.com", Some("/openehr/v1")),
+            "https://cdr.example.com"
+        );
+    }
+
+    #[test]
+    fn server_root_strips_the_api_root_when_the_prefix_is_empty() {
+        // An empty prefix means base_url is itself the API root: vendor endpoints hang
+        // off the server root above it.
+        assert_eq!(
+            join_server_root("https://cdr.example.com/ehrbase/rest/openehr/v1/", Some("")),
+            "https://cdr.example.com/ehrbase"
+        );
+        assert_eq!(
+            join_server_root("https://cdr.example.com/ehrbase", Some("")),
+            "https://cdr.example.com/ehrbase"
         );
     }
 
