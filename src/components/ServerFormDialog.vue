@@ -499,7 +499,11 @@ useEscapeKey(() => props.open, handleClose);
             <hr class="form-divider" />
             <div class="form-group">
               <SearchableSelect
-                label="Admin Credentials (for EHR deletion)"
+                :label="
+                  form.server_type === 'ehrbase'
+                    ? 'Admin Credentials (for EHR deletion and template overwrite)'
+                    : 'Admin Credentials (for EHR deletion)'
+                "
                 :options="ADMIN_AUTH_TYPE_OPTIONS"
                 :model-value="form.admin_auth_method ? form.admin_auth_method.type : 'none_admin'"
                 search-placeholder="Filter auth methods..."
