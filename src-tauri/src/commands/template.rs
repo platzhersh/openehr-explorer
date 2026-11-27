@@ -314,11 +314,20 @@ fn ehrbase_overwrite_error(status: u16, body: &str) -> String {
     let reason = match status {
         401 => "the server rejected the credentials; overwriting uses the admin credentials of the server profile",
         403 => "the account needs the EHRbase admin role; add admin credentials to the server profile",
-        404 => "EHRbase did not find the template, or its Admin API is not enabled on the server",
+        404 => "EHRbase did not find the template, or its Admin API is not enabled; if this server is not EHRbase, check the server type in its profile",
         422 => "EHRbase cannot replace a template that is used by at least one composition",
         _ => return format!("Overwrite failed (HTTP {}): {}", status, body),
     };
-    format!("Overwrite failed (HTTP {}): {}", status, reason)
+    // Keep what the server said: it tells "no such route" apart from "no such template".
+    let said: String = body.trim().chars().take(200).collect();
+    if said.is_empty() {
+        format!("Overwrite failed (HTTP {}): {}", status, reason)
+    } else {
+        format!(
+            "Overwrite failed (HTTP {}): {}. Server said: {}",
+            status, reason, said
+        )
+    }
 }
 
 /// Upload an OPT. A duplicate template ID is rejected by the server (HTTP 409).
@@ -649,8 +658,16 @@ mod extract_template_id_tests {
     fn ehrbase_overwrite_errors_explain_the_admin_api_statuses() {
         assert!(ehrbase_overwrite_error(403, "x").contains("admin role"));
         assert!(ehrbase_overwrite_error(401, "x").contains("credentials"));
-        assert!(ehrbase_overwrite_error(404, "x").contains("Admin API is not enabled"));
+        let not_found = ehrbase_overwrite_error(404, "x");
+        assert!(not_found.contains("Admin API is not enabled"));
+        assert!(not_found.contains("server type"));
         assert!(ehrbase_overwrite_error(422, "x").contains("used by at least one composition"));
+        let routing =
+            ehrbase_overwrite_error(404, r#"{"detail":"no resource is served at this path"}"#);
+        assert!(
+            routing.contains("Server said: {\"detail\":\"no resource is served at this path\"}")
+        );
+        assert!(!ehrbase_overwrite_error(403, "  ").contains("Server said"));
         assert_eq!(
             ehrbase_overwrite_error(500, "boom"),
             "Overwrite failed (HTTP 500): boom"
