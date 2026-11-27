@@ -1,6 +1,7 @@
 import { computed, ref, watch } from "vue";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
+import { optTemplateId } from "../lib/optTemplateId";
 import { useAnalytics } from "./useAnalytics";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -27,6 +28,14 @@ export function useTemplateUpload() {
   // server that returned the 409 so a confirmation can never reach another one.
   const pending = ref<{ text: string; serverId: string } | null>(null);
   const pendingOverwrite = computed(() => pending.value?.text ?? null);
+
+  // For the overwrite confirmation: which template would be replaced, and on which server.
+  const pendingTemplateId = computed(() =>
+    pending.value ? optTemplateId(pending.value.text) : null,
+  );
+  const pendingServerName = computed(
+    () => serverStore.profiles.find((p) => p.id === pending.value?.serverId)?.name ?? null,
+  );
 
   function resetState() {
     dragOver.value = false;
@@ -129,6 +138,8 @@ export function useTemplateUpload() {
     uploadStatus,
     uploadError,
     pendingOverwrite,
+    pendingTemplateId,
+    pendingServerName,
     confirmOverwrite,
     cancelOverwrite,
     resetState,

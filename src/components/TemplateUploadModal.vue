@@ -17,6 +17,8 @@ const {
   uploadStatus,
   uploadError,
   pendingOverwrite,
+  pendingTemplateId,
+  pendingServerName,
   confirmOverwrite,
   cancelOverwrite,
   resetState,
@@ -76,6 +78,8 @@ function handleKeydown(event: KeyboardEvent) {
           :upload-status="uploadStatus"
           :upload-error="uploadError"
           :can-overwrite="pendingOverwrite !== null"
+          :overwrite-template-id="pendingTemplateId"
+          :overwrite-server-name="pendingServerName"
           @overwrite="confirmOverwrite"
           @cancel-overwrite="cancelOverwrite"
           @dragover="dragOver = true"
