@@ -11,6 +11,11 @@ import { useAnalytics } from "./useAnalytics";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 
+/** The template ID as the backend reads it from the OPT (null if it can't). */
+function parseTemplateId(text: string): Promise<string | null> {
+  return invoke<string | null>("parse_opt_template_id", { optXml: text }).catch(() => null);
+}
+
 /**
  * Shared OPT upload flow (drag & drop + choose-file) used by both the
  * "Upload Template" modal and the inline drop zone shown when a server has
@@ -98,11 +103,6 @@ export function useTemplateUpload() {
 
   function serverTypeOf(serverId: string) {
     return serverStore.profiles.find((p) => p.id === serverId)?.server_type;
-  }
-
-  /** The template ID as the backend reads it from the OPT (null if it can't). */
-  function parseTemplateId(text: string): Promise<string | null> {
-    return invoke<string | null>("parse_opt_template_id", { optXml: text }).catch(() => null);
   }
 
   /**
