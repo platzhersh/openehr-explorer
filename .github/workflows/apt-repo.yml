@@ -35,6 +35,13 @@ jobs:
       APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
       APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
     steps:
+      # ubuntu-latest no longer ships apt-ftparchive (part of apt-utils),
+      # which the index/Release generation below depends on.
+      - name: Install apt-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils
+
       # Requires a fine-grained PAT with push access to the apt-repo repo
       # (APT_REPO_TOKEN), and a GPG private key + passphrase dedicated to
       # signing this repo (APT_SIGNING_PRIVATE_KEY / APT_SIGNING_KEY_PASSPHRASE
