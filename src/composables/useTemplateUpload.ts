@@ -50,13 +50,69 @@ export function useTemplateUpload() {
     pending.value = null;
   }
 
+  /** One upload, pinned to the server it was started for. */
+  interface Attempt {
+    serverId: string;
+    /** No newer attempt (or reset) has superseded this one. */
+    isLatest: () => boolean;
+    /** The user is still on the server this upload was sent to. */
+    serverStillActive: () => boolean;
+    /** Safe to update the local upload state: latest attempt, same server. */
+    isCurrent: () => boolean;
+  }
+
+  function beginAttempt(serverId: string): Attempt {
+    const id = ++latestAttempt;
+    const isLatest = () => id === latestAttempt;
+    const serverStillActive = () => serverStore.activeServerId === serverId;
+    return {
+      serverId,
+      isLatest,
+      serverStillActive,
+      isCurrent: () => isLatest() && serverStillActive(),
+    };
+  }
+
+  async function onUploadSucceeded(attempt: Attempt, result: string, overwrite: boolean) {
+    // Drop results for a server the user has since left.
+    if (!attempt.serverStillActive()) return;
+    if (attempt.isLatest()) uploadStatus.value = result;
+    void analytics.track("template_uploaded");
+    // The upload changed the server even if a newer attempt owns the local state.
+    await templateStore.fetchTemplates(attempt.serverId);
+    // An overwrite keeps the template ID, so the open template's details
+    // (Web Template, OPT, term bindings) must be reloaded explicitly.
+    if (overwrite && attempt.serverStillActive()) templateStore.requestDetailReload();
+  }
+
+  async function onUploadFailed(
+    attempt: Attempt,
+    text: string,
+    overwrite: boolean,
+    error: unknown,
+  ) {
+    if (!attempt.isCurrent()) return;
+    const message = String(error);
+    if (overwrite || !message.includes("HTTP 409")) {
+      uploadError.value = message;
+      return;
+    }
+    // Duplicate: ask the backend which template it is, so the confirmation names exactly
+    // the one an overwrite would replace.
+    const templateId = await invoke<string | null>("parse_opt_template_id", {
+      optXml: text,
+    }).catch(() => null);
+    // The user may have moved on while the backend parsed the OPT.
+    if (!attempt.isCurrent()) return;
+    pending.value = { text, serverId: attempt.serverId, templateId };
+    uploadError.value = "A template with this ID already exists on the server.";
+  }
+
   async function performUpload(text: string, overwrite = false) {
     // Pin the target server: the user may switch servers while the request is in flight.
     const serverId = serverStore.activeServerId;
     if (!serverId) return;
-    const attempt = ++latestAttempt;
-    const isLatest = () => attempt === latestAttempt;
-    const serverStillActive = () => serverStore.activeServerId === serverId;
+    const attempt = beginAttempt(serverId);
 
     uploading.value = true;
     uploadStatus.value = null;
@@ -65,31 +121,11 @@ export function useTemplateUpload() {
 
     try {
       const result = await templateStore.uploadTemplate(serverId, text, overwrite);
-      // Drop results for a server the user has since left.
-      if (!serverStillActive()) return;
-      if (isLatest()) uploadStatus.value = result;
-      void analytics.track("template_uploaded");
-      // The upload changed the server even if a newer attempt owns the local state.
-      await templateStore.fetchTemplates(serverId);
-      // An overwrite keeps the template ID, so the open template's details
-      // (Web Template, OPT, term bindings) must be reloaded explicitly.
-      if (overwrite && serverStillActive()) templateStore.requestDetailReload();
+      await onUploadSucceeded(attempt, result, overwrite);
     } catch (e) {
-      if (!isLatest() || !serverStillActive()) return;
-      const message = String(e);
-      if (!overwrite && message.includes("HTTP 409")) {
-        const templateId = await invoke<string | null>("parse_opt_template_id", {
-          optXml: text,
-        }).catch(() => null);
-        // The user may have moved on while the backend parsed the OPT.
-        if (!isLatest() || !serverStillActive()) return;
-        pending.value = { text, serverId, templateId };
-        uploadError.value = "A template with this ID already exists on the server.";
-      } else {
-        uploadError.value = message;
-      }
+      await onUploadFailed(attempt, text, overwrite, e);
     } finally {
-      if (isLatest()) uploading.value = false;
+      if (attempt.isLatest()) uploading.value = false;
     }
   }
 
