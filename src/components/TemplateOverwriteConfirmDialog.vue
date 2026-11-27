@@ -2,7 +2,9 @@
 /**
  * Explicit confirmation before replacing a template on the server. Cancel is
  * focused by default so a stray Enter never overwrites, and Escape closes only
- * this dialog (not the upload modal behind it).
+ * this dialog (not the upload modal behind it). It is rendered at the end of
+ * <body> and the rest of the page is made `inert` while it is open, so neither
+ * keyboard users nor assistive technology can reach the controls behind it.
  */
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
@@ -18,9 +20,24 @@ const emit = defineEmits<{
   cancel: [];
 }>();
 
+const overlay = ref<HTMLElement | null>(null);
 const dialog = ref<HTMLElement | null>(null);
 const cancelButton = ref<HTMLButtonElement | null>(null);
 let previouslyFocused: HTMLElement | null = null;
+// Page content made inert while the dialog is open (only what wasn't already inert).
+let inertedElements: Element[] = [];
+
+function makeBackgroundInert() {
+  inertedElements = Array.from(document.body.children).filter(
+    (element) => element !== overlay.value && !element.hasAttribute("inert"),
+  );
+  for (const element of inertedElements) element.setAttribute("inert", "");
+}
+
+function restoreBackground() {
+  for (const element of inertedElements) element.removeAttribute("inert");
+  inertedElements = [];
+}
 
 // Handled in the capture phase on window so Escape closes only this dialog even when
 // focus has drifted to the page body (the upload modal behind it listens on window
@@ -53,57 +70,68 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   window.addEventListener("keydown", onKeydown, true);
+  makeBackgroundInert();
   cancelButton.value?.focus();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown, true);
+  restoreBackground();
   if (previouslyFocused?.isConnected) previouslyFocused.focus();
 });
 </script>
 
 <template>
-  <div
-    class="dialog-overlay"
-    role="presentation"
-    @click.self="emit('cancel')"
-    @keydown.esc.stop="emit('cancel')"
-  >
+  <Teleport to="body">
     <div
-      ref="dialog"
-      class="dialog"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="overwrite-title"
-      aria-describedby="overwrite-desc"
+      ref="overlay"
+      class="dialog-overlay"
+      role="presentation"
+      @click.self="emit('cancel')"
+      @keydown.esc.stop="emit('cancel')"
     >
-      <div class="dialog-header">
-        <h2 id="overwrite-title">Overwrite existing template?</h2>
-      </div>
-      <div class="dialog-body" id="overwrite-desc">
-        <p>
-          <template v-if="templateId">
-            The template <strong class="mono">{{ templateId }}</strong>
-          </template>
-          <template v-else>This template</template>
-          already exists<template v-if="serverName"> on <strong>{{ serverName }}</strong></template
-          >. Overwriting <strong>replaces it with the file you uploaded</strong>.
-        </p>
-        <p class="warning">
-          The existing template is lost and can't be restored from this app. Download it first if
-          you may need it.
-        </p>
-      </div>
-      <div class="dialog-actions">
-        <button ref="cancelButton" type="button" class="btn btn-secondary" @click="emit('cancel')">
-          Cancel
-        </button>
-        <button type="button" class="btn btn-danger" @click="emit('confirm')">
-          Overwrite template
-        </button>
+      <div
+        ref="dialog"
+        class="dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="overwrite-title"
+        aria-describedby="overwrite-desc"
+      >
+        <div class="dialog-header">
+          <h2 id="overwrite-title">Overwrite existing template?</h2>
+        </div>
+        <div class="dialog-body" id="overwrite-desc">
+          <p>
+            <template v-if="templateId">
+              The template <strong class="mono">{{ templateId }}</strong>
+            </template>
+            <template v-else>This template</template>
+            already exists<template v-if="serverName">
+              on <strong>{{ serverName }}</strong></template
+            >. Overwriting <strong>replaces it with the file you uploaded</strong>.
+          </p>
+          <p class="warning">
+            The existing template is lost and can't be restored from this app. Download it first if
+            you may need it.
+          </p>
+        </div>
+        <div class="dialog-actions">
+          <button
+            ref="cancelButton"
+            type="button"
+            class="btn btn-secondary"
+            @click="emit('cancel')"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn btn-danger" @click="emit('confirm')">
+            Overwrite template
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
