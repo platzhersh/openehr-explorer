@@ -6,8 +6,15 @@ const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
 };
 
-// One token of element content: a CDATA section, a character/entity reference, or plain text.
-const TOKEN = /<!\[CDATA\[([\s\S]*?)\]\]>|&(#x[0-9a-f]+|#\d+|[a-z]+);|([^<&]+)/iy;
+// The kinds of token in element content, each matched at a given position (sticky).
+const CDATA = /<!\[CDATA\[([\s\S]*?)\]\]>/y;
+const REFERENCE = /&(#x[0-9a-f]+|#\d+|[a-z]+);/iy;
+const TEXT = /[^<&]+/y;
+
+function matchAt(re: RegExp, text: string, pos: number): RegExpExecArray | null {
+  re.lastIndex = pos;
+  return re.exec(text);
+}
 
 function decodeReference(ref: string): string | null {
   if (ref.startsWith("#")) {
@@ -23,19 +30,26 @@ function decodeReference(ref: string): string | null {
 /** Decode XML element content (text, named/numeric references, CDATA); null if anything is left undecoded. */
 function decodeContent(content: string): string | null {
   let result = "";
-  TOKEN.lastIndex = 0;
-  while (TOKEN.lastIndex < content.length) {
-    const match = TOKEN.exec(content);
-    if (!match) return null;
-    if (match[1] !== undefined) {
-      result += match[1];
-    } else if (match[2] !== undefined) {
-      const decoded = decodeReference(match[2]);
+  let pos = 0;
+  while (pos < content.length) {
+    const cdata = matchAt(CDATA, content, pos);
+    if (cdata) {
+      result += cdata[1];
+      pos += cdata[0].length;
+      continue;
+    }
+    const reference = matchAt(REFERENCE, content, pos);
+    if (reference) {
+      const decoded = decodeReference(reference[1]);
       if (decoded === null) return null;
       result += decoded;
-    } else {
-      result += match[3];
+      pos += reference[0].length;
+      continue;
     }
+    const text = matchAt(TEXT, content, pos);
+    if (!text) return null;
+    result += text[0];
+    pos += text[0].length;
   }
   return result;
 }
@@ -44,7 +58,7 @@ function decodeContent(content: string): string | null {
 function elementContent(xml: string, name: string): string | null {
   const open = String.raw`<(?:[\w.-]+:)?${name}\b[^>]*>`;
   const close = String.raw`</(?:[\w.-]+:)?${name}\s*>`;
-  return new RegExp(`${open}([\\s\\S]*?)${close}`).exec(xml)?.[1] ?? null;
+  return new RegExp(String.raw`${open}([\s\S]*?)${close}`).exec(xml)?.[1] ?? null;
 }
 
 /**
