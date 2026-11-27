@@ -189,3 +189,10 @@ Currently, full `ServerProfile` objects (including plaintext credentials) are se
 | `src-tauri/src/lib.rs` | Register new commands, add credential state |
 | `src/stores/server.ts` | Use `ServerProfilePublic`, send `profile_id` for operations |
 | `src/views/ServerManager.vue` | Update form to handle opaque credential state |
+
+## Addendum: startup behaviour and macOS keychain prompts
+
+- **No probe at startup.** The credential manager no longer does a write → read → delete probe against the keychain on every launch. The backend is chosen from on-disk state only: a `credential_backend` marker file in the config dir, else an existing `credentials.enc` (legacy fallback users), else the OS keychain (unconfirmed). The marker is written after the first successful keychain store.
+- **No silent backend switch.** An unconfirmed keychain that fails on the first store falls back to the encrypted file only on non-macOS platforms (e.g. Linux without a Secret Service). On macOS a failure is surfaced, since it usually means a denied ACL prompt and switching would strand existing keychain secrets.
+- **Tolerant listing.** `list_server_profiles` (and the other commands returning the list) never fail because a secret is unreadable. Such a profile is returned with empty credentials and `credentials_unavailable: true`, and the UI shows a "Credentials unavailable" badge. After the first failure the remaining profiles are flagged without further keychain reads, so a denied prompt is not repeated per profile.
+- **Developer note:** unsigned or ad-hoc-signed binaries (every `tauri dev` rebuild) get a new keychain identity, so macOS asks again for each item. Choose **Always Allow** (not "Allow") for every prompt, once per build. Signed release builds keep their access across updates.

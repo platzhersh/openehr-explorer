@@ -117,6 +117,11 @@ pub struct ServerProfilePublic {
     pub credential_backend: String,
     #[serde(default)]
     pub is_default: bool,
+    /// True when the stored secret could not be read (keychain access denied,
+    /// cancelled or otherwise failing). The profile is still listed, with
+    /// `has_password`/`has_token` false, so the user can re-enter credentials.
+    #[serde(default)]
+    pub credentials_unavailable: bool,
 }
 
 /// Inbound profile from the frontend when saving (credentials included).
@@ -448,6 +453,37 @@ fn to_public_profile(profile: &ServerProfile, backend: &StorageBackend) -> Serve
         api_path_prefix: profile.api_path_prefix.clone(),
         credential_backend: backend_str.to_string(),
         is_default: profile.is_default,
+        credentials_unavailable: false,
+    }
+}
+
+/// An auth method with the secret left empty (what the UI shows when the
+/// secret could not be read).
+fn empty_auth(stored: &StoredAuthMethod) -> AuthMethod {
+    match stored {
+        StoredAuthMethod::None => AuthMethod::None,
+        StoredAuthMethod::Basic { username } => AuthMethod::Basic {
+            username: username.clone(),
+            password: String::new(),
+        },
+        StoredAuthMethod::Bearer => AuthMethod::Bearer {
+            token: String::new(),
+        },
+    }
+}
+
+/// A profile without secrets, used when its secrets are unreadable.
+fn profile_without_secrets(stored: &StoredProfile) -> ServerProfile {
+    ServerProfile {
+        id: stored.id.clone(),
+        name: stored.name.clone(),
+        base_url: stored.base_url.clone(),
+        server_type: stored.server_type.clone(),
+        auth_method: empty_auth(&stored.auth_method),
+        admin_auth_method: stored.admin_auth_method.as_ref().map(empty_auth),
+        terminology_url: stored.terminology_url.clone(),
+        api_path_prefix: stored.api_path_prefix.clone(),
+        is_default: stored.is_default,
     }
 }
 
@@ -575,17 +611,52 @@ fn build_request(
 
 /// Resolve secrets for each stored profile and convert to the IPC-safe public
 /// representation. Shared by every command that returns the profile list.
+///
+/// Never fails because of a secret: a profile whose secrets can't be read is
+/// still listed, flagged `credentials_unavailable`. After the first failure
+/// the remaining profiles are flagged without further attempts, so a denied
+/// keychain prompt is not repeated once per profile.
 fn to_public_profiles(
     mgr: &CredentialManager,
     profiles: &[StoredProfile],
     config_dir: &std::path::Path,
-) -> Result<Vec<ServerProfilePublic>, String> {
-    let mut public = Vec::with_capacity(profiles.len());
-    for sp in profiles {
-        let resolved = load_resolved_profile(mgr, sp, config_dir)?;
-        public.push(to_public_profile(&resolved, mgr.backend()));
-    }
-    Ok(public)
+) -> Vec<ServerProfilePublic> {
+    let backend = mgr.backend();
+    public_profiles_tolerant(profiles, &backend, |sp| {
+        load_resolved_profile(mgr, sp, config_dir)
+    })
+}
+
+fn public_profiles_tolerant(
+    profiles: &[StoredProfile],
+    backend: &StorageBackend,
+    mut resolve: impl FnMut(&StoredProfile) -> Result<ServerProfile, String>,
+) -> Vec<ServerProfilePublic> {
+    let mut storage_failed = false;
+    profiles
+        .iter()
+        .map(|sp| {
+            let needs_secret = !matches!(sp.auth_method, StoredAuthMethod::None)
+                || matches!(
+                    sp.admin_auth_method,
+                    Some(StoredAuthMethod::Basic { .. } | StoredAuthMethod::Bearer)
+                );
+            let resolved = if storage_failed && needs_secret {
+                Err("skipped after earlier credential storage failure".to_string())
+            } else {
+                resolve(sp)
+            };
+            match resolved {
+                Ok(p) => to_public_profile(&p, backend),
+                Err(_) => {
+                    storage_failed = true;
+                    let mut public = to_public_profile(&profile_without_secrets(sp), backend);
+                    public.credentials_unavailable = true;
+                    public
+                }
+            }
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -597,7 +668,7 @@ pub async fn list_server_profiles() -> Result<Vec<ServerProfilePublic>, String> 
     let config_dir = get_config_dir();
     let mgr = cred_manager();
     let stored = load_stored_profiles();
-    to_public_profiles(mgr, &stored, &config_dir)
+    Ok(to_public_profiles(mgr, &stored, &config_dir))
 }
 
 #[tauri::command]
@@ -646,7 +717,7 @@ pub async fn save_server_profile(
     }
     save_stored_profiles(&profiles)?;
 
-    to_public_profiles(mgr, &profiles, &config_dir)
+    Ok(to_public_profiles(mgr, &profiles, &config_dir))
 }
 
 #[tauri::command]
@@ -661,7 +732,7 @@ pub async fn delete_server_profile(id: String) -> Result<Vec<ServerProfilePublic
     profiles.retain(|p| p.id != id);
     save_stored_profiles(&profiles)?;
 
-    to_public_profiles(mgr, &profiles, &config_dir)
+    Ok(to_public_profiles(mgr, &profiles, &config_dir))
 }
 
 #[tauri::command]
@@ -682,7 +753,7 @@ pub async fn set_default_server_profile(id: String) -> Result<Vec<ServerProfileP
     }
     save_stored_profiles(&profiles)?;
 
-    to_public_profiles(mgr, &profiles, &config_dir)
+    Ok(to_public_profiles(mgr, &profiles, &config_dir))
 }
 
 #[tauri::command]
@@ -1200,5 +1271,67 @@ mod tests {
     #[test]
     fn parse_ferroehr_status_json_rejects_invalid_json() {
         assert!(parse_ferroehr_status_json("not json").is_err());
+    }
+
+    fn stored(id: &str, auth: StoredAuthMethod) -> StoredProfile {
+        StoredProfile {
+            id: id.to_string(),
+            name: id.to_string(),
+            base_url: "http://localhost".to_string(),
+            server_type: ServerType::Generic,
+            auth_method: auth,
+            admin_auth_method: None,
+            terminology_url: None,
+            api_path_prefix: None,
+            is_default: false,
+        }
+    }
+
+    #[test]
+    fn listing_survives_a_failing_secret_loader() {
+        let profiles = vec![
+            stored("open", StoredAuthMethod::None),
+            stored(
+                "a",
+                StoredAuthMethod::Basic {
+                    username: "u".into(),
+                },
+            ),
+            stored("b", StoredAuthMethod::Bearer),
+        ];
+        let mut attempted = Vec::new();
+        let out = public_profiles_tolerant(&profiles, &StorageBackend::OsKeychain, |sp| {
+            attempted.push(sp.id.clone());
+            if matches!(sp.auth_method, StoredAuthMethod::None) {
+                return Ok(profile_without_secrets(sp));
+            }
+            Err(format!("denied {}", sp.id))
+        });
+        assert_eq!(out.len(), 3);
+        // Every profile is still listed; those needing a secret are flagged.
+        assert!(!out[0].credentials_unavailable);
+        assert!(out[1].credentials_unavailable && out[2].credentials_unavailable);
+        // ...but after the first failure the keychain is not asked again for
+        // profiles that need a secret.
+        assert_eq!(attempted, vec!["open", "a"]);
+        match &out[1].auth_method {
+            AuthMethodPublic::Basic {
+                username,
+                has_password,
+            } => {
+                assert_eq!(username, "u");
+                assert!(!has_password);
+            }
+            _ => panic!("expected basic auth"),
+        }
+    }
+
+    #[test]
+    fn listing_flags_only_failing_profiles_when_loader_works() {
+        let profiles = vec![stored("a", StoredAuthMethod::Bearer)];
+        let out = public_profiles_tolerant(&profiles, &StorageBackend::EncryptedFile, |sp| {
+            Ok(profile_without_secrets(sp))
+        });
+        assert!(!out[0].credentials_unavailable);
     }
 }

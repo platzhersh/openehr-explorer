@@ -376,7 +376,7 @@ Details: [`RELEASING.md`](../../RELEASING.md).
 
 ### 8.1 Security
 
-- **Credentials:** keychain-first storage, encrypted-file fallback, zeroization, never returned to the frontend, `Authorization`/`Cookie` redacted in the Inspector ([ADR-0015](../adr/ADR-0015-secure-credential-storage.md), [ADR-0011](../adr/ADR-0011-centralized-request-instrumentation.md)).
+- **Credentials:** keychain-first storage (no startup probe; backend persisted in a marker file), encrypted-file fallback, tolerant profile listing (`credentials_unavailable`), zeroization, never returned to the frontend, `Authorization`/`Cookie` redacted in the Inspector ([ADR-0015](../adr/ADR-0015-secure-credential-storage.md), [ADR-0011](../adr/ADR-0011-centralized-request-instrumentation.md)).
 - **Hostile server data:** treat CDR responses as untrusted; escape on render; validate user input ([ADR-0014](../adr/ADR-0014-xss-hardening-and-input-validation.md)).
 - **CSP + SRI:** CSP in `tauri.conf.json` limits script/style sources; CDN assets pinned with SRI ([ADR-0016](../adr/ADR-0016-csp-and-subresource-integrity.md)). `connect-src` permits arbitrary `http(s)` because users add arbitrary CDR URLs. CDR traffic is made from Rust, but the broad directive leaves a residual risk that compromised webview code could send requests to arbitrary destinations (see R3).
 - **Supply chain:** pinned dependencies + committed lockfiles, signed updater artifacts, code-signed Windows installer.
