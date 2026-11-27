@@ -501,8 +501,8 @@ useEscapeKey(() => props.open, handleClose);
               <SearchableSelect
                 :label="
                   form.server_type === 'ehrbase'
-                    ? 'Admin Credentials (for EHR deletion and template overwrite)'
-                    : 'Admin Credentials (for EHR deletion)'
+                    ? 'Admin Credentials (for EHR deletion, template overwrite and deletion)'
+                    : 'Admin Credentials (for EHR and template deletion)'
                 "
                 :options="ADMIN_AUTH_TYPE_OPTIONS"
                 :model-value="form.admin_auth_method ? form.admin_auth_method.type : 'none_admin'"

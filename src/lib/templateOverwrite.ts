@@ -43,3 +43,13 @@ export function duplicateWithoutOverwriteMessage(serverType: ServerType | undefi
 export function duplicateMayReplace(serverType: ServerType | undefined): boolean {
   return serverType !== "ferro_ehr" && serverType !== "better_platform";
 }
+
+/**
+ * Whether a template can be deleted on this server type. The openEHR REST API has no
+ * template delete, so it is a vendor admin route (ADR-0030): EHRbase
+ * `DELETE /rest/admin/template/{id}` and FerroEHR's admin extension. Better Platform has
+ * not been checked, so nothing is offered there.
+ */
+export function supportsTemplateDelete(serverType: ServerType | undefined): boolean {
+  return serverType === "ehrbase" || serverType === "ferro_ehr";
+}

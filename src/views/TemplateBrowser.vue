@@ -18,6 +18,8 @@ import CopyButton from "../components/CopyButton.vue";
 import XmlViewer from "../components/XmlViewer.vue";
 import TemplateUploadModal from "../components/TemplateUploadModal.vue";
 import TemplateUploadZone from "../components/TemplateUploadZone.vue";
+import TemplateDeleteConfirmDialog from "../components/TemplateDeleteConfirmDialog.vue";
+import { supportsTemplateDelete } from "../lib/templateOverwrite";
 import DownloadToast from "../components/DownloadToast.vue";
 import { useTemplateUpload } from "../composables/useTemplateUpload";
 import { useFileDownload } from "../composables/useFileDownload";
@@ -68,6 +70,38 @@ const resolvedBindingTerms = ref<Record<string, string>>({});
 // from — mirrors the request-id guard in the template store for
 // selectedWebTemplate/selectedOpt (see stores/template.ts).
 let bindingsRequestId = 0;
+
+// Template deletion (vendor admin API, ADR-0030): only offered where the route is known.
+const canDeleteTemplate = computed(() =>
+  supportsTemplateDelete(serverStore.activeServer?.server_type),
+);
+const showDeleteConfirm = ref(false);
+const deleting = ref(false);
+const deleteError = ref<string | null>(null);
+
+function askDeleteTemplate() {
+  deleteError.value = null;
+  showDeleteConfirm.value = true;
+}
+
+async function confirmDeleteTemplate() {
+  const serverId = serverStore.activeServerId;
+  const templateId = selectedTemplateId.value;
+  if (!serverId || !templateId) return;
+  deleting.value = true;
+  deleteError.value = null;
+  try {
+    await templateStore.deleteTemplate(serverId, templateId);
+    showDeleteConfirm.value = false;
+    clearTemplateDetail();
+    await router.push({ name: "templates" });
+    await templateStore.fetchTemplates(serverId);
+  } catch (e) {
+    deleteError.value = String(e);
+  } finally {
+    deleting.value = false;
+  }
+}
 
 function clearTemplateDetail() {
   templateStore.selectedWebTemplate = null;
@@ -603,6 +637,24 @@ onUnmounted(() => {
                 />
               </svg>
             </button>
+            <button
+              v-if="canDeleteTemplate"
+              type="button"
+              class="btn btn-sm icon-btn"
+              data-tooltip="Delete template"
+              aria-label="Delete template"
+              @click="askDeleteTemplate"
+            >
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M4 6h12M8 6V4h4v2m-6 0 .7 10h6.6L14 6"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -806,6 +858,15 @@ onUnmounted(() => {
     </div>
 
     <TemplateUploadModal :open="showUploadModal" @close="showUploadModal = false" />
+    <TemplateDeleteConfirmDialog
+      v-if="showDeleteConfirm && selectedTemplateId"
+      :template-id="selectedTemplateId"
+      :server-name="serverStore.activeServer?.name ?? null"
+      :error="deleteError"
+      :busy="deleting"
+      @confirm="confirmDeleteTemplate"
+      @cancel="showDeleteConfirm = false"
+    />
 
     <DownloadToast
       :toast="downloadToast"

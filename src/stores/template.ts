@@ -15,6 +15,11 @@ function uploadTemplate(serverId: string, optXml: string, overwrite = false): Pr
   return invoke<string>("upload_template", { serverId, optXml, overwrite });
 }
 
+// Permanently deletes a template through the server's vendor admin API.
+function deleteTemplate(serverId: string, templateId: string): Promise<string> {
+  return invoke<string>("delete_template", { serverId, templateId });
+}
+
 export const useTemplateStore = defineStore("template", () => {
   const templates = ref<TemplateSummary[]>([]);
   const loading = ref(false);
@@ -122,5 +127,6 @@ export const useTemplateStore = defineStore("template", () => {
     detailReloadToken,
     requestDetailReload,
     uploadTemplate,
+    deleteTemplate,
   };
 });

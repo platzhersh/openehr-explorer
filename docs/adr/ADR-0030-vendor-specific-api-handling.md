@@ -39,6 +39,7 @@ Adding a new vendor quirk therefore means: write the keyed function (or the norm
 | Template id header | `openehr-template-id` | `openEHR-TEMPLATE_ID` | `template_id_header` |
 | Web Template keys | camelCase, names present | snake_case, `name` missing on `context`/`category` | `normalizeWebTemplate` |
 | Template overwrite | spec defines only `POST` (duplicate → 409); no update operation. EHRBase: `PUT <base_url>/rest/admin/template/{id}` (Admin API, admin role, fails with 422 if a composition uses the template) | no overwrite needed: templates are versioned, a changed upload becomes a new active version and an identical one answers 409 (per the Better CDR 5.x docs; verified on a Better instance: an identical re-upload gave 409, a changed one 201) | `overwrite_target` in `commands/template.rs`, `supportsTemplateOverwrite` in `src/lib/templateOverwrite.ts` |
+| Template delete | spec has no delete. EHRBase: `DELETE <base_url>/rest/admin/template/{id}` (Admin API, 202; 422 if a composition uses it) | not checked, no delete offered (FerroEHR: `DELETE <api_root>/admin/template/{id}`, 204; 409 if in use) | `delete_target` in `commands/template.rs`, `supportsTemplateDelete` in `src/lib/templateOverwrite.ts` |
 
 ## Consequences
 
