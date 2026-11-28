@@ -21,6 +21,7 @@ Built with [Tauri](https://tauri.app) (Rust) + Vue 3 + TypeScript.
 - **Overview Dashboard** — Landing view with live, refreshable EHR/composition/template counts and connected server info
 - **EHR Browser** — Paginated list with server-side AQL search (subject, namespace, system, modifiable, hasCompositions)
 - **Composition Viewer** — Template-aware "pretty" view with human-readable labels, raw JSON, and FLAT format
+- **Validate Without Saving** — Check a new or edited composition on the server before committing it (Better Platform)
 - **FLAT Path Panel** — One-click copy of FLAT paths for SDK development
 - **Template Browser** — Inspect Web Template trees, view OPT XML, drag-and-drop upload
 - **AQL Query Runner** — Execute AQL queries with 3-layer autocomplete, tabular results, saved queries, CSV export

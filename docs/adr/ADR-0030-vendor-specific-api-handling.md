@@ -39,6 +39,7 @@ Adding a new vendor quirk therefore means: write the keyed function (or the norm
 | Template id header | `openehr-template-id` | `openEHR-TEMPLATE_ID` | `template_id_header` |
 | Web Template keys | camelCase, names present | snake_case, `name` missing on `context`/`category` | `normalizeWebTemplate` |
 | Template overwrite | spec defines only `POST` (duplicate → 409); no update operation. EHRBase: `PUT <base_url>/rest/admin/template/{id}` (Admin API, admin role, fails with 422 if a composition uses the template) | no overwrite needed: templates are versioned, a changed upload becomes a new active version and an identical one answers 409 (per the Better CDR 5.x docs; verified on a Better instance: an identical re-upload gave 409, a changed one 201) | `overwrite_target` in `commands/template.rs`, `supportsTemplateOverwrite` in `src/lib/templateOverwrite.ts` |
+| Validate without saving | the spec defines no operation | own `POST <base_url>/rest/v1/composition/validate?templateId=…&format=FLAT`: 204 when valid, 400 with `code`/`userMessage` when not. No fallback pattern applies, so the Validate button only appears for Better. Based on the Better CDR 5.x REST API specification and error documentation; **not yet verified against a live server** (an exception to rule 5) | `composition_validate_url` in `commands/composition.rs`, `supportsCompositionValidation` in `src/lib/compositionValidation.ts` |
 
 ## Consequences
 

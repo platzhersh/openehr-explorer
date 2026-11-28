@@ -215,6 +215,7 @@ pub fn run() {
             composition::get_composition_flat,
             composition::get_composition_versions,
             composition::get_composition_version_contribution,
+            composition::validate_composition,
             composition::create_composition,
             composition::update_composition,
             composition::delete_composition,

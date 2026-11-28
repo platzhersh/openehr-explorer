@@ -1,10 +1,25 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import type { CompositionValidation } from "../lib/compositionValidation";
 
 export const useCompositionStore = defineStore("composition", () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
+
+  /** Checks a composition without saving it. Leaves `loading`/`error` alone, as
+   *  those describe writes. */
+  async function validateComposition(
+    serverId: string,
+    templateId: string,
+    compositionData: Record<string, unknown>,
+  ) {
+    return invoke<CompositionValidation>("validate_composition", {
+      serverId,
+      templateId,
+      compositionData,
+    });
+  }
 
   async function createComposition(
     serverId: string,
@@ -76,6 +91,7 @@ export const useCompositionStore = defineStore("composition", () => {
   return {
     loading,
     error,
+    validateComposition,
     createComposition,
     updateComposition,
     deleteComposition,

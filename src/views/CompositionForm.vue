@@ -14,6 +14,11 @@ import RefreshButton from "../components/RefreshButton.vue";
 import PlusIcon from "../components/PlusIcon.vue";
 import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
 import { normalizeWebTemplate } from "../lib/webtemplate";
+import CompositionValidationResult from "../components/CompositionValidationResult.vue";
+import {
+  supportsCompositionValidation,
+  type CompositionValidation,
+} from "../lib/compositionValidation";
 
 const analytics = useAnalytics();
 
@@ -341,6 +346,55 @@ async function hydrateMbForm(attempt = 0) {
   }
 }
 
+// Validate without saving (offered only where the server supports it).
+const canValidate = computed(() =>
+  supportsCompositionValidation(serverStore.activeServer?.server_type),
+);
+const validating = ref(false);
+const validationResult = ref<CompositionValidation | null>(null);
+const validationFailure = ref<string | null>(null);
+// Bumped whenever what was validated may no longer be what's on screen, so a
+// reply that arrives after an edit is dropped instead of shown as current.
+let validationRun = 0;
+
+function clearValidation() {
+  validationRun++;
+  validating.value = false;
+  validationResult.value = null;
+  validationFailure.value = null;
+}
+
+watch(
+  [
+    composerName,
+    language,
+    territory,
+    compositionTime,
+    resolvedTemplateId,
+    () => route.params.templateId,
+    () => serverStore.activeServerId,
+  ],
+  clearValidation,
+);
+
+async function handleValidate() {
+  clearValidation();
+  const run = validationRun;
+  validating.value = true;
+  try {
+    const result = await compositionStore.validateComposition(
+      serverStore.activeServerId as string,
+      resolveSubmitTemplateId(),
+      buildSubmitPayload(),
+    );
+    if (run === validationRun) validationResult.value = result;
+  } catch (e) {
+    if (run === validationRun) validationFailure.value = String(e);
+  } finally {
+    if (run === validationRun) validating.value = false;
+  }
+}
+
 function handleMbSubmit(event: Event) {
   const customEvent = event as CustomEvent;
   flatData.value = customEvent.detail || {};
@@ -349,6 +403,7 @@ function handleMbSubmit(event: Event) {
 function handleMbChange(event: Event) {
   const customEvent = event as CustomEvent;
   console.log("mb-change event received:", customEvent.detail);
+  clearValidation();
   flatData.value = customEvent.detail || {};
 }
 
@@ -596,6 +651,17 @@ async function submitCompositionPayload(
   return result;
 }
 
+// The FLAT payload for the form as it stands. Shared by validate and submit, so
+// what is validated is what would be saved.
+function buildSubmitPayload(): Record<string, unknown> {
+  const formData = exportFormData();
+  // Build payload following EHRBase 2.x actual format
+  const isoTime = compositionTime.value
+    ? new Date(compositionTime.value).toISOString()
+    : new Date().toISOString();
+  return withContextFields(formData, isoTime);
+}
+
 async function handleSubmit() {
   console.log("handleSubmit called");
 
@@ -610,14 +676,8 @@ async function handleSubmit() {
   loading.value = true;
 
   try {
-    const formData = exportFormData();
+    const payload = buildSubmitPayload();
     const templateId = resolveSubmitTemplateId();
-
-    // Build payload following EHRBase 2.x actual format
-    const isoTime = compositionTime.value
-      ? new Date(compositionTime.value).toISOString()
-      : new Date().toISOString();
-    const payload = withContextFields(formData, isoTime);
 
     console.log("Final payload:", payload);
     console.log("Template ID:", templateId);
@@ -661,6 +721,7 @@ async function handleSubmit() {
 }
 
 function handleReset() {
+  clearValidation();
   // Editing an existing composition: revert to the composition as loaded,
   // not a blank form — the user is undoing their in-progress edits, not
   // starting a new composition.
@@ -889,7 +950,12 @@ watch(
       <!-- medblocks-ui Form -->
       <div v-if="isReady" class="form-section">
         <h3>Composition Data</h3>
-        <mb-auto-form ref="mbFormRef" @mb-submit="handleMbSubmit" @mb-change="handleMbChange" />
+        <mb-auto-form
+          ref="mbFormRef"
+          @mb-submit="handleMbSubmit"
+          @mb-change="handleMbChange"
+          @input="clearValidation"
+        />
       </div>
 
       <div v-else class="loading">
@@ -902,6 +968,17 @@ watch(
       <!-- Submit -->
       <div class="form-actions">
         <button class="btn btn-secondary" @click="router.back()">Cancel</button>
+        <!-- No EHR needed: nothing is stored. -->
+        <button
+          v-if="canValidate"
+          type="button"
+          class="btn"
+          :disabled="!isReady || validating || loading || (isEditMode && editLoadFailed)"
+          title="Check this composition on the server without saving it"
+          @click="handleValidate"
+        >
+          {{ validating ? "Validating..." : "Validate" }}
+        </button>
         <button
           class="btn btn-primary"
           @click="handleSubmit"
@@ -918,6 +995,11 @@ watch(
         >
           {{ loading ? "Submitting..." : isEditMode ? "Update Composition" : "Create Composition" }}
         </button>
+      </div>
+
+      <CompositionValidationResult v-if="validationResult" :result="validationResult" />
+      <div v-if="validationFailure" class="error-banner validation-failure" role="alert">
+        {{ validationFailure }}
       </div>
 
       <!-- Validation messages -->
@@ -1004,6 +1086,10 @@ watch(
   color: var(--color-error);
   font-size: 13px;
   margin-bottom: 16px;
+}
+
+.validation-failure {
+  margin: 16px 0 0;
 }
 
 .success-banner {
