@@ -5,7 +5,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { useServerStore } from "../stores/server";
 import { useTemplateStore } from "../stores/template";
 import { useAnalytics } from "../composables/useAnalytics";
-import { extractFlatPaths, classifyCodedTextNode, normalizeWebTemplate } from "../lib/webtemplate";
+import {
+  extractFlatPaths,
+  flatPathStyle,
+  classifyCodedTextNode,
+  normalizeWebTemplate,
+} from "../lib/webtemplate";
 import { lookupCode } from "../lib/terminology";
 import OptMetadata from "../components/OptMetadata.vue";
 import SearchOverlay from "../components/SearchOverlay.vue";
@@ -203,7 +208,10 @@ const filteredTemplates = computed(() => {
 
 const flatPaths = computed(() => {
   if (!templateStore.selectedWebTemplate) return [];
-  return extractFlatPaths(templateStore.selectedWebTemplate);
+  return extractFlatPaths(
+    templateStore.selectedWebTemplate,
+    flatPathStyle(serverStore.activeServer?.server_type),
+  );
 });
 
 // Web template tree nodes for display

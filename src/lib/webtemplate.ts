@@ -147,25 +147,57 @@ export function classifyCodedTextNode(node: Record<string, unknown>): string | n
 }
 
 /**
+ * How a server writes repeatable nodes in FLAT paths. `indexed` is Better
+ * Platform's style, `vitals/body_temperature:0/any_event:0/temperature`: every
+ * node that may occur more than once carries an index.
+ */
+export type FlatPathStyle = "indexed" | "unindexed";
+
+/**
+ * The style to list template paths in. Only Better's has been checked against
+ * vendor documentation (its API cookbook and Web Templates guide), so the other
+ * server types keep the unindexed paths the app has always shown.
+ */
+export function flatPathStyle(serverType: string | undefined): FlatPathStyle {
+  return serverType === "better_platform" ? "indexed" : "unindexed";
+}
+
+/**
  * Extract all FLAT paths from a Web Template tree.
  */
-export function extractFlatPaths(webTemplate: Record<string, unknown>): string[] {
+export function extractFlatPaths(
+  webTemplate: Record<string, unknown>,
+  style: FlatPathStyle = "unindexed",
+): string[] {
   const tree = webTemplate.tree as Record<string, unknown> | undefined;
   if (!tree) return [];
 
   const paths: string[] = [];
-  collectPaths(tree, "", paths);
+  collectPaths(tree, "", paths, style);
   return paths.sort();
 }
 
-function collectPaths(node: Record<string, unknown>, parentPath: string, paths: string[]): void {
-  const id = node.id as string | undefined;
-  const currentPath = parentPath ? `${parentPath}/${id ?? ""}` : (id ?? "");
+// `max` is -1 for unbounded. The root is the composition itself, never indexed.
+function pathSegment(node: Record<string, unknown>, isRoot: boolean, style: FlatPathStyle): string {
+  const id = (node.id as string | undefined) ?? "";
+  const max = node.max as number | undefined;
+  const repeatable = max === -1 || (max ?? 1) > 1;
+  return style === "indexed" && repeatable && !isRoot ? `${id}:0` : id;
+}
+
+function collectPaths(
+  node: Record<string, unknown>,
+  parentPath: string,
+  paths: string[],
+  style: FlatPathStyle,
+): void {
+  const segment = pathSegment(node, !parentPath, style);
+  const currentPath = parentPath ? `${parentPath}/${segment}` : segment;
 
   const children = node.children as Record<string, unknown>[] | undefined;
   if (children && children.length > 0) {
     for (const child of children) {
-      collectPaths(child, currentPath, paths);
+      collectPaths(child, currentPath, paths, style);
     }
   } else {
     if (currentPath) {
