@@ -1,6 +1,10 @@
 /**
  * Resolve a human-readable label from a Web Template for a given archetype node ID.
- * Falls back to the provided default name if no match is found.
+ *
+ * A node ID need not identify one node: at-codes repeat across archetypes, and
+ * a template can clone a node and rename each copy while they keep one at-code.
+ * When the matching template nodes disagree on the name, there is no telling
+ * which one this is, so the default (the composition's own name) is kept.
  */
 export function resolveNodeLabel(
   webTemplate: Record<string, unknown>,
@@ -12,27 +16,26 @@ export function resolveNodeLabel(
   const tree = webTemplate.tree as Record<string, unknown> | undefined;
   if (!tree) return defaultName;
 
-  const found = findNodeById(tree, archetypeNodeId);
-  return found ?? defaultName;
+  const names = new Set<string>();
+  collectNodeNames(tree, archetypeNodeId, names);
+  const [only] = names;
+  return names.size === 1 ? only : defaultName;
 }
 
-function findNodeById(node: Record<string, unknown>, targetId: string): string | null {
-  const nodeId = node.id as string | undefined;
-  const nodeArchetypeId = node.node_id as string | undefined;
-
-  if (nodeId === targetId || nodeArchetypeId === targetId) {
-    return (node.name as string) ?? (node.localizedName as string) ?? null;
+function collectNodeNames(
+  node: Record<string, unknown>,
+  targetId: string,
+  names: Set<string>,
+): void {
+  // EHRBase writes `nodeId` and `localizedName`; Better the snake_case forms.
+  if ([node.id, node.nodeId, node.node_id].includes(targetId)) {
+    const name = node.name ?? node.localizedName ?? node.localized_name;
+    if (typeof name === "string") names.add(name);
   }
 
-  const children = node.children as Record<string, unknown>[] | undefined;
-  if (children) {
-    for (const child of children) {
-      const found = findNodeById(child, targetId);
-      if (found) return found;
-    }
+  for (const child of (node.children as Record<string, unknown>[] | undefined) ?? []) {
+    collectNodeNames(child, targetId, names);
   }
-
-  return null;
 }
 
 /**
