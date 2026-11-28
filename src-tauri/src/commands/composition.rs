@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::server::{create_client, get_profile_by_id, make_request, ServerType};
+use super::server::{create_client, get_profile_by_id, make_request, ServerProfile, ServerType};
 use crate::inspector::send_instrumented;
 
 /// The FLAT-format media type to use for a composition, as either a
@@ -35,6 +35,127 @@ fn template_id_header(server_type: &ServerType) -> &'static str {
         ServerType::BetterPlatform => "openEHR-TEMPLATE_ID",
         _ => "openehr-template-id",
     }
+}
+
+/// URL of `action` (`meta` or `restore`) on a composition in Better Platform's
+/// own API, which sits outside the openEHR API root. `None` for other server
+/// types: the openEHR REST API has no restore operation (ADR-0030). Based on
+/// the Better CDR 5.x REST specification; not yet verified against a live server.
+fn better_composition_url(profile: &ServerProfile, uid: &str, action: &str) -> Option<String> {
+    match profile.server_type {
+        ServerType::BetterPlatform => Some(format!(
+            "{}/rest/v1/composition/{}/{}",
+            profile.base_url.trim_end_matches('/'),
+            uid,
+            action
+        )),
+        ServerType::Ehrbase | ServerType::FerroEhr | ServerType::Generic => None,
+    }
+}
+
+/// Where a composition version stands in its history.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompositionState {
+    /// Whether the latest version is a deletion.
+    pub deleted: bool,
+    /// Whether the requested version is the latest one.
+    pub is_latest: bool,
+    pub latest_uid: String,
+}
+
+/// Reads the `meta` response for the *latest* version of a composition (asked
+/// for by its bare versioned-object UID) against the version being looked at.
+fn parse_composition_state(requested_uid: &str, body: &str) -> Result<CompositionState, String> {
+    let json: Value = serde_json::from_str(body)
+        .map_err(|e| format!("Failed to parse composition state: {}", e))?;
+    let latest_uid = json
+        .get("compositionUid")
+        .and_then(Value::as_str)
+        .ok_or("Composition state has no compositionUid")?
+        .to_string();
+    let deleted = json
+        .get("deleted")
+        .and_then(Value::as_bool)
+        .ok_or("Composition state has no deleted flag")?;
+
+    // A bare UID stands for whatever is latest.
+    let is_latest = !requested_uid.contains("::") || requested_uid == latest_uid;
+
+    Ok(CompositionState {
+        deleted,
+        is_latest,
+        latest_uid,
+    })
+}
+
+fn parse_restored_uid(body: &str) -> Result<String, String> {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|json| json.get("compositionUid")?.as_str().map(String::from))
+        .ok_or_else(|| "Restored, but the server did not return the new version UID".to_string())
+}
+
+/// `None` where the server type can't report it.
+#[tauri::command]
+pub async fn get_composition_state(
+    app: tauri::AppHandle,
+    server_id: String,
+    composition_uid: String,
+) -> Result<Option<CompositionState>, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let versioned_object_uid = composition_uid.split("::").next().unwrap_or_default();
+    let Some(url) = better_composition_url(&profile, versioned_object_uid, "meta") else {
+        return Ok(None);
+    };
+    let client = create_client(&profile);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::GET, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
+    }
+
+    parse_composition_state(&composition_uid, &resp.body).map(Some)
+}
+
+/// Undoes a delete by committing a new version. `composition_uid` must be the
+/// latest (deleted) version. Returns the new version UID.
+#[tauri::command]
+pub async fn restore_composition(
+    app: tauri::AppHandle,
+    server_id: String,
+    composition_uid: String,
+) -> Result<String, String> {
+    let profile = get_profile_by_id(&server_id)?;
+    let url = better_composition_url(&profile, &composition_uid, "restore")
+        .ok_or("Restoring a composition is not supported for this server type")?;
+    let client = create_client(&profile);
+
+    let resp = send_instrumented(
+        &app,
+        &client,
+        make_request(&client, reqwest::Method::PUT, &url, &profile.auth_method)
+            .header("Accept", "application/json"),
+    )
+    .await?;
+
+    if !resp.is_success {
+        return Err(format!(
+            "Server returned HTTP {}: {}",
+            resp.status, resp.body
+        ));
+    }
+
+    parse_restored_uid(&resp.body)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +202,11 @@ pub async fn get_composition(
             "Server returned HTTP {}: {}",
             resp.status, resp.body
         ));
+    }
+
+    // The openEHR REST API answers 204, with no body, for a deleted version.
+    if resp.status == 204 {
+        return Err("This composition version is deleted".to_string());
     }
 
     serde_json::from_str(&resp.body).map_err(|e| format!("Failed to parse composition: {}", e))
@@ -470,4 +596,67 @@ pub async fn delete_composition(
         "Composition {} deleted successfully",
         composition_uid
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::server::AuthMethod;
+
+    fn profile(server_type: ServerType) -> ServerProfile {
+        ServerProfile {
+            id: "p".to_string(),
+            name: "p".to_string(),
+            base_url: "https://cdr.example.com/ehr/".to_string(),
+            server_type,
+            auth_method: AuthMethod::None,
+            admin_auth_method: None,
+            terminology_url: None,
+            api_path_prefix: Some("/custom/openehr/v1".to_string()),
+            is_default: false,
+        }
+    }
+
+    #[test]
+    fn only_better_has_composition_meta_and_restore() {
+        assert_eq!(
+            better_composition_url(&profile(ServerType::BetterPlatform), "a::sys::2", "restore")
+                .as_deref(),
+            Some("https://cdr.example.com/ehr/rest/v1/composition/a::sys::2/restore")
+        );
+        for other in [
+            ServerType::Ehrbase,
+            ServerType::FerroEhr,
+            ServerType::Generic,
+        ] {
+            assert_eq!(better_composition_url(&profile(other), "a", "meta"), None);
+        }
+    }
+
+    #[test]
+    fn state_compares_the_viewed_version_with_the_latest() {
+        let body = r#"{"compositionUid":"a::sys::3","deleted":true}"#;
+        let older = parse_composition_state("a::sys::2", body).unwrap();
+        assert!(older.deleted && !older.is_latest);
+        assert_eq!(older.latest_uid, "a::sys::3");
+        assert!(
+            parse_composition_state("a::sys::3", body)
+                .unwrap()
+                .is_latest
+        );
+        assert!(parse_composition_state("a", body).unwrap().is_latest);
+    }
+
+    #[test]
+    fn incomplete_state_is_an_error_rather_than_not_deleted() {
+        assert!(parse_composition_state("a", r#"{"compositionUid":"a::sys::1"}"#).is_err());
+        assert!(parse_composition_state("a", "").is_err());
+    }
+
+    #[test]
+    fn restored_uid_comes_from_the_body() {
+        let body = r#"{"action":"EXECUTE","compositionUid":"a::sys::4"}"#;
+        assert_eq!(parse_restored_uid(body).unwrap(), "a::sys::4");
+        assert!(parse_restored_uid("").is_err());
+    }
 }

@@ -13,6 +13,9 @@ import JsonViewer from "../components/JsonViewer.vue";
 import CopyButton from "../components/CopyButton.vue";
 import EditButton from "../components/EditButton.vue";
 import DeleteButton from "../components/DeleteButton.vue";
+import CompositionStateBanner, {
+  type CompositionState,
+} from "../components/CompositionStateBanner.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -56,6 +59,66 @@ const contributionLookupError = ref<string | null>(null);
 // The versioned_object_uid is the part of a version UID before the first
 // "::" (e.g. `abc123::system.example.com::1` -> `abc123`).
 const versionedObjectUid = computed(() => compositionUid.value.split("::")[0]);
+
+// Deleted / superseded state, where the server can report it (Better Platform).
+const compositionState = ref<CompositionState | null>(null);
+const restoring = ref(false);
+const restoreError = ref<string | null>(null);
+const isBetter = computed(() => serverStore.activeServer?.server_type === "better_platform");
+let stateRequestId = 0;
+
+async function loadCompositionState() {
+  const requestId = ++stateRequestId;
+  const serverId = serverStore.activeServerId;
+  const uid = compositionUid.value;
+  if (!isBetter.value || !serverId || !uid) return;
+  try {
+    const state = await invoke<CompositionState | null>("get_composition_state", {
+      serverId,
+      compositionUid: uid,
+    });
+    if (requestId === stateRequestId) compositionState.value = state;
+  } catch (e) {
+    // Only an extra hint: the viewer works without it.
+    console.warn("Could not read the composition state:", e);
+  }
+}
+
+watch(
+  [() => serverStore.activeServerId, compositionUid, isBetter],
+  () => {
+    compositionState.value = null;
+    restoreError.value = null;
+    restoring.value = false;
+    void loadCompositionState();
+  },
+  { immediate: true },
+);
+
+function openVersion(uid: string) {
+  router.replace({ name: "composition", params: { ehrId: ehrId.value, compositionUid: uid } });
+}
+
+async function handleRestore() {
+  const serverId = serverStore.activeServerId;
+  const state = compositionState.value;
+  if (!serverId || !state) return;
+  const requestId = stateRequestId;
+  restoring.value = true;
+  restoreError.value = null;
+  try {
+    const newUid = await invoke<string>("restore_composition", {
+      serverId,
+      compositionUid: state.latest_uid,
+    });
+    // The user may have moved on while the server worked.
+    if (requestId === stateRequestId) openVersion(newUid);
+  } catch (e) {
+    if (requestId === stateRequestId) restoreError.value = String(e);
+  } finally {
+    if (requestId === stateRequestId) restoring.value = false;
+  }
+}
 
 // Search state
 const showPanelSearch = ref(false);
@@ -261,6 +324,13 @@ async function handleDelete() {
     );
     showDeleteDialog.value = false;
     void analytics.track("composition_deleted");
+    // Where a delete can be undone, stay here and offer that. Deleted
+    // compositions aren't listed, so this page is the way back to them.
+    await loadCompositionState();
+    if (compositionState.value?.deleted) {
+      versions.value = [];
+      return;
+    }
     // Navigate back to EHR detail
     router.push({ name: "ehr-detail", params: { ehrId: ehrId.value } });
   } catch (e) {
@@ -330,8 +400,15 @@ onUnmounted(() => {
           variant="bordered"
           data-tour="composition-copy"
         />
-        <EditButton title="Edit composition" variant="bordered" size="md" @click="handleEdit" />
+        <EditButton
+          v-if="!compositionState?.deleted"
+          title="Edit composition"
+          variant="bordered"
+          size="md"
+          @click="handleEdit"
+        />
         <DeleteButton
+          v-if="!compositionState?.deleted"
           title="Delete composition"
           variant="bordered"
           size="md"
@@ -339,6 +416,15 @@ onUnmounted(() => {
         />
       </div>
     </div>
+
+    <CompositionStateBanner
+      v-if="compositionState"
+      :state="compositionState"
+      :restoring="restoring"
+      :error="restoreError"
+      @restore="handleRestore"
+      @view-latest="openVersion(compositionState.latest_uid)"
+    />
 
     <div v-if="loading" class="loading">Loading composition...</div>
     <div v-else-if="error" class="error-msg">{{ error }}</div>
@@ -459,7 +545,14 @@ onUnmounted(() => {
     <div v-if="showDeleteDialog" class="dialog-overlay" @click="showDeleteDialog = false">
       <div class="dialog" @click.stop>
         <h3>Delete Composition</h3>
-        <p>Are you sure you want to delete this composition? This action cannot be undone.</p>
+        <p>
+          Are you sure you want to delete this composition?
+          {{
+            isBetter
+              ? "You can restore it from this page afterwards."
+              : "This action cannot be undone."
+          }}
+        </p>
         <div class="dialog-actions">
           <button class="btn btn-sm" @click="showDeleteDialog = false" :disabled="deleting">
             Cancel

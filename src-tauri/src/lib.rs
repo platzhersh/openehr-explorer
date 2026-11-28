@@ -218,6 +218,8 @@ pub fn run() {
             composition::create_composition,
             composition::update_composition,
             composition::delete_composition,
+            composition::get_composition_state,
+            composition::restore_composition,
             // Contribution
             contribution::get_contribution,
             // Dashboard

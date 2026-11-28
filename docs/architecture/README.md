@@ -214,7 +214,7 @@ flowchart TB
 | `lib.rs` | `run()`: credential migration, crash-report consent seeding, plugin registration (opener, http, dialog, fs, updater, process, aptabase), native menu, `generate_handler![]` command registry |
 | `commands/server.rs` | Profile CRUD, connection test, server-type/version detection, plaintext-credential migration. Owns `ServerProfile`, `ServerType`, `AuthMethod`, `api_root()` |
 | `commands/ehr.rs` | EHR list/detail/create/delete/search (AQL-based per ADR-0010/0027) |
-| `commands/composition.rs` | Composition get (structured, FLAT, versions), create, update, delete |
+| `commands/composition.rs` | Composition get (structured, FLAT, versions), create, update, delete; deleted state and restore (Better Platform only) |
 | `commands/template.rs` | Template list, Web Template fetch, OPT XML get/upload |
 | `commands/query.rs` | AQL execution, saved-query storage |
 | `commands/terminology.rs` | Code lookups with `TerminologyCache` |
