@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeWebTemplate } from "./webtemplate";
+import { extractFlatPaths, flatPathStyle, normalizeWebTemplate } from "./webtemplate";
 
 describe("normalizeWebTemplate", () => {
   it("gives nameless structural nodes (Better's context/category) a readable name", () => {
@@ -45,5 +45,44 @@ describe("normalizeWebTemplate", () => {
     expect(tree.children[0].rmType).toBe("DV_QUANTITY");
     expect(tree.children[0].inContext).toBe(false);
     expect(tree.children[0].inputs[0].validation.range.minOp).toBe(">=");
+  });
+});
+
+describe("extractFlatPaths", () => {
+  // Cardinalities behind the sample composition in Better's API cookbook.
+  const template = {
+    tree: {
+      id: "vital_signs",
+      max: 1,
+      children: [
+        {
+          id: "blood_pressure",
+          max: -1,
+          children: [
+            { id: "any_event", max: -1, children: [{ id: "systolic", max: 1 }] },
+            { id: "location", max: 1, children: [{ id: "location_of_measurement", max: 1 }] },
+            { id: "comment", max: 3 },
+          ],
+        },
+      ],
+    },
+  };
+
+  it("indexes every repeatable node in Better's style", () => {
+    expect(extractFlatPaths(template, flatPathStyle("better_platform"))).toEqual([
+      "vital_signs/blood_pressure:0/any_event:0/systolic",
+      "vital_signs/blood_pressure:0/comment:0",
+      "vital_signs/blood_pressure:0/location/location_of_measurement",
+    ]);
+  });
+
+  it("leaves paths unindexed for other server types", () => {
+    for (const type of ["ehrbase", "ferro_ehr", "generic", undefined]) {
+      expect(extractFlatPaths(template, flatPathStyle(type))).toEqual([
+        "vital_signs/blood_pressure/any_event/systolic",
+        "vital_signs/blood_pressure/comment",
+        "vital_signs/blood_pressure/location/location_of_measurement",
+      ]);
+    }
   });
 });
