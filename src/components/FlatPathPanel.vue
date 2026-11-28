@@ -4,6 +4,8 @@ import CopyButton from "./CopyButton.vue";
 
 const props = defineProps<{
   paths: string[];
+  /** AQL path per FLAT path, where the web template resolves one. */
+  aqlPaths?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -38,8 +40,16 @@ const filteredPaths = computed(() => {
         @mouseenter="emit('highlight', path)"
         @mouseleave="emit('highlight', null)"
       >
-        <span class="path-text">{{ path }}</span>
-        <CopyButton :text="path" title="Copy path" />
+        <div class="path-line">
+          <span class="path-text">{{ path }}</span>
+          <CopyButton :text="path" title="Copy path" />
+        </div>
+        <div v-if="aqlPaths?.[path]" class="path-line">
+          <span class="path-text aql-path-text"
+            ><span class="aql-label">AQL</span> {{ aqlPaths[path] }}</span
+          >
+          <CopyButton :text="aqlPaths[path]" title="Copy AQL path" />
+        </div>
       </div>
 
       <div v-if="filteredPaths.length === 0" class="empty-state">
@@ -89,15 +99,26 @@ const filteredPaths = computed(() => {
 }
 
 .path-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 6px 12px;
   border-bottom: 1px solid var(--color-border);
   transition: background 0.1s;
 }
 .path-item:hover {
   background: var(--color-surface);
+}
+
+.path-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aql-path-text {
+  font-size: 10px;
+}
+
+.aql-label {
+  font-weight: 600;
 }
 
 .path-text {

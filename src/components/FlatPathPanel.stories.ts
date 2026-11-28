@@ -27,6 +27,19 @@ export const WithPaths: Story = {
   },
 };
 
+export const WithAqlPaths: Story = {
+  args: {
+    paths: [
+      "blood_pressure/blood_pressure/any_event:0/systolic|magnitude",
+      "blood_pressure/language|code",
+    ],
+    aqlPaths: {
+      "blood_pressure/blood_pressure/any_event:0/systolic|magnitude":
+        "/content[openEHR-EHR-OBSERVATION.blood_pressure.v2]/data[at0001]/events[at0006]/data[at0003]/items[at0004]/value",
+    },
+  },
+};
+
 export const Empty: Story = {
   args: { paths: [] },
 };

@@ -12,7 +12,7 @@ import TourReplayButton from "../components/TourReplayButton.vue";
 import JsonViewer from "../components/JsonViewer.vue";
 import DeleteButton from "../components/DeleteButton.vue";
 import SearchableSelect, { type SearchableSelectOption } from "../components/SearchableSelect.vue";
-import { extractAqlPathIndex, extractAqlPathsForArchetype } from "../lib/aql/aqlPathIndex";
+import { extractAqlPathIndex, buildArchetypePathMap } from "../lib/aql/aqlPathIndex";
 import type { AqlPathEntry } from "../lib/aql/aqlPathIndex";
 import DismissibleError from "../components/DismissibleError.vue";
 
@@ -161,37 +161,10 @@ watch(contextTemplateId, async (templateId) => {
   await templateStore.fetchWebTemplate(serverStore.activeServerId, templateId);
 
   if (templateStore.selectedWebTemplate) {
-    const allPaths = extractAqlPathIndex(templateStore.selectedWebTemplate);
-    allTemplatePaths.value = allPaths;
-
-    // Also build per-archetype maps by finding archetype nodes in the web template
-    const pathMap = new Map<string, AqlPathEntry[]>();
-    const tree = templateStore.selectedWebTemplate.tree as Record<string, unknown> | undefined;
-    if (tree) {
-      collectArchetypePaths(tree, pathMap);
-    }
-    templatePaths.value = pathMap;
+    allTemplatePaths.value = extractAqlPathIndex(templateStore.selectedWebTemplate);
+    templatePaths.value = buildArchetypePathMap(templateStore.selectedWebTemplate);
   }
 });
-
-function collectArchetypePaths(
-  node: Record<string, unknown>,
-  pathMap: Map<string, AqlPathEntry[]>,
-): void {
-  const nodeId = node.id as string | undefined;
-  if (nodeId && nodeId.startsWith("openEHR-") && templateStore.selectedWebTemplate) {
-    const paths = extractAqlPathsForArchetype(templateStore.selectedWebTemplate, nodeId);
-    if (paths.length > 0) {
-      pathMap.set(nodeId, paths);
-    }
-  }
-  const children = node.children as Record<string, unknown>[] | undefined;
-  if (children) {
-    for (const child of children) {
-      collectArchetypePaths(child, pathMap);
-    }
-  }
-}
 
 async function runQuery() {
   if (!serverStore.activeServerId || !queryText.value.trim()) return;
