@@ -34,6 +34,7 @@ Adding a new vendor quirk therefore means: write the keyed function (or the norm
 
 | Area | EHRBase / spec | Better Platform | Handled in |
 |---|---|---|---|
+| Deleted-composition state and restore | no restore operation | own `GET <base_url>/rest/v1/composition/{uid}/meta` (`deleted`) and `PUT .../restore`. The viewer shows the state and Restore button only for Better. From the Better CDR 5.x spec and cookbook; **not yet verified against a live server** (an exception to rule 5) | `better_composition_url` in `commands/composition.rs` |
 | Template example | Definition API `/example` | own `/rest/v1/template/{id}/example` (fallback after 404) | `commands/template.rs` |
 | FLAT media type | `...wt.flat.schema+json` (EHRBase), `...wt.flat+json` (spec, FerroEHR) | `...wt.flat+json` | `flat_composition_content_type` |
 | Template id header | `openehr-template-id` | `openEHR-TEMPLATE_ID` | `template_id_header` |
