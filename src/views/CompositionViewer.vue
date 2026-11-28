@@ -7,6 +7,7 @@ import { useCompositionStore } from "../stores/composition";
 import { useAnalytics } from "../composables/useAnalytics";
 import CompositionTree from "../components/CompositionTree.vue";
 import FlatPathPanel from "../components/FlatPathPanel.vue";
+import { aqlPathsForFlatPaths } from "../lib/aql/aqlPathIndex";
 import SearchOverlay from "../components/SearchOverlay.vue";
 import TourReplayButton from "../components/TourReplayButton.vue";
 import JsonViewer from "../components/JsonViewer.vue";
@@ -242,6 +243,10 @@ const flatPaths = computed(() => {
   return [];
 });
 
+const flatAqlPaths = computed(() =>
+  webTemplate.value ? aqlPathsForFlatPaths(webTemplate.value, flatPaths.value) : {},
+);
+
 function handleEdit() {
   router.push({
     name: "edit-composition",
@@ -451,6 +456,7 @@ onUnmounted(() => {
       <FlatPathPanel
         v-if="showFlatPaths"
         :paths="flatPaths"
+        :aql-paths="flatAqlPaths"
         @highlight="highlightedPath = $event"
       />
     </div>

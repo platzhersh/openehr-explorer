@@ -140,8 +140,9 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
                   })),
                 };
               }
-              // Fallback to all template paths if no specific archetype match
-              if (config.value.allTemplatePaths.length > 0) {
+              // Fallback to all template paths if no specific archetype match.
+              // They are rooted at the composition, so only fit its alias.
+              if (binding.rmType === "COMPOSITION" && config.value.allTemplatePaths.length > 0) {
                 return {
                   from: slashPos,
                   options: config.value.allTemplatePaths.slice(0, 100).map((p) => ({
@@ -149,7 +150,8 @@ export function aqlAutocomplete(config: { value: AqlCompletionConfig }) {
                     type: "property",
                     detail: p.rmType,
                     info: p.aqlPath,
-                    apply: p.aqlPath,
+                    // The "/" after the alias is already typed.
+                    apply: p.aqlPath.replace(/^\//, ""),
                   })),
                 };
               }
